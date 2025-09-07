@@ -30,7 +30,7 @@ def extract_filtered_commits(path: str) -> list:
     
 def write_commits(path: str, msg: str) -> None:
     """Append a commit message and related infos to a file."""
-    with open(path, 'a') as f:
+    with open(path, 'a', errors='ignore') as f:
         f.write(msg + "\n")
 
 def ensure_repo(repo_url: str, repo_path: str):
@@ -43,6 +43,7 @@ def ensure_repo(repo_url: str, repo_path: str):
 
 def checkout_commit(repo_path: str, sha: str):
     """Fetch and checkout a specific commit."""
+    # TODO: somehow get the diff from here?
     subprocess.run(["git", "-C", repo_path, "fetch", "--depth", "1", "origin", sha], check=True)
     subprocess.run(["git", "-C", repo_path, "checkout", sha], check=True)
 

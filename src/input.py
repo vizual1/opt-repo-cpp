@@ -31,9 +31,6 @@ def start():
 
     if args.test:
         tester = Tester() 
-        tester.test()
-
-    if args.test:
-        return 1
+        tester.test(url=args.repo)
 
     return 0
