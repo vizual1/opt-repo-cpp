@@ -14,6 +14,7 @@ def start():
 
     parser.add_argument("-repo", type=str, default="", help="GitHub Repo URL (optional) (default: repo_urls in config.py).")
     parser.add_argument("-filter", type=str, choices=["simple", "LLM", "custom"], default="simple", help="Filter strategy to use (default: simple).")
+    parser.add_argument("--crawl", action="store_true", help="Additionally collect and filter commits history.")
     parser.add_argument("--test", action="store_true", help="Additionally run tests on the repositories.")
 
     #test_mode = parser.add_mutually_exclusive_group()
@@ -22,14 +23,13 @@ def start():
 
     args = parser.parse_args()
 
-    logging.info("Starting Github Crawler")
-
-    crawler = GithubCrawler()
-    crawler.crawl_repos(args.repo)
-
-    logging.info("Starting Testing")
+    if args.crawl:
+        logging.info("Starting Github Crawler")
+        crawler = GithubCrawler()
+        crawler.crawl_repos(args.repo)
 
     if args.test:
+        logging.info("Starting Testing")
         tester = Tester() 
         tester.test(url=args.repo)
 

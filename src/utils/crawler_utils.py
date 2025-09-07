@@ -7,7 +7,7 @@ def extract_repo_ids(path: str, url: str = "") -> list[str]:
     repo_ids: list[str] = []
 
     if not url:
-        with open(path, 'r') as f:
+        with open(path, 'r', errors='ignore') as f:
             urls = f.readlines()
         for url in urls:
             repo_ids.append(url[len("https://github.com/"):].strip())
@@ -18,7 +18,7 @@ def extract_repo_ids(path: str, url: str = "") -> list[str]:
 
 def extract_filtered_commits(path: str) -> list:
     """Extract commit information from a file."""
-    with open(path, 'r') as f:
+    with open(path, 'r', errors='ignore') as f:
         filtered_commits = f.readlines()
 
     commits_info: list = []

@@ -1,6 +1,7 @@
 import os
 import src.config as conf
-from src.utils.crawler_utils import get_commit, ensure_repo, checkout_commit, extract_repo_ids, extract_filtered_commits
+from src.utils.crawler_utils import *
+from src.utils.test_utils import *
 
 class Tester:
     def __init__(self):
@@ -28,13 +29,14 @@ class Tester:
                 for (current_sha, parent_sha) in commits:
                     checkout_commit(commit_path, parent_sha)
                     print("run_test1")
+                    self.build(commit_path)
+
+                    assert False
 
                     checkout_commit(commit_path, current_sha)
                     print("run_test2")
 
                     # TODO: run tests and save results
-
-                    assert False
             
             else:
                 # TODO: full -> find better way to save them in test
@@ -49,3 +51,21 @@ class Tester:
 
                     print(current_url, parent_url)
                     assert False
+
+    def build(self, test_path: str):
+        # TODO: find all dependencies and install them
+        # TODO: try to build the repo
+        cmake_files = find_cmake_files(test_path)
+        full = set()
+        for cf in cmake_files:
+            t = extract_cmake_packages(cf)
+            full = t | full
+        
+        for p in full:
+            print(find_apt_package_for_cmake(p))
+        print(full)
+        return 0
+    
+    def test_setup(self, test_path: str):
+        # TODO: set the flags? ctest?
+        return 0
