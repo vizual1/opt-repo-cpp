@@ -13,7 +13,7 @@ def start():
     parser = argparse.ArgumentParser(description="Collect, Filter and Test C++ Github Repositories.")
 
     parser.add_argument("-repo", type=str, default="", help="GitHub Repo URL (optional) (default: repo_urls in config.py).")
-    parser.add_argument("-filter", type=str, choices=["simple", "LLM", "custom"], default="simple", help="Filter strategy to use (default: simple).")
+    #parser.add_argument("-filter", type=str, choices=["simple", "LLM", "custom"], default="simple", help="Filter strategy to use (default: simple).")
     parser.add_argument("--crawl", action="store_true", help="Additionally collect and filter commits history.")
     parser.add_argument("--test", action="store_true", help="Additionally run tests on the repositories.")
 
@@ -26,7 +26,7 @@ def start():
     if args.crawl:
         logging.info("Starting Github Crawler")
         crawler = GithubCrawler()
-        crawler.crawl_repos(args.repo)
+        crawler.crawl_repos(url=args.repo)
 
     if args.test:
         logging.info("Starting Testing")
