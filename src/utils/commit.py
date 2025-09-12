@@ -1,8 +1,7 @@
 import os, logging
 import requests, zipfile, io
-from src.utils.cmake_adapter import CMakeAdapter
 
-def extract_repo_ids(path: str, url: str = "") -> list[str]:
+def get_repo_ids(path: str, url: str = "") -> list[str]:
     """Extract repository IDs (owner/repo) from GitHub URLs."""
     repo_ids: list[str] = []
 
@@ -16,7 +15,7 @@ def extract_repo_ids(path: str, url: str = "") -> list[str]:
 
     return repo_ids
 
-def extract_filtered_commits(path: str) -> list:
+def get_filtered_commits(path: str) -> list:
     """Extract commit information from a file."""
     commits_info: list = []
     with open(path, 'r', errors='ignore') as f:

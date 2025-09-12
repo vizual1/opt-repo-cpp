@@ -12,7 +12,6 @@ def simple_filter(commit: Commit) -> bool:
         return True
     return False
 
-# TODO: add LLM filter
 def llm_filter(llm: OpenRouterLLM, repo_name: str, commit: Commit) -> bool:
     p = Prompt([Prompt.Message("user",
                                 f"The following is the message of a commit in the {repo_name} repository:\n\n###Message Start###{commit.commit.message}\n###Message End###"
