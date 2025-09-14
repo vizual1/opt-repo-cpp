@@ -18,7 +18,7 @@ def start():
     #parser.add_argument("-filter", type=str, choices=["simple", "LLM", "custom"], default="simple", help="Filter strategy to use (default: simple).")
     
     parser.add_argument("--crawl", action="store_true", help="Collect and filter commits history.")
-    parser.add_argument("--separate", action="store_true", help="Saves each filtered commit separately with commit message and diff for analysis purposes.")
+    parser.add_argument("--separate", action="store_true", help="Saves each filtered commit separately with commit message and diff.")
 
     parser.add_argument("--docker", action="store_true", help="Create Dockerfiles for testing.")
     parser.add_argument("--ignore_conflict", action="store_true", help="Ignores possible package conflicts while generating Dockerfile.")

@@ -1,37 +1,50 @@
 import os, re, logging
 from collections import deque
+from pathlib import Path
 
-def find_cmake_files(test_path: str) -> list[str]:
-    """Search all CMakeLists.txt and .cmake files in the directory."""
-    cmake_files: list[str] = []
+def find_files(test_path: str, search: str) -> list[str]:
+    found_files: list[str] = []
     for root, _, files in os.walk(test_path):
         for file in files:
-            if file == "CMakeLists.txt" or file.endswith(".cmake"):
-                cmake_files.append(os.path.join(root, file))
-    return cmake_files
+            if file == search:
+                found_files.append(os.path.join(root, file))
+    return found_files
 
+# TODO: fix checks and parsers below, currently all over the place
 def check_ctest_defined(cmake_files: list[str]) -> bool:
-    """Checks if CTest is defined in CMake."""
+    """Checks if include(CTest) is defined in CMake."""
     ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)', re.IGNORECASE)
+
+    for cf in cmake_files:
+        with open(cf, 'r', errors='ignore') as file:
+            content = file.read()
+        if ctest_pattern.search(content):
+            logging.info(f"CMakeFiles with CTest in {cf}.")
+            return True
+    return False
+
+def check_enable_testing_defined(cmake_files: list[str]) -> bool:
+    """Checks if enable_testing() is defined in CMake."""
     enable_testing_pattern = re.compile(r'enable_testing\s*\(\s*\)', re.IGNORECASE)
 
     for cf in cmake_files:
         with open(cf, 'r', errors='ignore') as file:
             content = file.read()
-        if ctest_pattern.search(content) or enable_testing_pattern.search(content):
-            logging.info("Found CTest.")
+        if enable_testing_pattern.search(content):
+            logging.info(f"CMakeFiles with enable_testing in {cf}.")
             return True
-    logging.info("No CTest Found.")
     return False
 
+# TODO: need better flag parser => parse entire boolean expressions OR, AND, NOT, etc.
 def parse_ctest_flags(cmake_files: list[str]) -> set[str]:
     """Parses a CMake file and returns flags needed for CTest."""
     if_pattern = re.compile(r'^\s*if\s*\(\s*(.+?)\s*\)\s*', re.IGNORECASE)
     elseif_pattern = re.compile(r'^\s*elseif\s*\(\s*(.+?)\s*\)\s*', re.IGNORECASE)
     else_pattern = re.compile(r'^\s*else\s*\(\s*\)\s*', re.IGNORECASE)
     endif_pattern = re.compile(r'^\s*endif\s*\(\s*(.*?)\s*\)\s*', re.IGNORECASE)
-    ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)|enable_testing\s*\(\s*\)', re.IGNORECASE)
-    
+    #ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)|enable_testing\s*\(\s*\)', re.IGNORECASE)
+    ctest_pattern = re.compile(r'enable_testing\s*\(\s*\)', re.IGNORECASE)
+
     condition_stack = deque()
     required_flags = set()
 
@@ -63,7 +76,7 @@ def parse_ctest_flags(cmake_files: list[str]) -> set[str]:
 
     return required_flags
 
-def extract_cmake_packages(cmake_path: str) -> set[str]:
+def get_cmake_packages(cmake_path: str) -> set[str]:
     """Find CMake dependency names from CMake files."""
     with open(cmake_path, 'r', errors='ignore') as file:
         content = file.read()
@@ -98,58 +111,53 @@ def extract_cmake_packages(cmake_path: str) -> set[str]:
         modules = match[3].split()
         packages.update(modules)
 
-    logging.info(f"Extracted CMake dependency package names: {packages}")
-
     return packages
 
-    
-"""
-def check_packages_installed(packages: list[str]) -> list[str]:
-    result_packages = []
-    for p in packages:
-        if not is_package_installed(p):
-            install_package(p)
+def find_enable_testing_files(test_path: str) -> list[Path]:
+    testing_files: list[Path] = []
+    enable_testing_pattern = re.compile(r'enable_testing\s*\(\s*\)', re.IGNORECASE)
+    for cmake_file in Path(test_path).rglob("CMakeLists.txt"):
+        with open(cmake_file, "r", errors="ignore") as f:
+            if enable_testing_pattern.search(f.read()):
+                testing_files.append(cmake_file)
+    return testing_files
 
-    return result_packages
+def get_add_subdirectory_guards(cmake_file: Path, sub_path: str):
+    """Return list of flags in if() that guard the add_subdirectory(sub_path)"""
+    pattern = re.compile(r"add_subdirectory\s*\(\s*{}\s*\)".format(re.escape(sub_path)))
+    if_pattern = re.compile(r'^\s*if\s*\(\s*(.+?)\s*\)', re.IGNORECASE)
 
-def is_package_installed(package: str) -> bool:
-    try:
-        result = subprocess.run(['dpkg', '-l'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        return package in result.stdout
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        return False
+    stack = []
+    flags = set()
+    with open(cmake_file, "r", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if m := if_pattern.match(line):
+                stack.append(m.group(1))
+            elif line.startswith("endif"):
+                if stack:
+                    stack.pop()
+            elif pattern.search(line):
+                for cond in stack:
+                    vars_in_cond = re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\b', cond)
+                    flags.update(vars_in_cond)
+    return flags
 
-def install_package(package: str):
-    try:
-        subprocess.run(['apt', 'install', '-y', package], check=True)
-        logging.info(f"{package} has been installed.")
-    except subprocess.CalledProcessError:
-        logging.error(f"Failed to install {package}.")
+def find_testing_flags(test_path: str) -> set[str]:
+    testing_files = find_enable_testing_files(test_path)
+    all_flags = set()
+    for test_file in testing_files:
+        current = test_file.parent
+        sub_path = test_file.parent.name
+        while True:
+            parent_file = current.parent / "CMakeLists.txt"
+            if not parent_file.exists() or parent_file == current:
+                break
+            flags = get_add_subdirectory_guards(parent_file, sub_path)
+            all_flags.update(flags)
+            sub_path = current.name
+            current = current.parent
+    return all_flags
 
-def cmake_build(test_path: str):
-    cmake_files = find_cmake_files(test_path)
-    if cmake_files and check_ctest_defined(cmake_files):
-        logging.info(f"Build with CMake for {test_path}.")
 
-        flags = parse_ctest_flags(cmake_files)
-        
-        #cmake_build(cmake_files, flags)
-        #def cmake_build(self, cmake_files: list[str], flags: set[str]):
 
-        cdep_names = set()
-        for cf in cmake_files:
-            cdep = extract_cmake_packages(cf)
-            cdep_names = cdep | cdep_names
-        
-        print(cdep_names)
-        packages_needed = set()
-        for cdep in cdep_names:
-            package = find_apt_package(cdep)
-            if package:
-                packages_needed.add(package)
-
-        print(packages_needed)
-        packages = check_packages_installed(list(packages_needed))
-        print(packages)
-"""

@@ -39,7 +39,7 @@ class LLMAdapter():
     def _send_request(self, prompt: Prompt):
         raise NotImplementedError
 
-    def generate(self, prompt: Prompt) -> str: # TODO: return string?
+    def generate(self, prompt: Prompt) -> str:
         return self._cached_request(self.model, prompt)
 
     
