@@ -17,6 +17,10 @@ def start():
     parser.add_argument("-sha", type=str, default="", help="Select a certain repository commit version.")
     #parser.add_argument("-filter", type=str, choices=["simple", "LLM", "custom"], default="simple", help="Filter strategy to use (default: simple).")
     
+    parser.add_argument("--popular", action="store_true", help="Collect and filter popular repos from github.")
+    parser.add_argument("-stars", type=int, default=1000, help="Selects only repos with more than x number of stars.")
+    parser.add_argument("-limit", type=int, default=5, help="Selects x amount of repos.")
+
     parser.add_argument("--crawl", action="store_true", help="Collect and filter commits history.")
     parser.add_argument("--separate", action="store_true", help="Saves each filtered commit separately with commit message and diff.")
 
@@ -33,7 +37,8 @@ def start():
 
     if args.crawl:
         logging.info("Starting Github Crawler...")
-        crawler = GithubCrawler(url=args.repo, sha=args.sha, separate=args.separate)
+        crawler = GithubCrawler(url=args.repo, sha=args.sha, separate=args.separate,
+                                popular=args.popular, stars=args.stars, limit=args.limit)
         crawler.crawl()
 
     if args.docker:

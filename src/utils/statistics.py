@@ -1,6 +1,6 @@
 import logging
 
-class Statistics:
+class FilterStats:
     def __init__(self):
         self.num_commits = 0
         self.perf_commits = 0
