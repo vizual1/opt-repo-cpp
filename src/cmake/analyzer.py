@@ -3,6 +3,53 @@ from pathlib import Path
 from typing import List, Tuple, Dict
 from src.cmake.parser import Parser
 
+import logging
+from src.cmake.parser import CMakeParser
+from src.utils.package_resolver import find_apt_package
+
+class CMakeAnalyzer:
+    """
+    High-level interface for analyzing CMake repositories.
+    """
+    def __init__(self, root: str):
+        self.root = root
+        self.parser = CMakeParser(self.root)
+        self.cmakelists = self.parser.find_files(search="CMakeLists.txt")
+        logging.info(f"CMakeLists.txt: {self.cmakelists}")
+
+    def is_cmake_root(self) -> bool:
+        return self.parser.is_cmake_root()
+
+    def has_testing(self) -> bool:
+        return (self.parser.check_add_test_defined(self.cmakelists) and 
+                self.parser.check_enable_testing_defined(self.cmakelists))
+    #TODO: self.parser.check_add_test_defined(self.cmakelists) or add_cpp_test?
+
+    def has_build_testing_flag(self) -> bool:
+        return self.parser.check_build_testing_flag(self.cmakelists)
+
+    def has_ctest(self) -> bool:
+        return self.parser.check_ctest_defined(self.cmakelists)
+    
+    def has_enable_testing(self) -> bool:
+        return self.parser.check_enable_testing_defined(self.cmakelists)
+    
+    def get_testfile(self) -> list[str]:
+        return self.parser.find_files(search="CTestTestfile.cmake")
+    
+    def get_ctest_flags(self) -> set[str]:
+        return self.parser.parse_ctest_flags(self.cmakelists)
+
+    def get_enable_testing_flags(self) -> set[str]:
+        return self.parser.find_testing_flags(self.root)
+
+    def get_dependencies(self) -> set[str]:
+        deps = set()
+        for cf in self.cmakelists:
+            deps |= self.parser.get_cmake_packages(cf)
+        return deps
+
+
 class CMakeFlagsAnalyzer:
     def __init__(self, root: str):
         self.root = Path(root).resolve()
@@ -16,7 +63,7 @@ class CMakeFlagsAnalyzer:
         self.endif_pattern = re.compile(r'^\s*endif', re.IGNORECASE)
 
 
-    def find_targets(self) -> Tuple[List[Tuple[Path, int]], List[Tuple[Path, int]]]:
+    def _find_targets(self) -> Tuple[List[Tuple[Path, int]], List[Tuple[Path, int]]]:
         """
         Finds all enable_testing() and add_test() in CMakeLists.txt.
         Saves as a tuple of Path to CMakeLists.txt and line number.
@@ -35,7 +82,7 @@ class CMakeFlagsAnalyzer:
         return enable_testing_files, add_test_files
 
 
-    def find_add_subdirectory_guard(self, root_file: Path, sub_file: Path) -> List[Tuple[Path, List[str]]]:
+    def _find_add_subdirectory_guard(self, root_file: Path, sub_file: Path) -> List[Tuple[Path, List[str]]]:
         """
         Find the flags needed to reach add_subdirectory (directory with CMakeLists.txt with enable_testing() or add_test())
         """
@@ -86,7 +133,7 @@ class CMakeFlagsAnalyzer:
         return guards
 
 
-    def collect_all_guards(self, target_file: Path) -> List[Tuple[Path, List[str]]]:
+    def _collect_all_guards(self, target_file: Path) -> List[Tuple[Path, List[str]]]:
         """
         Collects all flags of nested add_subdirectory until directory 
         with CMakeLists.txt with enable_testing() or add_test().
@@ -106,10 +153,10 @@ class CMakeFlagsAnalyzer:
                 break
 
             if parent_cmake.exists():
-                guards = self.find_add_subdirectory_guard(parent_cmake, current_file)
+                guards = self._find_add_subdirectory_guard(parent_cmake, current_file)
                 if guards:
                     guard_file, conditions = guards[0]
-                    test = self.collect_all_guards(guard_file)
+                    test = self._collect_all_guards(guard_file)
                     if test:
                         for t in test:
                             p, c = t
@@ -128,7 +175,7 @@ class CMakeFlagsAnalyzer:
         return guards_chain[::-1]  # reverse to go root to target
     
 
-    def parse_conditional_targets(self, cmake_file: Path, pattern: re.Pattern) -> List[List[str]]:
+    def _parse_conditional_targets(self, cmake_file: Path, pattern: re.Pattern) -> List[List[str]]:
         """
         Parse a single CMake file for all pattern (add_test or enable_testing),
         capturing the full conditional stack for each occurrence.
@@ -176,7 +223,7 @@ class CMakeFlagsAnalyzer:
         return targets
 
 
-    def analyze_target_file(self, cmake_file: Path, pattern: re.Pattern) -> List[List[str]]:
+    def _analyze_target_file(self, cmake_file: Path, pattern: re.Pattern) -> List[List[str]]:
         """
         Combine recursive add_subdirectory guards and local conditional stacks
         for every occurrence of the pattern.
@@ -184,8 +231,8 @@ class CMakeFlagsAnalyzer:
         all_targets = []
 
         # Collect add_subdirectory guards up to root
-        guards_chain = self.collect_all_guards(cmake_file)
-        local_targets = self.parse_conditional_targets(cmake_file, pattern)
+        guards_chain = self._collect_all_guards(cmake_file)
+        local_targets = self._parse_conditional_targets(cmake_file, pattern)
 
         for local_stack in local_targets:
             combined_stack = []
@@ -198,16 +245,16 @@ class CMakeFlagsAnalyzer:
 
 
     def analyze(self) -> Dict[str, Dict[str, List[List[str]]]]:
-        enable_testing_targets, add_test_targets = self.find_targets()
+        enable_testing_targets, add_test_targets = self._find_targets()
 
         results = {"enable_testing_flags": {}, "add_test_flags": {}}
 
         for file, _ in enable_testing_targets:
-            stacks = self.analyze_target_file(file, self.enable_testing_pattern)
+            stacks = self._analyze_target_file(file, self.enable_testing_pattern)
             results["enable_testing_flags"][str(file)] = stacks
 
         for file, _ in add_test_targets:
-            stacks = self.analyze_target_file(file, self.add_test_pattern)
+            stacks = self._analyze_target_file(file, self.add_test_pattern)
             results["add_test_flags"][str(file)] = stacks
 
         return results

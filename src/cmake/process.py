@@ -1,6 +1,7 @@
 
 import logging, subprocess
 from pathlib import Path
+from src.cmake.analyzer import CMakeAnalyzer, CMakeFlagsAnalyzer
 
 class CMakeProcess:
     def __init__(self, root: str, build: str, test: str, jobs: int = 1):
@@ -8,14 +9,15 @@ class CMakeProcess:
         self.build = build
         self.test = test
         self.jobs = jobs
+        self.flags_dict = CMakeFlagsAnalyzer(self.root).analyze()
         self.flags: list[tuple[str, str]] = [] # TODO: add a flags analyzer to get testing flags
 
-    def run(self):
+    def run(self) -> None:
         self._configure()
         self._cmake()
         self._ctest()
 
-    def _configure(self):
+    def _configure(self) -> None:
         # TODO: maybe no optimization
         cmd = ['cmake', '-S', self.root, '-B', self.build, f'-DCMAKE_BUILD_TYPE=Release']
         for flag, set in self.flags:
@@ -27,7 +29,7 @@ class CMakeProcess:
         except subprocess.CalledProcessError:
             logging.error(f"CMake configuration failed for {self.build}.")
 
-    def _cmake(self):
+    def _cmake(self) -> None:
         cmd = ['cmake', '--build', self.build]
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
@@ -38,7 +40,7 @@ class CMakeProcess:
         except subprocess.CalledProcessError:
             logging.error(f"CMake build failed for {self.root}.")
 
-    def _ctest(self):
+    def _ctest(self) -> None:
         test_dir = Path(self.test)
         cmd = ['ctest', '--output-on-failure']
         try:
@@ -52,8 +54,36 @@ class CMakeProcess:
             
 
 class CMakePackageHandler:
-    def __init__(self, packages: list[str]):
-        self.packages = packages
+    def __init__(self, analyzer: CMakeAnalyzer):
+        self.analyzer = analyzer
+        self.packages = self._get_packages()
+
+    def _get_packages(self) -> set[str]:
+        deps = self.analyzer.get_dependencies()
+        packages_needed = set()
+        for dep in deps:
+            # TODO: add cache load if exist otherwise find_apt_package and save
+            pkg = self._find_apt_package(dep)
+            if pkg:
+                packages_needed.add(pkg)
+        return packages_needed
+
+    def _find_apt_package(self, cdep_name: str) -> str:
+        """Find corresponding apt package from CMake dependency name."""
+        try:
+            logging.info(f"Trying to find_apt_package: {cdep_name}")
+            result = subprocess.run(['apt-cache', 'search', cdep_name],
+                                    capture_output=True, text=True, check=False)
+            lines = result.stdout.splitlines()
+            dev_packages = [line.split(' - ')[0] for line in lines if 'dev' in line]
+            if dev_packages:
+                logging.info(f"Found dev_packages for {cdep_name}: {dev_packages[0]}")
+                return dev_packages[0]
+        except FileNotFoundError:
+            logging.error(f"No dev_packages for {cdep_name} found.")
+            pass
+
+        return ''
 
     def packages_installer(self) -> list[str]:
         result_packages = []
@@ -74,7 +104,7 @@ class CMakePackageHandler:
             logging.error(f"An error occurred: {e}")
             return False
 
-    def _install_package(self, package: str):
+    def _install_package(self, package: str) -> None:
         try:
             subprocess.run(['apt', 'install', '-y', package], check=True)
             logging.info(f"{package} has been installed.")

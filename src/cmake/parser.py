@@ -19,7 +19,7 @@ class CMakeParser:
 
     def check_ctest_defined(self, cmake_files: list[str]) -> bool:
         """Checks if include(CTest) is defined in CMake."""
-        ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)', re.IGNORECASE)
+        ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)', re.IGNORECASE | re.DOTALL)
 
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
@@ -31,7 +31,7 @@ class CMakeParser:
 
     def check_enable_testing_defined(self, cmake_files: list[str]) -> bool:
         """Checks if enable_testing() is defined in CMake."""
-        enable_testing_pattern = re.compile(r'enable_testing\s*\(\s*\)', re.IGNORECASE)
+        enable_testing_pattern = re.compile(r'enable_testing\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
 
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
@@ -42,14 +42,25 @@ class CMakeParser:
         return False
     
     def check_add_test_defined(self, cmake_files: list[str]) -> bool:
-        add_test_pattern = re.compile(r'add_test\s*\(\s*\)', re.IGNORECASE)
-        add_cpp_test_pattern = re.compile(r'add_cpp_test\s*\(\s*\)', re.IGNORECASE)
+        add_test_pattern = re.compile(r'add_test\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
+        add_cpp_test_pattern = re.compile(r'add_cpp_test\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
 
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
             if add_test_pattern.search(content) or add_cpp_test_pattern.search(content):
                 logging.info(f"CMakeFiles with add_test in {cf}.")
+                return True
+        return False
+    
+    def check_build_testing_flag(self, cmake_files: list[str]) -> bool:
+        build_testing_pattern = re.compile(r'\bBUILD_TESTING\b', re.IGNORECASE)
+
+        for cf in cmake_files:
+            with open(cf, 'r', errors='ignore') as file:
+                content = file.read()
+            if build_testing_pattern.search(content):
+                logging.info(f"CMakeLists.txt with BUILD_TESTING in {cf}.")
                 return True
         return False
 

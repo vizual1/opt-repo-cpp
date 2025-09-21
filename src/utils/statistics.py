@@ -1,6 +1,6 @@
 import logging
 
-class FilterStats:
+class CrawlStats:
     def __init__(self):
         self.num_commits = 0
         self.perf_commits = 0

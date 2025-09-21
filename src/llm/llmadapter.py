@@ -30,10 +30,10 @@ class LLMAdapter():
         return response
     
     # TODO: cache
-    def _load_cache(self):
+    def _load_cache(self) -> dict:
         return {}
     
-    def _save_cache(self):
+    def _save_cache(self) -> None:
         return
 
     def _send_request(self, prompt: Prompt):

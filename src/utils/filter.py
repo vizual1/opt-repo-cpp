@@ -53,9 +53,26 @@ def llm_filter(llm: OpenRouterLLM, repo_name: str, commit: Commit) -> bool:
     """
     return 'YES' in res and 'NO' not in res
 
-# TODO: add other filters, CMakeLists.txt is at root
-# TODO: enable_testing() and add_test() in CMakeLists.txt
-# TODO: filter commits by changes to cpp code
 
+def test_filter(commit: Commit) -> bool:
+    """
+    Returns True if the commit does NOT touch test files.
+    """
+    for f in commit.files:
+        file_path = f.filename
+        if file_path.startswith("test/") or file_path.startswith("tests/"):
+            return False
+    return True
+
+def cpp_filter(commit: Commit) -> bool:
+    """
+    Returns True if the commit modifies any C++ source or header files.
+    """
+    cpp_extensions = (".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp")
+    
+    for f in commit.files:
+        if f.filename.endswith(cpp_extensions):
+            return True
+    return False
 
  
