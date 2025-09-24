@@ -1,6 +1,14 @@
 import logging
+from collections import Counter
 
-class CrawlStats:
+class RepoStats:
+    def __init__(self):
+        self.test_dirs = Counter()
+
+    def write_final_log(self):
+        logging.info(f"Final Counter: {self.test_dirs}")
+
+class CommitStats:
     def __init__(self):
         self.num_commits = 0
         self.perf_commits = 0

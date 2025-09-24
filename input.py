@@ -1,7 +1,5 @@
-import argparse, logging
-from src.crawler import GithubCrawler
-from src.test import Tester
-from src.docker.generator import DockerBuilder
+import argparse
+from src.pipeline import Pipeline
 
 def start():
     parser = argparse.ArgumentParser(description="Collect, Filter and Test C++ Github Repositories.")
@@ -23,20 +21,6 @@ def start():
 
     args = parser.parse_args()
 
-    if args.crawl:
-        logging.info("Starting Github Crawler...")
-        crawler = GithubCrawler(url=args.url, filter=args.filter, sha=args.sha, separate=args.separate,
-                                popular=args.popular, stars=args.stars, limit=args.limit)
-        crawler.crawl()
-
-    if args.docker:
-        logging.info("Building Dockerfile...")
-        docker = DockerBuilder(url=args.url)
-        docker.create(sha=args.sha, ignore_conflict=args.ignore_conflict)
-
-    if args.test:
-        logging.info("Starting Testing...")
-        tester = Tester() 
-        tester.test(url=args.url)
-
-    return 0
+    pipeline = Pipeline(crawl=args.crawl, docker=args.docker, test=args.docker,
+                        url=args.url, popular=args.popular, stars=args.stars, limit=args.limit,
+                        sha=args.sha, filter=args.filter, separate=args.separate)

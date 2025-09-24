@@ -1,6 +1,9 @@
 import os, re, logging
 from collections import deque
 from pathlib import Path
+from src.config import FLAG_KEYWORDS
+
+FLAG_PATTERNS = [re.compile(rf"(?:\(|\b){kw}\b") for kw in FLAG_KEYWORDS]
 
 class CMakeParser:
     def __init__(self, root: str):
@@ -17,51 +20,54 @@ class CMakeParser:
     def is_cmake_root(self) -> bool:
         return os.path.exists(os.path.join(self.root, "CMakeLists.txt"))
 
-    def check_ctest_defined(self, cmake_files: list[str]) -> bool:
-        """Checks if include(CTest) is defined in CMake."""
+    def check_enable_testing(self, cmake_files: list[str]) -> bool:
+        """Checks if enable_testing() is called in CMakeLists.txt"""
+        enable_testing_pattern = re.compile(r'enable_testing\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
         ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)', re.IGNORECASE | re.DOTALL)
 
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
-            if ctest_pattern.search(content):
-                logging.info(f"CMakeFiles with CTest in {cf}.")
-                return True
-        return False
-
-    def check_enable_testing_defined(self, cmake_files: list[str]) -> bool:
-        """Checks if enable_testing() is defined in CMake."""
-        enable_testing_pattern = re.compile(r'enable_testing\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
-
-        for cf in cmake_files:
-            with open(cf, 'r', errors='ignore') as file:
-                content = file.read()
-            if enable_testing_pattern.search(content):
-                logging.info(f"CMakeFiles with enable_testing in {cf}.")
+            if enable_testing_pattern.search(content) or ctest_pattern.search(content):
+                logging.info(f"CMakeFiles with enable_testing() in {cf}.")
                 return True
         return False
     
-    def check_add_test_defined(self, cmake_files: list[str]) -> bool:
+    def check_add_test(self, cmake_files: list[str]) -> bool:
         add_test_pattern = re.compile(r'add_test\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
-        add_cpp_test_pattern = re.compile(r'add_cpp_test\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
+        discover_pattern = re.compile(r'(gtest|catch|doctest)_discover_tests\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
+        include_pattern = re.compile(r'include\s*\(\s*(GoogleTest|Catch|doctest)\s*\)', re.IGNORECASE)
 
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
-            if add_test_pattern.search(content) or add_cpp_test_pattern.search(content):
-                logging.info(f"CMakeFiles with add_test in {cf}.")
+            
+            found_add_test = add_test_pattern.search(content)
+            found_discover = discover_pattern.search(content)
+            found_include = include_pattern.search(content)
+
+            if found_add_test:
+                logging.info(f"Found add_test(...) in {cf}.")
+            if found_discover:
+                logging.info(f"Found discover_tests(...) in {cf}.")
+            if found_include:
+                logging.info(f"Found include(GoogleTest|Catch|doctest) in {cf}.")
+            
+            if found_add_test or found_discover:
                 return True
+            
         return False
     
     def check_build_testing_flag(self, cmake_files: list[str]) -> bool:
-        build_testing_pattern = re.compile(r'\bBUILD_TESTING\b', re.IGNORECASE)
-
         for cf in cmake_files:
-            with open(cf, 'r', errors='ignore') as file:
+            with open(cf, "r", errors="ignore") as file:
                 content = file.read()
-            if build_testing_pattern.search(content):
-                logging.info(f"CMakeLists.txt with BUILD_TESTING in {cf}.")
-                return True
+            flag = False
+            for pattern in FLAG_PATTERNS:
+                if pattern.search(content):
+                    logging.info(f"CMakeLists.txt with {pattern.pattern} in {cf}.")
+                    flag = True
+            return flag
         return False
 
     # TODO: fix checks and parsers below, currently all over the place

@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-#from input import start
 
 logging.basicConfig(filename='logs/logging_{:%Y-%m-%d-%H-%M}.log'.format(datetime.now()),
                     filemode='a',
@@ -14,9 +13,10 @@ def main() -> None:
     #out = test.analyze()["add_test_flags"]
     #print(out)
     
-    from src.crawler import GithubCrawler
-    crawl = GithubCrawler(popular=True, limit=200)
-    crawl.crawl()
+    from src.pipeline import Pipeline
+    Pipeline(crawl=True, popular=True, limit=10, analyze=True).run()
+
+    #from input import start
     #start()
 
 if __name__ == '__main__':

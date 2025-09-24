@@ -10,6 +10,7 @@ class CMakeProcess:
         self.test = test
         self.jobs = jobs
         self.flags_dict = CMakeFlagsAnalyzer(self.root).analyze()
+        logging.info(f"FLAGS: {self.flags_dict}")
         self.flags: list[tuple[str, str]] = [] # TODO: add a flags analyzer to get testing flags
 
     def run(self) -> None:

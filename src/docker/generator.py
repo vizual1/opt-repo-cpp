@@ -1,27 +1,37 @@
 import logging
 import src.config as conf
-from src.utils.commit import *
-#from src.cmake.adapter import CMakeAdapter
-from src.utils.conflict_resolver import *
+from src.utils.helper import *
+from github import Github, Auth
+from src.utils.resolver import *
 from src.cmake.process import CMakePackageHandler, CMakeProcess
 from src.cmake.analyzer import CMakeAnalyzer
 
 class DockerBuilder:
-    def __init__(self, url: str = ""):
-        self.storage = conf.storage
-        self.repo_ids = get_repo_ids(os.path.join(self.storage['repo_urls']), url)
+    def __init__(self, url: str = "", sha: str = "", ignore_conflict: bool = False):
+        access_token: str = conf.github['access_token']
+        auth = Auth.Token(access_token)
+        self.git = Github(auth=auth)
+        rate_limit = self.git.get_rate_limit()
+        logging.info(f"GitHub rate limit rate: {rate_limit.rate}")
 
-    def create(self, sha: str = "", ignore_conflict: bool = False):
+        self.url = url
+        self.sha = sha
+        self.ignore_conflict = ignore_conflict
+
+        self.storage = conf.storage
+        self.repo_ids = get_repo_ids(os.path.join(self.storage['repo_urls']), self.url)
+
+    def create(self):
         for repo in self.repo_ids:
             repo_info = repo.split("/")
             owner = repo_info[0].strip()
             name = repo_info[1].strip()
             folder = f"{owner}_{name}"
 
-            if not sha:
+            if not self.sha:
                 commits = get_filtered_commits(os.path.join(self.storage['dataset'], f"{folder}_filtered.txt"))
             else:
-                commits = get_filtered_commits(os.path.join(self.storage['dataset'], f"{folder}_{sha}.txt"))
+                commits = get_filtered_commits(os.path.join(self.storage['dataset'], f"{folder}_{self.sha}.txt"))
 
             for (current_sha, parent_sha) in commits:
                 commit_path = os.path.join(self.storage['dataset'], f"{folder}_{current_sha}")
@@ -34,8 +44,8 @@ class DockerBuilder:
                     get_commit(parent_url, parent_path)
                 parent_analyzer = CMakeAnalyzer(parent_path)
 
-                #parent_analyzer = CMakeFlagsAnalyzer(parent_path)
-                #testing_flags = parent_analyzer.analyze()
+                #parent_flag_analyzer = CMakeFlagsAnalyzer(parent_path)
+                #testing_flags = parent_flag_analyzer.analyze()
                 #logging.info(f"TESTING: {testing_flags}")
 
                 current_url = f"https://api.github.com/repos/{owner}/{name}/zipball/{current_sha}"
@@ -70,10 +80,10 @@ class DockerBuilder:
                 logging.info(f"Packages parent: {parent_packages}") 
                 logging.info(f"Packages current: {current_packages}")
                 
-                if ignore_conflict:
+                if self.ignore_conflict:
                     logging.warning("Package conflicts are ignored.")
                 
-                if ignore_conflict or not check_package_conflict(parent_packages, current_packages):
+                if self.ignore_conflict or not check_package_conflict(parent_packages, current_packages):
                     parent_package_handler.packages_installer()
                     current_package_handler.packages_installer()
 
@@ -83,8 +93,9 @@ class DockerBuilder:
                         test_path = testfile_path[0].removesuffix("CTestTestfile.cmake")
                     else:
                         test_path = parent_build_path
-                    CMakeProcess(parent_path, parent_build_path, test_path).run()
+                    CMakeProcess(parent_path, parent_build_path, test_path) #.run()
 
+                    assert False
                     current_build_path = os.path.join(current_path, "build")
                     testfile_path = CMakeAnalyzer(current_build_path).get_testfile()
                     if test_path: 
