@@ -15,7 +15,7 @@ class StructureFilter:
         self.repo = self.git.get_repo(self.repo_id)
         self.head = self.repo.get_commits()[0].sha
         self.cmake_files, self.tree_paths, self.tree = get_repo_tree(self.repo, self.head)
-        self.all_test_dirs = Counter()
+        self.test_dirs = Counter()
 
     def is_valid(self) -> bool:
         if has_root_cmake(self.cmake_files):
@@ -45,6 +45,7 @@ class StructureFilter:
             logging.info(f"CMake at root found in GitHub repository {self.repo.full_name}.")
 
             with tempfile.TemporaryDirectory() as tmpdir:
+                
                 get_cmakelists(self.repo, self.cmake_files, tmpdir)
                 analyzer = CMakeAnalyzer(tmpdir)
 
@@ -54,9 +55,9 @@ class StructureFilter:
                     
                     test_dirs = extract_test_dirs(self.tree)
                     if test_dirs:
-                        logging.info(f"TEST_DIRS: {test_dirs} in GitHub repository {self.repo.full_name}")
+                        logging.info(f"Test directories: {test_dirs} in GitHub repository {self.repo.full_name}")
                         for d in test_dirs:
-                            self.all_test_dirs[d] += 1
+                            self.test_dirs[d] += 1
                         conv_test_dir = test_dirs & conf.TEST_DIR
 
                         if conv_test_dir:

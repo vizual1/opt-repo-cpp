@@ -9,9 +9,12 @@ class CMakeProcess:
         self.build = build
         self.test = test
         self.jobs = jobs
+        # TODO: process?
+        self.analyzer = CMakeAnalyzer(self.root)
         self.flags_dict = CMakeFlagsAnalyzer(self.root).analyze()
-        logging.info(f"FLAGS: {self.flags_dict}")
-        self.flags: list[tuple[str, str]] = [] # TODO: add a flags analyzer to get testing flags
+        self.flags_info = CMakeProcessAnalyzer(self.root).analyze_flags()
+        logging.info(f"Flags information:\n{self.flags_info}")
+        self.flags: list[tuple[str, str]] = []
 
     def run(self) -> None:
         self._configure()
@@ -111,3 +114,33 @@ class CMakePackageHandler:
             logging.info(f"{package} has been installed.")
         except subprocess.CalledProcessError:
             logging.error(f"Failed to install {package}.")
+
+
+class CMakeProcessAnalyzer:
+    """Class used for analyzing CMakeLists.txt by running subprocess."""
+    def __init__(self, root: str):
+        self.root = root
+
+    def analyze_flags(self) -> str:
+        repo_root = Path(self.root)
+        build_dir = repo_root / "build"
+        build_dir.mkdir(exist_ok=True)
+
+        logging.info(f"Configuring project at {repo_root}")
+        try:
+            result_config = subprocess.run(["cmake", str(repo_root)], cwd=build_dir, capture_output=True, text=True, check=True)
+            logging.info(f"CMake configure output:\n{result_config.stdout}")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"FAILED: cmake configure at {repo_root}")
+            logging.error(f"stderr:\n{e.stderr}")
+            return ""
+        
+        logging.info(f"Querying cached variables with 'cmake -LH'")
+        try:
+            result_flags = subprocess.run(["cmake", "-LH"], cwd=build_dir, capture_output=True, text=True, check=True)
+            logging.info(f"CMake -LH output:\n{result_flags.stdout}")
+            return result_flags.stdout
+        except subprocess.CalledProcessError as e:
+            logging.error(f"FAILED: cmake -LH at {repo_root}")
+            logging.error(f"stderr:\n{e.stderr}")
+            return ""

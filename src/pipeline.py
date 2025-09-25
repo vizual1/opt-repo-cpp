@@ -43,14 +43,13 @@ class Pipeline:
             for repo in valid_repos:
                 commit_pipeline = CommitPipeline(repo=repo, sha=self.sha, filter=self.filter, separate=self.separate)
                 commit_pipeline.get_commits()
-
+    
     def _docker(self):
         docker = DockerBuilder(url=self.url, sha=self.sha, ignore_conflict=self.ignore_conflict)
         docker.create()
-        # TODO: call DockerBuilder from here?
 
 
-class RepositoryPipeline(Pipeline):
+class RepositoryPipeline:
     """"""
     def __init__(self, url: str = "", popular: bool = False, stars: int = 1000, limit: int = 10):
         super().__init__()
@@ -66,30 +65,32 @@ class RepositoryPipeline(Pipeline):
         crawl = RepositoryCrawler(url=self.url, popular=self.popular, stars=self.stars, limit=self.limit)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            filter = StructureFilter(repo_id, crawl.git)
-            if filter.is_valid():
-                Writer(filter.repo.full_name).write_repo()
-                self.valid_repos.append(filter.repo)
+            structure = StructureFilter(repo_id, crawl.git)
+            if structure.is_valid():
+                Writer(structure.repo.full_name).write_repo()
+                self.valid_repos.append(structure.repo)
                 
     def analyze_repos(self) -> None:
         crawl = RepositoryCrawler(url=self.url, popular=self.popular, stars=self.stars, limit=self.limit)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            filter = StructureFilter(repo_id, crawl.git)
-            filter.analyze()
-            Writer(filter.repo.full_name).write_repo()
-            self.stats.test_dirs += filter.all_test_dirs
+            structure = StructureFilter(repo_id, crawl.git)
+            structure.analyze()
+            Writer(structure.repo.full_name).write_repo()
+            self.stats.test_dirs += structure.test_dirs
         self.stats.write_final_log()
 
 
-class CommitPipeline(CommitStats):
+class CommitPipeline:
     """"""
     def __init__(self, repo: Repository, sha: str = "", filter: str = "simple", separate: bool = False):
-        super().__init__()
         self.stats = CommitStats()
         self.repo = repo
-        self.commits = self.repo.get_commits()
         self.sha = sha
+        if self.sha:
+            self.commits = self.repo.get_commits(sha=sha)
+        else:
+            self.commits = self.repo.get_commits()
         self.filter = filter
         self.separate = separate
 
