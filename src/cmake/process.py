@@ -1,119 +1,130 @@
 
-import logging, subprocess
+import logging, subprocess, os, shutil, re
 from pathlib import Path
-from src.cmake.analyzer import CMakeAnalyzer, CMakeFlagsAnalyzer
+from src.cmake.analyzer import CMakeAnalyzer
+from typing import Optional
+from src.cmake.package import CMakePackageHandler
 
 class CMakeProcess:
-    def __init__(self, root: str, build: str, test: str, jobs: int = 1):
+    """Class configures, builds and tests commits."""
+    def __init__(self, root: str, build: str, test: str, jobs: int = 1, analyzer: Optional[CMakeAnalyzer] = None):
         self.root = root
-        self.build = build
-        self.test = test
+        self.build_path = build
+        self.test_path = test
         self.jobs = jobs
-        # TODO: process?
-        self.analyzer = CMakeAnalyzer(self.root)
-        self.flags_dict = CMakeFlagsAnalyzer(self.root).analyze()
-        self.flags_info = CMakeProcessAnalyzer(self.root).analyze_flags()
-        logging.info(f"Flags information:\n{self.flags_info}")
-        self.flags: list[tuple[str, str]] = []
 
-    def run(self) -> None:
-        self._configure()
-        self._cmake()
-        self._ctest()
+        self.analyzer = analyzer if analyzer is not None else CMakeAnalyzer(self.root)
+        self.flags = self.analyzer.has_build_testing_flag()
+        #self.flags_info = CMakeProcessAnalyzer(self.root).analyze_flags()
 
-    def _configure(self) -> None:
-        # TODO: maybe no optimization
-        cmd = ['cmake', '-S', self.root, '-B', self.build, f'-DCMAKE_BUILD_TYPE=Release']
-        for flag, set in self.flags:
-            cmd.append(f'-D{flag}={set}')
+    def build(self) -> bool:
+        package_handler = CMakePackageHandler(self.analyzer)
+        package_handler.packages_installer()
+        return self._configure() and self._cmake()
+    
+    def test(self) -> bool:
+        return self._ctest()
+
+    def _configure(self) -> bool:
+        # TODO: maybe no optimization, gcovr + llvm coverage information
+        cmakelists = Path(self.root) / "CMakeLists.txt"
+        needs_old_policy = False
+        if cmakelists.exists():
+            text = cmakelists.read_text()
+            match = re.search(r"cmake_minimum_required\s*\(VERSION\s*([0-9.]+)", text, re.I)
+            if match:
+                version = tuple(map(int, match.group(1).split(".")))
+                if version < (3, 5):
+                    needs_old_policy = True
+
+        cmd = ['cmake', '-S', self.root, '-B', self.build_path, 
+               #f'-DCMAKE_BUILD_TYPE=Release',
+               '-DCMAKE_C_COMPILER=clang',
+               '-DCMAKE_BUILD_TYPE=Debug',
+               '-DCMAKE_CXX_COMPILER=clang++',
+               '-DCMAKE_CXX_FLAGS=--coverage -O0 -g',
+               '-DCMAKE_EXE_LINKER_FLAGS=--coverage'
+        ]
+
+        if needs_old_policy:
+            logging.info("CMake needs olf policy, setting CMAKE_POLICY_VERSION_MINIMUM=3.5")
+            cmd.append("-DCMAKE_POLICY_VERSION_MINIMUM=3.5")
+
+        for flag in self.flags.keys():
+            if 'disable' in flag.lower():
+                cmd.append(f'-D{flag}=OFF')
+            else:
+                cmd.append(f'-D{flag}=ON')
+        
         try:
             logging.info(f"Configure CMake: {cmd}")
-            subprocess.run(cmd, check=True)
-            logging.info(f"CMake configured {self.build} successfully.")
-        except subprocess.CalledProcessError:
-            logging.error(f"CMake configuration failed for {self.build}.")
+            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            logging.info(f"CMake configured {self.build_path} successfully:\n{result.stdout}")
+            return True
+        except subprocess.CalledProcessError as e:
+            logging.error(f"CMake configuration failed for {self.build_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+            return False
 
-    def _cmake(self) -> None:
-        cmd = ['cmake', '--build', self.build]
+    
+    def _cmake(self) -> bool:
+        cmd = ['cmake', '--build', self.build_path]
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
         try:
             logging.info(f"Build CMake: {cmd}")
-            subprocess.run(cmd, check=True)
-            logging.info(f"CMake build completed for {self.root}.")
-        except subprocess.CalledProcessError:
-            logging.error(f"CMake build failed for {self.root}.")
-
-    def _ctest(self) -> None:
-        test_dir = Path(self.test)
-        cmd = ['ctest', '--output-on-failure']
-        try:
-            logging.info(f"CTest: {cmd} in {self.test}")
-            result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logging.info(f"CMake tests passed for {self.test}")
-            logging.info(result.stdout)
+            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            logging.info(f"CMake build completed for {self.root}:\n{result.stdout}")
+            return True
         except subprocess.CalledProcessError as e:
-            logging.error(f"CMake tests failed for {self.test}")
-            logging.info(e.stdout)
-            
-
-class CMakePackageHandler:
-    def __init__(self, analyzer: CMakeAnalyzer):
-        self.analyzer = analyzer
-        self.packages = self._get_packages()
-
-    def _get_packages(self) -> set[str]:
-        deps = self.analyzer.get_dependencies()
-        packages_needed = set()
-        for dep in deps:
-            # TODO: add cache load if exist otherwise find_apt_package and save
-            pkg = self._find_apt_package(dep)
-            if pkg:
-                packages_needed.add(pkg)
-        return packages_needed
-
-    def _find_apt_package(self, cdep_name: str) -> str:
-        """Find corresponding apt package from CMake dependency name."""
-        try:
-            logging.info(f"Trying to find_apt_package: {cdep_name}")
-            result = subprocess.run(['apt-cache', 'search', cdep_name],
-                                    capture_output=True, text=True, check=False)
-            lines = result.stdout.splitlines()
-            dev_packages = [line.split(' - ')[0] for line in lines if 'dev' in line]
-            if dev_packages:
-                logging.info(f"Found dev_packages for {cdep_name}: {dev_packages[0]}")
-                return dev_packages[0]
-        except FileNotFoundError:
-            logging.error(f"No dev_packages for {cdep_name} found.")
-            pass
-
-        return ''
-
-    def packages_installer(self) -> list[str]:
-        result_packages = []
-        for p in self.packages:
-            if not self._is_package_installed(p):
-                logging.info(f"Trying to install package {p}...")
-                self._install_package(p)
-            else:
-                logging.info(f"Package {p} is already installed.")
-
-        return result_packages
-
-    def _is_package_installed(self, package: str) -> bool:
-        try:
-            result = subprocess.run(['dpkg', '-l'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            return package in result.stdout
-        except Exception as e:
-            logging.error(f"An error occurred: {e}")
+            logging.error(f"CMake build failed for {self.root}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
             return False
 
-    def _install_package(self, package: str) -> None:
+    # TODO: ensure that the tests are each run in isolation
+    # check CTestTestfile.cmake -> check add_test(some_name path/to/executable)
+    # use path/to/executable 
+    #      Catch2   => --list-tests 
+    #      GTest    => --gtest_list_tests
+    #      doctest  => --list-test-cases
+    #      add_test => probably just scanning all add_test(some_name path/to/executable)
+    #                   and take path/to/executable as unit test
+    def _ctest(self) -> bool:
+        test_dir = Path(self.test_path)
+        cmd = ['ctest', '--output-on-failure']
         try:
-            subprocess.run(['apt', 'install', '-y', package], check=True)
-            logging.info(f"{package} has been installed.")
-        except subprocess.CalledProcessError:
-            logging.error(f"Failed to install {package}.")
+            logging.info(f"CTest: {cmd} in {self.test_path}")
+            result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            logging.info(f"CMake tests passed for {self.test_path}\n{result.stdout}")
+            return True
+        except subprocess.CalledProcessError as e:
+            logging.error(f"CMake tests failed for {self.test_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+            return False
+        
+    def _get_default_branch(self, repo_url: str):
+        result = subprocess.run(
+            ["git", "ls-remote", "--symref", repo_url, "HEAD"],
+            capture_output=True, text=True, check=True
+        )
+
+        for line in result.stdout.splitlines():
+            if line.startswith("ref:"):
+                return line.split()[1].split("/")[-1]
+        return "main" 
+        
+    def clone_repo(self, repo_id: str, repo_path: str, branch: str = "main") -> bool:
+        url = f"https://github.com/{repo_id}.git"
+        if branch == "main":
+            branch = self._get_default_branch(url)
+        if os.path.exists(repo_path):
+            shutil.rmtree(repo_path)
+        cmd = ["git", "clone", "--recurse-submodules", "--shallow-submodules", "--branch", branch, f"--depth=1", url, repo_path]
+        logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
+        try:
+            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            logging.info(f"Repository cloned successfully:\n{result.stdout}")
+            return True
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to clone repository {url} (branch: {branch}) into {repo_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+            return False
 
 
 class CMakeProcessAnalyzer:
@@ -126,9 +137,9 @@ class CMakeProcessAnalyzer:
         build_dir = repo_root / "build"
         build_dir.mkdir(exist_ok=True)
 
-        logging.info(f"Configuring project at {repo_root}")
+        logging.info(f"Configuring project at {repo_root}.")
         try:
-            result_config = subprocess.run(["cmake", str(repo_root)], cwd=build_dir, capture_output=True, text=True, check=True)
+            result_config = subprocess.run(["cmake", ".."], cwd=build_dir, capture_output=True, text=True, check=True)
             logging.info(f"CMake configure output:\n{result_config.stdout}")
         except subprocess.CalledProcessError as e:
             logging.error(f"FAILED: cmake configure at {repo_root}")
@@ -137,7 +148,7 @@ class CMakeProcessAnalyzer:
         
         logging.info(f"Querying cached variables with 'cmake -LH'")
         try:
-            result_flags = subprocess.run(["cmake", "-LH"], cwd=build_dir, capture_output=True, text=True, check=True)
+            result_flags = subprocess.run(["cmake", "-LH", ".."], cwd=build_dir, capture_output=True, text=True, check=True)
             logging.info(f"CMake -LH output:\n{result_flags.stdout}")
             return result_flags.stdout
         except subprocess.CalledProcessError as e:

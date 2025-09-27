@@ -1,7 +1,8 @@
 import argparse
-from src.pipeline import Pipeline
+from src.controller import Controller
+from src.utils.dataclasses import Config
 
-def start():
+def start() -> None:
     parser = argparse.ArgumentParser(description="Collect, Filter and Test C++ Github Repositories.")
 
     parser.add_argument("--crawl", action="store_true", help="Collect and filter commits history.")
@@ -23,14 +24,17 @@ def start():
     
     args = parser.parse_args()
 
-    if args.sha and not args.url:
-        parser.error("Argument -sha requires -url to be set.")
-
-    pipeline = Pipeline(
-        crawl=args.crawl, docker=args.docker, test=args.test,
-        # crawling arguments 
-        url=args.url, popular=args.popular, stars=args.stars, limit=args.limit,
-        sha=args.sha, filter=args.filter, separate=args.separate, analyze=args.analyze,
-        # docker building arguments
+    #if args.sha and not args.url:
+    #    parser.error("Argument -sha requires -url to be set.")
+    
+    config = Config(
+        popular=args.popular, stars=args.stars, limit=args.limit,
+        filter=args.filter, separate=args.separate, analyze=args.analyze,
         ignore_conflict=args.ignore_conflict
     )
+
+    pipeline = Controller(
+        crawl=args.crawl, docker=args.docker, test=args.test,
+        url=args.url, sha=args.sha, config=config
+    )
+    pipeline.run()

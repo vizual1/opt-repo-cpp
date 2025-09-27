@@ -1,6 +1,5 @@
-import requests, json
-from src.llm.llmadapter import LLMAdapter 
-from src.llm.prompt import Prompt
+from src.filter.llm.llmadapter import LLMAdapter 
+from src.filter.llm.prompt import Prompt
 
 class OpenRouterLLM(LLMAdapter):
     def __init__(self, model: str):

@@ -1,6 +1,6 @@
 import src.config as conf
 from openai import OpenAI
-from src.llm.prompt import Prompt
+from src.filter.llm.prompt import Prompt
 import hashlib, json
 
 class LLMAdapter():

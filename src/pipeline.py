@@ -1,102 +1,90 @@
-import logging
 from tqdm import tqdm
-from src.utils.crawler import RepositoryCrawler
-from src.utils.filter import StructureFilter, CommitFilter
-from src.utils.statistics import RepoStats, CommitStats
-from src.utils.writer import Writer
 from github.Repository import Repository
-from src.docker.generator import DockerBuilder
-
-class Pipeline:
-    """"""
-    def __init__(self, crawl: bool = False, docker: bool = False, test: bool = False,
-                 # crawling arguments
-                 url: str = "", popular: bool = False, stars: int = 1000, limit: int = 10,
-                 sha: str = "", filter: str = "simple", separate: bool = False, analyze: bool = False,
-                 # docker building arguments
-                 ignore_conflict: bool = False):
-        
-        self.crawl, self.docker, self.test = crawl, docker, test
-
-        self.url, self.popular, self.stars, self.limit = url, popular, stars, limit
-        self.sha, self.filter, self.separate, self.analyze = sha, filter, separate, analyze
-
-        self.ignore_conflict = ignore_conflict
-
-    def run(self):
-        if self.crawl:
-            logging.info("Crawling GitHub repositories...")
-            self._crawl()
-        if self.docker:
-            logging.info("Building Dockerfile...")
-            self._docker()
-        if self.test:
-            logging.info("Testing commits...")
-        
-    def _crawl(self):
-        repo_pipeline = RepositoryPipeline(url=self.url, popular=self.popular, stars=self.stars, limit=self.limit)
-        if self.analyze:
-            repo_pipeline.analyze_repos()
-        else:
-            repo_pipeline.get_repos()
-            valid_repos = repo_pipeline.valid_repos
-            for repo in valid_repos:
-                commit_pipeline = CommitPipeline(repo=repo, sha=self.sha, filter=self.filter, separate=self.separate)
-                commit_pipeline.get_commits()
-    
-    def _docker(self):
-        docker = DockerBuilder(url=self.url, sha=self.sha, ignore_conflict=self.ignore_conflict)
-        docker.create()
-
+from src.utils.crawler import RepositoryCrawler
+from src.filter.structure_filter import StructureFilter
+from src.filter.commit_filter import CommitFilter
+from src.utils.stats import RepoStats, CommitStats
+from src.utils.writer import Writer
+from src.utils.tester import Tester
+from github.Repository import Repository
+from src.utils.dataclasses import Config 
 
 class RepositoryPipeline:
-    """"""
-    def __init__(self, url: str = "", popular: bool = False, stars: int = 1000, limit: int = 10):
-        super().__init__()
+    """
+    This class crawls and filters GitHub repositories.
+    """
+    def __init__(self, url: str, config: Config = Config()):
         self.stats = RepoStats()
         self.url = url
-        self.popular = popular
-        self.stars = stars
-        self.limit = limit
-
+        self.config = config
         self.valid_repos: list[Repository] = []
 
     def get_repos(self) -> None:
-        crawl = RepositoryCrawler(url=self.url, popular=self.popular, stars=self.stars, limit=self.limit)
+        crawl = RepositoryCrawler(self.url, config=self.config)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            structure = StructureFilter(repo_id, crawl.git)
+            structure = StructureFilter(repo_id, self.config.git)
             if structure.is_valid():
-                Writer(structure.repo.full_name).write_repo()
                 self.valid_repos.append(structure.repo)
-                
+                if self.config.popular:
+                    Writer(structure.repo.full_name).write_repo()
+           
     def analyze_repos(self) -> None:
-        crawl = RepositoryCrawler(url=self.url, popular=self.popular, stars=self.stars, limit=self.limit)
+        crawl = RepositoryCrawler(self.url, config=self.config)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            structure = StructureFilter(repo_id, crawl.git)
-            structure.analyze()
-            Writer(structure.repo.full_name).write_repo()
-            self.stats.test_dirs += structure.test_dirs
+            structure = StructureFilter(repo_id, self.config.git)
+            if structure.analyze() and self.config.popular:
+                Writer(structure.repo.full_name).write_repo()
+            self.stats += structure.stats
         self.stats.write_final_log()
 
 
-class CommitPipeline:
-    """"""
-    def __init__(self, repo: Repository, sha: str = "", filter: str = "simple", separate: bool = False):
+class CommitPipeline():
+    """
+    This class filters and saves the commit history of a repository.
+    """
+    def __init__(self, repo: Repository, sha: str, config: Config = Config()):
         self.stats = CommitStats()
+        self.config = config
         self.repo = repo
         self.sha = sha
         if self.sha:
             self.commits = self.repo.get_commits(sha=sha)
         else:
             self.commits = self.repo.get_commits()
-        self.filter = filter
-        self.separate = separate
 
     def get_commits(self) -> None:
         for commit in tqdm(self.commits, total=self.commits.totalCount, desc=f"{self.repo.full_name} commits"):
-            if CommitFilter(commit, self.filter, self.repo.full_name).accept():
-                Writer(self.repo.full_name).write_commit(self.stats, commit, self.separate)
-            self.stats.num_commits += 1
+            if CommitFilter(commit, self.config.filter, self.repo.full_name).accept():
+                self.stats += Writer(self.repo.full_name).write_commit(commit, self.config.separate)
         self.stats.write_final_log()
+
+
+class TesterPipeline:
+    def __init__(self, url: str = "", sha: str = "", config: Config = Config()):
+        self.url = url
+        self.sha = sha
+        self.config = config
+
+    def run(self):
+        crawl = RepositoryCrawler(url=self.url)
+        repo_ids = crawl.get_repos()
+        tester = Tester(sha=self.sha, ignore_conflict=self.config.ignore_conflict)
+        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Running filtered commits..."):
+            commits, file = tester.get_commits(repo_id)
+            repo = self.config.git.get_repo(repo_id)
+            for (current_sha, parent_sha) in commits:
+                current_path, parent_path = tester.get_paths(file, current_sha)
+                # TODO: need test
+                current_filter = StructureFilter(repo_id, self.config.git, current_path, current_sha)
+                parent_filter = StructureFilter(repo_id, self.config.git, parent_path, parent_sha)
+                current_process = tester.create_process(current_filter.analyzer, current_path)
+                parent_process = tester.create_process(parent_filter.analyzer, parent_path)
+                if (current_process.clone_repo(repo_id, current_path, branch=current_sha) and 
+                    parent_process.clone_repo(repo_id, parent_path, branch=parent_sha)):
+                    if current_filter.is_valid() and parent_filter.is_valid():
+                        if current_process.build() and parent_process.build():
+                            current_process.test()
+                            parent_process.test()
+                        

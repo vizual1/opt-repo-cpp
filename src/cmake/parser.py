@@ -1,13 +1,17 @@
 import os, re, logging
 from collections import deque
 from pathlib import Path
-from src.config import FLAG_KEYWORDS
 
-FLAG_PATTERNS = [re.compile(rf"(?:\(|\b){kw}\b") for kw in FLAG_KEYWORDS]
+# TODO: fix checks and parsers below, currently all over the place and clean up
+# patterns to parse possible flags
+OPTION_PATTERN = re.compile(r'option\s*\(\s*([A-Za-z0-9_]+)\s+"([^"]*)"\s+(ON|OFF)\s*\)', re.IGNORECASE)
+SET_CACHE_PATTERN = re.compile(r'set\s*\(\s*([A-Za-z0-9_]+)\s+([^\s\)]+)\s+CACHE\s+([A-Z]+)\s*"([^"]*)"\s*\)', re.IGNORECASE)
+IF_TEST_PATTERN = re.compile(r'if\s*\(\s*([A-Za-z0-9_]*TEST[A-Za-z0-9_]*)\s*\)', re.IGNORECASE)
 
 class CMakeParser:
     def __init__(self, root: str):
         self.root = root
+        self.enable_testing_path = ""
 
     def find_files(self, search: str) -> list[str]:
         found_files: list[str] = []
@@ -30,6 +34,7 @@ class CMakeParser:
                 content = file.read()
             if enable_testing_pattern.search(content) or ctest_pattern.search(content):
                 logging.info(f"CMakeFiles with enable_testing() in {cf}.")
+                self.enable_testing_path = cf
                 return True
         return False
     
@@ -58,21 +63,47 @@ class CMakeParser:
             
         return False
     
-    def check_build_testing_flag(self, cmake_files: list[str]) -> bool:
-        for cf in cmake_files:
-            with open(cf, "r", errors="ignore") as file:
-                content = file.read()
-            flag = False
-            for pattern in FLAG_PATTERNS:
-                if pattern.search(content):
-                    logging.info(f"CMakeLists.txt with {pattern.pattern} in {cf}.")
-                    flag = True
-            return flag
-        return False
+    def find_test_flags(self, cmake_files: list[str]) -> dict[str, dict[str, str]]:
+        ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)', re.IGNORECASE | re.DOTALL)
+        test_flags = {}
 
-    # TODO: fix checks and parsers below, currently all over the place
-    # TODO: need better flag parser => parse entire boolean expressions OR, AND, NOT, etc.
-    # TODO: need to check for add_test and its flags too...
+        for cf in cmake_files:
+            with open(cf, "r", errors="ignore") as f:
+                content = f.read()
+
+            if ctest_pattern.search(content):
+                if "BUILD_TESTING" not in test_flags:
+                    test_flags["BUILD_TESTING"] = {
+                        "description": "Enable CTest-based testing",
+                        "default": "ON"
+                    }
+
+            for match in OPTION_PATTERN.finditer(content):
+                name, desc, default = match.groups()
+                if "TEST" in name.upper():
+                    test_flags[name] = {"type": "BOOL", "description": desc.strip(), "default": default}
+
+            for match in SET_CACHE_PATTERN.finditer(content):
+                name, value, vartype, desc = match.groups()
+                if "TEST" in name.upper():
+                    test_flags[name] = {"type": vartype.upper(), "description": desc.strip(), "default": value}
+
+            for match in IF_TEST_PATTERN.finditer(content):
+                var = match.group(1)
+                if var not in test_flags:
+                    test_flags[var] = {
+                        "type": "BOOL",
+                        "description": f"Implicit test flag used in {cf}",
+                        "default": "undefined"
+                    }
+
+        logging.info("Discovered test flags:")
+        for k, v in test_flags.items():
+            logging.info(f"  - {k} (default={v['default']}): {v['description']}")
+
+        return test_flags
+
+
     def parse_ctest_flags(self, cmake_files: list[str]) -> set[str]:
         """Parses a CMake file and returns flags needed for ctest."""
         required_conditions: set[str] = set()
@@ -168,7 +199,7 @@ class CMakeParser:
         return all_flags
 
     def get_cmake_packages(self, cmake_path: str) -> set[str]:
-        """Find CMake dependency names from CMake files."""
+        """Find CMake dependency names from CMakeLists.txt."""
         with open(cmake_path, 'r', errors='ignore') as file:
             content = file.read()
         
@@ -188,20 +219,32 @@ class CMakeParser:
 
         packages = set()
 
+        def normalize(name: str) -> str:
+            name = re.split(r'[<>= ]', name)[0] # remove version constraints (>=, =, <, etc.)
+            name = name.replace("++", "pp") # replace "++" -> "pp"
+            name = re.sub(r'[-_]\d+(\.\d+)*$', '', name) # remove trailing version suffixes: Foo-2.5 -> Foo
+            name = name.lower() # lowercase everything (CMake is case-insensitive for packages)
+            return name
+
         for match in find_package_pattern.findall(content):
-            pkg_name = match[0]
+            pkg_name = normalize(match[0])
             options = match[2].strip().split() if match[2] else []
             components = []
             if 'COMPONENTS' in options:
                 comp_index = options.index('COMPONENTS')
                 components = options[comp_index + 1:] 
-            packages.add(pkg_name)
-            packages.update(components)
+            if pkg_name:
+                packages.add(pkg_name)
+            if components:    
+                packages.update(components)
 
         for match in pkg_check_pattern.findall(content):
             modules = match[3].split()
-            packages.update(modules)
+            for m in modules:
+                if m:
+                    packages.add(normalize(m))
 
+        logging.debug(f"Normalized package set from {cmake_path}: {packages}")
         return packages
 
 

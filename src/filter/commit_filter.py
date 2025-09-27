@@ -1,74 +1,9 @@
-import re, logging, tempfile
-from github import Github
+import re, logging
 from github.Commit import Commit
 import src.config as conf
-from src.llm.prompt import Prompt
-from src.llm.openai import OpenRouterLLM
-from src.utils.helper import *
-from src.cmake.analyzer import CMakeAnalyzer
-from collections import Counter
+from src.filter.llm.prompt import Prompt
+from src.filter.llm.openai import OpenRouterLLM
 
-class StructureFilter:
-    def __init__(self, repo_id: str, git: Github):
-        self.repo_id = repo_id
-        self.git = git
-        self.repo = self.git.get_repo(self.repo_id)
-        self.head = self.repo.get_commits()[0].sha
-        self.cmake_files, self.tree_paths, self.tree = get_repo_tree(self.repo, self.head)
-        self.test_dirs = Counter()
-
-    def is_valid(self) -> bool:
-        if has_root_cmake(self.cmake_files):
-            logging.info(f"CMake at root found in GitHub repository {self.repo.full_name}.")
-
-            if has_test_dir(self.tree_paths):
-                logging.info(f"Valid test directory found in GitHub repository {self.repo.full_name}.")
-
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    get_cmakelists(self.repo, self.cmake_files, tmpdir)
-                    analyzer = CMakeAnalyzer(tmpdir)
-                    
-                    if analyzer.has_testing():
-                        logging.info(f"CTest found in GitHub repository {self.repo.full_name}.")
-                        return True                
-                    else:
-                        logging.info(f"No CTest found in GitHub repository {self.repo.full_name}.")
-            else:
-                logging.info(f"Not a valid test directory structure in GitHub repository {self.repo.full_name}.")
-        else:
-            logging.info(f"No CMake at root found in GitHub repository {self.repo.full_name}.")
-
-        return False
-    
-    def analyze(self) -> None:
-        if has_root_cmake(self.cmake_files):
-            logging.info(f"CMake at root found in GitHub repository {self.repo.full_name}.")
-
-            with tempfile.TemporaryDirectory() as tmpdir:
-                
-                get_cmakelists(self.repo, self.cmake_files, tmpdir)
-                analyzer = CMakeAnalyzer(tmpdir)
-
-                # Analyzing the repository for test structure and flags
-                if analyzer.has_testing():
-                    logging.info(f"add_test and enable_testing in GitHub repository {self.repo.full_name}.")
-                    
-                    test_dirs = extract_test_dirs(self.tree)
-                    if test_dirs:
-                        logging.info(f"Test directories: {test_dirs} in GitHub repository {self.repo.full_name}")
-                        for d in test_dirs:
-                            self.test_dirs[d] += 1
-                        conv_test_dir = test_dirs & conf.TEST_DIR
-
-                        if conv_test_dir:
-                            logging.info(f"Repo {self.repo.full_name} has conventional test dirs: {conv_test_dir}")
-                            analyzer.has_build_testing_flag()
-                else:
-                    logging.info(f"No CTest found in GitHub repository {self.repo.full_name}.")
-        else:
-            logging.info(f"No CMake at root found in GitHub repository {self.repo.full_name}.")
-    
-    
 class CommitFilter:
     def __init__(self, commit: Commit, filter: str, repo_name: str):
         self.commit = commit
