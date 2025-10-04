@@ -15,6 +15,9 @@ def start() -> None:
     parser.add_argument("-stars", type=int, default=1000, help="Selects only repositories with more than x stars.")
     parser.add_argument("-limit", type=int, default=10, help="Selects x amount of repositories.")
     
+    group.add_argument("-read", type=str, default="", help="Filepath to read in GitHub URLs.")
+    parser.add_argument("-write", type=str, default="", help="Filepath to write GitHub URLs.")
+
     parser.add_argument("-sha", type=str, default="", help="Select a certain commit version of some Github repository.")
     parser.add_argument("-filter", type=str, choices=["simple", "LLM", "custom"], default="simple", help="Filter strategy to use (default: simple).")
     parser.add_argument("--separate", action="store_true", help="Saves each filtered commit separately with commit message and diff.")
@@ -28,6 +31,7 @@ def start() -> None:
     #    parser.error("Argument -sha requires -url to be set.")
     
     config = Config(
+        read=args.read, write=args.write,
         popular=args.popular, stars=args.stars, limit=args.limit,
         filter=args.filter, separate=args.separate, analyze=args.analyze,
         ignore_conflict=args.ignore_conflict

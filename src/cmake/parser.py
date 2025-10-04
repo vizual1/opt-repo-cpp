@@ -1,6 +1,7 @@
 import os, re, logging
 from collections import deque
 from pathlib import Path
+import src.cmake.patterns as pattern
 
 # TODO: fix checks and parsers below, currently all over the place and clean up
 # patterns to parse possible flags
@@ -11,9 +12,16 @@ IF_TEST_PATTERN = re.compile(r'if\s*\(\s*([A-Za-z0-9_]*TEST[A-Za-z0-9_]*)\s*\)',
 class CMakeParser:
     def __init__(self, root: str):
         self.root = root
-        self.enable_testing_path = ""
+        self.enable_testing_path: list[str] = []
+        self.add_test_path: list[str] = []
+        self.discover_tests_path: list[str] = []
+        self.target_link_path: list[str] = []
+
+    def has_root_cmake(self) -> bool:
+        return os.path.exists(os.path.join(self.root, "CMakeLists.txt"))
 
     def find_files(self, search: str) -> list[str]:
+        """Search all files 'search' from root."""
         found_files: list[str] = []
         for root, _, files in os.walk(self.root):
             for file in files:
@@ -21,57 +29,115 @@ class CMakeParser:
                     found_files.append(os.path.join(root, file))
         return found_files
     
-    def is_cmake_root(self) -> bool:
-        return os.path.exists(os.path.join(self.root, "CMakeLists.txt"))
-
-    def check_enable_testing(self, cmake_files: list[str]) -> bool:
-        """Checks if enable_testing() is called in CMakeLists.txt"""
-        enable_testing_pattern = re.compile(r'enable_testing\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
-        ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)', re.IGNORECASE | re.DOTALL)
-
+    def find_enable_testing(self, cmake_files: list[str]) -> bool:
+        """
+        Checks if enable_testing() is called anywhere in CMakeLists.txt. 
+        Either CMakeLists.txt calls enable_testing() directly or it calls enable_testing() via include(CTest).
+        """
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
-            if enable_testing_pattern.search(content) or ctest_pattern.search(content):
-                logging.info(f"CMakeFiles with enable_testing() in {cf}.")
-                self.enable_testing_path = cf
-                return True
+            if pattern.enable_testing.search(content) or pattern.include_ctest.search(content):  
+               self.enable_testing_path.append(cf)
+        
+        if self.enable_testing_path:
+            logging.info(f"CMakeLists.txt with enable_testing(): {self.enable_testing_path}.")
+            return True
+        
         return False
     
-    def check_add_test(self, cmake_files: list[str]) -> bool:
-        add_test_pattern = re.compile(r'add_test\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
-        discover_pattern = re.compile(r'(gtest|catch|doctest)_discover_tests\s*\(.*?\)', re.IGNORECASE | re.DOTALL)
-        include_pattern = re.compile(r'include\s*\(\s*(GoogleTest|Catch|doctest)\s*\)', re.IGNORECASE)
+    def find_add_tests(self, cmake_files: list[str]) -> bool:
+        for cf in cmake_files:
+            with open(cf, 'r', errors='ignore') as file:
+                content = file.read()
+            if pattern.add_test.search(content):
+                self.add_test_path.append(cf)
+        
+        if self.add_test_path:
+            logging.info(f"CMakeLists.txt with add_test(): {self.add_test_path}.")
+            return True
+        
+        return False
+    
+    def find_discover_tests(self, cmake_files: list[str]) -> bool:
+        for cf in cmake_files:
+            with open(cf, 'r', errors='ignore') as file:
+                content = file.read()
+            if pattern.discover_tests.search(content):
+                self.discover_tests_path.append(cf)
+        
+        if self.discover_tests_path:
+            logging.info(f"CMakeLists.txt with *_discover_tests(): {self.discover_tests_path}.")
+            return True
+        
+        return False
+    
+    def can_list_tests(self, cmake_files: list[str]) -> bool:
+        for cf in cmake_files:
+            with open(cf, 'r', errors='ignore') as file:
+                content = file.read()
+
+            if pattern.target_link_libraries.search(content):
+                logging.info(f"GoogleTest|Catch|doctest library link found in {cf}.")
+                return True
+
+        return False
+    
+    def check_external_package_manager(self, cmake_files: list[str]) -> dict[str, list[str]]:
+        """
+        Detects external C++ package managers used in the project by scanning CMakeLists.txt files.
+        Returns a dictionary mapping manager name to a list of CMake files where it was found.
+        """
+        patterns = {
+            "Conan": [
+                re.compile(r'include\s*\(\s*Conan\.cmake\s*\)', re.IGNORECASE),
+                re.compile(r'conan_basic_setup\s*\(', re.IGNORECASE),
+                re.compile(r'conan_cmake_run\s*\(', re.IGNORECASE)
+            ],
+            "vcpkg": [
+                re.compile(r'set\s*\(\s*CMAKE_TOOLCHAIN_FILE.*vcpkg\.cmake\s*\)', re.IGNORECASE),
+            ],
+            "Hunter": [
+                re.compile(r'include\s*\(\s*HunterGate\.cmake\s*\)', re.IGNORECASE),
+                re.compile(r'hunter_add_package\s*\(', re.IGNORECASE)
+            ],
+            "FetchContent": [
+                re.compile(r'include\s*\(\s*FetchContent\s*\)', re.IGNORECASE),
+                re.compile(r'FetchContent_Declare\s*\(', re.IGNORECASE),
+                re.compile(r'FetchContent_MakeAvailable\s*\(', re.IGNORECASE)
+            ],
+            "ExternalProject": [
+                re.compile(r'include\s*\(\s*ExternalProject\s*\)', re.IGNORECASE),
+                re.compile(r'ExternalProject_Add\s*\(', re.IGNORECASE)
+            ],
+            "CPM": [
+                re.compile(r'include\s*\(\s*CPM\.cmake\s*\)', re.IGNORECASE),
+                re.compile(r'CPMAddPackage\s*\(', re.IGNORECASE)
+            ]
+        }
+
+        found_managers = {k: [] for k in patterns}
 
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
-            
-            found_add_test = add_test_pattern.search(content)
-            found_discover = discover_pattern.search(content)
-            found_include = include_pattern.search(content)
+            for manager, pats in patterns.items():
+                if any(p.search(content) for p in pats):
+                    found_managers[manager].append(cf)
 
-            if found_add_test:
-                logging.info(f"Found add_test(...) in {cf}.")
-            if found_discover:
-                logging.info(f"Found discover_tests(...) in {cf}.")
-            if found_include:
-                logging.info(f"Found include(GoogleTest|Catch|doctest) in {cf}.")
-            
-            if found_add_test or found_discover:
-                return True
-            
-        return False
+        found_managers = {k: v for k, v in found_managers.items() if v}
+        for mgr, files in found_managers.items():
+            logging.info(f"Detected package manager {mgr} in {files}")
+        return found_managers
     
     def find_test_flags(self, cmake_files: list[str]) -> dict[str, dict[str, str]]:
-        ctest_pattern = re.compile(r'include\s*\(\s*CTest\s*\)', re.IGNORECASE | re.DOTALL)
         test_flags = {}
 
         for cf in cmake_files:
             with open(cf, "r", errors="ignore") as f:
                 content = f.read()
 
-            if ctest_pattern.search(content):
+            if pattern.include_ctest.search(content):
                 if "BUILD_TESTING" not in test_flags:
                     test_flags["BUILD_TESTING"] = {
                         "description": "Enable CTest-based testing",
@@ -248,23 +314,3 @@ class CMakeParser:
         return packages
 
 
-class Parser:
-    def parse_parenthesis(self, s: str) -> str: 
-        count = 0
-        seen = 0
-        save = ""
-        for c in s:
-            if c == "(":
-                count += 1
-                seen += 1
-            elif c == ")":
-                count -= 1
-                seen += 1
-
-            if seen > 0:
-                save += c
-
-            if count == 0 and seen > 1:
-                return save
-            
-        return ""

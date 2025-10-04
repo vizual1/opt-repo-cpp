@@ -8,9 +8,13 @@ class Writer:
         self.owner, self.name = repo_name.split("/")
         self.storage = conf.storage
 
-    def write_repo(self) -> None:
+    def write_repo(self, write: str = "") -> None:
         msg = f"https://github.com/{self.owner}/{self.name}\n"
-        path = os.path.join(self.storage['dataset'], self.storage['repo_urls'])
+        if write:
+            path = write
+        else:
+            path = self.storage['repo_urls']
+        logging.info(f"Written to {path}")
         self._write(path, msg)
 
     def write_commit(self, commit: Commit, separate: bool) -> CommitStats:
@@ -32,7 +36,7 @@ class Writer:
 
         file = f"{self.owner}_{self.name}_filtered.txt"
         msg = f"{current_sha} | {commit.parents[0].sha or 'None'} | +{total_add} | -{total_del} | {total_add + total_del}\n" 
-        path = os.path.join(self.storage['dataset'], file)
+        path = os.path.join(self.storage['store_commits'], file)
         self._write(path, msg)
         
         # saves each commit version to file with patch information
@@ -42,7 +46,7 @@ class Writer:
             final_msg: list[str] = [msg, commit.commit.message]
             for f in commit.files:
                 final_msg.append(f.patch)
-            path = os.path.join(self.storage['dataset'], file)
+            path = os.path.join(self.storage['store_commits'], file)
             self._write(path, "\n".join(final_msg))
         
         return stats

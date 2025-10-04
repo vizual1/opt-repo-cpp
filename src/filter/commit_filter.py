@@ -14,9 +14,9 @@ class CommitFilter:
 
     def accept(self): 
         if self.filter == "simple":
-            return self._simple_filter() and self.test_filter() and self.cpp_filter()
+            return self._simple_filter() and self.cpp_filter()
         elif self.filter == "llm":
-            return self._llm_filter() and self.test_filter() and self.cpp_filter()
+            return self._llm_filter() and self.cpp_filter()
         return True
     
     def _simple_filter(self) -> bool:

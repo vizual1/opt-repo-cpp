@@ -26,16 +26,16 @@ class RepositoryPipeline:
             structure = StructureFilter(repo_id, self.config.git)
             if structure.is_valid():
                 self.valid_repos.append(structure.repo)
-                if self.config.popular:
-                    Writer(structure.repo.full_name).write_repo()
+                if self.config.popular or self.config.write:
+                    Writer(structure.repo.full_name).write_repo(self.config.write)
            
     def analyze_repos(self) -> None:
         crawl = RepositoryCrawler(self.url, config=self.config)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
             structure = StructureFilter(repo_id, self.config.git)
-            if structure.analyze() and self.config.popular:
-                Writer(structure.repo.full_name).write_repo()
+            if structure.analyze() and (self.config.popular or self.config.write):
+                Writer(structure.repo.full_name).write_repo(self.config.write)
             self.stats += structure.stats
         self.stats.write_final_log()
 

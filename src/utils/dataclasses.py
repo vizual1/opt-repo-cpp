@@ -5,6 +5,8 @@ from github import Auth, Github
 
 @dataclass
 class Config:
+    read: str = ""
+    write: str = ""
     popular: bool = False
     stars: int = 1000
     limit: int = 10

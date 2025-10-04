@@ -12,7 +12,7 @@ class Controller:
                  url: str = "", sha: str = "", config: Config = Config()):
         
         self.crawl, self.test, self.docker = crawl, test, docker
-        self.url = url, self.sha = sha
+        self.url, self.sha = url, sha
         self.config = config
 
     def run(self):

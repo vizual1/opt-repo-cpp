@@ -5,17 +5,24 @@ class RepoStats:
     def __init__(self):
         self.test_dirs = Counter()
         self.test_flags = Counter()
+        self.pack_manager = Counter()
+        self.pack_files = Counter()
+        self.dependencies = Counter()
 
     def __iadd__(self, other: 'RepoStats') -> 'RepoStats':
         self.test_dirs += other.test_dirs
         self.test_flags += other.test_flags
+        self.pack_manager += other.pack_manager
+        self.pack_files += other.pack_files
+        self.dependencies += other.dependencies
         return self
 
     def write_final_log(self):
         logging.info(f"Final Counter: {self.test_dirs}")
         logging.info(f"Final Flags: {self.test_flags}")
-
-
+        logging.info(f"Final Package Managers: {self.pack_manager}")
+        logging.info(f"Final Package Files: {self.pack_files}")
+        logging.info(f"Final Dependencies: {self.dependencies}")
 
 class CommitStats:
     def __init__(self):

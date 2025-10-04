@@ -1,4 +1,5 @@
-import os, logging
+import os, logging, time
+from datetime import datetime, timezone
 from tqdm import tqdm
 import src.config as conf
 from src.utils.dataclasses import Config
@@ -12,37 +13,55 @@ class RepositoryCrawler:
 
     def get_repos(self) -> list[str]:
         if self.config.popular:
-            return self._query_popular_repos()
+            repos = self._query_popular_repos()
+            os.makedirs("data", exist_ok=True)
+            with open("data/popular_urls.txt", "w", encoding="utf-8") as f:
+                for repo in repos:
+                    f.write(f"https://github.com/{repo}\n")
+            return repos
         else:
-            return self._get_repo_ids(os.path.join(self.storage['repo_urls']), self.url)
+            if self.config.read:
+                path = self.config.read
+            else:
+                path = self.storage['repo_urls']
+            return self._get_repo_ids(path, self.url)
     
     def _query_popular_repos(self) -> list[str]:
-        query = f"language:{self.type} stars:>={self.config.stars}"
-
-        logging.info(f"Get popular repos...")
-        repos = self.config.git.search_repositories(query=query, sort="stars", order="desc")
-        
-        # TODO: improve/change the code:
         ok_language = ["C++", "CMake", "Shell", "C", "Makefile", "Dockerfile"]
         result = []
         count = 0
-        for repo in tqdm(repos, desc=f"Getting popular repos..."):
-            languages = repo.get_languages() 
-            cpp = languages.get("C++", 0)
-            total_bytes = sum(languages.values())
-            cmake = languages.get("CMake", 0)
-            others = sum(v for k, v in languages.items() if k not in ok_language)
 
-            if total_bytes == 0:
-                continue
+        upper = self.config.stars 
+        lower = upper
+        while lower > 10000  and count < self.config.limit:
+            upper = lower
+            lower = int(0.95 * upper)
 
-            others_ok = all((size / total_bytes) <= 0.02 for lang, size in languages.items() if lang not in ok_language)
-            if cpp > 0 and cmake > 0 and others_ok:
-                result.append(repo.full_name)
-                count += 1
-            
-            if count >= self.config.limit:
-                break
+            query = f"language:{self.type} stars:{lower}..{upper}"
+            logging.info(f"Querying popular repos ({query})...")
+            repos = self.config.git.search_repositories(query=query, sort="stars", order="desc")
+
+            with tqdm(repos, desc="Getting popular repos...") as pbar:
+                for repo in pbar:
+                    languages = repo.get_languages() 
+                    cpp = languages.get("C++", 0)
+                    total_bytes = sum(languages.values())
+                    cmake = languages.get("CMake", 0)
+
+                    if total_bytes == 0:
+                        continue
+
+                    others_ok = all((size / total_bytes) <= 0.02 for lang, size in languages.items() if lang not in ok_language)
+                    if cpp > 0 and cmake > 0 and others_ok:
+                        result.append(repo.full_name)
+                        count += 1
+                    
+                    pbar.set_postfix({"matched": count})
+
+                    if count >= self.config.limit:
+                        break
+
+                    time.sleep(0.5)
 
         return result
     
@@ -57,10 +76,10 @@ class RepositoryCrawler:
         try:
             with open(path, 'r', errors='ignore') as f:
                 urls = f.readlines()
+            for url in urls:
+                repo_ids.append(url.removeprefix("https://github.com/").strip())
         except (OSError, IOError) as e:
             logging.error(f"Failed to read {path}: {e}", exc_info=True)
 
-        for url in urls:
-            repo_ids.append(url.removeprefix("https://github.com/").strip())
-
         return repo_ids
+    

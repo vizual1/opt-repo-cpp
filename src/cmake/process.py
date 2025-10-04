@@ -17,6 +17,9 @@ class CMakeProcess:
         self.flags = self.analyzer.has_build_testing_flag()
         #self.flags_info = CMakeProcessAnalyzer(self.root).analyze_flags()
 
+    def configure(self) -> bool:
+        return self._configure()
+
     def build(self) -> bool:
         package_handler = CMakePackageHandler(self.analyzer)
         package_handler.packages_installer()
@@ -27,28 +30,15 @@ class CMakeProcess:
 
     def _configure(self) -> bool:
         # TODO: maybe no optimization, gcovr + llvm coverage information
-        cmakelists = Path(self.root) / "CMakeLists.txt"
-        needs_old_policy = False
-        if cmakelists.exists():
-            text = cmakelists.read_text()
-            match = re.search(r"cmake_minimum_required\s*\(VERSION\s*([0-9.]+)", text, re.I)
-            if match:
-                version = tuple(map(int, match.group(1).split(".")))
-                if version < (3, 5):
-                    needs_old_policy = True
-
+        # process to check for compiler versions
         cmd = ['cmake', '-S', self.root, '-B', self.build_path, 
                #f'-DCMAKE_BUILD_TYPE=Release',
-               '-DCMAKE_C_COMPILER=clang',
+               #'-DCMAKE_C_COMPILER=/usr/bin/clang', #also works: gcc
                '-DCMAKE_BUILD_TYPE=Debug',
-               '-DCMAKE_CXX_COMPILER=clang++',
-               '-DCMAKE_CXX_FLAGS=--coverage -O0 -g',
-               '-DCMAKE_EXE_LINKER_FLAGS=--coverage'
+               #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++', #also works: g++
+               #'-DCMAKE_CXX_FLAGS=--coverage -O0 -g',
+               #'-DCMAKE_EXE_LINKER_FLAGS=--coverage'
         ]
-
-        if needs_old_policy:
-            logging.info("CMake needs olf policy, setting CMAKE_POLICY_VERSION_MINIMUM=3.5")
-            cmd.append("-DCMAKE_POLICY_VERSION_MINIMUM=3.5")
 
         for flag in self.flags.keys():
             if 'disable' in flag.lower():
@@ -57,7 +47,7 @@ class CMakeProcess:
                 cmd.append(f'-D{flag}=ON')
         
         try:
-            logging.info(f"Configure CMake: {cmd}")
+            logging.info(f"Configure CMake: {' '.join(cmd)}")
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             logging.info(f"CMake configured {self.build_path} successfully:\n{result.stdout}")
             return True
@@ -71,7 +61,7 @@ class CMakeProcess:
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
         try:
-            logging.info(f"Build CMake: {cmd}")
+            logging.info(f"Build CMake: {' '.join(cmd)}")
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             logging.info(f"CMake build completed for {self.root}:\n{result.stdout}")
             return True
@@ -91,7 +81,7 @@ class CMakeProcess:
         test_dir = Path(self.test_path)
         cmd = ['ctest', '--output-on-failure']
         try:
-            logging.info(f"CTest: {cmd} in {self.test_path}")
+            logging.info(f"CTest: {' '.join(cmd)} in {self.test_path}")
             result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             logging.info(f"CMake tests passed for {self.test_path}\n{result.stdout}")
             return True
@@ -116,6 +106,7 @@ class CMakeProcess:
             branch = self._get_default_branch(url)
         if os.path.exists(repo_path):
             shutil.rmtree(repo_path)
+        # TODO: "--recurse-submodules", "--shallow-submodules", 
         cmd = ["git", "clone", "--recurse-submodules", "--shallow-submodules", "--branch", branch, f"--depth=1", url, repo_path]
         logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
         try:
@@ -125,7 +116,6 @@ class CMakeProcess:
         except subprocess.CalledProcessError as e:
             logging.error(f"Failed to clone repository {url} (branch: {branch}) into {repo_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
             return False
-
 
 class CMakeProcessAnalyzer:
     """Class used for analyzing CMakeLists.txt by running subprocess."""

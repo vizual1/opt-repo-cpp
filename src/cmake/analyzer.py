@@ -9,15 +9,21 @@ class CMakeAnalyzer:
         self.cmakelists = self.parser.find_files(search="CMakeLists.txt")
         logging.info(f"CMakeLists.txt: {self.cmakelists}")
 
-    def is_cmake_root(self) -> bool:
-        return self.parser.is_cmake_root()
+    def has_root_cmake(self) -> bool:
+        return self.parser.has_root_cmake()
 
+    # TODO: test this
     def has_testing(self) -> bool:
-        return (self.parser.check_enable_testing(self.cmakelists) and 
-                self.parser.check_add_test(self.cmakelists))
+        return (self.parser.find_enable_testing(self.cmakelists) and 
+                self.parser.can_list_tests(self.cmakelists) and 
+                (self.parser.find_add_tests(self.cmakelists) or 
+                 self.parser.find_discover_tests(self.cmakelists)))
 
     def has_build_testing_flag(self) -> dict[str, dict[str, str]]:
         return self.parser.find_test_flags(self.cmakelists)
+    
+    def has_package_manager(self) -> dict[str, list[str]]:
+        return self.parser.check_external_package_manager(self.cmakelists)
     
     def get_testfile(self) -> list[str]:
         return self.parser.find_files(search="CTestTestfile.cmake")

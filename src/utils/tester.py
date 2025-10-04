@@ -15,19 +15,20 @@ class Tester:
         name = repo_info[1].strip()
         file = f"{owner}_{name}"
         if not self.sha:
-            commits = self._get_filtered_commits(os.path.join(self.storage['dataset'], f"{file}_filtered.txt"))
+            commits = self._get_filtered_commits(os.path.join(self.storage['store_commits'], f"{file}_filtered.txt"))
         else:
-            commits = self._get_filtered_commits(os.path.join(self.storage['dataset'], f"{file}_{self.sha}.txt"))
+            commits = self._get_filtered_commits(os.path.join(self.storage['store_commits'], f"{file}_{self.sha}.txt"))
         return commits, file
     
     def get_paths(self, file: str, sha: str) -> tuple[str, str]:
-        commit_path = os.path.join(self.storage['dataset'], f"{file}_{sha}")
+        commit_path = os.path.join(self.storage['store_commits'], f"{file}_{sha}")
         parent_path = os.path.join(commit_path, "parent")
         current_path = os.path.join(commit_path, "current")
         return parent_path, current_path
     
     def create_process(self, analyzer: CMakeAnalyzer, path: str) -> CMakeProcess:
-        enable_testing_path = analyzer.parser.enable_testing_path.removesuffix("/CMakeLists.txt").removeprefix(path)
+        # TODO fix enable_testing_path
+        enable_testing_path = analyzer.parser.enable_testing_path[0].removesuffix("/CMakeLists.txt").removeprefix(path)
         build_path = os.path.join(path, "build")
         test_path = os.path.join(path, "build", enable_testing_path)
         return CMakeProcess(path, build_path, test_path, analyzer=analyzer)

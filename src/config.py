@@ -2,15 +2,14 @@ import os
 from typing import Any
 
 storage: dict[str, str] = {
-    "dataset": "data",
-    "repo_urls": "repo_urls.txt",
-    "history": "history.txt",
-    "filtered": "filtered.txt",
-    "results": "results.txt"
+    "store_commits": "data/commits",
+    "store_analyze": "data/analyze",
+    "repo_urls": "data/repos/urls.txt",
+    "results": "data/results.txt"
 }
 
 llm: dict[str, Any] = {
-    'cache_file': 'test',
+    'cache_file': 'cache/save.txt',
     'api_key': os.environ['api_key'],
     'base': True,
     'base_url': 'https://openrouter.ai/api/v1',
@@ -27,19 +26,30 @@ likelihood: dict[str, int] = {
     'max_likelihood': 50
 }
 
-# TODO: flags
-FLAG_BASE = [
-    "BUILD_TESTING", "ENABLE_TESTING", "WITH_TESTING", "UNIT_TESTING", "COMPILE_TESTING",
-    "BUILD_TESTS", "BUILD_TEST", "ENABLE_TESTS", "ENABLE_TEST","WITH_TESTS", "WITH_TEST", 
-    "COMPILE_TESTS", "COMPILE_TEST", "TESTS", "TEST",
-    "BUILD_UNIT_TESTS", "ENABLE_UNIT_TESTS", "WITH_UNIT_TESTS", "UNIT_TESTS", "UNITTESTS",
-    "BUILD_UNIT_TEST", "ENABLE_UNIT_TEST", "WITH_UNIT_TEST", "UNIT_TEST", "UNITTEST", 
-    "RUN_TESTS", "TESTING"
-]
-#FLAG_KEYWORDS = ["\b" + flag for flag in FLAG_BASE] + ["_" + flag for flag in FLAG_BASE]
-FLAG_KEYWORDS = [rf"\b{flag}\b" for flag in FLAG_BASE] + [rf"_{flag}\b" for flag in FLAG_BASE]
 
-TEST_DIR = {
+# TODO: flags
+valid_flags = [
+    "BUILD_TESTING", "BUILD_TESTS", "BUILD_TEST",
+    "ENABLE_TESTING", "ENABLE_TESTS", "ENABLE_TEST",
+    "ENABLE_UNITTESTS",
+    "WITH_TESTING", "WITH_TESTS",
+    "WITH_UNIT_TESTS",
+    "BUILD_UNIT_TESTS",
+    "TESTING", "TESTS", "TEST",
+    "RUN_TESTS"
+]
+
+valid_flags_suffix = [
+    "_BUILD_TEST", "_BUILD_TESTS", "_BUILD_TESTING",
+    "_ENABLE_TEST", "_ENABLE_TESTS", "_ENABLE_TESTING",
+    "_UNIT_TESTS", "_UNITTEST"
+]
+
+valid_flags_in = [
+    "_UNIT_TEST_"
+]
+
+valid_test_dir = {
     'test', 'tests', 'unittest', 'unittests', 
     'src/test', 'src/tests', 'src/unittest', 'src/unittests',
 
@@ -117,12 +127,6 @@ PACKAGE_MAP = {
     "ffmpeg": "libavcodec-dev",
 }
 
-PYTHON_MAP = {
-    "libmultiprocess": "Python module, install via pip if needed",
-    "libmultiprocessnative": "Python module, install via pip if needed",
-    "libmultiprocess": "Python module, install via pip if needed",
-}
-
 NON_APT = {
     "python3": "Ensure Python 3 interpreter is installed",
     "cudatoolkit": "Install NVIDIA CUDA toolkit manually",
@@ -150,7 +154,10 @@ NON_APT = {
     "mman": "Part of system libc, skip installation",
     "openvino": "Intel OpenVINO toolkit. Install manually from Intel's site.",
     "Runtime": "Part of SDK or project-specific runtime. Install manually.",
-    "flexiblas_api": "Install FlexiBLAS manually or via Intel oneAPI MKL"
+    "flexiblas_api": "Install FlexiBLAS manually or via Intel oneAPI MKL",
+    "libmultiprocess": "Python module, install via pip if needed",
+    "libmultiprocessnative": "Python module, install via pip if needed",
+    "libmultiprocess": "Python module, install via pip if needed",
 }
 
 SKIP_NAMES = {
