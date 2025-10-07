@@ -6,7 +6,6 @@ class CMakePackageHandler:
     def __init__(self, analyzer: CMakeAnalyzer):
         self.analyzer = analyzer
         self.packages, self.python = self._get_packages()
-        self.cache: dict[str, str] = {}
 
     def packages_installer(self) -> None:
         for p in self.packages:
@@ -26,21 +25,12 @@ class CMakePackageHandler:
                 logging.debug(f"{dep} is skipped.")
                 continue
 
-            if dep.lower() in conf.PYTHON_MAP:
-                python_packages.add(dep.lower())
-                continue
-
             if dep in conf.NON_APT:
                 logging.warning(f"{dep} is not an apt package: {conf.NON_APT[dep]}.")
                 continue
 
-            if dep in self.cache:
-                packages_needed.add(self.cache[dep])
-                continue
-
             pkg = self._find_apt_package(dep)
             if pkg:
-                self.cache[dep] = pkg
                 packages_needed.add(pkg)
 
         return packages_needed, python_packages
@@ -105,7 +95,7 @@ class CMakePackageHandler:
             if "libgtest-dev" == package:
                 subprocess.run(["cmake", ".", "-B", "build_gtest"], cwd="/usr/src/gtest")
                 subprocess.run(["make"], cwd="/usr/src/gtest/build_gtest")
-                subprocess.run(["sudo", "cp", "*.a", "/usr/lib/"], cwd="/usr/src/gtest/build_gtest")
+                subprocess.run(["cp", "*.a", "/usr/lib/"], cwd="/usr/src/gtest/build_gtest")
         except subprocess.CalledProcessError:
             logging.error(f"Failed to install {package}.", exc_info=True)
         except PermissionError:

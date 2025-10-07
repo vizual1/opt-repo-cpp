@@ -14,6 +14,11 @@ class Config:
     separate: bool = False
     analyze: bool = False
     ignore_conflict: bool = False
+    
+    test_commit: bool = False
+    test_configure: bool = False
+    test_build: bool = False
+    test_ctest: bool = False
 
     access_token: str = field(init=False)
     auth: Auth.Token = field(init=False)

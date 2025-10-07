@@ -68,15 +68,6 @@ class CommitFilter:
         """
         return 'YES' in res and 'NO' not in res
 
-    def test_filter(self) -> bool:
-        """
-        Returns True if the commit does NOT touch test files.
-        """
-        for f in self.commit.files:
-            file_path = f.filename
-            if any(file_path.startswith(dir) for dir in conf.TEST_DIR):
-                return False
-        return True
 
     def cpp_filter(self) -> bool:
         """

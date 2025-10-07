@@ -2,8 +2,9 @@ import os, logging
 import src.config as conf
 from src.cmake.process import CMakeProcess
 from src.cmake.analyzer import CMakeAnalyzer
+from src.filter.flags_filter import FlagFilter
 
-class Tester:
+class CommitTester:
     def __init__(self, sha: str = "", ignore_conflict: bool = False):
         self.sha = sha
         self.ignore_conflict = ignore_conflict
@@ -31,7 +32,8 @@ class Tester:
         enable_testing_path = analyzer.parser.enable_testing_path[0].removesuffix("/CMakeLists.txt").removeprefix(path)
         build_path = os.path.join(path, "build")
         test_path = os.path.join(path, "build", enable_testing_path)
-        return CMakeProcess(path, build_path, test_path, analyzer=analyzer)
+        flags = FlagFilter(analyzer.has_build_testing_flag()).get_valid_flags()
+        return CMakeProcess(path, build_path, test_path, flags=flags, analyzer=analyzer)
 
     def _get_filtered_commits(self, path: str) -> list[tuple[str, str]]:
         """Extract commit information from a file."""

@@ -5,7 +5,7 @@ from src.filter.structure_filter import StructureFilter
 from src.filter.commit_filter import CommitFilter
 from src.utils.stats import RepoStats, CommitStats
 from src.utils.writer import Writer
-from src.utils.tester import Tester
+from src.utils.tester import CommitTester
 from github.Repository import Repository
 from src.utils.dataclasses import Config 
 
@@ -65,18 +65,17 @@ class TesterPipeline:
     def __init__(self, url: str = "", sha: str = "", config: Config = Config()):
         self.url = url
         self.sha = sha
-        self.config = config
-
-    def run(self):
-        crawl = RepositoryCrawler(url=self.url)
-        repo_ids = crawl.get_repos()
-        tester = Tester(sha=self.sha, ignore_conflict=self.config.ignore_conflict)
-        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Running filtered commits..."):
+        self.config = config     
+        self.repo_ids = RepositoryCrawler(url=self.url).get_repos()  
+    
+    def test_commit(self):
+        tester = CommitTester(sha=self.sha, ignore_conflict=self.config.ignore_conflict)
+        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Testing filtered commits..."):
             commits, file = tester.get_commits(repo_id)
             repo = self.config.git.get_repo(repo_id)
             for (current_sha, parent_sha) in commits:
                 current_path, parent_path = tester.get_paths(file, current_sha)
-                # TODO: need test
+                # TODO: need test, maybe use CMakeProcess
                 current_filter = StructureFilter(repo_id, self.config.git, current_path, current_sha)
                 parent_filter = StructureFilter(repo_id, self.config.git, parent_path, parent_sha)
                 current_process = tester.create_process(current_filter.analyzer, current_path)
@@ -85,6 +84,21 @@ class TesterPipeline:
                     parent_process.clone_repo(repo_id, parent_path, branch=parent_sha)):
                     if current_filter.is_valid() and parent_filter.is_valid():
                         if current_process.build() and parent_process.build():
-                            current_process.test()
-                            parent_process.test()
-                        
+                            current_test_exec = current_filter.analyzer.parser.find_ctest_exec()
+                            current_process.test(current_test_exec)
+                            parent_test_exec = parent_filter.analyzer.parser.find_ctest_exec()
+                            parent_process.test(parent_test_exec)
+
+    def test_configure(self):
+        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Configuring Repositories..."):
+            return
+
+    def test_build(self):
+        self.test_configure()
+        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Building Repositories..."):
+            return
+    
+    def test_ctest(self):
+        self.test_build()
+        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Testing Repositories..."):
+            return 

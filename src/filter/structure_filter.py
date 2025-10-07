@@ -7,10 +7,11 @@ import src.config as conf
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.process import CMakeProcess
 from src.utils.stats import RepoStats
+from src.filter.flags_filter import FlagFilter
 
 class StructureFilter:
     """
-    This class checks the structure of a repository.
+    This class analyses and filters the structure of a repository.
     """
     def __init__(self, repo_id: str, git: Github, root: str = "", sha: str = ""):
         self.repo_id = repo_id
@@ -45,9 +46,7 @@ class StructureFilter:
                     if self.analyzer.has_testing():
                         logging.info(f"CTest found in GitHub repository {self.repo.full_name}.")
 
-                        valid_flags = list(set(conf.valid_flags) & self.analyzer.has_build_testing_flag().keys())
-                        valid_flags += [y for y in self.analyzer.has_build_testing_flag() if any(y.endswith(x) for x in conf.valid_flags_suffix)]
-                        valid_flags += [y for y in self.analyzer.has_build_testing_flag() if any(x in y for x in conf.valid_flags_in)]
+                        valid_flags = FlagFilter(self.analyzer.has_build_testing_flag()).get_valid_flags()
                         if valid_flags:
                             logging.info(f"Valid flag {valid_flags} found in {self.repo.full_name}.")
 
@@ -115,19 +114,18 @@ class StructureFilter:
         sorted_testing_path = sorted(analyzer.parser.enable_testing_path, key=self._sort_key)
         enable_testing_path = sorted_testing_path[0].removesuffix("/CMakeLists.txt").removeprefix(root)
         test_path = os.path.join(root, "build", enable_testing_path)
-        process = CMakeProcess(root, os.path.join(root, "build"), test_path, analyzer=analyzer)
-        if process.clone_repo(self.repo_id, root) and process.configure(): 
-            logging.info(f"Configuring {self.repo.full_name} was successful.")
-            return True
-            """
-            if process.test():
-                logging.info(f"Testing {self.repo.full_name} was successful.")
-                return True
+        flags = FlagFilter(analyzer.has_build_testing_flag()).get_valid_flags()
+        process = CMakeProcess(root, os.path.join(root, "build"), test_path, jobs=4, flags=flags, analyzer=analyzer)
+        if process.clone_repo(self.repo_id, root) and process.build(): 
+            logging.info(f"Configuring was successful. {self.repo.full_name}")
+            if process.test([]):
+                logging.info(f"Testing was successful. {self.repo.full_name} ")
             else:
-                logging.info(f"Testing {self.repo.full_name} failed.")
-            """
+                logging.info(f"Testing failed. {self.repo.full_name}")
+            return True
+            
         else:
-            logging.info(f"Configuring {self.repo.full_name} failed.")
+            logging.info(f"Configuring failed. {self.repo.full_name} ")
             
         return False
     

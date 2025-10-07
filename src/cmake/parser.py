@@ -29,6 +29,17 @@ class CMakeParser:
                     found_files.append(os.path.join(root, file))
         return found_files
     
+    def find_ctest_exec(self) -> list[str]:
+        testfiles = self.find_files("CTestTestfile.cmake")
+        exec: list[str] = []
+        for tf in testfiles:
+            with open(tf, 'r', errors='ignore') as file:
+                content = file.read()
+            if m := pattern.add_test_exec.search(content):
+                exec.append(m.group(1))
+                # TODO
+        return exec
+    
     def find_enable_testing(self, cmake_files: list[str]) -> bool:
         """
         Checks if enable_testing() is called anywhere in CMakeLists.txt. 
@@ -83,52 +94,23 @@ class CMakeParser:
 
         return False
     
-    def check_external_package_manager(self, cmake_files: list[str]) -> dict[str, list[str]]:
-        """
-        Detects external C++ package managers used in the project by scanning CMakeLists.txt files.
-        Returns a dictionary mapping manager name to a list of CMake files where it was found.
-        """
-        patterns = {
-            "Conan": [
-                re.compile(r'include\s*\(\s*Conan\.cmake\s*\)', re.IGNORECASE),
-                re.compile(r'conan_basic_setup\s*\(', re.IGNORECASE),
-                re.compile(r'conan_cmake_run\s*\(', re.IGNORECASE)
-            ],
-            "vcpkg": [
-                re.compile(r'set\s*\(\s*CMAKE_TOOLCHAIN_FILE.*vcpkg\.cmake\s*\)', re.IGNORECASE),
-            ],
-            "Hunter": [
-                re.compile(r'include\s*\(\s*HunterGate\.cmake\s*\)', re.IGNORECASE),
-                re.compile(r'hunter_add_package\s*\(', re.IGNORECASE)
-            ],
-            "FetchContent": [
-                re.compile(r'include\s*\(\s*FetchContent\s*\)', re.IGNORECASE),
-                re.compile(r'FetchContent_Declare\s*\(', re.IGNORECASE),
-                re.compile(r'FetchContent_MakeAvailable\s*\(', re.IGNORECASE)
-            ],
-            "ExternalProject": [
-                re.compile(r'include\s*\(\s*ExternalProject\s*\)', re.IGNORECASE),
-                re.compile(r'ExternalProject_Add\s*\(', re.IGNORECASE)
-            ],
-            "CPM": [
-                re.compile(r'include\s*\(\s*CPM\.cmake\s*\)', re.IGNORECASE),
-                re.compile(r'CPMAddPackage\s*\(', re.IGNORECASE)
-            ]
-        }
-
-        found_managers = {k: [] for k in patterns}
-
+    def get_list_test_arg(self, cmake_files: list[str]) -> str:
         for cf in cmake_files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
-            for manager, pats in patterns.items():
-                if any(p.search(content) for p in pats):
-                    found_managers[manager].append(cf)
 
-        found_managers = {k: v for k, v in found_managers.items() if v}
-        for mgr, files in found_managers.items():
-            logging.info(f"Detected package manager {mgr} in {files}")
-        return found_managers
+            if pattern.gtest_link.search(content):
+                return "--gtest_list_tests"
+            if pattern.catch_link.search(content):
+                return "--list-tests "
+            if pattern.doctest_link.search(content):
+                return "--list-test-cases"
+        
+        return ""
+                
+    def get_unit_tests(self) -> list[str]:
+        # TODO: extract the list tests to unit tests
+        return []
     
     def find_test_flags(self, cmake_files: list[str]) -> dict[str, dict[str, str]]:
         test_flags = {}

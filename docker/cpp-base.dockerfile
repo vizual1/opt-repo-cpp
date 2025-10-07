@@ -3,9 +3,35 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
-    build-essential cmake ninja-build git wget curl unzip pkg-config \
-    gdb valgrind lcov python3 python3-pip \
-    software-properties-common gnupg \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    wget \
+    curl \
+    unzip \
+    pkg-config \
+    gdb \
+    tar \
+    valgrind \
+    lcov \
+    python3 \
+    python3-pip \
+    software-properties-common \
+    gnupg \
+    libgflags-dev \
+    libgtest-dev \
+    libgmock-dev \
+    catch2 \
+    libboost-all-dev \
+    libfmt-dev \
+    libspdlog-dev \
+    nlohmann-json3-dev \
+    zlib1g-dev \
+    bzip2 \
+    liblz4-dev \
+    libzstd-dev \
+    extra-cmake-modules \
     && wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh \
     && ./llvm.sh 16 all \
     && rm llvm.sh \

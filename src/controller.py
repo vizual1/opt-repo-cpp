@@ -39,7 +39,14 @@ class Controller:
 
     def _tester(self):
         tester_pipeline = TesterPipeline(url=self.url, sha=self.sha, config=self.config)
-        tester_pipeline.run()
+        if self.config.test_commit:
+            tester_pipeline.test_commit()
+        elif self.config.test_configure:
+            tester_pipeline.test_configure()
+        elif self.config.test_build:
+            tester_pipeline.test_build()
+        elif self.config.test_ctest:
+            tester_pipeline.test_ctest()
 
     def _docker(self):
         docker = DockerBuilder()

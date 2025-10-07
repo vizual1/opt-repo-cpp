@@ -18,12 +18,16 @@ class CMakeAnalyzer:
                 self.parser.can_list_tests(self.cmakelists) and 
                 (self.parser.find_add_tests(self.cmakelists) or 
                  self.parser.find_discover_tests(self.cmakelists)))
+    
+    # TODO: test
+    def get_list_test_arg(self) -> str:
+        return self.parser.get_list_test_arg(self.cmakelists)
 
     def has_build_testing_flag(self) -> dict[str, dict[str, str]]:
         return self.parser.find_test_flags(self.cmakelists)
     
-    def has_package_manager(self) -> dict[str, list[str]]:
-        return self.parser.check_external_package_manager(self.cmakelists)
+    #def has_package_manager(self) -> dict[str, list[str]]:
+    #    return self.parser.check_external_package_manager(self.cmakelists)
     
     def get_testfile(self) -> list[str]:
         return self.parser.find_files(search="CTestTestfile.cmake")

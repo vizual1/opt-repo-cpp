@@ -1,0 +1,38 @@
+cpp-base analyze
+https://github.com/nlohmann/json
+https://github.com/google/leveldb # -DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_STANDARD_REQUIRED=ON
+https://github.com/gabime/spdlog
+https://github.com/fmtlib/fmt
+https://github.com/alibaba/MNN
+https://github.com/skypjack/entt
+https://github.com/WasmEdge/WasmEdge # -DFMT_EXTERNAL=OFF -DCMAKE_CXX_STANDARD=17
+https://github.com/google/glog
+https://github.com/microsoft/GSL
+https://github.com/wisdompeak/LeetCode
+https://github.com/tiny-dnn/tiny-dnn # ???
+https://github.com/google/bloaty
+https://github.com/google/highway # OOM Error
+
+
+cpp-extend analyze
+https://github.com/BehaviorTree/BehaviorTree.CPP
+https://github.com/CLIUtils/CLI11
+https://github.com/COVESA/vsomeip
+https://github.com/CrowCpp/Crow
+https://github.com/Haivision/srt
+https://github.com/InsightSoftwareConsortium/ITK
+https://github.com/Intel-Media-SDK/MediaSDK
+https://github.com/OGRECave/ogre
+https://github.com/OpenVPN/openvpn3
+https://github.com/PatWie/CppNumericalSolvers
+https://github.com/RainerKuemmerle/g2o
+https://github.com/Thalhammer/jwt-cpp
+https://github.com/TileDB-Inc/TileDB
+https://github.com/acoustid/chromaprint
+https://github.com/azerothcore/azerothcore-wotlk
+https://github.com/brndnmtthws/conky
+https://github.com/charles-lunarg/vk-bootstrap
+https://github.com/cmu-db/bustub
+https://github.com/eclipse-omr/omr
+https://github.com/ethz-adrl/ifopt
+https://github.com/ethz-asl/okvis # way too long

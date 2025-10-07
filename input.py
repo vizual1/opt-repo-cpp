@@ -26,9 +26,6 @@ def start() -> None:
     parser.add_argument("--ignore_conflict", action="store_true", help="Ignores possible package conflicts while generating Dockerfile.")
     
     args = parser.parse_args()
-
-    #if args.sha and not args.url:
-    #    parser.error("Argument -sha requires -url to be set.")
     
     config = Config(
         read=args.read, write=args.write,

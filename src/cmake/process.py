@@ -1,46 +1,42 @@
 
-import logging, subprocess, os, shutil, re
+import logging, subprocess, os, shutil
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from typing import Optional
-from src.cmake.package import CMakePackageHandler
+#from src.cmake.package import CMakePackageHandler
+#import src.config as conf
 
 class CMakeProcess:
     """Class configures, builds and tests commits."""
-    def __init__(self, root: str, build: str, test: str, jobs: int = 1, analyzer: Optional[CMakeAnalyzer] = None):
+    def __init__(self, root: str, build: str, test: str, flags: list[str], jobs: int = 1, analyzer: Optional[CMakeAnalyzer] = None):
         self.root = root
         self.build_path = build
         self.test_path = test
         self.jobs = jobs
-
+        self.flags = flags
         self.analyzer = analyzer if analyzer is not None else CMakeAnalyzer(self.root)
-        self.flags = self.analyzer.has_build_testing_flag()
-        #self.flags_info = CMakeProcessAnalyzer(self.root).analyze_flags()
-
+        
     def configure(self) -> bool:
         return self._configure()
 
     def build(self) -> bool:
-        package_handler = CMakePackageHandler(self.analyzer)
-        package_handler.packages_installer()
+        #package_handler = CMakePackageHandler(self.analyzer)
+        #package_handler.packages_installer()
         return self._configure() and self._cmake()
     
-    def test(self) -> bool:
-        return self._ctest()
+    def test(self, test_exec: list[str]) -> bool:
+        return self._ctest(test_exec)
 
     def _configure(self) -> bool:
-        # TODO: maybe no optimization, gcovr + llvm coverage information
-        # process to check for compiler versions
         cmd = ['cmake', '-S', self.root, '-B', self.build_path, 
-               #f'-DCMAKE_BUILD_TYPE=Release',
-               #'-DCMAKE_C_COMPILER=/usr/bin/clang', #also works: gcc
-               '-DCMAKE_BUILD_TYPE=Debug',
-               #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++', #also works: g++
-               #'-DCMAKE_CXX_FLAGS=--coverage -O0 -g',
-               #'-DCMAKE_EXE_LINKER_FLAGS=--coverage'
+            '-DCMAKE_C_COMPILER=/usr/bin/clang',
+            '-DCMAKE_BUILD_TYPE=Debug',
+            '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
+            '-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
+            '-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate'
         ]
 
-        for flag in self.flags.keys():
+        for flag in self.flags:
             if 'disable' in flag.lower():
                 cmd.append(f'-D{flag}=OFF')
             else:
@@ -77,8 +73,11 @@ class CMakeProcess:
     #      doctest  => --list-test-cases
     #      add_test => probably just scanning all add_test(some_name path/to/executable)
     #                   and take path/to/executable as unit test
-    def _ctest(self) -> bool:
+    def _ctest(self, test_exec: list[str]) -> bool:
         test_dir = Path(self.test_path)
+        if test_exec:
+            self._isolated_ctest(test_exec)
+
         cmd = ['ctest', '--output-on-failure']
         try:
             logging.info(f"CTest: {' '.join(cmd)} in {self.test_path}")
@@ -87,8 +86,37 @@ class CMakeProcess:
             return True
         except subprocess.CalledProcessError as e:
             logging.error(f"CMake tests failed for {self.test_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
-            return False
+        except FileNotFoundError as e:
+            logging.error(f"FileNotFoundError: {e}", exc_info=True)
+        return False
         
+    
+    # TODO
+    def _isolated_ctest(self, test_exec: list[str]) -> bool:
+        test_dir = Path(self.test_path)
+        list_test_arg = self.analyzer.get_list_test_arg()
+        unit_tests: dict[str, list[str]] = {}
+        for exec in test_exec:
+            cmd = [exec, list_test_arg]
+            try:
+                logging.info(f"Run CTest Executable: {' '.join(cmd)} {list_test_arg}")
+                result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                logging.info(f"CTest Executable Output: {result.stdout}")
+                unit_tests[exec] = self.analyzer.parser.get_unit_tests()
+            except subprocess.CalledProcessError as e:
+                logging.error(f"CTest Executable {' '.join(cmd)} {list_test_arg} couldn't list unit tests.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+        for exec, tests in unit_tests.items():
+            for test in tests:
+                # TODO: run this tests, each with different profile
+                cmd = ['LLVM_PROFILE_FILE=coverage/%t.profraw', exec, test]
+                try:
+                    result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                except:
+                    logging.error("", exc_info=True)
+                    # TODO: extract the profraw coverage without the test and build folders
+            # TODO: extract coverage data and create
+        return False
+
     def _get_default_branch(self, repo_url: str):
         result = subprocess.run(
             ["git", "ls-remote", "--symref", repo_url, "HEAD"],
@@ -106,7 +134,6 @@ class CMakeProcess:
             branch = self._get_default_branch(url)
         if os.path.exists(repo_path):
             shutil.rmtree(repo_path)
-        # TODO: "--recurse-submodules", "--shallow-submodules", 
         cmd = ["git", "clone", "--recurse-submodules", "--shallow-submodules", "--branch", branch, f"--depth=1", url, repo_path]
         logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
         try:

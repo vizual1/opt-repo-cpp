@@ -4,7 +4,7 @@ from typing import Any
 storage: dict[str, str] = {
     "store_commits": "data/commits",
     "store_analyze": "data/analyze",
-    "repo_urls": "data/repos/urls.txt",
+    "repo_urls": "data/analyze/cpp-base.txt", #"data/repos/urls.txt",
     "results": "data/results.txt"
 }
 
@@ -26,28 +26,27 @@ likelihood: dict[str, int] = {
     'max_likelihood': 50
 }
 
+test_flags_filter = {
+    "valid": [
+        "BUILD_TESTING", "BUILD_TESTS", "BUILD_TEST",
+        "ENABLE_TESTING", "ENABLE_TESTS", "ENABLE_TEST",
+        "ENABLE_UNITTESTS",
+        "WITH_TESTING", "WITH_TESTS",
+        "WITH_UNIT_TESTS",
+        "BUILD_UNIT_TESTS",
+        "TESTING", "TESTS", "TEST",
+        "RUN_TESTS"
+    ],
+    "suffix": [
+        "_BUILD_TEST", "_BUILD_TESTS", "_BUILD_TESTING",
+        "_ENABLE_TEST", "_ENABLE_TESTS", "_ENABLE_TESTING",
+        "_UNIT_TESTS", "_UNITTEST"
+    ],
+    "in": [
+        "_UNIT_TEST_"
+    ]
+}
 
-# TODO: flags
-valid_flags = [
-    "BUILD_TESTING", "BUILD_TESTS", "BUILD_TEST",
-    "ENABLE_TESTING", "ENABLE_TESTS", "ENABLE_TEST",
-    "ENABLE_UNITTESTS",
-    "WITH_TESTING", "WITH_TESTS",
-    "WITH_UNIT_TESTS",
-    "BUILD_UNIT_TESTS",
-    "TESTING", "TESTS", "TEST",
-    "RUN_TESTS"
-]
-
-valid_flags_suffix = [
-    "_BUILD_TEST", "_BUILD_TESTS", "_BUILD_TESTING",
-    "_ENABLE_TEST", "_ENABLE_TESTS", "_ENABLE_TESTING",
-    "_UNIT_TESTS", "_UNITTEST"
-]
-
-valid_flags_in = [
-    "_UNIT_TEST_"
-]
 
 valid_test_dir = {
     'test', 'tests', 'unittest', 'unittests', 
