@@ -1,0 +1,27 @@
+15:34:08,103 root INFO Starting Github Crawler
+15:34:08,103 root INFO Fetching commit history...
+15:34:08,977 root INFO Fetching and filtering commits of skypjack_entt ...
+15:34:13,799 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:34:20,96 root INFO Commit 6fa668900e0b13432dfb25ce13d9c6663c716b0f in skypjack/entt has a likelihood of 0.0%, which is below the threshold.
+15:34:21,788 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:34:58,240 root INFO Commit 17e88e506c0be6e361f2dc0c274eb0f48dfaf755 in skypjack/entt has a likelihood of 0.0%, which is below the threshold.
+15:35:00,87 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:35:06,839 root INFO Commit 3bcbea785aca49337d2983a033a0896a88d91217 in skypjack/entt has a likelihood of 5.0%, which is below the threshold.
+15:35:08,684 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:35:36,335 root INFO Commit 3bac3d4bbe07cb01ed44efdd9e6585ee2c7b452b in skypjack/entt has a likelihood of 1.0%, which is below the threshold.
+15:35:47,76 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:36:00,191 root INFO Commit abdb293106c33be259b8cc38add3ba37bf8e34a9 in skypjack/entt has a likelihood of 5.0%, which is below the threshold.
+15:36:01,823 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:36:17,810 root INFO Commit f4b960dc930a5d4a54f27b160b282eee505c5183 in skypjack/entt has a likelihood of 0.0%, which is below the threshold.
+15:36:18,936 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:36:25,180 root INFO Commit 71c217da28b0bc9eb75f323b7af3cb5fae4540f6 in skypjack/entt has a likelihood of 5.0%, which is below the threshold.
+15:36:28,152 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:36:32,693 root INFO Commit 4777ca29800e65497d3d427a2be07f377537ce41 in skypjack/entt has a likelihood of 0.0%, which is below the threshold.
+15:36:33,886 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:36:38,290 root INFO Commit 4aabca2f0b117db72202960bd58f473a39ec75c2 in skypjack/entt has a likelihood of 0.0%, which is below the threshold.
+15:36:40,435 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:36:48,114 root INFO Commit 5c31fda9bd33b79f99a8146b9dc8146162dbb914 in skypjack/entt has a likelihood of 20.0%, which is below the threshold.
+15:36:53,111 httpx INFO HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 200 OK"
+15:37:05,727 root INFO Commit eecd1dc636dd2d349b72fcd1bfd036c32a680206 in skypjack/entt has a likelihood of 0.0%, which is below the threshold.
+15:37:15,796 openai._base_client INFO Retrying request to /chat/completions in 0.462039 seconds
+15:37:26,302 openai._base_client INFO Retrying request to /chat/completions in 0.908143 seconds
