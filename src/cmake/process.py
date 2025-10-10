@@ -1,39 +1,110 @@
 
-import logging, subprocess, os, shutil
+import logging, subprocess, os, shutil, re
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
-from typing import Optional
-#from src.cmake.package import CMakePackageHandler
+#from src.cmake.autobuilder import CMakeAutoBuilder
+from src.cmake.package import CMakePackageHandler
 #import src.config as conf
 
+vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
+os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
+
 class CMakeProcess:
-    """Class configures, builds and tests commits."""
-    def __init__(self, root: str, build: str, test: str, flags: list[str], jobs: int = 1, analyzer: Optional[CMakeAnalyzer] = None):
+    """Class configures, builds, tests, and clones commits."""
+    def __init__(self, root: str, build: str, test: str, flags: list[str], analyzer: CMakeAnalyzer, jobs: int = 1):
         self.root = root
         self.build_path = build
         self.test_path = test
         self.jobs = jobs
-        self.flags = flags
-        self.analyzer = analyzer if analyzer is not None else CMakeAnalyzer(self.root)
+        self.flags: list[str] = flags
+        self.analyzer = analyzer
+        self.config_stdout: str = ""
+        self.config_stderr: str = ""
+        self.build_stdout: str = ""
+        self.other_flags: set[str] = set()
+        #self.auto_builder = CMakeAutoBuilder(self.root)
+        self.package_handler = CMakePackageHandler(self.analyzer)
         
     def configure(self) -> bool:
-        return self._configure()
+        return self._configure_with_retries()
 
     def build(self) -> bool:
-        #package_handler = CMakePackageHandler(self.analyzer)
-        #package_handler.packages_installer()
-        return self._configure() and self._cmake()
+        return self._configure_with_retries() and self._build()
     
     def test(self, test_exec: list[str]) -> bool:
         return self._ctest(test_exec)
+    
+############### CONFIGURATION ###############
+    
+    def _configure_with_retries(self, max_retries: int = 5) -> bool:
+        # TODO: create vcpkg manifest and run cmake configure in manifest mode!
+        
+        #if not self.auto_builder.generate_vcpkg_manifest(dependencies):
+        #    logging.warning("Failed to generate vcpkg manifest, proceeding anyway...")
+
+        save_dependencies = set()
+        for attempt in range(max_retries):
+            logging.info(f"[Attempt {attempt}/{max_retries}] Configuring project at {self.root}")
+
+            if self._configure():
+                return True
+            
+            missing_dependencies = self.package_handler.get_missing_dependencies(self.config_stdout, self.config_stderr, Path(self.build_path) / "CMakeCache.txt")
+            if not missing_dependencies:
+                logging.error("Configuration failed but no missing dependencies detected")
+                return False
+            
+            if missing_dependencies in save_dependencies:
+                logging.error("Configuration failed but no new missing dependencies detected")
+                return False
+            
+            #self.auto_builder.add_to_manifest(missing_dependencies)
+            if attempt == 0:
+                missing_dependencies |= self.analyzer.get_dependencies()
+            
+            for dep in missing_dependencies:
+                try:
+                    subprocess.run(["/opt/vcpkg/vcpkg", "install", dep.lower()], check=True)
+                    #self.auto_builder.inject_vcpkg_dependency(dep)
+                    #self.other_flags |= self.auto_builder.flags
+                    logging.info(f"Installed {dep}")
+                except subprocess.CalledProcessError as e:
+                    logging.warning(f"Failed to install {dep}: {e}")
+                except Exception as e:
+                    logging.error(f"Unexpected error with {dep}: {e}")
+            
+            save_dependencies = missing_dependencies.copy()
+             
+        # TODO: if still fail try LLM?
+        logging.error("All configuration attempts failed.")
+        return False
 
     def _configure(self) -> bool:
-        cmd = ['cmake', '-S', self.root, '-B', self.build_path, 
-            '-DCMAKE_C_COMPILER=/usr/bin/clang',
+        cmd = [
+            'cmake', 
+            '-S', self.root, 
+            '-B', self.build_path, 
+            '-G', 'Ninja',
+
+            '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
+            #'-DVCPKG_MANIFEST_MODE=ON',
+            #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
+            #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
+            
             '-DCMAKE_BUILD_TYPE=Debug',
-            '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
+            '-DCMAKE_C_COMPILER=/usr/bin/clang-16',
+            '-DCMAKE_CXX_COMPILER=/usr/bin/clang++-16',
+
+            '-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
             '-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
-            '-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate'
+            '-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
+            
+            '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
+            '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
+
+            '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+            #'-DCMAKE_VERBOSE_MAKEFILE=ON',
+            #'-DCMAKE_FIND_DEBUG_MODE=ON',
         ]
 
         for flag in self.flags:
@@ -41,29 +112,75 @@ class CMakeProcess:
                 cmd.append(f'-D{flag}=OFF')
             else:
                 cmd.append(f'-D{flag}=ON')
+
+        for flag in self.other_flags:
+            cmd.append(flag)
         
         try:
-            logging.info(f"Configure CMake: {' '.join(cmd)}")
+            logging.info(f"{' '.join(cmd)}")
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logging.info(f"CMake configured {self.build_path} successfully:\n{result.stdout}")
+            logging.info(f"CMake Configuration successful for {self.build_path}")
+            logging.info(f"Output:\n{result.stdout}")
             return True
         except subprocess.CalledProcessError as e:
-            logging.error(f"CMake configuration failed for {self.build_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+            logging.error(f"CMake configuration failed for {self.build_path} (return code {e.returncode})", exc_info=True)
+            self.config_stdout = e.stdout if e.stdout else ""
+            self.config_stderr = e.stderr if e.stderr else ""
+            logging.error(f"Output (stdout):\n{e.stdout}")
+            logging.error(f"Error (stderr):\n{e.stderr}")
             return False
 
+############### BUILDING ###############
+
+    # TODO:
+    def _build_with_retries(self, max_retries: int = 3) -> bool:
+        for attempt in range(max_retries):
+            logging.info(f"[Attempt {attempt}/{max_retries}] Building project at {self.root}")
+            if self._build():
+                return True
+            logging.warning("Build failed. Attempting recovery and retry...")
+            self._analyze_build_failure() 
+        logging.error("All build attempts failed.")
+        return False
     
-    def _cmake(self) -> bool:
-        cmd = ['cmake', '--build', self.build_path]
+    def _analyze_build_failure(self):
+        """Try to automatically handle common build failures."""
+        missing_header = re.findall(r"fatal error: ([\w\/\.\-]+): No such file or directory", self.build_stdout)
+        if missing_header:
+            for header in missing_header:
+                pkg = header.split('/')[0]
+                logging.warning(f"Missing header detected: {header} -> guessing package '{pkg}'")
+                subprocess.run(["/opt/vcpkg/vcpkg", "install", pkg])
+
+        if "undefined reference to" in self.build_stdout:
+            symbols = re.findall(r"undefined reference to [`']([\w:]+)[`']", self.build_stdout)
+            if symbols:
+                logging.warning(f"Detected linker symbols: {symbols[:3]}{'...' if len(symbols) > 3 else ''}")
+            # Optionally try to detect missing libraries via `pkg-config --list-all`
+
+        if "No rule to make target" in self.build_stdout or "file not found" in self.build_stdout:
+            logging.info("Possible parallel build race condition: retrying single-threaded build...")
+            subprocess.run(['cmake', '--build', self.build_path, '-j1'])
+
+
+    def _build(self) -> bool:
+        cmd = ['cmake', '--build', self.build_path, '--']
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
+        cmd += ['-k', '0'] 
         try:
-            logging.info(f"Build CMake: {' '.join(cmd)}")
+            logging.info(f"{' '.join(cmd)}")
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logging.info(f"CMake build completed for {self.root}:\n{result.stdout}")
+            logging.info(f"CMake build completed for {self.root}")
+            logging.info(f"Output:\n{result.stdout}")
             return True
         except subprocess.CalledProcessError as e:
-            logging.error(f"CMake build failed for {self.root}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+            logging.error(f"CMake build failed for {self.root} (return code {e.returncode})", exc_info=True)
+            logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
+            logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
             return False
+
+############### TESTING ###############
 
     # TODO: ensure that the tests are each run in isolation
     # check CTestTestfile.cmake -> check add_test(some_name path/to/executable)
@@ -80,12 +197,15 @@ class CMakeProcess:
 
         cmd = ['ctest', '--output-on-failure']
         try:
-            logging.info(f"CTest: {' '.join(cmd)} in {self.test_path}")
+            logging.info(f"{' '.join(cmd)} in {self.test_path}")
             result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logging.info(f"CMake tests passed for {self.test_path}\n{result.stdout}")
+            logging.info(f"CTest passed for {self.test_path}")
+            logging.info(f"Output:\n{result.stdout}")
             return True
         except subprocess.CalledProcessError as e:
-            logging.error(f"CMake tests failed for {self.test_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+            logging.error(f"CTest failed for {self.test_path} (return code {e.returncode})", exc_info=True)
+            logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
+            logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
         except FileNotFoundError as e:
             logging.error(f"FileNotFoundError: {e}", exc_info=True)
         return False
@@ -94,17 +214,19 @@ class CMakeProcess:
     # TODO
     def _isolated_ctest(self, test_exec: list[str]) -> bool:
         test_dir = Path(self.test_path)
-        list_test_arg = self.analyzer.get_list_test_arg()
+        list_test_arg = self.analyzer.get_list_test_arg()[0]
         unit_tests: dict[str, list[str]] = {}
         for exec in test_exec:
             cmd = [exec, list_test_arg]
             try:
-                logging.info(f"Run CTest Executable: {' '.join(cmd)} {list_test_arg}")
+                logging.info(f"{' '.join(cmd)} {list_test_arg}")
                 result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                logging.info(f"CTest Executable Output: {result.stdout}")
-                unit_tests[exec] = self.analyzer.parser.get_unit_tests()
+                logging.info(f"CTest Output: {result.stdout}")
+                unit_tests[exec] = self.analyzer.parser.find_unit_tests(result.stdout)
             except subprocess.CalledProcessError as e:
-                logging.error(f"CTest Executable {' '.join(cmd)} {list_test_arg} couldn't list unit tests.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+                logging.error(f"{' '.join(cmd)} {list_test_arg} couldn't list unit tests (return code {e.returncode})", exc_info=True)
+                logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
+                logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
         for exec, tests in unit_tests.items():
             for test in tests:
                 # TODO: run this tests, each with different profile
@@ -116,11 +238,13 @@ class CMakeProcess:
                     # TODO: extract the profraw coverage without the test and build folders
             # TODO: extract coverage data and create
         return False
+    
+############### CLONING ###############
 
     def _get_default_branch(self, repo_url: str):
         result = subprocess.run(
             ["git", "ls-remote", "--symref", repo_url, "HEAD"],
-            capture_output=True, text=True, check=True
+            capture_output=True, text=True
         )
 
         for line in result.stdout.splitlines():
@@ -138,37 +262,10 @@ class CMakeProcess:
         logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
         try:
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logging.info(f"Repository cloned successfully:\n{result.stdout}")
+            logging.info(f"Repository cloned successfully")
             return True
         except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to clone repository {url} (branch: {branch}) into {repo_path}.\nReturn code: {e.returncode}\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}", exc_info=True)
+            logging.error(f"Failed to clone repository {url} (branch: {branch}) into {repo_path} (return code {e.returncode})", exc_info=True)
+            logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
+            logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
             return False
-
-class CMakeProcessAnalyzer:
-    """Class used for analyzing CMakeLists.txt by running subprocess."""
-    def __init__(self, root: str):
-        self.root = root
-
-    def analyze_flags(self) -> str:
-        repo_root = Path(self.root)
-        build_dir = repo_root / "build"
-        build_dir.mkdir(exist_ok=True)
-
-        logging.info(f"Configuring project at {repo_root}.")
-        try:
-            result_config = subprocess.run(["cmake", ".."], cwd=build_dir, capture_output=True, text=True, check=True)
-            logging.info(f"CMake configure output:\n{result_config.stdout}")
-        except subprocess.CalledProcessError as e:
-            logging.error(f"FAILED: cmake configure at {repo_root}")
-            logging.error(f"stderr:\n{e.stderr}")
-            return ""
-        
-        logging.info(f"Querying cached variables with 'cmake -LH'")
-        try:
-            result_flags = subprocess.run(["cmake", "-LH", ".."], cwd=build_dir, capture_output=True, text=True, check=True)
-            logging.info(f"CMake -LH output:\n{result_flags.stdout}")
-            return result_flags.stdout
-        except subprocess.CalledProcessError as e:
-            logging.error(f"FAILED: cmake -LH at {repo_root}")
-            logging.error(f"stderr:\n{e.stderr}")
-            return ""

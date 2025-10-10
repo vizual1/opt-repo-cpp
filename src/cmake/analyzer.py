@@ -1,4 +1,3 @@
-import logging
 from src.cmake.parser import CMakeParser
 
 class CMakeAnalyzer:
@@ -6,40 +5,20 @@ class CMakeAnalyzer:
     def __init__(self, root: str):
         self.root = root
         self.parser = CMakeParser(self.root)
-        self.cmakelists = self.parser.find_files(search="CMakeLists.txt")
-        logging.info(f"CMakeLists.txt: {self.cmakelists}")
 
     def has_root_cmake(self) -> bool:
         return self.parser.has_root_cmake()
 
-    # TODO: test this
     def has_testing(self) -> bool:
-        return (self.parser.find_enable_testing(self.cmakelists) and 
-                self.parser.can_list_tests(self.cmakelists) and 
-                (self.parser.find_add_tests(self.cmakelists) or 
-                 self.parser.find_discover_tests(self.cmakelists)))
+        return (self.parser.find_enable_testing() and self.parser.can_list_tests() and 
+               (self.parser.find_add_tests() or self.parser.find_discover_tests()))
     
-    # TODO: test
-    def get_list_test_arg(self) -> str:
-        return self.parser.get_list_test_arg(self.cmakelists)
+    def get_list_test_arg(self) -> list[str]:
+        return list(self.parser.list_test_arg)
 
     def has_build_testing_flag(self) -> dict[str, dict[str, str]]:
-        return self.parser.find_test_flags(self.cmakelists)
-    
-    #def has_package_manager(self) -> dict[str, list[str]]:
-    #    return self.parser.check_external_package_manager(self.cmakelists)
-    
-    def get_testfile(self) -> list[str]:
-        return self.parser.find_files(search="CTestTestfile.cmake")
-    
-    def get_ctest_flags(self) -> set[str]:
-        return self.parser.parse_ctest_flags(self.cmakelists)
-
-    def get_enable_testing_flags(self) -> set[str]:
-        return self.parser.find_testing_flags(self.root)
+        return self.parser.find_test_flags()
 
     def get_dependencies(self) -> set[str]:
-        deps = set()
-        for cf in self.cmakelists:
-            deps |= self.parser.get_cmake_packages(cf)
+        deps = self.parser.find_dependencies()
         return deps

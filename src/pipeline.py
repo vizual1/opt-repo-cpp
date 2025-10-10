@@ -1,3 +1,4 @@
+import logging
 from tqdm import tqdm
 from github.Repository import Repository
 from src.utils.crawler import RepositoryCrawler
@@ -23,20 +24,28 @@ class RepositoryPipeline:
         crawl = RepositoryCrawler(self.url, config=self.config)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            structure = StructureFilter(repo_id, self.config.git)
-            if structure.is_valid():
-                self.valid_repos.append(structure.repo)
-                if self.config.popular or self.config.write:
-                    Writer(structure.repo.full_name).write_repo(self.config.write)
+            try:
+                structure = StructureFilter(repo_id, self.config.git)
+                if structure.is_valid():
+                    self.valid_repos.append(structure.repo)
+                    if self.config.popular or self.config.write:
+                        Writer(structure.repo.full_name).write_repo(self.config.write)
+            except Exception as e:
+                logging.warning(f"Exception: {e}")
+                continue
            
     def analyze_repos(self) -> None:
         crawl = RepositoryCrawler(self.url, config=self.config)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            structure = StructureFilter(repo_id, self.config.git)
-            if structure.analyze() and (self.config.popular or self.config.write):
-                Writer(structure.repo.full_name).write_repo(self.config.write)
-            self.stats += structure.stats
+            try:
+                structure = StructureFilter(repo_id, self.config.git)
+                if structure.analyze() and (self.config.popular or self.config.write):
+                    Writer(structure.repo.full_name).write_repo(self.config.write)
+                self.stats += structure.stats
+            except Exception as e:
+                logging.warning(f"Exception: {e}")
+                continue
         self.stats.write_final_log()
 
 

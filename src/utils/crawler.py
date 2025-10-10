@@ -27,13 +27,21 @@ class RepositoryCrawler:
             return self._get_repo_ids(path, self.url)
     
     def _query_popular_repos(self) -> list[str]:
-        ok_language = ["C++", "CMake", "Shell", "C", "Makefile", "Dockerfile"]
+        ok_language = [
+            "C++", "CMake", "Shell", "C", "Makefile", "Dockerfile",
+            "Meson", "Bazel", "Ninja", "QMake", "Gradle", "JSON", "YAML",
+            "TOML", "INI", "Batchfile", "PowerSHell", "Markdown",
+            "HTML", "CSS", "TeX"
+        ]
         result = []
         count = 0
 
         upper = self.config.stars 
         lower = upper
-        while lower > 10000  and count < self.config.limit:
+
+        pbar = tqdm(desc="Getting popular repos...")
+
+        while lower > -1 and count < self.config.limit:
             upper = lower
             lower = int(0.95 * upper)
 
@@ -41,27 +49,27 @@ class RepositoryCrawler:
             logging.info(f"Querying popular repos ({query})...")
             repos = self.config.git.search_repositories(query=query, sort="stars", order="desc")
 
-            with tqdm(repos, desc="Getting popular repos...") as pbar:
-                for repo in pbar:
-                    languages = repo.get_languages() 
-                    cpp = languages.get("C++", 0)
-                    total_bytes = sum(languages.values())
-                    cmake = languages.get("CMake", 0)
+            for repo in repos:
+                languages = repo.get_languages() 
+                cpp = languages.get("C++", 0)
+                total_bytes = sum(languages.values())
+                #cmake = languages.get("CMake", 0)
 
-                    if total_bytes == 0:
-                        continue
+                if total_bytes == 0:
+                    continue
 
-                    others_ok = all((size / total_bytes) <= 0.02 for lang, size in languages.items() if lang not in ok_language)
-                    if cpp > 0 and cmake > 0 and others_ok:
-                        result.append(repo.full_name)
-                        count += 1
-                    
-                    pbar.set_postfix({"matched": count})
+                others_ok = all((size / total_bytes) <= 0.05 for lang, size in languages.items() if lang not in ok_language)
+                if cpp > 0 and others_ok:
+                    result.append(repo.full_name)
+                    count += 1
+                
+                pbar.update(1)
+                pbar.set_postfix({"matched": count})
 
-                    if count >= self.config.limit:
-                        break
+                if count >= self.config.limit:
+                    break
 
-                    time.sleep(0.5)
+                time.sleep(0.5)
 
         return result
     

@@ -29,34 +29,25 @@ class StructureFilter:
 
         self.cmake_files, self.tree_paths, self.tree = self._get_repo_tree()
         self.stats = RepoStats()
+        self.testing_flags: dict = {}
 
 
     def is_valid(self) -> bool:
         if self._has_root_cmake(self.cmake_files):
-            logging.info(f"CMake at root found in GitHub repository {self.repo.full_name}.")
+            logging.info(f"CMake at root found for {self.repo.full_name}.")
 
-            if self._has_test_dir(self.tree_paths):
-                logging.info(f"Valid test directory found in GitHub repository {self.repo.full_name}.")
+            with tempfile.TemporaryDirectory() as tmpdir:
+                self._get_cmake_lists(tmpdir)
+                analyzer = CMakeAnalyzer(tmpdir)
 
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    if not self.root:
-                        self._get_cmakelists(tmpdir)
-                        self.analyzer = CMakeAnalyzer(tmpdir)
-                    
-                    if self.analyzer.has_testing():
-                        logging.info(f"CTest found in GitHub repository {self.repo.full_name}.")
-
-                        valid_flags = FlagFilter(self.analyzer.has_build_testing_flag()).get_valid_flags()
-                        if valid_flags:
-                            logging.info(f"Valid flag {valid_flags} found in {self.repo.full_name}.")
-
-                        return self._valid_cmake_run(tmpdir, self.analyzer)
-                    else:
-                        logging.info(f"No CTest found in GitHub repository {self.repo.full_name}.")
-            else:
-                logging.info(f"Not a valid test directory structure in GitHub repository {self.repo.full_name}.")
+                if analyzer.has_testing():
+                    logging.info(f"CTest is defined for {self.repo.full_name}.")
+                    return self._valid_cmake_run(tmpdir, analyzer)
+                
+                else:
+                    logging.info(f"CTest is not defined for {self.repo.full_name}.")
         else:
-            logging.info(f"No CMake at root found in GitHub repository {self.repo.full_name}.")
+            logging.info(f"CMake at root not found for {self.repo.full_name}.")
 
         return False
     
@@ -66,7 +57,7 @@ class StructureFilter:
             logging.info(f"CMake at root found in GitHub repository {self.repo.full_name}.")
 
             with tempfile.TemporaryDirectory() as tmpdir:
-                self._get_cmakelists(tmpdir)
+                self._get_cmake_lists(tmpdir)
                 analyzer = CMakeAnalyzer(tmpdir)
 
                 # Analyzing the repository for test structure and flags
@@ -82,21 +73,16 @@ class StructureFilter:
 
                         if conv_test_dir:
                             logging.info(f"{self.repo.full_name} has conventional test dirs: {conv_test_dir}")
-                            self.test_flags = Counter(analyzer.has_build_testing_flag().keys())
+                            self.testing_flags = analyzer.has_build_testing_flag()
+                            self.test_flags = Counter(self.testing_flags.keys())
                         
-                    #for mg in set(analyzer.has_package_manager()):
-                    #    self.stats.pack_manager[mg] += 1
-
-                    #for mg in set(self._check_package_files_exist()):
-                    #    self.stats.pack_files[mg] += 1
-
                     deps = analyzer.get_dependencies()
                     for dep in deps:
                         self.stats.dependencies[dep] += 1
 
-                    if self._valid_cmake_run(tmpdir, analyzer):
-                        logging.info(f"CMake and CTest run successfully: {self.repo.full_name}.")
-                        return True
+                    #if self._valid_cmake_run(tmpdir, analyzer):
+                    #    logging.info(f"CMake and CTest run successfully: {self.repo.full_name}.")
+                    return True
                 else:
                     logging.info(f"No CTest found in GitHub repository {self.repo.full_name}.")
         else:
@@ -109,24 +95,30 @@ class StructureFilter:
         length = len(y.split("/"))
         return (priority, length)
     
-    # TODO: better start Docker image and run it from inside there (communicating with Docker)
     def _valid_cmake_run(self, root: str, analyzer: CMakeAnalyzer) -> bool:
+        if self.testing_flags:
+            flags = FlagFilter(self.testing_flags).get_valid_flags()
+        else:
+            flags = FlagFilter(analyzer.has_build_testing_flag()).get_valid_flags()
+
         sorted_testing_path = sorted(analyzer.parser.enable_testing_path, key=self._sort_key)
+        if len(sorted_testing_path) == 0:
+            logging.info(f"Path to enablte_testing() was not found: {sorted_testing_path}")
+            return False
         enable_testing_path = sorted_testing_path[0].removesuffix("/CMakeLists.txt").removeprefix(root)
+        logging.info(f"Path to enable_testing(): '{enable_testing_path}'")
         test_path = os.path.join(root, "build", enable_testing_path)
-        flags = FlagFilter(analyzer.has_build_testing_flag()).get_valid_flags()
+        
         process = CMakeProcess(root, os.path.join(root, "build"), test_path, jobs=4, flags=flags, analyzer=analyzer)
         if process.clone_repo(self.repo_id, root) and process.build(): 
-            logging.info(f"Configuring was successful. {self.repo.full_name}")
-            if process.test([]):
-                logging.info(f"Testing was successful. {self.repo.full_name} ")
-            else:
-                logging.info(f"Testing failed. {self.repo.full_name}")
+            logging.info(f"Building was successful ({self.repo.full_name}).")
+            #if process.test([]):
+            #    logging.info(f"Testing was successful ({self.repo.full_name}).")
+            #else:
+            #    logging.info(f"Testing failed ({self.repo.full_name}).")
             return True
-            
         else:
-            logging.info(f"Configuring failed. {self.repo.full_name} ")
-            
+            logging.info(f"Building failed ({self.repo.full_name}).")
         return False
     
     def _has_root_cmake(self, cmake_files: list[GitTreeElement]) -> bool:
@@ -150,7 +142,7 @@ class StructureFilter:
         cmake_files = [item for item in tree if item.type == "blob" and item.path.endswith("CMakeLists.txt")]
         return cmake_files, tree_paths, tree
     
-    def _get_cmakelists(self, dest: str) -> list[str]:
+    def _get_cmake_lists(self, dest: str) -> list[str]:
         """
         Fetch only CMakeLists.txt files from a GitHub repo using requests, preserving folder structure.
         """

@@ -1,14 +1,7 @@
-import os, re, logging
-from collections import deque
-from pathlib import Path
-import src.cmake.patterns as pattern
+import os, logging, re
+from cmakeast.printer import ast
 
 # TODO: fix checks and parsers below, currently all over the place and clean up
-# patterns to parse possible flags
-OPTION_PATTERN = re.compile(r'option\s*\(\s*([A-Za-z0-9_]+)\s+"([^"]*)"\s+(ON|OFF)\s*\)', re.IGNORECASE)
-SET_CACHE_PATTERN = re.compile(r'set\s*\(\s*([A-Za-z0-9_]+)\s+([^\s\)]+)\s+CACHE\s+([A-Z]+)\s*"([^"]*)"\s*\)', re.IGNORECASE)
-IF_TEST_PATTERN = re.compile(r'if\s*\(\s*([A-Za-z0-9_]*TEST[A-Za-z0-9_]*)\s*\)', re.IGNORECASE)
-
 class CMakeParser:
     def __init__(self, root: str):
         self.root = root
@@ -16,6 +9,9 @@ class CMakeParser:
         self.add_test_path: list[str] = []
         self.discover_tests_path: list[str] = []
         self.target_link_path: list[str] = []
+        self.list_test_arg: set[str] = set()
+        self.cmake_files: list[str] = self.find_files(search="CMakeLists.txt")
+        self.cmake_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls(self.cmake_files)
 
     def has_root_cmake(self) -> bool:
         return os.path.exists(os.path.join(self.root, "CMakeLists.txt"))
@@ -29,270 +25,264 @@ class CMakeParser:
                     found_files.append(os.path.join(root, file))
         return found_files
     
-    def find_ctest_exec(self) -> list[str]:
-        testfiles = self.find_files("CTestTestfile.cmake")
-        exec: list[str] = []
-        for tf in testfiles:
-            with open(tf, 'r', errors='ignore') as file:
-                content = file.read()
-            if m := pattern.add_test_exec.search(content):
-                exec.append(m.group(1))
-                # TODO
-        return exec
+    def find_cmake_minimum_required(self) -> str:
+        cmake_file: str = os.path.join(self.root, "CMakeLists.txt")
+        root_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls([cmake_file]) 
+        call, cf = self._find_function_calls(name="cmake_minimum_required", fcalls=root_function_calls)[0]
+        arguments: list = call.arguments
+        # VERSION x.x..something?
+        logging.info(f"CMake minimum veresion required: {arguments}")
+        # TODO: read minimum requirement <-> maximum?
+        return ""
     
-    def find_enable_testing(self, cmake_files: list[str]) -> bool:
+    def find_ctest_exec(self) -> list[str]:
+        # TODO: test
+        logging.info("Searching for ctest executables...")
+        test_files = self.find_files("CTestTestfile.cmake")
+        self.ctest_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls(test_files) 
+        all_exec: list[str] = []
+        calls = self._find_function_calls(name="add_test", fcalls=self.ctest_function_calls)
+        for call, tf in calls:
+            arguments: list = call.arguments
+            if len(arguments) == 2:
+                name = arguments[0].contents if hasattr(arguments[0], "contents") else ""
+                exec = arguments[1].contents if hasattr(arguments[1], "contents") else ""
+                if exec:
+                    all_exec.append(exec)
+        logging.info("Found ctest executables:")
+        for exec in all_exec:
+            logging.info(f"  -./{exec}")
+        return all_exec
+    
+    def find_enable_testing(self) -> bool:
         """
         Checks if enable_testing() is called anywhere in CMakeLists.txt. 
         Either CMakeLists.txt calls enable_testing() directly or it calls enable_testing() via include(CTest).
         """
-        for cf in cmake_files:
-            with open(cf, 'r', errors='ignore') as file:
-                content = file.read()
-            if pattern.enable_testing.search(content) or pattern.include_ctest.search(content):  
-               self.enable_testing_path.append(cf)
-        
+        logging.info("Searching for enable_testing()...")
+        calls = self._find_function_calls(name="enable_testing")
+        calls += self._find_function_calls(name="include", _args=["CTest"])
+        for _, cf in calls:
+            self.enable_testing_path.append(cf)
         if self.enable_testing_path:
             logging.info(f"CMakeLists.txt with enable_testing(): {self.enable_testing_path}.")
             return True
         
         return False
     
-    def find_add_tests(self, cmake_files: list[str]) -> bool:
-        for cf in cmake_files:
-            with open(cf, 'r', errors='ignore') as file:
-                content = file.read()
-            if pattern.add_test.search(content):
-                self.add_test_path.append(cf)
-        
+    def find_add_tests(self) -> bool:
+        logging.info("Search for add_tests...")
+        calls = self._find_function_calls(name="add_test")
+        for _, cf in calls:
+            self.add_test_path.append(cf)
         if self.add_test_path:
             logging.info(f"CMakeLists.txt with add_test(): {self.add_test_path}.")
             return True
         
         return False
     
-    def find_discover_tests(self, cmake_files: list[str]) -> bool:
-        for cf in cmake_files:
-            with open(cf, 'r', errors='ignore') as file:
-                content = file.read()
-            if pattern.discover_tests.search(content):
-                self.discover_tests_path.append(cf)
-        
+    def find_discover_tests(self) -> bool:
+        logging.info("Search for *_discover_tests...")
+        calls = self._find_function_calls(ends="_discover_tests")
+        for _, cf in calls:
+            self.discover_tests_path.append(cf)
         if self.discover_tests_path:
             logging.info(f"CMakeLists.txt with *_discover_tests(): {self.discover_tests_path}.")
             return True
         
         return False
     
-    def can_list_tests(self, cmake_files: list[str]) -> bool:
-        for cf in cmake_files:
-            with open(cf, 'r', errors='ignore') as file:
-                content = file.read()
+    def can_list_tests(self) -> bool:
+        libraries: list[str] = [
+            "GTest::gtest", "GTest::gtest_main", "GTest::gmock", "GTest::gmock_main", 
+            "gtest", "gtest_main", "gmock", "gmock_main",
+            "Catch2::Catch2", "Catch::Main",
+            "Catch2::Catch2WithMain", "Catch2::Catch2WithMainNoExit", "Catch2::Catch2WithRunner"
+            "doctest", "doctest::doctest", "doctest::doctest_main",
+            "Boost::unit_test_framework", "boost_unit_test_framework",
+            "Qt::Test", "Qt5::Test", "Qt6::Test"
+        ]
 
-            if pattern.target_link_libraries.search(content):
-                logging.info(f"GoogleTest|Catch|doctest library link found in {cf}.")
-                return True
+        logging.info("Searching for target_link_libraries to isolate test cases...")
+        all_calls: list[tuple[ast.FunctionCall, str]] = []
+        for library in libraries:
+            calls = self._find_function_calls(name="target_link_libraries", _args=[library])
+            for _, cf in calls:
+                logging.info(f"target_link_libraries found {library} in {cf}.")
+                all_calls += calls
+                if "gtest" in library.lower():
+                    # run individual tests with ./test_executable --gtest_filter=TESTNAME
+                    self.list_test_arg.add("--gtest_list_tests")
+                elif "catch" in library.lower():
+                    # run individual tests with ./test_executable TESTNAME
+                    self.list_test_arg.add("--list-tests") #maybe also --list-test-cases possible
+                elif "doctest" in library.lower():
+                    # run individual tests with ./test_executable TESTNAME
+                    self.list_test_arg.add("--list-test-cases") #maybe also --list-test-suites possible
+                elif "boost" in library.lower():
+                    # run individual tests wiht ./test_executable --run_test=suite/test
+                    self.list_test_arg.add("--list_content")
+                elif "qt" in library.lower():
+                    # run individual tests wiht ./test_executable TESTNAME
+                    self.list_test_arg.add("-functions")
+
+        if all_calls:
+            logging.info(f"target_link_libraries(...) to isolate test cases found.")
+            return True
 
         return False
     
-    def get_list_test_arg(self, cmake_files: list[str]) -> str:
-        for cf in cmake_files:
-            with open(cf, 'r', errors='ignore') as file:
-                content = file.read()
-
-            if pattern.gtest_link.search(content):
-                return "--gtest_list_tests"
-            if pattern.catch_link.search(content):
-                return "--list-tests "
-            if pattern.doctest_link.search(content):
-                return "--list-test-cases"
-        
-        return ""
-                
-    def get_unit_tests(self) -> list[str]:
-        # TODO: extract the list tests to unit tests
-        return []
-    
-    def find_test_flags(self, cmake_files: list[str]) -> dict[str, dict[str, str]]:
+    def find_test_flags(self) -> dict[str, dict[str, str]]:
         test_flags = {}
 
-        for cf in cmake_files:
-            with open(cf, "r", errors="ignore") as f:
-                content = f.read()
+        logging.info("Searching for possible test flags...")
+        if "BUILD_TESTING" not in test_flags and self._find_function_calls(name="include", _args=["CTest"]):
+            test_flags["BUILD_TESTING"] = {
+                "desc": "Enable CTest-based testing",
+                "default": "ON"
+            }
 
-            if pattern.include_ctest.search(content):
-                if "BUILD_TESTING" not in test_flags:
-                    test_flags["BUILD_TESTING"] = {
-                        "description": "Enable CTest-based testing",
-                        "default": "ON"
-                    }
+        options = self._find_function_calls(name="option")
+        for option, cf in options:
+            arguments: list = option.arguments
+            if len(arguments) == 0:
+                continue
+            arg_name = arguments[0].contents.strip() if hasattr(arguments[0], "contents") else None
+            if arg_name and self._valid_name(arg_name) and "TEST" in arg_name.upper():
+                desc = arguments[1].contents.strip() if len(arguments) > 1 and hasattr(arguments[1], "contents") else "option"
+                default = arguments[2].contents.strip() if len(arguments) > 2 and hasattr(arguments[2], "contents") else ""
+                test_flags[arg_name] = {"type": "BOOL", "desc": desc, "default": default}
 
-            for match in OPTION_PATTERN.finditer(content):
-                name, desc, default = match.groups()
-                if "TEST" in name.upper():
-                    test_flags[name] = {"type": "BOOL", "description": desc.strip(), "default": default}
+        set_caches = self._find_function_calls(name="set")
+        for set_cache, cf in set_caches:
+            arguments: list = set_cache.arguments
+            if len(arguments) == 0:
+                continue
+            exist_cache = any(hasattr(argument, "contents") and argument.contents == "CACHE" for argument in arguments)
+            if exist_cache:
+                arg_name = arguments[0].contents if hasattr(arguments[0], "contents") else None
+                if arg_name and self._valid_name(arg_name) and "TEST" in arg_name.upper():
+                    default = arguments[1].contents.strip() if len(arguments) > 1 and hasattr(arguments[1], "contents") else ""
+                    test_flags[arg_name] = {"default": default, "desc": "cache"}
 
-            for match in SET_CACHE_PATTERN.finditer(content):
-                name, value, vartype, desc = match.groups()
-                if "TEST" in name.upper():
-                    test_flags[name] = {"type": vartype.upper(), "description": desc.strip(), "default": value}
-
-            for match in IF_TEST_PATTERN.finditer(content):
-                var = match.group(1)
-                if var not in test_flags:
-                    test_flags[var] = {
-                        "type": "BOOL",
-                        "description": f"Implicit test flag used in {cf}",
-                        "default": "undefined"
-                    }
+        branches = self._find_function_calls(name="if")
+        branches += self._find_function_calls(name="elseif")
+        for branch, cf in branches:
+            arguments: list = branch.arguments
+            for argument in arguments:
+                arg_name = argument.contents if hasattr(argument, "contents") else None
+                if arg_name and self._valid_name(arg_name) and "TEST" in arg_name.upper():
+                    test_flags[arg_name] = {"type": "BOOL", "desc": f"Implicit test flag used in {cf}", "default": "undefined"}
 
         logging.info("Discovered test flags:")
         for k, v in test_flags.items():
-            logging.info(f"  - {k} (default={v['default']}): {v['description']}")
+            logging.info(f"  - {k} (default={v['default']}): {v['desc']}")
 
         return test_flags
 
+    def find_unit_tests(self, text: str) -> list[str]:
+        # TODO: extract the list tests to unit tests
+        return []
 
-    def parse_ctest_flags(self, cmake_files: list[str]) -> set[str]:
-        """Parses a CMake file and returns flags needed for ctest."""
-        required_conditions: set[str] = set()
-
-        for cf in cmake_files:
-            required_conditions |= self.parse_flag(cf)
-
-        return required_conditions
-        
-    def parse_flag(self, cmake_file: str) -> set:
-        if_pattern = re.compile(r'^\s*if\s*\(\s*(.+?)\s*\)\s*', re.IGNORECASE)
-        elseif_pattern = re.compile(r'^\s*elseif\s*\(\s*(.+?)\s*\)\s*', re.IGNORECASE)
-        else_pattern = re.compile(r'^\s*else\s*\(\s*\)\s*', re.IGNORECASE)
-        endif_pattern = re.compile(r'^\s*endif\s*\(\s*(.*?)\s*\)\s*', re.IGNORECASE)
-        ctest_pattern = re.compile(r'enable_testing\s*\(\s*\)|add_test\s*\(', re.IGNORECASE)
-
-        condition_stack = deque()
-        required_flags = set()
-
-        with open(cmake_file, 'r', errors='ignore') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-
-                if m := if_pattern.match(line):
-                    condition_stack.append(m.group(1))
-                elif m := elseif_pattern.match(line):
-                    if condition_stack:
-                        condition_stack.pop()
-                        condition_stack.append(m.group(1))
-                elif else_pattern.match(line):
-                    if condition_stack:
-                        condition_stack.pop()
-                        condition_stack.append("ELSE")
-                elif endif_pattern.match(line):
-                    if condition_stack:
-                        condition_stack.pop()
-
-                if ctest_pattern.search(line):
-                    for cond in condition_stack:
-                        vars_in_cond = re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\b', cond)
-                        logging.info(f"COND: {vars_in_cond}")
-                        required_flags.update(vars_in_cond)
-        
-        return required_flags
-
-
-    def find_enable_testing_files(self, test_path: str) -> list[Path]:
-        testing_files: list[Path] = []
-        enable_testing_pattern = re.compile(r'enable_testing\s*\(\s*\)', re.IGNORECASE)
-        for cmake_file in Path(test_path).rglob("CMakeLists.txt"):
-            with open(cmake_file, "r", errors="ignore") as f:
-                if enable_testing_pattern.search(f.read()):
-                    testing_files.append(cmake_file)
-        return testing_files
-
-    def get_add_subdirectory_guards(self, cmake_file: Path, sub_path: str):
-        """Return list of flags in if() that guard the add_subdirectory(sub_path)"""
-        pattern = re.compile(r"add_subdirectory\s*\(\s*{}\s*\)".format(re.escape(sub_path)))
-        if_pattern = re.compile(r'^\s*if\s*\(\s*(.+?)\s*\)', re.IGNORECASE)
-
-        stack = []
-        flags = set()
-        with open(cmake_file, "r", errors="ignore") as f:
-            for line in f:
-                line = line.strip()
-                if m := if_pattern.match(line):
-                    stack.append(m.group(1))
-                elif line.startswith("endif"):
-                    if stack:
-                        stack.pop()
-                elif pattern.search(line):
-                    for cond in stack:
-                        vars_in_cond = re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\b', cond)
-                        flags.update(vars_in_cond)
-        return flags
-
-    def find_testing_flags(self, test_path: str) -> set[str]:
-        testing_files = self.find_enable_testing_files(test_path)
-        all_flags = set()
-        for test_file in testing_files:
-            current = test_file.parent
-            sub_path = test_file.parent.name
-            while True:
-                parent_file = current.parent / "CMakeLists.txt"
-                if not parent_file.exists() or parent_file == current:
-                    break
-                flags = self.get_add_subdirectory_guards(parent_file, sub_path)
-                all_flags.update(flags)
-                sub_path = current.name
-                current = current.parent
-        return all_flags
-
-    def get_cmake_packages(self, cmake_path: str) -> set[str]:
+    def find_dependencies(self) -> set[str]:
         """Find CMake dependency names from CMakeLists.txt."""
-        with open(cmake_path, 'r', errors='ignore') as file:
-            content = file.read()
-        
-        find_package_pattern = re.compile(
-            r'find_package\(\s*([^\s)]+)'              
-            r'(?:\s+([0-9.]+))?'                       
-            r'((?:\s+(?:REQUIRED|QUIET|COMPONENTS\s+[^\)]+))*)'
-            r'\)', re.IGNORECASE
-        )
-        
-        pkg_check_pattern = re.compile(
-            r'pkg_check_modules\(\s*([^\s)]+)'      
-            r'((?:\s+(REQUIRED|QUIET))*)'        
-            r'\s+([^\)]+)\)',           
-            re.IGNORECASE
-        )
+        logging.info("Searching for possible dependencies...")
+        calls: list[tuple[ast.FunctionCall, str]] = []
+        calls += self._find_function_calls(name="include", starts="Find")
+        calls += self._find_function_calls(name="find_package")
+        calls += self._find_function_calls(name="pkg_check_modules")
+        #calls += self._find_function_calls(name="target_link_libraries")
+        #calls += self._find_function_calls(name="include_directories")
+        #calls += self._find_function_calls(name="target_include_directories")
+        #calls += self._find_function_calls(name="add_subdirectory")
+            
+        packages: set[str] = set()
+        for call, _ in calls:
+            arguments = call.arguments
+            if arguments and hasattr(arguments[0], "contents"):
+                #for argument in arguments:
+                #if hasattr(argument, "contents"):
+                arg_name = arguments[0].contents.strip()
+                if self._valid_name(arg_name):
+                    if "::" in arg_name:
+                        packages.add(arg_name.split("::")[0])
+                    else:
+                        packages.add(arg_name)
 
-        packages = set()
-
-        def normalize(name: str) -> str:
-            name = re.split(r'[<>= ]', name)[0] # remove version constraints (>=, =, <, etc.)
-            name = name.replace("++", "pp") # replace "++" -> "pp"
-            name = re.sub(r'[-_]\d+(\.\d+)*$', '', name) # remove trailing version suffixes: Foo-2.5 -> Foo
-            name = name.lower() # lowercase everything (CMake is case-insensitive for packages)
-            return name
-
-        for match in find_package_pattern.findall(content):
-            pkg_name = normalize(match[0])
-            options = match[2].strip().split() if match[2] else []
-            components = []
-            if 'COMPONENTS' in options:
-                comp_index = options.index('COMPONENTS')
-                components = options[comp_index + 1:] 
-            if pkg_name:
-                packages.add(pkg_name)
-            if components:    
-                packages.update(components)
-
-        for match in pkg_check_pattern.findall(content):
-            modules = match[3].split()
-            for m in modules:
-                if m:
-                    packages.add(normalize(m))
-
-        logging.debug(f"Normalized package set from {cmake_path}: {packages}")
+        logging.info(f"Found possible dependencies: {packages}")
         return packages
 
 
+    def _check_cmakeast_class(self, node):
+        return hasattr(node, "__class__") and node.__class__.__module__.startswith("cmakeast")
+
+    def _walk_ast(self, node):
+        if isinstance(node, list):
+            for item in node:
+                yield from self._walk_ast(item)
+        elif self._check_cmakeast_class(node):
+            yield node
+            for attr_name in dir(node):
+                if attr_name.startswith("_"):
+                    continue
+                try:
+                    value = getattr(node, attr_name)
+                    if isinstance(value, (list,)) or self._check_cmakeast_class(value):
+                        yield from self._walk_ast(value)
+                except Exception:
+                    continue
+
+    def _find_function_calls(self, name: str = "", _args: list[str] = [], starts: str = "", ends: str = "", fcalls: list[tuple[ast.FunctionCall, str]] = []) -> list[tuple[ast.FunctionCall, str]]:
+        calls: list[tuple[ast.FunctionCall, str]] = []
+        if not fcalls:
+            fcalls = self.cmake_function_calls
+        for statement, cf in fcalls:
+            if (name and statement.name == name) or (ends and statement.name.endswith(ends)) or (starts and statement.name.startswith(starts)):
+                arguments: list = statement.arguments
+                if not _args:
+                    calls.append((statement, cf))
+                count = 0
+                for argument in arguments:
+                    if (hasattr(argument, "contents") and argument.contents.strip() in _args):
+                        count += 1
+                if count == len(_args):
+                    calls.append((statement, cf))     
+        return calls
+    
+    def _find_all_function_calls(self, files: list[str]) -> list[tuple[ast.FunctionCall, str]]:
+        calls: list[tuple[ast.FunctionCall, str]] = []
+        for cf in files:
+            with open(cf, 'r', errors='ignore') as file:
+                content = file.read()
+            statements = ast.parse(content).statements
+            cmake_statements = self._walk_ast(statements)
+            for statement in cmake_statements:
+                if isinstance(statement, ast.FunctionCall):
+                    calls.append((statement, cf))
+        return calls
+    
+    def _valid_name(self, name: str) -> bool:
+        keywords = {
+            "REQUIRED", "OPTIONAL", "QUIET", "EXACT", "CONFIG", "NO_MODULE", "PRIVATE", 
+            "PUBLIC", "INTERFACE", "BEFORE", "IMPORTED_TARGET", "REGEX", "INCLUDE", "PATH",
+            "COMPONENTS"
+        }
+        if name.upper() in keywords:
+            return False
+        if "/" in name or "\\" in name or name.startswith("."):
+            return False # relative/absolute paths
+        if "{" in name or "}" in name:
+            return False # variables
+        if "\"" in name or "'" in name:
+            return False # string
+        if re.match(r'^\d+(\.\d+)*$', name):
+            return False # version numbers
+        if name.endswith(('.so', '.a', '.lib', '.dll', '.dylib', '.cmake', '.txt', '.h', '.cc', '.cpp')):
+            return False # files
+        if name.startswith(('test_', 'example_', 'demo_', 'benchmark_')):
+            return False # internal variables
+        if not name or len(name) < 2:
+            return False # single letter
+        if "<" in name or ">" in name:
+            return False
+        return True
