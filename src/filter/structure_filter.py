@@ -192,25 +192,3 @@ class StructureFilter:
                 top_level_dirs.add(dir_path)
 
         return top_level_dirs
-
-    def _check_package_files_exist(self) -> dict[str, list[str]]:
-        """
-        Checks if typical package manager files exist in the repo tree.
-        Returns a dictionary mapping manager name to found files.
-        """
-        file_patterns = {
-            "Conan": ["conanfile.py", "conanfile.txt", "Conan.cmake"],
-            "vcpkg": ["vcpkg.json", "vcpkg-configuration.json", "CMakePresets.json"],
-            "Hunter": ["HunterGate.cmake"],
-            "CPM": ["CPM.cmake"]
-        }
-
-        found_files = {}
-        for manager, patterns in file_patterns.items():
-            matched = [p for p in self.tree_paths if any(p.endswith(f) for f in patterns)]
-            if matched:
-                found_files[manager] = matched
-        for mgr, files in found_files.items():
-            logging.info(f"Found package manager files for {mgr}: {files}")
-
-        return found_files

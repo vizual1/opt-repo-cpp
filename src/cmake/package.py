@@ -69,15 +69,13 @@ class CMakePackageHandler:
         'Could not find a configuration file for package "Qt6" that is compatible with requested version "6.4".'
         'fastcdr package NOT found'
 
-    def llm_prompt(self, errors, missing_cache, missing_pkgconfig) -> str:
+    def llm_prompt(self, errors: str) -> str:
         p = Prompt([Prompt.Message(
             role="user",
             content=
                 f"You are an expert C++/CMake/Dependency assistant.\nCMake configuration failed with these errors:\n"
                 +f"{errors}"
-                +f"Missing CMake cache entries: {missing_cache}"
-                +f"Missing pkg-config packages: {missing_pkgconfig}"
-                +"Please ONLY output shell commands that would install the missing dependencies."
+                +"Please ONLY output shell commands each separated by \\n that would install the missing dependencies."
                 +"Do NOT provide explanations, text, or comments -> ONLY valid shell commands."
                 +"Commands should work on Linux with vcpkg or apt-get where appropriate."
         )])

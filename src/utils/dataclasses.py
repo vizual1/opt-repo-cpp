@@ -7,6 +7,7 @@ from github import Auth, Github
 class Config:
     read: str = ""
     write: str = ""
+    write_fail: str = "data/fail.txt"
     popular: bool = False
     stars: int = 1000
     limit: int = 10

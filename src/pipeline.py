@@ -30,6 +30,8 @@ class RepositoryPipeline:
                     self.valid_repos.append(structure.repo)
                     if self.config.popular or self.config.write:
                         Writer(structure.repo.full_name).write_repo(self.config.write)
+                elif self.config.write:
+                    Writer(structure.repo.full_name).write_repo(self.config.write_fail)
             except Exception as e:
                 logging.warning(f"Exception: {e}")
                 continue

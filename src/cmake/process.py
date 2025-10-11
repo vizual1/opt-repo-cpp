@@ -2,7 +2,7 @@
 import logging, subprocess, os, shutil, re
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
-#from src.cmake.autobuilder import CMakeAutoBuilder
+from src.cmake.autobuilder import CMakeAutoBuilder
 from src.cmake.package import CMakePackageHandler
 #import src.config as conf
 
@@ -22,7 +22,7 @@ class CMakeProcess:
         self.config_stderr: str = ""
         self.build_stdout: str = ""
         self.other_flags: set[str] = set()
-        #self.auto_builder = CMakeAutoBuilder(self.root)
+        self.auto_builder = CMakeAutoBuilder(self.root)
         self.package_handler = CMakePackageHandler(self.analyzer)
         
     def configure(self) -> bool:
@@ -37,11 +37,6 @@ class CMakeProcess:
 ############### CONFIGURATION ###############
     
     def _configure_with_retries(self, max_retries: int = 5) -> bool:
-        # TODO: create vcpkg manifest and run cmake configure in manifest mode!
-        
-        #if not self.auto_builder.generate_vcpkg_manifest(dependencies):
-        #    logging.warning("Failed to generate vcpkg manifest, proceeding anyway...")
-
         save_dependencies = set()
         for attempt in range(max_retries):
             logging.info(f"[Attempt {attempt}/{max_retries}] Configuring project at {self.root}")
@@ -49,24 +44,28 @@ class CMakeProcess:
             if self._configure():
                 return True
             
-            missing_dependencies = self.package_handler.get_missing_dependencies(self.config_stdout, self.config_stderr, Path(self.build_path) / "CMakeCache.txt")
+            missing_dependencies = self.package_handler.get_missing_dependencies(
+                self.config_stdout, 
+                self.config_stderr, 
+                Path(self.build_path) / "CMakeCache.txt"
+            )
             if not missing_dependencies:
                 logging.error("Configuration failed but no missing dependencies detected")
-                return False
+                break
             
             if missing_dependencies in save_dependencies:
                 logging.error("Configuration failed but no new missing dependencies detected")
-                return False
-            
+                break   
+
             #self.auto_builder.add_to_manifest(missing_dependencies)
-            if attempt == 0:
-                missing_dependencies |= self.analyzer.get_dependencies()
+            #if attempt == 0:
+            #    missing_dependencies |= self.analyzer.get_dependencies()
             
             for dep in missing_dependencies:
                 try:
                     subprocess.run(["/opt/vcpkg/vcpkg", "install", dep.lower()], check=True)
-                    #self.auto_builder.inject_vcpkg_dependency(dep)
-                    #self.other_flags |= self.auto_builder.flags
+                    self.auto_builder.inject_vcpkg_dependency(dep)
+                    self.other_flags |= self.auto_builder.flags
                     logging.info(f"Installed {dep}")
                 except subprocess.CalledProcessError as e:
                     logging.warning(f"Failed to install {dep}: {e}")
@@ -75,7 +74,22 @@ class CMakeProcess:
             
             save_dependencies = missing_dependencies.copy()
              
-        # TODO: if still fail try LLM?
+        logging.info("Try LLM...")
+        response: str = self.package_handler.llm_prompt(errors=self.config_stderr[:200])
+        logging.info(f"{response}")
+        for cmd in response.split("\n"):
+            try:
+                subprocess.run([cmd.replace("sudo", "")], check=True)
+                self.auto_builder.inject_vcpkg_dependency(dep)
+                self.other_flags |= self.auto_builder.flags
+                logging.info(f"Installed with {cmd}")
+            except subprocess.CalledProcessError as e:
+                logging.warning(f"Failed to install {cmd}: {e}")
+            except Exception as e:
+                logging.error(f"Unexpected error with {cmd}: {e}")
+        if self._configure():
+            return True
+        
         logging.error("All configuration attempts failed.")
         return False
 
@@ -100,7 +114,7 @@ class CMakeProcess:
             '-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
             
             '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
-            '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
+            '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
 
             '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
             #'-DCMAKE_VERBOSE_MAKEFILE=ON',

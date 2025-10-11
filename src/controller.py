@@ -10,7 +10,6 @@ class Controller:
     """
     def __init__(self, crawl: bool = False, test: bool = False, docker: bool = False, 
                  url: str = "", sha: str = "", config: Config = Config()):
-        
         self.crawl, self.test, self.docker = crawl, test, docker
         self.url, self.sha = url, sha
         self.config = config
