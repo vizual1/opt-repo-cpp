@@ -14,40 +14,32 @@ class RepositoryPipeline:
     """
     This class crawls and filters GitHub repositories.
     """
-    def __init__(self, url: str, config: Config = Config()):
+    def __init__(self, url: str, config: Config):
         self.stats = RepoStats()
         self.url = url
         self.config = config
         self.valid_repos: list[Repository] = []
 
     def get_repos(self) -> None:
-        crawl = RepositoryCrawler(self.url, config=self.config)
+        crawl = RepositoryCrawler(url=self.url, config=self.config)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            try:
-                structure = StructureFilter(repo_id, self.config.git)
-                if structure.is_valid():
-                    self.valid_repos.append(structure.repo)
-                    if self.config.popular or self.config.write:
-                        Writer(structure.repo.full_name).write_repo(self.config.write)
-                elif self.config.write:
-                    Writer(structure.repo.full_name).write_repo(self.config.write_fail)
-            except Exception as e:
-                logging.warning(f"Exception: {e}")
-                continue
+            structure = StructureFilter(repo_id, self.config.git)
+            if structure.is_valid():
+                self.valid_repos.append(structure.repo)
+                if self.config.popular or self.config.write:
+                    Writer(structure.repo.full_name).write_repo(self.config.write)
+            elif self.config.write:
+                Writer(structure.repo.full_name).write_repo(self.config.write_fail)
            
     def analyze_repos(self) -> None:
-        crawl = RepositoryCrawler(self.url, config=self.config)
+        crawl = RepositoryCrawler(url=self.url, config=self.config)
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
-            try:
-                structure = StructureFilter(repo_id, self.config.git)
-                if structure.analyze() and (self.config.popular or self.config.write):
-                    Writer(structure.repo.full_name).write_repo(self.config.write)
-                self.stats += structure.stats
-            except Exception as e:
-                logging.warning(f"Exception: {e}")
-                continue
+            structure = StructureFilter(repo_id, self.config.git)
+            if structure.analyze() and (self.config.popular or self.config.write):
+                Writer(structure.repo.full_name).write_repo(self.config.write)
+            self.stats += structure.stats
         self.stats.write_final_log()
 
 
@@ -55,7 +47,7 @@ class CommitPipeline():
     """
     This class filters and saves the commit history of a repository.
     """
-    def __init__(self, repo: Repository, sha: str, config: Config = Config()):
+    def __init__(self, repo: Repository, sha: str, config: Config):
         self.stats = CommitStats()
         self.config = config
         self.repo = repo
@@ -73,11 +65,11 @@ class CommitPipeline():
 
 
 class TesterPipeline:
-    def __init__(self, url: str = "", sha: str = "", config: Config = Config()):
+    def __init__(self, config: Config, url: str = "", sha: str = ""):
         self.url = url
         self.sha = sha
         self.config = config     
-        self.repo_ids = RepositoryCrawler(url=self.url).get_repos()  
+        self.repo_ids = RepositoryCrawler(url=self.url, config=self.config).get_repos()  
     
     def test_commit(self):
         tester = CommitTester(sha=self.sha, ignore_conflict=self.config.ignore_conflict)

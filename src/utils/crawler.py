@@ -5,7 +5,7 @@ import src.config as conf
 from src.utils.dataclasses import Config
 
 class RepositoryCrawler:
-    def __init__(self, url: str = "", type: str = "C++", config: Config = Config()):
+    def __init__(self, config: Config, url: str = "", type: str = "C++"):
         self.url = url
         self.type = type
         self.config = config

@@ -1,9 +1,11 @@
 
-import logging, subprocess, os, shutil, re
+import logging, subprocess, os, shutil, json
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.autobuilder import CMakeAutoBuilder
 from src.cmake.package import CMakePackageHandler
+from src.cmake.resolver import DependencyResolver
+from typing import Any
 #import src.config as conf
 
 vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
@@ -18,15 +20,19 @@ class CMakeProcess:
         self.jobs = jobs
         self.flags: list[str] = flags
         self.analyzer = analyzer
+
         self.config_stdout: str = ""
         self.config_stderr: str = ""
         self.build_stdout: str = ""
+        self.build_stderr: str = ""
         self.other_flags: set[str] = set()
-        self.auto_builder = CMakeAutoBuilder(self.root)
-        self.package_handler = CMakePackageHandler(self.analyzer)
+
+        #self.auto_builder = CMakeAutoBuilder(self.root)
+        #self.package_handler = CMakePackageHandler(self.analyzer)
+        self.resolver = DependencyResolver()
         
     def configure(self) -> bool:
-        return self._configure_with_retries()
+        return self._configure()
 
     def build(self) -> bool:
         return self._configure_with_retries() and self._build()
@@ -44,11 +50,12 @@ class CMakeProcess:
             if self._configure():
                 return True
             
-            missing_dependencies = self.package_handler.get_missing_dependencies(
+            missing_dependencies = self.resolver.package_handler.get_missing_dependencies(
                 self.config_stdout, 
                 self.config_stderr, 
                 Path(self.build_path) / "CMakeCache.txt"
             )
+
             if not missing_dependencies:
                 logging.error("Configuration failed but no missing dependencies detected")
                 break
@@ -57,23 +64,70 @@ class CMakeProcess:
                 logging.error("Configuration failed but no new missing dependencies detected")
                 break   
 
-            #self.auto_builder.add_to_manifest(missing_dependencies)
-            #if attempt == 0:
-            #    missing_dependencies |= self.analyzer.get_dependencies()
+            if attempt == 0:
+                missing_dependencies |= self.analyzer.get_dependencies()
             
+            unresolved_dependencies: set[str] = set() 
             for dep in missing_dependencies:
-                try:
-                    subprocess.run(["/opt/vcpkg/vcpkg", "install", dep.lower()], check=True)
-                    self.auto_builder.inject_vcpkg_dependency(dep)
-                    self.other_flags |= self.auto_builder.flags
-                    logging.info(f"Installed {dep}")
-                except subprocess.CalledProcessError as e:
-                    logging.warning(f"Failed to install {dep}: {e}")
-                except Exception as e:
-                    logging.error(f"Unexpected error with {dep}: {e}")
+                resolve = self.resolver.resolve(dep.lower())
+                if not resolve:
+                    unresolved_dependencies.add(dep)
+                    continue
+                
+                dep = dep.lower()
+                if self.resolver.install(dep, method="apt"):
+                    self.other_flags |= self.resolver.flags(dep, method="apt")
+                elif self.resolver.install(dep, method="vcpkg"):
+                    self.resolver.cache.mapping[dep]["apt"] = ""
+                    self.other_flags |= self.resolver.flags(dep, method="vcpkg")
+                else:
+                    self.resolver.cache.mapping[dep]["apt"] = ""
+                    self.resolver.cache.mapping[dep]["vcpkg"] = ""
+                self.resolver.cache.save()
             
+            if unresolved_dependencies:
+                llm_output = self.resolver.llm.llm_prompt(list(unresolved_dependencies), timeout=60)
+                logging.info(f"LLM prompt returned:\n{llm_output}")
+                try:
+                    data: dict[str, dict[str, Any]] = json.loads(llm_output)
+                    data = {k.lower() if isinstance(k, str) else k: v for k, v in data.items()}
+                except json.JSONDecodeError as e:
+                    logging.error(f"Invalid JSON for {llm_output}: {e}")
+                    continue # skip
+
+                for dep in unresolved_dependencies:
+                    resolve = self.resolver.resolve(dep.lower())
+                    if not resolve:
+                        logging.warning(f"Failed to resolve {dep} (invalid dependency or wrong LLM output)")
+                        continue
+                    
+                    dep.lower()
+                    if self.resolver.install(dep, method="apt"):
+                        self.other_flags |= self.resolver.flags(dep, method="apt")
+                    elif self.resolver.install(dep, method="vcpkg"):
+                        data[dep]["apt"] = ""
+                        self.other_flags |= self.resolver.flags(dep, method="vcpkg")
+                    else:
+                        data[dep]["apt"] = ""
+                        data[dep]["vcpkg"] = ""
+
+                self.resolver.cache.mapping.update(data)
+                self.resolver.cache.save()
+                logging.info(f"Added {data.keys()} to dependency cache")
+                    
+            '''
+            try:
+                subprocess.run(["/opt/vcpkg/vcpkg", "install", dep.lower()], check=True)
+                self.auto_builder.inject_vcpkg_dependency(dep)
+                self.other_flags |= self.auto_builder.flags
+                logging.info(f"Installed {dep}")
+            except subprocess.CalledProcessError as e:
+                logging.warning(f"Failed to install {dep}: {e}")
+            except Exception as e:
+                logging.error(f"Unexpected error with {dep}: {e}")
+            '''
             save_dependencies = missing_dependencies.copy()
-             
+        '''
         logging.info("Try LLM...")
         response: str = self.package_handler.llm_prompt(errors=self.config_stderr[:200])
         logging.info(f"{response}")
@@ -89,7 +143,7 @@ class CMakeProcess:
                 logging.error(f"Unexpected error with {cmd}: {e}")
         if self._configure():
             return True
-        
+        '''
         logging.error("All configuration attempts failed.")
         return False
 
@@ -145,37 +199,6 @@ class CMakeProcess:
             return False
 
 ############### BUILDING ###############
-
-    # TODO:
-    def _build_with_retries(self, max_retries: int = 3) -> bool:
-        for attempt in range(max_retries):
-            logging.info(f"[Attempt {attempt}/{max_retries}] Building project at {self.root}")
-            if self._build():
-                return True
-            logging.warning("Build failed. Attempting recovery and retry...")
-            self._analyze_build_failure() 
-        logging.error("All build attempts failed.")
-        return False
-    
-    def _analyze_build_failure(self):
-        """Try to automatically handle common build failures."""
-        missing_header = re.findall(r"fatal error: ([\w\/\.\-]+): No such file or directory", self.build_stdout)
-        if missing_header:
-            for header in missing_header:
-                pkg = header.split('/')[0]
-                logging.warning(f"Missing header detected: {header} -> guessing package '{pkg}'")
-                subprocess.run(["/opt/vcpkg/vcpkg", "install", pkg])
-
-        if "undefined reference to" in self.build_stdout:
-            symbols = re.findall(r"undefined reference to [`']([\w:]+)[`']", self.build_stdout)
-            if symbols:
-                logging.warning(f"Detected linker symbols: {symbols[:3]}{'...' if len(symbols) > 3 else ''}")
-            # Optionally try to detect missing libraries via `pkg-config --list-all`
-
-        if "No rule to make target" in self.build_stdout or "file not found" in self.build_stdout:
-            logging.info("Possible parallel build race condition: retrying single-threaded build...")
-            subprocess.run(['cmake', '--build', self.build_path, '-j1'])
-
 
     def _build(self) -> bool:
         cmd = ['cmake', '--build', self.build_path, '--']

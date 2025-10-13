@@ -8,8 +8,8 @@ class Controller:
     """
     This class builds a Controller to crawl, filter, download, build Dockerfiles or test GitHub repositories.
     """
-    def __init__(self, crawl: bool = False, test: bool = False, docker: bool = False, 
-                 url: str = "", sha: str = "", config: Config = Config()):
+    def __init__(self, config: Config, crawl: bool = False, test: bool = False, docker: bool = False, 
+                 url: str = "", sha: str = ""):
         self.crawl, self.test, self.docker = crawl, test, docker
         self.url, self.sha = url, sha
         self.config = config

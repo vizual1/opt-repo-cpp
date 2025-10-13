@@ -5,7 +5,8 @@ storage: dict[str, str] = {
     "store_commits": "data/commits",
     "store_analyze": "data/analyze",
     "repo_urls": "data/analyze/cpp-base.txt", #"data/repos/urls.txt",
-    "results": "data/results.txt"
+    "results": "data/results.txt",
+    "cmake-dep": "cache/cmake-dep.json"
 }
 
 llm: dict[str, Any] = {
@@ -13,7 +14,7 @@ llm: dict[str, Any] = {
     'api_key': os.environ['api_key'],
     'base': True,
     'base_url': 'https://openrouter.ai/api/v1',
-    'model': 'z-ai/glm-4.5-air:free'
+    'model': 'moonshotai/kimi-k2:free' #'openai/gpt-oss-20b:free' #'deepseek/deepseek-chat-v3.1:free' #'z-ai/glm-4.5-air:free'
 }
 # openai/gpt-oss-120b:free
 

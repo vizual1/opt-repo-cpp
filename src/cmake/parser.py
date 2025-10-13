@@ -1,5 +1,6 @@
 import os, logging, re
 from cmakeast.printer import ast
+from typing import Optional
 
 # TODO: fix checks and parsers below, currently all over the place and clean up
 class CMakeParser:
@@ -11,17 +12,18 @@ class CMakeParser:
         self.target_link_path: list[str] = []
         self.list_test_arg: set[str] = set()
         self.cmake_files: list[str] = self.find_files(search="CMakeLists.txt")
+        self.find_cmake_files: list[str] = self.find_files(pattern=re.compile(r"Find.*\.cmake$", re.IGNORECASE))
         self.cmake_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls(self.cmake_files)
 
     def has_root_cmake(self) -> bool:
         return os.path.exists(os.path.join(self.root, "CMakeLists.txt"))
 
-    def find_files(self, search: str) -> list[str]:
+    def find_files(self, search: str = "", pattern: Optional[re.Pattern] = None) -> list[str]:
         """Search all files 'search' from root."""
         found_files: list[str] = []
         for root, _, files in os.walk(self.root):
-            for file in files:
-                if file == search:
+            for file in files: 
+                if file == search or (pattern and pattern.match(file)):
                     found_files.append(os.path.join(root, file))
         return found_files
     
@@ -245,8 +247,8 @@ class CMakeParser:
                 for argument in arguments:
                     if (hasattr(argument, "contents") and argument.contents.strip() in _args):
                         count += 1
-                if count == len(_args):
-                    calls.append((statement, cf))     
+                if count >= len(_args):
+                    calls.append((statement, cf))   
         return calls
     
     def _find_all_function_calls(self, files: list[str]) -> list[tuple[ast.FunctionCall, str]]:
@@ -254,7 +256,11 @@ class CMakeParser:
         for cf in files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
-            statements = ast.parse(content).statements
+            try:
+                statements = ast.parse(content).statements
+            except Exception as e:
+                logging.warning(f"{cf} has an error: {e}")
+                continue
             cmake_statements = self._walk_ast(statements)
             for statement in cmake_statements:
                 if isinstance(statement, ast.FunctionCall):

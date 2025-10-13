@@ -1,0 +1,974 @@
+{
+    "cpack": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCPACK_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCPACK_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCPACK_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCPACK_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "libbsd-overlay": {
+        "apt": "libbsd-dev",
+        "vcpkg": "libbsd",
+        "flags": {
+            "apt": [
+                "-DLIBBSD_INCLUDE_DIR=/usr/include/bsd",
+                "-DLIBBSD_LIBRARY=/usr/lib/x86_64-linux-gnu/libbsd.so"
+            ],
+            "vcpkg": [
+                "-DLIBBSD_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/bsd",
+                "-DLIBBSD_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libbsd.a"
+            ]
+        }
+    },
+    "cmakeparsearguments": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCMAKEPARSEARGUMENTS_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCMAKEPARSEARGUMENTS_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCMAKEPARSEARGUMENTS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCMAKEPARSEARGUMENTS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "buildparameters": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "searchforstuff": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "checkcxxcompilerflag": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKCXXCOMPILERFLAG_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKCXXCOMPILERFLAG_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKCXXCOMPILERFLAG_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKCXXCOMPILERFLAG_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "jack": {
+        "apt": "libjack-jackd2-dev",
+        "vcpkg": "jack",
+        "flags": {
+            "apt": [
+                "-DJACK_INCLUDE_DIR=/usr/include/jack",
+                "-DJACK_LIBRARY=/usr/lib/x86_64-linux-gnu/libjack.so"
+            ],
+            "vcpkg": [
+                "-DJACK_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/jack",
+                "-DJACK_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libjack.a"
+            ]
+        }
+    },
+    "libpulse": {
+        "apt": "libpulse-dev",
+        "vcpkg": "pulseaudio",
+        "flags": {
+            "apt": [
+                "-DPULSE_INCLUDE_DIR=/usr/include/pulse",
+                "-DPULSE_LIBRARY=/usr/lib/x86_64-linux-gnu/libpulse.so"
+            ],
+            "vcpkg": [
+                "-DPULSE_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/pulse",
+                "-DPULSE_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libpulse.a"
+            ]
+        }
+    },
+    "checkcsourceruns": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKCSOURCERUNS_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKCSOURCERUNS_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKCSOURCERUNS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKCSOURCERUNS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "checkstructhasmember": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKSTRUCTHASMEMBER_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKSTRUCTHASMEMBER_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKSTRUCTHASMEMBER_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKSTRUCTHASMEMBER_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "checktypesize": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKTYPESIZE_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKTYPESIZE_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKTYPESIZE_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKTYPESIZE_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "testbigendian": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DTESTBIGENDIAN_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DTESTBIGENDIAN_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DTESTBIGENDIAN_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DTESTBIGENDIAN_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "alsa": {
+        "apt": "libasound2-dev",
+        "vcpkg": "alsa",
+        "flags": {
+            "apt": [
+                "-DALSA_INCLUDE_DIR=/usr/include/alsa",
+                "-DALSA_LIBRARY=/usr/lib/x86_64-linux-gnu/libasound.so"
+            ],
+            "vcpkg": [
+                "-DALSA_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/alsa",
+                "-DALSA_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libasound.a"
+            ]
+        }
+    },
+    "pcsx2utils": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "checkcsourcecompiles": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKCSOURCECOMPILES_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKCSOURCECOMPILES_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKCSOURCECOMPILES_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKCSOURCECOMPILES_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "copybasetranslations": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "cmakepackageconfighelpers": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCMAKEPACKAGECONFIGHELPERS_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCMAKEPACKAGECONFIGHELPERS_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCMAKEPACKAGECONFIGHELPERS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCMAKEPACKAGECONFIGHELPERS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "checksymbolexists": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKSYMBOLEXISTS_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKSYMBOLEXISTS_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKSYMBOLEXISTS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKSYMBOLEXISTS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "joinpaths": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DJOINPATHS_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DJOINPATHS_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DJOINPATHS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DJOINPATHS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "gnuinstalldirs": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DGNUINSTALLDIRS_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DGNUINSTALLDIRS_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DGNUINSTALLDIRS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DGNUINSTALLDIRS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "findsetenv": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "checkfunctionexists": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKFUNCTIONEXISTS_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKFUNCTIONEXISTS_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKFUNCTIONEXISTS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKFUNCTIONEXISTS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "threads": {
+        "apt": "libpthread-stubs0-dev",
+        "vcpkg": "pthread",
+        "flags": {
+            "apt": [
+                "-DTHREADS_INCLUDE_DIR=/usr/include",
+                "-DTHREADS_LIBRARY=/usr/lib/x86_64-linux-gnu/libpthread.so"
+            ],
+            "vcpkg": [
+                "-DTHREADS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DTHREADS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libpthread.a"
+            ]
+        }
+    },
+    "checkincludefiles": {
+        "apt": "cmake",
+        "vcpkg": "cmake",
+        "flags": {
+            "apt": [
+                "-DCHECKINCLUDEFILES_INCLUDE_DIR=/usr/share/cmake-3.22/Modules",
+                "-DCHECKINCLUDEFILES_LIBRARY=/usr/lib/cmake"
+            ],
+            "vcpkg": [
+                "-DCHECKINCLUDEFILES_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cmake",
+                "-DCHECKINCLUDEFILES_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/cmake"
+            ]
+        }
+    },
+    "plutovg": {
+        "apt": "libplutovg-dev",
+        "vcpkg": "plutovg",
+        "flags": {
+            "apt": [
+                "-DPLUTOVG_INCLUDE_DIR=/usr/include/plutovg",
+                "-DPLUTOVG_LIBRARY=/usr/lib/x86_64-linux-gnu/libplutovg.so"
+            ],
+            "vcpkg": [
+                "-DPLUTOVG_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/plutovg",
+                "-DPLUTOVG_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libplutovg.a"
+            ]
+        }
+    },
+    "openssl": {
+        "apt": "libssl-dev",
+        "vcpkg": "openssl",
+        "flags": {
+            "apt": [
+                "-DOPENSSL_INCLUDE_DIR=/usr/include",
+                "-DOPENSSL_LIBRARIES=/usr/lib/x86_64-linux-gnu"
+            ],
+            "vcpkg": [
+                "-DOPENSSL_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DOPENSSL_LIBRARIES=/opt/vcpkg/installed/x64-linux/lib"
+            ]
+        }
+    },
+    "zlib": {
+        "apt": "zlib1g-dev",
+        "vcpkg": "zlib",
+        "flags": {
+            "apt": [
+                "-DZLIB_INCLUDE_DIR=/usr/include",
+                "-DZLIB_LIBRARY=/usr/lib/x86_64-linux-gnu/libz.so"
+            ],
+            "vcpkg": [
+                "-DZLIB_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DZLIB_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libz.a"
+            ]
+        }
+    },
+    "fmt": {
+        "apt": "libfmt-dev",
+        "vcpkg": "fmt",
+        "flags": {
+            "apt": [
+                "-DFMT_INCLUDE_DIR=/usr/include",
+                "-DFMT_LIBRARY=/usr/lib/x86_64-linux-gnu/libfmt.so"
+            ],
+            "vcpkg": [
+                "-DFMT_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DFMT_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libfmt.a"
+            ]
+        }
+    },
+    "spdlog": {
+        "apt": "libspdlog-dev",
+        "vcpkg": "spdlog",
+        "flags": {
+            "apt": [
+                "-DSPDLOG_INCLUDE_DIR=/usr/include",
+                "-DSPDLOG_LIBRARY=/usr/lib/x86_64-linux-gnu/libspdlog.so"
+            ],
+            "vcpkg": [
+                "-DSPDLOG_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DSPDLOG_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libspdlog.a"
+            ]
+        }
+    },
+    "protobuf": {
+        "apt": "libprotobuf-dev",
+        "vcpkg": "protobuf",
+        "flags": {
+            "apt": [
+                "-DProtobuf_INCLUDE_DIR=/usr/include",
+                "-DProtobuf_LIBRARY=/usr/lib/x86_64-linux-gnu/libprotobuf.so"
+            ],
+            "vcpkg": [
+                "-DProtobuf_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DProtobuf_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libprotobuf.a"
+            ]
+        }
+    },
+    "curl": {
+        "apt": "libcurl4-openssl-dev",
+        "vcpkg": "curl",
+        "flags": {
+            "apt": [
+                "-DCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu",
+                "-DCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so"
+            ],
+            "vcpkg": [
+                "-DCURL_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DCURL_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libcurl.a"
+            ]
+        }
+    },
+    "openblas": {
+        "apt": "libopenblas-dev",
+        "vcpkg": "openblas",
+        "flags": {
+            "apt": [
+                "-DOPENBLAS_INCLUDE_DIR=/usr/include/openblas",
+                "-DOPENBLAS_LIBRARY=/usr/lib/x86_64-linux-gnu/libopenblas.so"
+            ],
+            "vcpkg": [
+                "-DOPENBLAS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DOPENBLAS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libopenblas.a"
+            ]
+        }
+    },
+    "openblas64": {
+        "apt": "libopenblas64-dev",
+        "vcpkg": "openblas",
+        "flags": {
+            "apt": [
+                "-DOPENBLAS64_INCLUDE_DIR=/usr/include/openblas",
+                "-DOPENBLAS64_LIBRARY=/usr/lib/x86_64-linux-gnu/libopenblas64.so"
+            ],
+            "vcpkg": [
+                "-DOPENBLAS64_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DOPENBLAS64_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libopenblas64.a"
+            ]
+        }
+    },
+    "blas": {
+        "apt": "libblas-dev",
+        "vcpkg": "blas",
+        "flags": {
+            "apt": [
+                "-DBLAS_INCLUDE_DIR=/usr/include",
+                "-DBLAS_LIBRARY=/usr/lib/x86_64-linux-gnu/libblas.so"
+            ],
+            "vcpkg": [
+                "-DBLAS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DBLAS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libblas.a"
+            ]
+        }
+    },
+    "vulkan": {
+        "apt": "libvulkan-dev",
+        "vcpkg": "vulkan",
+        "flags": {
+            "apt": [
+                "-DVULKAN_INCLUDE_DIR=/usr/include",
+                "-DVULKAN_LIBRARY=/usr/lib/x86_64-linux-gnu/libvulkan.so"
+            ],
+            "vcpkg": [
+                "-DVULKAN_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DVULKAN_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libvulkan.a"
+            ]
+        }
+    },
+    "sqlite3": {
+        "apt": "libsqlite3-dev",
+        "vcpkg": "sqlite3",
+        "flags": {
+            "apt": [
+                "-DSQLite3_INCLUDE_DIR=/usr/include",
+                "-DSQLite3_LIBRARY=/usr/lib/x86_64-linux-gnu/libsqlite3.so"
+            ],
+            "vcpkg": [
+                "-DSQLite3_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DSQLite3_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libsqlite3.a"
+            ]
+        }
+    },
+    "tbb": {
+        "apt": "libtbb-dev",
+        "vcpkg": "tbb",
+        "flags": {
+            "apt": [
+                "-DTBB_INCLUDE_DIR=/usr/include",
+                "-DTBB_LIBRARY=/usr/lib/x86_64-linux-gnu/libtbb.so"
+            ],
+            "vcpkg": [
+                "-DTBB_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DTBB_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libtbb.a"
+            ]
+        }
+    },
+    "png": {
+        "apt": "libpng-dev",
+        "vcpkg": "libpng",
+        "flags": {
+            "apt": [
+                "-DPNG_INCLUDE_DIR=/usr/include",
+                "-DPNG_LIBRARY=/usr/lib/x86_64-linux-gnu/libpng.so"
+            ],
+            "vcpkg": [
+                "-DPNG_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DPNG_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libpng.a"
+            ]
+        }
+    },
+    "opencl": {
+        "apt": "ocl-icd-opencl-dev",
+        "vcpkg": "opencl",
+        "flags": {
+            "apt": [
+                "-DOpenCL_INCLUDE_DIR=/usr/include",
+                "-DOpenCL_LIBRARY=/usr/lib/x86_64-linux-gnu/libOpenCL.so"
+            ],
+            "vcpkg": [
+                "-DOpenCL_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DOpenCL_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libOpenCL.a"
+            ]
+        }
+    },
+    "doxygen": {
+        "apt": "doxygen",
+        "vcpkg": "doxygen",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "dot": {
+        "apt": "graphviz",
+        "vcpkg": "graphviz",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "icu": {
+        "apt": "libicu-dev",
+        "vcpkg": "icu",
+        "flags": {
+            "apt": [
+                "-DICU_INCLUDE_DIR=/usr/include",
+                "-DICU_LIBRARY=/usr/lib/x86_64-linux-gnu/libicuuc.so"
+            ],
+            "vcpkg": [
+                "-DICU_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DICU_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libicuuc.a"
+            ]
+        }
+    },
+    "cairo": {
+        "apt": "libcairo2-dev",
+        "vcpkg": "cairo",
+        "flags": {
+            "apt": [
+                "-DCAIRO_INCLUDE_DIR=/usr/include/cairo",
+                "-DCAIRO_LIBRARY=/usr/lib/x86_64-linux-gnu/libcairo.so"
+            ],
+            "vcpkg": [
+                "-DCAIRO_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/cairo",
+                "-DCAIRO_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libcairo.a"
+            ]
+        }
+    },
+    "fontconfig": {
+        "apt": "libfontconfig1-dev",
+        "vcpkg": "fontconfig",
+        "flags": {
+            "apt": [
+                "-DFontconfig_INCLUDE_DIR=/usr/include",
+                "-DFontconfig_LIBRARY=/usr/lib/x86_64-linux-gnu/libfontconfig.so"
+            ],
+            "vcpkg": [
+                "-DFontconfig_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DFontconfig_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libfontconfig.a"
+            ]
+        }
+    },
+    "libarchive": {
+        "apt": "libarchive-dev",
+        "vcpkg": "libarchive",
+        "flags": {
+            "apt": [
+                "-DLIBARCHIVE_INCLUDE_DIR=/usr/include",
+                "-DLIBARCHIVE_LIBRARY=/usr/lib/x86_64-linux-gnu/libarchive.so"
+            ],
+            "vcpkg": [
+                "-DLIBARCHIVE_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DLIBARCHIVE_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libarchive.a"
+            ]
+        }
+    },
+    "gtest": {
+        "apt": "libgtest-dev",
+        "vcpkg": "gtest",
+        "flags": {
+            "apt": [
+                "-DGTEST_INCLUDE_DIR=/usr/src/gtest",
+                "-DGTEST_LIBRARY=/usr/lib/x86_64-linux-gnu/libgtest.a"
+            ],
+            "vcpkg": [
+                "-DGTEST_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DGTEST_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libgtest.a"
+            ]
+        }
+    },
+    "lept": {
+        "apt": "libleptonica-dev",
+        "vcpkg": "leptonica",
+        "flags": {
+            "apt": [
+                "-DLept_INCLUDE_DIR=/usr/include/leptonica",
+                "-DLept_LIBRARY=/usr/lib/x86_64-linux-gnu/liblept.so"
+            ],
+            "vcpkg": [
+                "-DLept_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/leptonica",
+                "-DLept_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/liblept.a"
+            ]
+        }
+    },
+    "libcurl": {
+        "apt": "libcurl4-gnutls-dev",
+        "vcpkg": "curl",
+        "flags": {
+            "apt": [
+                "-DLIBCURL_INCLUDE_DIR=/usr/include/x86_64-linux-gnu",
+                "-DLIBCURL_LIBRARY=/usr/lib/x86_64-linux-gnu/libcurl.so"
+            ],
+            "vcpkg": [
+                "-DLIBCURL_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DLIBCURL_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libcurl.a"
+            ]
+        }
+    },
+    "glfw3": {
+        "apt": "libglfw3-dev",
+        "vcpkg": "glfw3",
+        "flags": {
+            "apt": [
+                "-DGLFW3_INCLUDE_DIR=/usr/include",
+                "-DGLFW3_LIBRARY=/usr/lib/x86_64-linux-gnu/libglfw.so"
+            ],
+            "vcpkg": [
+                "-DGLFW3_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DGLFW3_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libglfw3.a"
+            ]
+        }
+    },
+    "capstone": {
+        "apt": "libcapstone-dev",
+        "vcpkg": "capstone",
+        "flags": {
+            "apt": [
+                "-DCAPSTONE_INCLUDE_DIR=/usr/include/capstone",
+                "-DCAPSTONE_LIBRARY=/usr/lib/x86_64-linux-gnu/libcapstone.so"
+            ],
+            "vcpkg": [
+                "-DCAPSTONE_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/capstone",
+                "-DCAPSTONE_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libcapstone.a"
+            ]
+        }
+    },
+    "yara": {
+        "apt": "libyara-dev",
+        "vcpkg": "yara",
+        "flags": {
+            "apt": [
+                "-DYARA_INCLUDE_DIR=/usr/include",
+                "-DYARA_LIBRARY=/usr/lib/x86_64-linux-gnu/libyara.so"
+            ],
+            "vcpkg": [
+                "-DYARA_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DYARA_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libyara.a"
+            ]
+        }
+    },
+    "freetype": {
+        "apt": "libfreetype6-dev",
+        "vcpkg": "freetype",
+        "flags": {
+            "apt": [
+                "-DFREETYPE_INCLUDE_DIRS=/usr/include/freetype2",
+                "-DFREETYPE_LIBRARY=/usr/lib/x86_64-linux-gnu/libfreetype.so"
+            ],
+            "vcpkg": [
+                "-DFREETYPE_INCLUDE_DIRS=/opt/vcpkg/installed/x64-linux/include/freetype2",
+                "-DFREETYPE_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libfreetype.a"
+            ]
+        }
+    },
+    "mbedtls": {
+        "apt": "libmbedtls-dev",
+        "vcpkg": "mbedtls",
+        "flags": {
+            "apt": [
+                "-DMBEDTLS_INCLUDE_DIR=/usr/include",
+                "-DMBEDTLS_LIBRARY=/usr/lib/x86_64-linux-gnu/libmbedtls.so"
+            ],
+            "vcpkg": [
+                "-DMBEDTLS_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DMBEDTLS_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libmbedtls.a"
+            ]
+        }
+    },
+    "libssh2": {
+        "apt": "libssh2-1-dev",
+        "vcpkg": "libssh2",
+        "flags": {
+            "apt": [
+                "-DLIBSSH2_INCLUDE_DIR=/usr/include",
+                "-DLIBSSH2_LIBRARY=/usr/lib/x86_64-linux-gnu/libssh2.so"
+            ],
+            "vcpkg": [
+                "-DLIBSSH2_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DLIBSSH2_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libssh2.a"
+            ]
+        }
+    },
+    "x11": {
+        "apt": "libx11-dev",
+        "vcpkg": "x11",
+        "flags": {
+            "apt": [
+                "-DX11_INCLUDE_DIR=/usr/include/X11",
+                "-DX11_LIBRARY=/usr/lib/x86_64-linux-gnu/libX11.so"
+            ],
+            "vcpkg": [
+                "-DX11_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/X11",
+                "-DX11_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libX11.a"
+            ]
+        }
+    },
+    "qt6": {
+        "apt": "qt6-base-dev",
+        "vcpkg": "qtbase",
+        "flags": {
+            "apt": [
+                "-DQt6_DIR=/usr/lib/x86_64-linux-gnu//Qt6",
+                "-DQt6Widgets_DIR=/usr/lib/x86_64-linux-gnu//Qt6Widgets"
+            ],
+            "vcpkg": [
+                "-DQt6_DIR=/opt/vcpkg/installed/x64-linux/share/Qt6",
+                "-DQt6Widgets_DIR=/opt/vcpkg/installed/x64-linux/share/Qt6Widgets"
+            ]
+        }
+    },
+    "webp": {
+        "apt": "libwebp-dev",
+        "vcpkg": "libwebp",
+        "flags": {
+            "apt": [
+                "-DWEBP_INCLUDE_DIR=/usr/include",
+                "-DWEBP_LIBRARY=/usr/lib/x86_64-linux-gnu/libwebp.so"
+            ],
+            "vcpkg": [
+                "-DWEBP_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DWEBP_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libwebp.a"
+            ]
+        }
+    },
+    "libavif": {
+        "apt": "libavif-dev",
+        "vcpkg": "libavif",
+        "flags": {
+            "apt": [
+                "-DAVIF_INCLUDE_DIR=/usr/include",
+                "-DAVIF_LIBRARY=/usr/lib/x86_64-linux-gnu/libavif.so"
+            ],
+            "vcpkg": [
+                "-DAVIF_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DAVIF_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libavif.a"
+            ]
+        }
+    },
+    "libtommath": {
+        "apt": "libtommath-dev",
+        "vcpkg": "libtommath",
+        "flags": {
+            "apt": [
+                "-DLIBTOMMATH_INCLUDE_DIR=/usr/include",
+                "-DLIBTOMMATH_LIBRARY=/usr/lib/x86_64-linux-gnu/libtommath.so"
+            ],
+            "vcpkg": [
+                "-DLIBTOMMATH_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DLIBTOMMATH_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libtommath.a"
+            ]
+        }
+    },
+    "sdl2": {
+        "apt": "libsdl2-dev",
+        "vcpkg": "sdl2",
+        "flags": {
+            "apt": [
+                "-DSDL2_INCLUDE_DIR=/usr/include/SDL2",
+                "-DSDL2_LIBRARY=/usr/lib/x86_64-linux-gnu/libSDL2.so"
+            ],
+            "vcpkg": [
+                "-DSDL2_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/SDL2",
+                "-DSDL2_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libSDL2.a"
+            ]
+        }
+    },
+    "ffmpeg": {
+        "apt": "libavcodec-dev",
+        "vcpkg": "ffmpeg",
+        "flags": {
+            "apt": [
+                "-DFFMPEG_INCLUDE_DIR=/usr/include/x86_64-linux-gnu",
+                "-DFFMPEG_LIBRARY=/usr/lib/x86_64-linux-gnu/libavcodec.so"
+            ],
+            "vcpkg": [
+                "-DFFMPEG_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DFFMPEG_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libavcodec.a"
+            ]
+        }
+    },
+    "tiff": {
+        "apt": "libtiff-dev",
+        "vcpkg": "tiff",
+        "flags": {
+            "apt": [
+                "-DTIFF_INCLUDE_DIR=/usr/include/x86_64-linux-gnu",
+                "-DTIFF_LIBRARY=/usr/lib/x86_64-linux-gnu/libtiff.so"
+            ],
+            "vcpkg": [
+                "-DTIFF_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DTIFF_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libtiff.a"
+            ]
+        }
+    },
+    "openmp": {
+        "apt": "libomp-dev",
+        "vcpkg": "openmp",
+        "flags": {
+            "apt": [
+                "-DOpenMP_C_FLAGS=-fopenmp",
+                "-DOpenMP_CXX_FLAGS=-fopenmp"
+            ],
+            "vcpkg": [
+                "-DOpenMP_C_FLAGS=-fopenmp",
+                "-DOpenMP_CXX_FLAGS=-fopenmp"
+            ]
+        }
+    },
+    "googletest": {
+        "apt": "libgtest-dev",
+        "vcpkg": "gtest",
+        "flags": {
+            "apt": [
+                "-DGTEST_INCLUDE_DIR=/usr/src/googletest/googletest/include",
+                "-DGTEST_LIBRARY=/usr/lib/x86_64-linux-gnu/libgtest.a"
+            ],
+            "vcpkg": [
+                "-DGTEST_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DGTEST_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libgtest.a"
+            ]
+        }
+    },
+    "pango": {
+        "apt": "libpango1.0-dev",
+        "vcpkg": "pango",
+        "flags": {
+            "apt": [
+                "-DPANGO_INCLUDE_DIR=/usr/include/pango-1.0",
+                "-DPANGO_LIBRARY=/usr/lib/x86_64-linux-gnu/libpango-1.0.so"
+            ],
+            "vcpkg": [
+                "-DPANGO_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/pango-1.0",
+                "-DPANGO_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libpango-1.0.a"
+            ]
+        }
+    },
+    "cpufeaturesndkcompat": {
+        "apt": "",
+        "vcpkg": "cpu-features",
+        "flags": {
+            "apt": [
+                "-DCPUFEATURES_INCLUDE_DIR=/usr/include",
+                "-DCPUFEATURES_LIBRARY=/usr/lib/x86_64-linux-gnu/libcpu_features.so"
+            ],
+            "vcpkg": [
+                "-DCPUFEATURES_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DCPUFEATURES_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libcpu_features.a"
+            ]
+        }
+    },
+    "checkipssupported": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "pkgconfig": {
+        "apt": "pkg-config",
+        "vcpkg": "pkgconf",
+        "flags": {
+            "apt": [
+                "-DPKG_CONFIG_EXECUTABLE=/usr/bin/pkg-config"
+            ],
+            "vcpkg": [
+                "-DPKG_CONFIG_EXECUTABLE=/opt/vcpkg/installed/x64-linux/bin/pkg-config"
+            ]
+        }
+    },
+    "generateexportheader": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "configure": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "processorcount": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "buildoptimizations": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "sourcegroups": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "buildfunctions": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "sw": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [
+                "-DSW_INCLUDE_DIR=/usr/include",
+                "-DSW_LIBRARY=/usr/lib/x86_64-linux-gnu/libsw.so"
+            ],
+            "vcpkg": [
+                "-DSW_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include",
+                "-DSW_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libsw.so"
+            ]
+        }
+    },
+    "checkfunctions": {
+        "apt": "",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    }
+}
