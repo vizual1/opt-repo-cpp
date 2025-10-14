@@ -47,6 +47,7 @@ class DependencyResolver:
         }[method]
 
         try:
+            logging.info(f"Installing {dep_name} via {method}...")
             subprocess.run(cmd, check=True)
             logging.info(f"Installed {dep_name} via {method}")
             return True
@@ -100,6 +101,7 @@ class DependencyResolver:
                 r"Could not find a configuration file for package \"([^\"]+)\"",
                 r"([A-Za-z0-9_\-\+\.]+)\s+package NOT found",
                 r"No module named ['\"]([^'\"]+)['\"]",
+                r"executable '([a-zA-Z0-9_\-\+\.]+)' not found",
             ]
             missing = set()
             for pattern in patterns:
@@ -120,7 +122,7 @@ class DependencyResolver:
                     role="user",
                     content=f"""
                         You are an expert in CMake, Ubuntu, and vcpkg. 
-                        Given a missing dependency name, return a JSON object like this:
+                        Given one or more missing dependency names, return a single JSON object where each key is a <dependency>:
                         {{
                         "<dependency>": {{
                             "apt": "<Ubuntu 22.04 package>",
@@ -132,11 +134,11 @@ class DependencyResolver:
                         }}
                         }}
                         Rules:
-                        1. Use the correct header subfolder if the package installs headers under a subdirectory (e.g., `/usr/include/leptonica`, `/usr/include/SDL2`, `/usr/include/freetype2`).
-                        2. For vcpkg, mirror the subfolder inside `/opt/vcpkg/installed/x64-linux/include`.
-                        3. Only return valid JSON, no explanations.
-                        4. For invalid dependencies, set "<Ubuntu 22.04 package>" and "<vcpkg port>" to "".
-                        5. Generate it for <dependency> if exists in [{deps}].
+                        1. Use correct subfolders (e.g. '/usr/include/SDL2', '/usr/include/freetype2').
+                        2. Mirror subfolder in vcpkg under '/opt/vcpkg/installed/x64-linux/include'.
+                        3. Output only valid JSON (no text)
+                        4. For unknown deps, set "<Ubuntu 22.04 package>" and "<vcpkg port>" to "".
+                        5. Generate it for all <dependency> if exists in {deps}.
                         """
                 )])
                 try:

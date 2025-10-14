@@ -9,8 +9,8 @@ class CMakeAnalyzer:
     def has_root_cmake(self) -> bool:
         return self.parser.has_root_cmake()
 
-    def has_testing(self) -> bool:
-        return (self.parser.find_enable_testing() and self.parser.can_list_tests() and 
+    def has_testing(self, nolist: bool = False) -> bool:
+        return (self.parser.find_enable_testing() and (nolist or self.parser.can_list_tests()) and 
                (self.parser.find_add_tests() or self.parser.find_discover_tests()))
     
     def get_list_test_arg(self) -> list[str]:

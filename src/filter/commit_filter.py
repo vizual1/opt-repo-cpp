@@ -80,15 +80,17 @@ class CommitFilter:
                 return True
         return False
     
-    # TODO: write save_cache/load_cache and test it
+    # TODO: write save_cache/load_cache and test it 
+    # write the cache to memory
+    # add commit information to cache
+    # load the cache from outside
     def _save_cache(self, commit: Commit) -> None:
-        self.cache[commit.sha] = {} # TODO: add commit information to cache
-        # TODO: write the cache to memory
+        self.cache[commit.sha] = {}
         return
     
     def _load_cache(self) -> str:
         if not self.cache:
-            self.cache = {} # TODO: load the cache from outside
+            self.cache = {} 
         elif self.commit.sha in self.cache.keys():
             if self.filter in self.cache[self.commit.sha]:
                 return self.cache[self.commit.sha][self.filter]

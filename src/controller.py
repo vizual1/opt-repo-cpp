@@ -31,10 +31,11 @@ class Controller:
             repo_pipeline.analyze_repos()
         else:
             repo_pipeline.get_repos()
-            valid_repos = repo_pipeline.valid_repos
-            for repo in valid_repos:
-                commit_pipeline = CommitPipeline(repo=repo, sha=self.sha, config=self.config)
-                commit_pipeline.get_commits()
+            #valid_repos = repo_pipeline.valid_repos
+            # TODO: put that under TESTER
+            #for repo in valid_repos:
+            #    commit_pipeline = CommitPipeline(repo=repo, sha=self.sha, config=self.config)
+            #    commit_pipeline.get_commits()
 
     def _tester(self):
         tester_pipeline = TesterPipeline(url=self.url, sha=self.sha, config=self.config)

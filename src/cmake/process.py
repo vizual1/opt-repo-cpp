@@ -2,8 +2,8 @@
 import logging, subprocess, os, shutil, json
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
-from src.cmake.autobuilder import CMakeAutoBuilder
-from src.cmake.package import CMakePackageHandler
+#from src.cmake.autobuilder import CMakeAutoBuilder
+#from src.cmake.package import CMakePackageHandler
 from src.cmake.resolver import DependencyResolver
 from typing import Any
 #import src.config as conf
@@ -13,13 +13,16 @@ os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','
 
 class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
-    def __init__(self, root: str, build: str, test: str, flags: list[str], analyzer: CMakeAnalyzer, jobs: int = 1):
+    def __init__(self, root: str, build: str, test: str, 
+                 flags: list[str], analyzer: CMakeAnalyzer, package_manager: str, jobs: int = 1):
         self.root = root
         self.build_path = build
         self.test_path = test
-        self.jobs = jobs
+        
         self.flags: list[str] = flags
         self.analyzer = analyzer
+        self.package_manager = package_manager
+        self.jobs = jobs
 
         self.config_stdout: str = ""
         self.config_stderr: str = ""
@@ -35,7 +38,15 @@ class CMakeProcess:
         return self._configure()
 
     def build(self) -> bool:
-        return self._configure_with_retries() and self._build()
+        # TODO: _configure()
+        # vcpkg.json -> set to manifest mode?
+        # conanfiles.txt or conanfiles.py -> conan install . --build=missing?
+        # no package_handler -> _configure_with_retries()
+        #return self._configure_with_retries() and self._build()
+        if self.package_manager:
+            return self._configure() and self._build()
+        else:
+            return self._configure_with_retries() and self._build()
     
     def test(self, test_exec: list[str]) -> bool:
         return self._ctest(test_exec)
@@ -45,6 +56,8 @@ class CMakeProcess:
     def _configure_with_retries(self, max_retries: int = 5) -> bool:
         save_dependencies = set()
         for attempt in range(max_retries):
+        #attempt = 0
+        #while save_dependencies or attempt == 0:
             logging.info(f"[Attempt {attempt}/{max_retries}] Configuring project at {self.root}")
 
             if self._configure():
@@ -91,61 +104,31 @@ class CMakeProcess:
                 try:
                     data: dict[str, dict[str, Any]] = json.loads(llm_output)
                     data = {k.lower() if isinstance(k, str) else k: v for k, v in data.items()}
+                    for dep in unresolved_dependencies:
+                        resolve = self.resolver.resolve(dep.lower())
+                        if not resolve:
+                            logging.warning(f"Failed to resolve {dep} (invalid dependency or wrong LLM output)")
+                            continue
+                        
+                        dep.lower()
+                        if self.resolver.install(dep, method="apt"):
+                            self.other_flags |= self.resolver.flags(dep, method="apt")
+                        elif self.resolver.install(dep, method="vcpkg"):
+                            data[dep]["apt"] = ""
+                            self.other_flags |= self.resolver.flags(dep, method="vcpkg")
+                        else:
+                            data[dep]["apt"] = ""
+                            data[dep]["vcpkg"] = ""
+
+                    self.resolver.cache.mapping.update(data)
+                    self.resolver.cache.save()
+                    logging.info(f"Added {data.keys()} to dependency cache")
                 except json.JSONDecodeError as e:
                     logging.error(f"Invalid JSON for {llm_output}: {e}")
-                    continue # skip
 
-                for dep in unresolved_dependencies:
-                    resolve = self.resolver.resolve(dep.lower())
-                    if not resolve:
-                        logging.warning(f"Failed to resolve {dep} (invalid dependency or wrong LLM output)")
-                        continue
-                    
-                    dep.lower()
-                    if self.resolver.install(dep, method="apt"):
-                        self.other_flags |= self.resolver.flags(dep, method="apt")
-                    elif self.resolver.install(dep, method="vcpkg"):
-                        data[dep]["apt"] = ""
-                        self.other_flags |= self.resolver.flags(dep, method="vcpkg")
-                    else:
-                        data[dep]["apt"] = ""
-                        data[dep]["vcpkg"] = ""
-
-                self.resolver.cache.mapping.update(data)
-                self.resolver.cache.save()
-                logging.info(f"Added {data.keys()} to dependency cache")
-                    
-            '''
-            try:
-                subprocess.run(["/opt/vcpkg/vcpkg", "install", dep.lower()], check=True)
-                self.auto_builder.inject_vcpkg_dependency(dep)
-                self.other_flags |= self.auto_builder.flags
-                logging.info(f"Installed {dep}")
-            except subprocess.CalledProcessError as e:
-                logging.warning(f"Failed to install {dep}: {e}")
-            except Exception as e:
-                logging.error(f"Unexpected error with {dep}: {e}")
-            '''
-            save_dependencies = missing_dependencies.copy()
-        '''
-        logging.info("Try LLM...")
-        response: str = self.package_handler.llm_prompt(errors=self.config_stderr[:200])
-        logging.info(f"{response}")
-        for cmd in response.split("\n"):
-            try:
-                subprocess.run([cmd.replace("sudo", "")], check=True)
-                self.auto_builder.inject_vcpkg_dependency(dep)
-                self.other_flags |= self.auto_builder.flags
-                logging.info(f"Installed with {cmd}")
-            except subprocess.CalledProcessError as e:
-                logging.warning(f"Failed to install {cmd}: {e}")
-            except Exception as e:
-                logging.error(f"Unexpected error with {cmd}: {e}")
-        if self._configure():
-            return True
-        '''
         logging.error("All configuration attempts failed.")
         return False
+    
 
     def _configure(self) -> bool:
         cmd = [
@@ -155,7 +138,7 @@ class CMakeProcess:
             '-G', 'Ninja',
 
             '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
-            #'-DVCPKG_MANIFEST_MODE=ON',
+            '-DVCPKG_MANIFEST_MODE=ON',
             #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
             #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
             

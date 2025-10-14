@@ -2,7 +2,6 @@ import os, logging, re
 from cmakeast.printer import ast
 from typing import Optional
 
-# TODO: fix checks and parsers below, currently all over the place and clean up
 class CMakeParser:
     def __init__(self, root: str):
         self.root = root

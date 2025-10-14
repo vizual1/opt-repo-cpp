@@ -23,7 +23,7 @@ class RepositoryPipeline:
     def get_repos(self) -> None:
         crawl = RepositoryCrawler(url=self.url, config=self.config)
         repo_ids = crawl.get_repos()
-        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
+        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing repositories..."):
             structure = StructureFilter(repo_id, self.config.git)
             if structure.is_valid():
                 self.valid_repos.append(structure.repo)
@@ -35,7 +35,7 @@ class RepositoryPipeline:
     def analyze_repos(self) -> None:
         crawl = RepositoryCrawler(url=self.url, config=self.config)
         repo_ids = crawl.get_repos()
-        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Fetching commit history..."):
+        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Analyzing repositories..."):
             structure = StructureFilter(repo_id, self.config.git)
             if structure.analyze() and (self.config.popular or self.config.write):
                 Writer(structure.repo.full_name).write_repo(self.config.write)
