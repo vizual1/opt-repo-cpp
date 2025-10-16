@@ -5,7 +5,8 @@ from src.utils.dataclasses import Config
 def start() -> None:
     parser = argparse.ArgumentParser(description="Collect, Filter and Test C++ Github Repositories.")
 
-    parser.add_argument("--crawl", action="store_true", help="Collect and filter commits history.")
+    parser.add_argument("--crawl", action="store_true", help="Collect and filter Github Repositories.")
+    parser.add_argument("--commits", action="store_true", help="Collect and filter commits from Github Repositories.")
     parser.add_argument("--docker", action="store_true", help="Create Dockerfiles for testing.")
     parser.add_argument("--test", action="store_true", help="Run tests on the filtered repositories.")
 
@@ -19,23 +20,20 @@ def start() -> None:
     parser.add_argument("-write", type=str, default="", help="Filepath to write GitHub URLs.")
 
     parser.add_argument("-sha", type=str, default="", help="Select a certain commit version of some Github repository.")
-    parser.add_argument("-filter", type=str, choices=["simple", "LLM", "custom"], default="simple", help="Filter strategy to use (default: simple).")
+    parser.add_argument("-filter", type=str, choices=["simple", "llm", "custom"], default="simple", help="Filter strategy to use (default: simple).")
     parser.add_argument("--separate", action="store_true", help="Saves each filtered commit separately with commit message and diff.")
     parser.add_argument("--analyze", action="store_true", help="Analyze the given repos")
 
-    parser.add_argument("--ignore_conflict", action="store_true", help="Ignores possible package conflicts while generating Dockerfile.")
-    
     args = parser.parse_args()
     
     config = Config(
-        read=args.read, write=args.write,
+        crawl=args.crawl, commits=args.commits, docker=args.docker, test=args.test,
         popular=args.popular, stars=args.stars, limit=args.limit,
-        filter=args.filter, separate=args.separate, analyze=args.analyze,
-        ignore_conflict=args.ignore_conflict
+        read=args.read, write=args.write,
+        filter=args.filter, separate=args.separate, analyze=args.analyze
     )
 
     pipeline = Controller(
-        crawl=args.crawl, docker=args.docker, test=args.test,
         url=args.url, sha=args.sha, config=config
     )
     pipeline.run()
