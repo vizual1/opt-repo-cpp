@@ -4,6 +4,7 @@ from typing import Any
 from pathlib import Path
 from src.filter.llm.prompt import Prompt
 from src.filter.llm.openai import OpenRouterLLM
+from src.filter.llm.ollama import OllamaLLM
 
 class DependencyResolver:
 
@@ -112,7 +113,10 @@ class DependencyResolver:
     
     class LLMResolver:
         def __init__(self):
-            self.llm = OpenRouterLLM(conf.llm['model'])
+            if conf.llm["ollama"]:
+                self.llm = OllamaLLM(conf.llm['ollama_model'])
+            else:
+                self.llm = OpenRouterLLM(conf.llm['model'])
 
         def llm_prompt(self, deps: list[str], timeout: int = 60) -> str:
             result: dict[str, str] = {"out": ""}

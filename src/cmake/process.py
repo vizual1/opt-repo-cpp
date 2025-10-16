@@ -1,5 +1,5 @@
 
-import logging, subprocess, os, shutil, json
+import logging, subprocess, os, shutil, json, time
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 #from src.cmake.autobuilder import CMakeAutoBuilder
@@ -33,6 +33,7 @@ class CMakeProcess:
         #self.auto_builder = CMakeAutoBuilder(self.root)
         #self.package_handler = CMakePackageHandler(self.analyzer)
         self.resolver = DependencyResolver()
+        self.test_time: float = 0.0
         
     def configure(self) -> bool:
         return self._configure()
@@ -48,16 +49,14 @@ class CMakeProcess:
         else:
             return self._configure_with_retries() and self._build()
     
-    def test(self, test_exec: list[str]) -> bool:
-        return self._ctest(test_exec)
+    def test(self, test_exec: list[str], test_repeat: int = 1) -> bool:
+        return self._ctest(test_exec, test_repeat)
     
 ############### CONFIGURATION ###############
     
     def _configure_with_retries(self, max_retries: int = 5) -> bool:
         save_dependencies = set()
         for attempt in range(max_retries):
-        #attempt = 0
-        #while save_dependencies or attempt == 0:
             logging.info(f"[Attempt {attempt}/{max_retries}] Configuring project at {self.root}")
 
             if self._configure():
@@ -85,6 +84,7 @@ class CMakeProcess:
                 resolve = self.resolver.resolve(dep.lower())
                 if not resolve:
                     unresolved_dependencies.add(dep)
+                    logging.warning(f"Unresolved dependency {dep}")
                     continue
                 
                 dep = dep.lower()
@@ -99,6 +99,7 @@ class CMakeProcess:
                 self.resolver.cache.save()
             
             if unresolved_dependencies:
+                logging.info(f"All unresolved dependencies {unresolved_dependencies}")
                 llm_output = self.resolver.llm.llm_prompt(list(unresolved_dependencies), timeout=60)
                 logging.info(f"LLM prompt returned:\n{llm_output}")
                 try:
@@ -138,22 +139,21 @@ class CMakeProcess:
             '-G', 'Ninja',
 
             '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
-            '-DVCPKG_MANIFEST_MODE=ON',
+            #'-DVCPKG_MANIFEST_MODE=ON',
             #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
             #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
             
             '-DCMAKE_BUILD_TYPE=Debug',
             '-DCMAKE_C_COMPILER=/usr/bin/clang-16',
             '-DCMAKE_CXX_COMPILER=/usr/bin/clang++-16',
+            '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
 
             '-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
             '-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
             '-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
-            
             '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
             '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
 
-            '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
             #'-DCMAKE_VERBOSE_MAKEFILE=ON',
             #'-DCMAKE_FIND_DEBUG_MODE=ON',
         ]
@@ -166,6 +166,13 @@ class CMakeProcess:
 
         for flag in self.other_flags:
             cmd.append(flag)
+
+        if self.package_manager.startswith("vcpkg"):
+            cmd.append('-DVCPKG_MANIFEST_MODE=ON')
+        elif self.package_manager.startswith("conanfile"):
+            logging.info("Installing through package manager conan...")
+            install = ['conan', 'install', '.', '-build=missing'] 
+            result = subprocess.run(install, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         
         try:
             logging.info(f"{' '.join(cmd)}")
@@ -187,7 +194,6 @@ class CMakeProcess:
         cmd = ['cmake', '--build', self.build_path, '--']
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
-        cmd += ['-k', '0'] 
         try:
             logging.info(f"{' '.join(cmd)}")
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -210,17 +216,24 @@ class CMakeProcess:
     #      doctest  => --list-test-cases
     #      add_test => probably just scanning all add_test(some_name path/to/executable)
     #                   and take path/to/executable as unit test
-    def _ctest(self, test_exec: list[str]) -> bool:
+    def _ctest(self, test_exec: list[str], test_repeat: int) -> bool:
         test_dir = Path(self.test_path)
         if test_exec:
             self._isolated_ctest(test_exec)
 
         cmd = ['ctest', '--output-on-failure']
+
+        start_time = time.perf_counter()
         try:
-            logging.info(f"{' '.join(cmd)} in {self.test_path}")
-            result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logging.info(f"CTest passed for {self.test_path}")
-            logging.info(f"Output:\n{result.stdout}")
+            for _ in range(test_repeat):
+                logging.info(f"{' '.join(cmd)} in {self.test_path}")
+                result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                elapsed = time.perf_counter() - start_time
+                self.test_time += elapsed
+                logging.info(f"CTest passed for {self.test_path}")
+                logging.info(f"Output:\n{result.stdout}")
+                logging.info(f"Measured time: {elapsed}")
+            self.test_time /= test_repeat
             return True
         except subprocess.CalledProcessError as e:
             logging.error(f"CTest failed for {self.test_path} (return code {e.returncode})", exc_info=True)
@@ -272,7 +285,7 @@ class CMakeProcess:
                 return line.split()[1].split("/")[-1]
         return "main" 
         
-    def clone_repo(self, repo_id: str, repo_path: str, branch: str = "main") -> bool:
+    def _clone_repo(self, repo_id: str, repo_path: str, branch: str = "main") -> bool:
         url = f"https://github.com/{repo_id}.git"
         if branch == "main":
             branch = self._get_default_branch(url)
@@ -289,3 +302,62 @@ class CMakeProcess:
             logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
             logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
             return False
+
+
+    def clone_repo(self, repo_id: str, repo_path: str, branch: str = "main", sha: str = "") -> bool:
+        url = f"https://github.com/{repo_id}.git"
+        
+        if os.path.exists(repo_path):
+            shutil.rmtree(repo_path)
+        
+        if sha:
+            logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
+            try:
+                subprocess.run(
+                    ["git", "clone", "--depth=1", url, repo_path],
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                
+                subprocess.run(
+                    ["git", "fetch", "--depth=1", "origin", sha],
+                    cwd=repo_path,
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                
+                subprocess.run(
+                    ["git", "checkout", sha],
+                    cwd=repo_path,
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                
+                subprocess.run(
+                    ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
+                    cwd=repo_path,
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                
+                logging.info(f"Repository checked out to commit {sha} successfully")
+                return True
+                
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Failed to clone/checkout commit {sha}", exc_info=True)
+                logging.error(f"Output (stdout):\n{e.stdout}")
+                logging.error(f"Error (stderr):\n{e.stderr}")
+                return False
+        else:
+            if branch == "main":
+                branch = self._get_default_branch(url)
+            
+            cmd = ["git", "clone", "--recurse-submodules", "--shallow-submodules", 
+                        "--branch", branch, "--depth=1", url, repo_path]
+            logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
+            try:
+                result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, 
+                                    stderr=subprocess.PIPE, text=True)
+                logging.info(f"Repository cloned successfully")
+                return True
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Failed to clone repository {url} (branch: {branch})", exc_info=True)
+                logging.error(f"Output (stdout):\n{e.stdout}")
+                logging.error(f"Error (stderr):\n{e.stderr}")
+                return False

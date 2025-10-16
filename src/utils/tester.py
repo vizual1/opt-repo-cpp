@@ -5,9 +5,8 @@ from src.cmake.analyzer import CMakeAnalyzer
 from src.filter.flags_filter import FlagFilter
 
 class CommitTester:
-    def __init__(self, sha: str = "", ignore_conflict: bool = False):
+    def __init__(self, sha: str = ""):
         self.sha = sha
-        self.ignore_conflict = ignore_conflict
         self.storage = conf.storage
     
     def get_commits(self, repo_id: str) -> tuple[list[tuple[str, str]], str]:
@@ -33,7 +32,7 @@ class CommitTester:
         build_path = os.path.join(path, "build")
         test_path = os.path.join(path, "build", enable_testing_path)
         flags = FlagFilter(analyzer.has_build_testing_flag()).get_valid_flags()
-        return CMakeProcess(path, build_path, test_path, flags=flags, analyzer=analyzer)
+        return CMakeProcess(path, build_path, test_path, flags=flags, analyzer=analyzer, package_manager="")
 
     def _get_filtered_commits(self, path: str) -> list[tuple[str, str]]:
         """Extract commit information from a file."""

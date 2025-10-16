@@ -25,7 +25,7 @@ class RepositoryPipeline:
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing repositories..."):
             structure = StructureFilter(repo_id, self.config.git)
-            if structure.is_valid():
+            if self.config.commits or structure.is_valid():
                 self.valid_repos.append(structure.repo)
                 if self.config.popular or self.config.write:
                     Writer(structure.repo.full_name).write_repo(self.config.write)
@@ -56,11 +56,16 @@ class CommitPipeline():
             self.commits = self.repo.get_commits(sha=sha)
         else:
             self.commits = self.repo.get_commits()
+        self.filtered_commits: list[str] = []
 
     def get_commits(self) -> None:
         for commit in tqdm(self.commits, total=self.commits.totalCount, desc=f"{self.repo.full_name} commits"):
+            self.stats.num_commits += 1
             if CommitFilter(commit, self.config.filter, self.repo.full_name).accept():
-                self.stats += Writer(self.repo.full_name).write_commit(commit, self.config.separate)
+                writer = Writer(self.repo.full_name)
+                self.filtered_commits.append(writer.file)
+                self.stats.perf_commits += 1
+                self.stats += writer.write_commit(commit, self.config.separate)
         self.stats.write_final_log()
 
 
@@ -72,25 +77,28 @@ class TesterPipeline:
         self.repo_ids = RepositoryCrawler(url=self.url, config=self.config).get_repos()  
     
     def test_commit(self):
-        tester = CommitTester(sha=self.sha, ignore_conflict=self.config.ignore_conflict)
+        tester = CommitTester(sha=self.sha)
         for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Testing filtered commits..."):
             commits, file = tester.get_commits(repo_id)
-            repo = self.config.git.get_repo(repo_id)
+            #repo = self.config.git.get_repo(repo_id)
             for (current_sha, parent_sha) in commits:
                 current_path, parent_path = tester.get_paths(file, current_sha)
-                # TODO: need test, maybe use CMakeProcess
                 current_filter = StructureFilter(repo_id, self.config.git, current_path, current_sha)
                 parent_filter = StructureFilter(repo_id, self.config.git, parent_path, parent_sha)
-                current_process = tester.create_process(current_filter.analyzer, current_path)
-                parent_process = tester.create_process(parent_filter.analyzer, parent_path)
-                if (current_process.clone_repo(repo_id, current_path, branch=current_sha) and 
-                    parent_process.clone_repo(repo_id, parent_path, branch=parent_sha)):
-                    if current_filter.is_valid() and parent_filter.is_valid():
-                        if current_process.build() and parent_process.build():
-                            current_test_exec = current_filter.analyzer.parser.find_ctest_exec()
-                            current_process.test(current_test_exec)
-                            parent_test_exec = parent_filter.analyzer.parser.find_ctest_exec()
-                            parent_process.test(parent_test_exec)
+                logging.info(f"Testing {repo_id} ({current_sha} and {parent_sha})...")
+                if current_filter.is_valid():
+                    logging.info(f"commit cmake and ctest successful ({repo_id}/{current_sha})")
+                    if parent_filter.is_valid():
+                        logging.info(f"parent cmake and ctest successful ({repo_id}/{parent_sha})")
+                        current_test_time = current_filter.process.test_time if current_filter.process else 0.0
+                        parent_test_time = parent_filter.process.test_time if parent_filter.process else 0.0
+                        logging.info(f"Commit Test Time {current_test_time}")
+                        logging.info(f"Parent Test Time {parent_test_time}")
+                    else:
+                        logging.error(f"parent cmake and ctest failed ({repo_id}/{parent_sha})")
+                else:
+                    logging.error(f"commit cmake and ctest failed ({repo_id}/{parent_sha})")
+
 
     def test_configure(self):
         for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Configuring Repositories..."):

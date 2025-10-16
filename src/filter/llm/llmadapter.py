@@ -13,7 +13,7 @@ class LLMAdapter():
             self.client = OpenAI(api_key=conf.llm['api_key'])
         self.model = model
         self.cache_file = conf.llm['cache_file']
-        self.cache = self._load_cache() # TODO: if exists
+        self.cache = self._load_cache()
 
     def _make_cache_key(self, model: str, prompt: Prompt) -> str:
         key_data = {"model": model, "prompt": prompt}

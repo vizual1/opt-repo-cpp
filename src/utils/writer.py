@@ -7,6 +7,7 @@ class Writer:
     def __init__(self, repo_name: str):
         self.owner, self.name = repo_name.split("/")
         self.storage = conf.storage
+        self.file: str = ""
 
     def write_repo(self, write: str = "") -> None:
         msg = f"https://github.com/{self.owner}/{self.name}\n"
@@ -34,9 +35,9 @@ class Writer:
 
         current_sha = commit.sha
 
-        file = f"{self.owner}_{self.name}_filtered.txt"
+        self.file = f"{self.owner}_{self.name}_filtered.txt"
         msg = f"{current_sha} | {commit.parents[0].sha or 'None'} | +{total_add} | -{total_del} | {total_add + total_del}\n" 
-        path = os.path.join(self.storage['store_commits'], file)
+        path = os.path.join(self.storage['store_commits'], self.file)
         self._write(path, msg)
         
         # saves each commit version to file with patch information

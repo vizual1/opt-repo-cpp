@@ -2,6 +2,7 @@ import logging, tempfile, os, requests
 from collections import Counter
 from github import Github
 from github.GitTreeElement import GitTreeElement
+from typing import Optional
 
 import src.config as conf
 from src.cmake.analyzer import CMakeAnalyzer
@@ -30,23 +31,24 @@ class StructureFilter:
         self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
         self.stats = RepoStats()
         self.testing_flags: dict = {}
+        self.process: Optional[CMakeProcess] = None
 
 
     def is_valid(self) -> bool:
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 
-        if self._has_root_cmake() and (vcpkg or conan):
+        if self._has_root_cmake(): #and (vcpkg or conan):
             logging.info(f"CMakeLists.txt at root ({self.repo.full_name})")
 
             with tempfile.TemporaryDirectory() as tmpdir:
                 self._get_cmake_lists(tmpdir)
                 analyzer = CMakeAnalyzer(tmpdir)
 
-                if analyzer.has_testing():
+                if analyzer.has_testing(nolist=True):
                     logging.info(f"ctest is defined ({self.repo.full_name})")
                     
-                    if self._valid_cmake_run(tmpdir, analyzer, vcpkg or conan):
+                    if self._valid_cmake_run(tmpdir, analyzer, vcpkg): #or conan):
                         logging.info(f"cmake and ctest run successfully ({self.repo.full_name})")
                         return True
                     else:
@@ -98,12 +100,39 @@ class StructureFilter:
         
         return False
     
+    def commit_test(self, sha: str):
+        vcpkg = self._has_root_vcpkg()
+        conan = self._has_root_conan()
+
+        if self._has_root_cmake(): #and (vcpkg or conan):
+            logging.info(f"CMakeLists.txt at root ({self.repo.full_name})")
+
+            #with tempfile.TemporaryDirectory() as tmpdir: # TODO: tmpdir for commits testing?
+            self._get_cmake_lists(self.root)
+            analyzer = CMakeAnalyzer(self.root)
+
+            if analyzer.has_testing(nolist=True):
+                logging.info(f"ctest is defined ({self.repo.full_name})")
+                
+                if self._valid_cmake_run(self.root, analyzer, vcpkg, sha, test_repeat=3):
+                    logging.info(f"cmake and ctest run successfully ({self.repo.full_name})")
+                    return True
+                else:
+                    logging.warning(f"cmake and ctest failed ({self.repo.full_name})")
+            
+            else:
+                logging.warning(f"invalid ctest ({self.repo.full_name})")
+        else:
+            logging.warning(f"no CMakeLists.txt at root ({self.repo.full_name})")
+
+        return False
+    
     def _sort_key(self, y: str) -> tuple[int, int]:
         priority = 0 if any(y.startswith(x) for x in conf.valid_test_dir) else 1
         length = len(y.split("/"))
         return (priority, length)
     
-    def _valid_cmake_run(self, root: str, analyzer: CMakeAnalyzer, package_manager: str) -> bool:
+    def _valid_cmake_run(self, root: str, analyzer: CMakeAnalyzer, package_manager: str, sha: str = "", test_repeat: int = 1) -> bool:
         if self.testing_flags:
             flags = FlagFilter(self.testing_flags).get_valid_flags()
         else:
@@ -117,14 +146,14 @@ class StructureFilter:
         logging.info(f"path to enable_testing(): '{enable_testing_path}'")
         test_path = os.path.join(root, "build", enable_testing_path)
         
-        process = CMakeProcess(
+        self.process = CMakeProcess(
             root, build=os.path.join(root, "build"), test=test_path, 
             flags=flags, analyzer=analyzer, package_manager=package_manager,
             jobs=4
         )
-        if process.clone_repo(self.repo_id, root) and process.build(): 
+        if self.process.clone_repo(self.repo_id, root, sha=sha) and self.process.build(): 
             logging.info(f"cmake build was successful ({self.repo.full_name})")
-            if process.test([]):
+            if self.process.test([], test_repeat=test_repeat):
                 logging.info(f"ctest was successful ({self.repo.full_name})")
                 return True
             else:

@@ -8,6 +8,8 @@ class RepoStats:
         self.pack_manager = Counter()
         self.pack_files = Counter()
         self.dependencies = Counter()
+        self.total_repos: int = 0
+        self.valid_repos: int = 0
 
     def __iadd__(self, other: 'RepoStats') -> 'RepoStats':
         self.test_dirs += other.test_dirs

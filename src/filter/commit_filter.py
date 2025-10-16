@@ -3,21 +3,25 @@ from github.Commit import Commit
 import src.config as conf
 from src.filter.llm.prompt import Prompt
 from src.filter.llm.openai import OpenRouterLLM
+from src.filter.llm.ollama import OllamaLLM
 
 class CommitFilter:
     def __init__(self, commit: Commit, filter: str, repo_name: str):
         self.commit = commit
         self.filter = filter
-        self.llm = OpenRouterLLM(conf.llm['model'])
+        if conf.llm["ollama"]:
+            self.llm = OllamaLLM(conf.llm['ollama_model'])
+        else:
+            self.llm = OpenRouterLLM(conf.llm['model'])
         self.name = repo_name
         #self.cache = self._load_cache()
 
-    def accept(self): 
+    def accept(self, max_msg_size: int = 200): 
         if self.filter == "simple":
             return self._simple_filter() and self.cpp_filter()
         elif self.filter == "llm":
-            return self._llm_filter() and self.cpp_filter()
-        return True
+            return self.cpp_filter() and self._llm_filter(max_msg_size=max_msg_size)
+        return False
     
     def _simple_filter(self) -> bool:
         msg = self.commit.commit.message
@@ -27,12 +31,13 @@ class CommitFilter:
             return True
         return False
 
-    def _llm_filter(self) -> bool:
+    def _llm_filter(self, max_msg_size: int) -> bool:
         p = Prompt([Prompt.Message("user",
-                                    f"The following is the message of a commit in the {self.name} repository:\n\n###Message Start###{self.commit.commit.message}\n###Message End###"
-                                    + f"\n\nHow likely is it for this commit to be a performance improving commit in terms of execution time? Answer by only writing the likelihood in the following format:\nLikelihood: x%"
+                                    f"The following is the message of a commit in the {self.name} repository:\n###Message Start###{self.commit.commit.message}\n###Message End###"
+                                    + f"\nHow likely is it for this commit to be a performance improving commit in terms of execution time? Answer by only writing the likelihood in the following format for x: int with no comments:\nLikelihood: x%"
                                     )])
         res = self.llm.generate(p)
+        logging.info(f"LLM returned:\n{res}")
 
         match = re.search(r"Likelihood:\s*([0-9]+(?:\.[0-9]+)?)%", res)
         if match:
