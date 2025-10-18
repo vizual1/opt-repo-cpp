@@ -4,7 +4,7 @@ from typing import Any
 storage: dict[str, str] = {
     "store_commits": "data/commits",
     "store_analyze": "data/analyze",
-    "repo_urls": "data/analyze/cpp-base.txt", #"data/repos/urls.txt",
+    "repo_urls": "data/analyze/cpp-base.txt",
     "results": "data/results.txt",
     "cmake-dep": "cache/cmake-dep.json"
 }
@@ -16,21 +16,66 @@ llm: dict[str, Any] = {
     'base_url': 'https://openrouter.ai/api/v1',
     'model': 'moonshotai/kimi-k2:free', #'openai/gpt-oss-20b:free' #'deepseek/deepseek-chat-v3.1:free' #'z-ai/glm-4.5-air:free'
 
-    'ollama': True, 
-    'ollama_model': "mistral", # "phi3:mini"
+    'ollama': False, 
+    'ollama_model': "mistral", # "phi3:mini" # "qwen2.5:7b-instruct-q4_K_M"
+    'ollama_url': "http://host.docker.internal:11434/api/generate", # "http://127.0.0.1:11434/api/generate"
+
+    'twostage': False,
+    # <name> for repository name and <message> for commit message to be filtered
+    'message1': 
+     """The following is the message of a commit in the <name> repository: 
+        ###Message Start###<message>###Message End###
+        Does this commit likely improve performance  in terms of execution time?
+        Answer ONLY: Yes or No""",
+    'message2': 
+     """The following is the message of a commit in the <name> repository:
+        ###Message Start###<message>###Message End###
+        How likely is it for this commit to be a performance improving commit in terms of execution time? 
+        Answer by only writing the likelihood in the following format for x: int with no comments:
+        Likelihood: x%"""
 }
-# openai/gpt-oss-120b:free
 
 github: dict[str, str] = {
     'access_token': os.environ['access_token']
 }
 
 likelihood: dict[str, int] = {
-    'min_likelihood': 50,
-    'max_likelihood': 50
+    'min_likelihood': 80,
+    'max_likelihood': 80
 }
 
-test_flags_filter = {
+test: dict[str, Any] = {
+    # filters repositories and commits by target_link_libraries with gtest, catch2, doctest, etc.
+    "no_list_testing": True,
+    # number of times to tests the commits
+    "commit_test_times": 3,
+}
+
+resolver: dict[str, str] = {
+    # <deps> for list of dependencies to generate json for
+    'resolver_message': 
+     """You are an expert in CMake, Ubuntu, and vcpkg. 
+        Given one or more missing dependency names, return a single JSON object where each key is a <dependency>:
+        {{
+        "<dependency>": {{
+            "apt": "<Ubuntu 22.04 package>",
+            "vcpkg": "<vcpkg port>",
+            "flags": {{
+                "apt": ["-D<VAR_INCLUDE_DIR>=<full_path_to_headers>", "-D<VAR_LIBRARY>=<full_path_to_library>"],
+                "vcpkg": ["-D<VAR_INCLUDE_DIR>=/opt/vcpkg/installed/x64-linux/include/<subdir_if_any>", "-D<VAR_LIBRARY>=/opt/vcpkg/installed/x64-linux/lib/<library_file>"]
+            }}
+        }}
+        }}
+        Rules:
+        1. Use correct subfolders (e.g. '/usr/include/SDL2', '/usr/include/freetype2').
+        2. Mirror subfolder in vcpkg under '/opt/vcpkg/installed/x64-linux/include'.
+        3. Output only valid JSON (no text)
+        4. For unknown deps, set "<Ubuntu 22.04 package>" and "<vcpkg port>" to "".
+        5. Generate it for all <dependency> if exists in <deps>.
+        """
+}
+
+test_flags_filter: dict[str, list[str]] = {
     "valid": [
         "BUILD_TESTING", "BUILD_TESTS", "BUILD_TEST",
         "ENABLE_TESTING", "ENABLE_TESTS", "ENABLE_TEST",
@@ -41,6 +86,7 @@ test_flags_filter = {
         "TESTING", "TESTS", "TEST",
         "RUN_TESTS"
     ],
+    "prefix": [],
     "suffix": [
         "_BUILD_TEST", "_BUILD_TESTS", "_BUILD_TESTING",
         "_ENABLE_TEST", "_ENABLE_TESTS", "_ENABLE_TESTING",
@@ -52,13 +98,9 @@ test_flags_filter = {
 }
 
 
-valid_test_dir = {
+valid_test_dir: set[str] = {
     'test', 'tests', 'unittest', 'unittests', 
-    'src/test', 'src/tests', 'src/unittest', 'src/unittests',
-
-    "gtest", "googletest",
-    "integration_tests",
-    "benchmark", "perf", "gperf"
+    'src/test', 'src/tests', 'src/unittest', 'src/unittests'
 }
 
 
@@ -70,7 +112,7 @@ TEST_KEYWORDS = [
     "benchmark", "perf", "gperf"
 ]
 
-
+"""
 PACKAGE_MAP = {
     "openssl": "libssl-dev",
     "zlib": "zlib1g-dev",
@@ -167,3 +209,4 @@ SKIP_NAMES = {
     "threads", "openmp", "pkgconfig", "required", "quiet", "lib", "none", "all", "bin", "interpreter", "names", "imported_target", "sw", "${package}",
     "data", "utils", "base", "common"
 }
+"""
