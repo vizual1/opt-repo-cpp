@@ -78,22 +78,22 @@ class TesterPipeline:
     
     def test_commit(self):
         tester = CommitTester(sha=self.sha)
-        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Testing filtered commits..."):
+        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Testing..."):
             commits, file = tester.get_commits(repo_id)
-            #repo = self.config.git.get_repo(repo_id)
-            for (current_sha, parent_sha) in commits:
+            repo = self.config.git.get_repo(repo_id)
+            for (current_sha, parent_sha) in tqdm(commits, total=len(commits), desc=f"Testing filtered commits..."):
                 current_path, parent_path = tester.get_paths(file, current_sha)
                 current_filter = StructureFilter(repo_id, self.config.git, current_path, current_sha)
                 parent_filter = StructureFilter(repo_id, self.config.git, parent_path, parent_sha)
                 logging.info(f"Testing {repo_id} ({current_sha} and {parent_sha})...")
-                if current_filter.is_valid():
+                if current_filter.commit_test(current_sha):
                     logging.info(f"commit cmake and ctest successful ({repo_id}/{current_sha})")
-                    if parent_filter.is_valid():
+                    if parent_filter.commit_test(parent_sha):
                         logging.info(f"parent cmake and ctest successful ({repo_id}/{parent_sha})")
                         current_test_time = current_filter.process.test_time if current_filter.process else 0.0
                         parent_test_time = parent_filter.process.test_time if parent_filter.process else 0.0
-                        logging.info(f"Commit Test Time {current_test_time}")
-                        logging.info(f"Parent Test Time {parent_test_time}")
+                        logging.info(f"Average Commit Test Time {current_test_time}")
+                        logging.info(f"Average Parent Test Time {parent_test_time}")
                     else:
                         logging.error(f"parent cmake and ctest failed ({repo_id}/{parent_sha})")
                 else:

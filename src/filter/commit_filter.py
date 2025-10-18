@@ -32,10 +32,12 @@ class CommitFilter:
         return False
 
     def _llm_filter(self, max_msg_size: int) -> bool:
+        if conf.llm["twostage"]:
+            return self.stage_filter()
+        
         p = Prompt([Prompt.Message("user",
-                                    f"The following is the message of a commit in the {self.name} repository:\n###Message Start###{self.commit.commit.message}\n###Message End###"
-                                    + f"\nHow likely is it for this commit to be a performance improving commit in terms of execution time? Answer by only writing the likelihood in the following format for x: int with no comments:\nLikelihood: x%"
-                                    )])
+            conf.llm['message2'].replace("<name>", self.name).replace("<message>", self.commit.commit.message)
+        )])
         res = self.llm.generate(p)
         logging.info(f"LLM returned:\n{res}")
 
@@ -72,6 +74,37 @@ class CommitFilter:
         res = self.o4.get_response(p)
         """
         return 'YES' in res and 'NO' not in res
+    
+
+    def stage_filter(self) -> bool:
+        p = Prompt([Prompt.Message("user",
+            conf.llm['message1'].replace("<name>", self.name).replace("<message>", self.commit.commit.message)
+        )])
+
+        res = self.llm.generate(p)
+        logging.info(f"First LLM returned: {res}")
+        if "yes" in res.lower():
+            p = Prompt([Prompt.Message("user",
+                conf.llm['message2'].replace("<name>", self.name).replace("<message>", self.commit.commit.message)
+            )])
+
+            res = self.llm.generate(p)
+            logging.info(f"Second LLM returned: {res}")
+            match = re.search(r"Likelihood:\s*([0-9]+(?:\.[0-9]+)?)%", res)
+            if match:
+                likelihood = float(match.group(1))
+            else:
+                logging.info(f"Commit {self.commit.sha} in {self.name} did not return a valid likelihood response.")
+                return False
+
+            if likelihood < conf.likelihood['min_likelihood']:
+                logging.info(f"Commit {self.commit.sha} in {self.name} has a likelihood of {likelihood}%, which is below the threshold.")
+                return False
+            if likelihood >= conf.likelihood['max_likelihood']:
+                logging.info(f"Commit {self.commit.sha} in {self.name} has a high likelihood of being a performance commit ({likelihood}%).")
+                return True
+            
+        return False
 
 
     def cpp_filter(self) -> bool:

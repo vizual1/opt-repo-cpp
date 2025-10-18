@@ -8,7 +8,7 @@ logging.basicConfig(filename='logs/logging_{:%Y-%m-%d-%H-%M}.log'.format(datetim
                     level=logging.INFO)
 
 def main() -> None:
-    from input import start
+    from src.input import start
     start()
 
 if __name__ == '__main__':

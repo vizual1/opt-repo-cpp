@@ -16,17 +16,11 @@ class StructureFilter:
     """
     def __init__(self, repo_id: str, git: Github, root: str = "", sha: str = ""):
         self.repo_id = repo_id
-        self.git = git
-        self.repo = self.git.get_repo(self.repo_id)
+        self.repo = git.get_repo(self.repo_id)
         self.root = root
-
-        if root:
-            self.analyzer = CMakeAnalyzer(self.root)
-
-        if sha:
-            self.sha = sha
-        else:
-            self.sha = self.repo.get_commits()[0].sha
+        self.sha = sha if sha else self.repo.get_commits()[0].sha
+        #if root:
+        #    self.analyzer = CMakeAnalyzer(self.root)
 
         self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
         self.stats = RepoStats()
@@ -34,18 +28,18 @@ class StructureFilter:
         self.process: Optional[CMakeProcess] = None
 
 
-    def is_valid(self) -> bool:
+    def is_valid(self, without_pkg_manager: bool = True) -> bool:
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 
-        if self._has_root_cmake(): #and (vcpkg or conan):
+        if self._has_root_cmake() and (without_pkg_manager or vcpkg or conan):
             logging.info(f"CMakeLists.txt at root ({self.repo.full_name})")
 
             with tempfile.TemporaryDirectory() as tmpdir:
                 self._get_cmake_lists(tmpdir)
                 analyzer = CMakeAnalyzer(tmpdir)
 
-                if analyzer.has_testing(nolist=True):
+                if analyzer.has_testing(nolist=conf.test['no_list_testing']):
                     logging.info(f"ctest is defined ({self.repo.full_name})")
                     
                     if self._valid_cmake_run(tmpdir, analyzer, vcpkg): #or conan):
@@ -62,8 +56,8 @@ class StructureFilter:
         return False
     
     
-    def analyze(self) -> bool:
-        if self._has_root_cmake() and (self._has_root_conan() or self._has_root_vcpkg()):
+    def analyze(self, without_pkg_manager: bool = True) -> bool:
+        if self._has_root_cmake() and (without_pkg_manager or self._has_root_conan() or self._has_root_vcpkg()):
             logging.info(f"CMakeLists.txt and package handler at root ({self.repo.full_name})")
 
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -71,7 +65,7 @@ class StructureFilter:
                 analyzer = CMakeAnalyzer(tmpdir)
 
                 # Analyzing the repository for test structure and flags
-                if analyzer.has_testing():
+                if analyzer.has_testing(nolist=conf.test['no_list_testing']):
                     logging.info(f"ctest is defined ({self.repo.full_name})")
 
                     test_dirs = self._extract_test_dirs()
@@ -104,17 +98,18 @@ class StructureFilter:
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 
-        if self._has_root_cmake(): #and (vcpkg or conan):
+        if self._has_root_cmake():
             logging.info(f"CMakeLists.txt at root ({self.repo.full_name})")
 
-            #with tempfile.TemporaryDirectory() as tmpdir: # TODO: tmpdir for commits testing?
+            # TODO: rather than get cmakelist and has testing, start with _valid_cmake_run? 
             self._get_cmake_lists(self.root)
             analyzer = CMakeAnalyzer(self.root)
 
-            if analyzer.has_testing(nolist=True):
+            if analyzer.has_testing(nolist=conf.test['no_list_testing']):
                 logging.info(f"ctest is defined ({self.repo.full_name})")
                 
-                if self._valid_cmake_run(self.root, analyzer, vcpkg, sha, test_repeat=3):
+                # TODO: or conan
+                if self._valid_cmake_run(self.root, analyzer, vcpkg, sha, test_repeat=conf.test['commit_test_times']):
                     logging.info(f"cmake and ctest run successfully ({self.repo.full_name})")
                     return True
                 else:
@@ -132,6 +127,7 @@ class StructureFilter:
         length = len(y.split("/"))
         return (priority, length)
     
+    # TODO: move flags filter and enable_testing after cloning
     def _valid_cmake_run(self, root: str, analyzer: CMakeAnalyzer, package_manager: str, sha: str = "", test_repeat: int = 1) -> bool:
         if self.testing_flags:
             flags = FlagFilter(self.testing_flags).get_valid_flags()
@@ -151,6 +147,13 @@ class StructureFilter:
             flags=flags, analyzer=analyzer, package_manager=package_manager,
             jobs=4
         )
+        # TODO: build process should maybe run a given Dockerimage?
+        ubuntu = analyzer.get_ubuntu_version() # folder: docker/<ubuntu>.dockerfile?
+        logging.info(f"Ubuntu version {ubuntu}")
+        #import docker
+        #client = docker.from_env()
+        #client.containers.run(ubuntu, detach=True)
+
         if self.process.clone_repo(self.repo_id, root, sha=sha) and self.process.build(): 
             logging.info(f"cmake build was successful ({self.repo.full_name})")
             if self.process.test([], test_repeat=test_repeat):

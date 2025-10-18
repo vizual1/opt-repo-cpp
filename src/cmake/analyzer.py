@@ -22,3 +22,6 @@ class CMakeAnalyzer:
     def get_dependencies(self) -> set[str]:
         deps = self.parser.find_dependencies()
         return deps
+    
+    def get_ubuntu_version(self) -> str:
+        return self.parser.get_ubuntu_for_cmake(self.parser.find_cmake_minimum_required())

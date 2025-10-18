@@ -27,7 +27,6 @@ class CommitTester:
         return parent_path, current_path
     
     def create_process(self, analyzer: CMakeAnalyzer, path: str) -> CMakeProcess:
-        # TODO fix enable_testing_path
         enable_testing_path = analyzer.parser.enable_testing_path[0].removesuffix("/CMakeLists.txt").removeprefix(path)
         build_path = os.path.join(path, "build")
         test_path = os.path.join(path, "build", enable_testing_path)

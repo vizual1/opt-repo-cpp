@@ -56,8 +56,17 @@ class CMakeProcess:
     
     def _configure_with_retries(self, max_retries: int = 5) -> bool:
         save_dependencies = set()
+        unresolved_dependencies: set[str] = set() 
+
+        # TODO: test this
         for attempt in range(max_retries):
             logging.info(f"[Attempt {attempt}/{max_retries}] Configuring project at {self.root}")
+
+            if attempt == 0:
+                missing_dependencies = self.analyzer.get_dependencies()
+                unresolv, oflags = self.resolver.resolve_all(missing_dependencies)
+                unresolved_dependencies |= unresolv
+                self.other_flags |= oflags
 
             if self._configure():
                 return True
@@ -74,58 +83,15 @@ class CMakeProcess:
             
             if missing_dependencies in save_dependencies:
                 logging.error("Configuration failed but no new missing dependencies detected")
-                break   
+                break 
 
-            if attempt == 0:
-                missing_dependencies |= self.analyzer.get_dependencies()
-            
-            unresolved_dependencies: set[str] = set() 
-            for dep in missing_dependencies:
-                resolve = self.resolver.resolve(dep.lower())
-                if not resolve:
-                    unresolved_dependencies.add(dep)
-                    logging.warning(f"Unresolved dependency {dep}")
-                    continue
-                
-                dep = dep.lower()
-                if self.resolver.install(dep, method="apt"):
-                    self.other_flags |= self.resolver.flags(dep, method="apt")
-                elif self.resolver.install(dep, method="vcpkg"):
-                    self.resolver.cache.mapping[dep]["apt"] = ""
-                    self.other_flags |= self.resolver.flags(dep, method="vcpkg")
-                else:
-                    self.resolver.cache.mapping[dep]["apt"] = ""
-                    self.resolver.cache.mapping[dep]["vcpkg"] = ""
-                self.resolver.cache.save()
+            unresolv, oflags = self.resolver.resolve_all(missing_dependencies)
+            unresolved_dependencies |= unresolv
+            self.other_flags |= oflags
             
             if unresolved_dependencies:
-                logging.info(f"All unresolved dependencies {unresolved_dependencies}")
-                llm_output = self.resolver.llm.llm_prompt(list(unresolved_dependencies), timeout=60)
-                logging.info(f"LLM prompt returned:\n{llm_output}")
-                try:
-                    data: dict[str, dict[str, Any]] = json.loads(llm_output)
-                    data = {k.lower() if isinstance(k, str) else k: v for k, v in data.items()}
-                    for dep in unresolved_dependencies:
-                        resolve = self.resolver.resolve(dep.lower())
-                        if not resolve:
-                            logging.warning(f"Failed to resolve {dep} (invalid dependency or wrong LLM output)")
-                            continue
-                        
-                        dep.lower()
-                        if self.resolver.install(dep, method="apt"):
-                            self.other_flags |= self.resolver.flags(dep, method="apt")
-                        elif self.resolver.install(dep, method="vcpkg"):
-                            data[dep]["apt"] = ""
-                            self.other_flags |= self.resolver.flags(dep, method="vcpkg")
-                        else:
-                            data[dep]["apt"] = ""
-                            data[dep]["vcpkg"] = ""
-
-                    self.resolver.cache.mapping.update(data)
-                    self.resolver.cache.save()
-                    logging.info(f"Added {data.keys()} to dependency cache")
-                except json.JSONDecodeError as e:
-                    logging.error(f"Invalid JSON for {llm_output}: {e}")
+                unresolved_dependencies, oflags = self.resolver.unresolved_dep(unresolved_dependencies)
+                self.other_flags |= oflags
 
         logging.error("All configuration attempts failed.")
         return False
@@ -167,13 +133,21 @@ class CMakeProcess:
         for flag in self.other_flags:
             cmd.append(flag)
 
+        # TODO: test this
         if self.package_manager.startswith("vcpkg"):
+            logging.info("Installing through package manager vcpkg...")
             cmd.append('-DVCPKG_MANIFEST_MODE=ON')
         elif self.package_manager.startswith("conanfile"):
-            logging.info("Installing through package manager conan...")
-            install = ['conan', 'install', '.', '-build=missing'] 
-            result = subprocess.run(install, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        
+            try:
+                logging.info("Installing through package manager conan...")
+                install = ['conan', 'install', '.', '-build=missing'] 
+                result = subprocess.run(install, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                logging.info(f"Conan Output:\n{result.stdout}")
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Conan Output (stdout):\n{e.stdout}")
+                logging.error(f"Conan Error (stderr):\n{e.stderr}")
+                return False
+
         try:
             logging.info(f"{' '.join(cmd)}")
             result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -243,8 +217,7 @@ class CMakeProcess:
             logging.error(f"FileNotFoundError: {e}", exc_info=True)
         return False
         
-    
-    # TODO
+
     def _isolated_ctest(self, test_exec: list[str]) -> bool:
         test_dir = Path(self.test_path)
         list_test_arg = self.analyzer.get_list_test_arg()[0]
@@ -284,25 +257,6 @@ class CMakeProcess:
             if line.startswith("ref:"):
                 return line.split()[1].split("/")[-1]
         return "main" 
-        
-    def _clone_repo(self, repo_id: str, repo_path: str, branch: str = "main") -> bool:
-        url = f"https://github.com/{repo_id}.git"
-        if branch == "main":
-            branch = self._get_default_branch(url)
-        if os.path.exists(repo_path):
-            shutil.rmtree(repo_path)
-        cmd = ["git", "clone", "--recurse-submodules", "--shallow-submodules", "--branch", branch, f"--depth=1", url, repo_path]
-        logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
-        try:
-            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logging.info(f"Repository cloned successfully")
-            return True
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to clone repository {url} (branch: {branch}) into {repo_path} (return code {e.returncode})", exc_info=True)
-            logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
-            logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
-            return False
-
 
     def clone_repo(self, repo_id: str, repo_path: str, branch: str = "main", sha: str = "") -> bool:
         url = f"https://github.com/{repo_id}.git"
@@ -313,6 +267,11 @@ class CMakeProcess:
         if sha:
             logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
             try:
+                subprocess.run(
+                    ["git", "config", "--global", "--add", "safe.directory", "*"],
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+
                 subprocess.run(
                     ["git", "clone", "--depth=1", url, repo_path],
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True

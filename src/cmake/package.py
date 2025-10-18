@@ -4,12 +4,16 @@ from src.cmake.analyzer import CMakeAnalyzer
 import src.config as conf
 from src.filter.llm.prompt import Prompt
 from src.filter.llm.openai import OpenRouterLLM
+from src.filter.llm.ollama import OllamaLLM
 
 class CMakePackageHandler:
     def __init__(self, analyzer: CMakeAnalyzer):
         self.analyzer = analyzer
         #self.packages, self.python = self._get_packages()
-        self.llm = OpenRouterLLM(conf.llm['model'])
+        if conf.llm["ollama"]:
+            self.llm = OllamaLLM(conf.llm['ollama_model'])
+        else:
+            self.llm = OpenRouterLLM(conf.llm['model'])
 
     def get_missing_dependencies(self, stdout: str, stderr: str, cache_path: Path) -> set[str]:
         if not cache_path.exists():
@@ -19,7 +23,6 @@ class CMakePackageHandler:
         missing_pkgconfig = self._find_pkgconfig_missing(stdout, stderr)
         logging.info(f"Missing packages: {missing_pkgconfig}")
 
-        # TODO: too fragile, needs different method
         missing_others: set[str] = set()
         for dep in missing_cache | missing_pkgconfig:
             if "-" in dep:
@@ -32,7 +35,6 @@ class CMakePackageHandler:
                 missing_others.add("_".join(dep.split("_")[0:2]))
             if "_" in dep and len(dep.split("_")) > 3:
                 missing_others.add("_".join(dep.split("_")[0:-1]))
-            # 'avahi-compat-libdns_sd'
         logging.info(f"Missing others: {missing_others}")
 
         return missing_cache | missing_pkgconfig | missing_others
@@ -70,17 +72,24 @@ class CMakePackageHandler:
         'fastcdr package NOT found'
 
     def llm_prompt(self, errors: str) -> str:
-        p = Prompt([Prompt.Message(
-            role="user",
-            content=
+        result: dict[str, str] = {"out": ""}
+
+        def run_llm():
+            p = Prompt([Prompt.Message(
+                "user",
                 f"You are an expert C++/CMake/Dependency assistant.\nCMake configuration failed with these errors:\n"
                 +f"{errors}"
                 +"Please ONLY output shell commands each separated by \\n that would install the missing dependencies."
                 +"Do NOT provide explanations, text, or comments -> ONLY valid shell commands."
                 +"Commands should work on Linux with vcpkg or apt-get where appropriate."
-        )])
-        out = self.llm.generate(p)
-        return out
+            )])
+            try:
+                result["out"] = self.llm.generate(p)
+            except Exception as e:
+                logging.warning(f"LLM call failed {e}")
+                result["out"] = ""
+
+        return result["out"]
         
     '''
     def packages_installer(self) -> None:

@@ -22,6 +22,28 @@ class DependencyResolver:
         self.cache = self.DependencyCache()
         self.package_handler = self.PackageHandler()
         self.llm = self.LLMResolver()
+
+    def resolve_all(self, dep_names: set[str]) -> tuple[set[str], set[str]]:
+        unresolved_dependencies: set[str] = set() 
+        other_flags: set[str] = set()
+        for dep in dep_names:
+            resolve = self.resolve(dep.lower())
+            if not resolve:
+                unresolved_dependencies.add(dep)
+                logging.warning(f"Unresolved dependency {dep}")
+                continue
+            
+            dep = dep.lower()
+            if self.install(dep, method="apt"):
+                other_flags |= self.flags(dep, method="apt")
+            elif self.install(dep, method="vcpkg"):
+                self.cache.mapping[dep]["apt"] = ""
+                other_flags |= self.flags(dep, method="vcpkg")
+            else:
+                self.cache.mapping[dep]["apt"] = ""
+                self.cache.mapping[dep]["vcpkg"] = ""
+            self.cache.save()
+        return unresolved_dependencies, other_flags
         
     def resolve(self, dep_name: str) -> dict[str, Any]:
         if dep_name in self.cache.mapping:
@@ -55,32 +77,31 @@ class DependencyResolver:
         except subprocess.CalledProcessError:
             logging.error(f"Failed to install {dep_name} via {method}")
             return False
+        
+    def unresolved_dep(self, unresolved_dependencies: set[str]) -> tuple[set[str], set[str]]:
+        logging.info(f"All unresolved dependencies {unresolved_dependencies}")
+        llm_output = self.llm.llm_prompt(list(unresolved_dependencies), timeout=100)
+        logging.info(f"LLM prompt returned:\n{llm_output}")
+        try:
+            data: dict[str, dict[str, Any]] = json.loads(llm_output)
+            data = {k.lower() if isinstance(k, str) else k: v for k, v in data.items()}
+            self.cache.mapping.update(data)
+            unresolved_dependencies, other_flags = self.resolve_all(unresolved_dependencies)
+            logging.info(f"Added {data.keys()} to dependency cache")
+            return unresolved_dependencies, other_flags
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON for {llm_output}: {e}")
+            return set(), set()
 
     class PackageHandler:
         def get_missing_dependencies(self, stdout: str, stderr: str, cache_path: Path) -> set[str]:
             if not cache_path.exists():
                 logging.warning("No CMakeCache.txt found, skipping")
-
+            
             missing_cache = self._find_cache_missing(cache_path)
             logging.info(f"Missing caches: {missing_cache}")
             missing_pkgconfig = self._find_pkgconfig_missing(stdout, stderr)
             logging.info(f"Missing packages: {missing_pkgconfig}")
-
-            '''
-            missing_others: set[str] = set()
-            for dep in missing_cache | missing_pkgconfig:
-                if "-" in dep:
-                    missing_others.add(dep.split("-")[0])
-                if "+" in dep:
-                    missing_others.add(dep.split("+")[0])
-                if "_" in dep and len(dep.split("_")) > 1:
-                    missing_others.add(dep.split("_")[0])
-                if "_" in dep and len(dep.split("_")) > 2:
-                    missing_others.add("_".join(dep.split("_")[0:2]))
-                if "_" in dep and len(dep.split("_")) > 3:
-                    missing_others.add("_".join(dep.split("_")[0:-1]))
-            logging.info(f"Missing others: {missing_others}")
-            '''
 
             return missing_cache | missing_pkgconfig
 
@@ -123,27 +144,8 @@ class DependencyResolver:
 
             def run_llm():
                 p = Prompt([Prompt.Message(
-                    role="user",
-                    content=f"""
-                        You are an expert in CMake, Ubuntu, and vcpkg. 
-                        Given one or more missing dependency names, return a single JSON object where each key is a <dependency>:
-                        {{
-                        "<dependency>": {{
-                            "apt": "<Ubuntu 22.04 package>",
-                            "vcpkg": "<vcpkg port>",
-                            "flags": {{
-                                "apt": ["-D<VAR_INCLUDE_DIR>=<full_path_to_headers>", "-D<VAR_LIBRARY>=<full_path_to_library>"],
-                                "vcpkg": ["-D<VAR_INCLUDE_DIR>=/opt/vcpkg/installed/x64-linux/include/<subdir_if_any>", "-D<VAR_LIBRARY>=/opt/vcpkg/installed/x64-linux/lib/<library_file>"]
-                            }}
-                        }}
-                        }}
-                        Rules:
-                        1. Use correct subfolders (e.g. '/usr/include/SDL2', '/usr/include/freetype2').
-                        2. Mirror subfolder in vcpkg under '/opt/vcpkg/installed/x64-linux/include'.
-                        3. Output only valid JSON (no text)
-                        4. For unknown deps, set "<Ubuntu 22.04 package>" and "<vcpkg port>" to "".
-                        5. Generate it for all <dependency> if exists in {deps}.
-                        """
+                    "user",
+                    conf.resolver['resolver_message'].replace("<deps>", f"{deps}")
                 )])
                 try:
                     llm_output = self.llm.generate(p)

@@ -31,13 +31,16 @@ class CMakeParser:
         root_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls([cmake_file]) 
         call, cf = self._find_function_calls(name="cmake_minimum_required", fcalls=root_function_calls)[0]
         arguments: list = call.arguments
-        # VERSION x.x..something?
-        logging.info(f"CMake minimum veresion required: {arguments}")
-        # TODO: read minimum requirement <-> maximum?
-        return ""
+        logging.info(f"CMake minimum version required: {arguments}")
+        for arg in arguments:
+            arg_str = str(arg)
+            version_match = re.search(r'(\d+\.\d+(?:\.\d+)?)', arg_str)
+            if version_match:
+                return version_match.group(1)
+        
+        return "3.16"
     
     def find_ctest_exec(self) -> list[str]:
-        # TODO: test
         logging.info("Searching for ctest executables...")
         test_files = self.find_files("CTestTestfile.cmake")
         self.ctest_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls(test_files) 
@@ -201,8 +204,6 @@ class CMakeParser:
         for call, _ in calls:
             arguments = call.arguments
             if arguments and hasattr(arguments[0], "contents"):
-                #for argument in arguments:
-                #if hasattr(argument, "contents"):
                 arg_name = arguments[0].contents.strip()
                 if self._valid_name(arg_name):
                     if "::" in arg_name:
@@ -291,3 +292,26 @@ class CMakeParser:
         if "<" in name or ">" in name:
             return False
         return True
+    
+    def get_ubuntu_for_cmake(self, cmake_version: str) -> str:
+        version_num = self._version_to_number(cmake_version)
+        if version_num >= 325:
+            return "ubuntu:24.04"
+        elif version_num >= 316:
+            return "ubuntu:22.04" 
+        elif version_num >= 310:
+            return "ubuntu:20.04"
+        else:
+            return "ubuntu:24.04" 
+        
+    def _version_to_number(self, version_str: str) -> int:
+        try:
+            clean_version = re.sub(r'[^\d.]', '', version_str)
+            parts = clean_version.split('.')
+            
+            major = int(parts[0]) if len(parts) > 0 else 0
+            minor = int(parts[1]) if len(parts) > 1 else 0
+
+            return major * 100 + minor
+        except (ValueError, IndexError):
+            return 316
