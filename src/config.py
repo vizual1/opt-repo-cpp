@@ -14,7 +14,7 @@ llm: dict[str, Any] = {
     'api_key': os.environ['api_key'],
     'base': True,
     'base_url': 'https://openrouter.ai/api/v1',
-    'model': 'moonshotai/kimi-k2:free', #'openai/gpt-oss-20b:free' #'deepseek/deepseek-chat-v3.1:free' #'z-ai/glm-4.5-air:free'
+    'model': 'openai/gpt-4.1-nano', #'moonshotai/kimi-k2:free', #'openai/gpt-oss-20b:free' #'deepseek/deepseek-chat-v3.1:free' #'z-ai/glm-4.5-air:free'
 
     'ollama': False, 
     'ollama_model': "mistral", # "phi3:mini" # "qwen2.5:7b-instruct-q4_K_M"
@@ -32,7 +32,12 @@ llm: dict[str, Any] = {
         ###Message Start###<message>###Message End###
         How likely is it for this commit to be a performance improving commit in terms of execution time? 
         Answer by only writing the likelihood in the following format for x: int with no comments:
-        Likelihood: x%"""
+        Likelihood: x%""",
+    'message3':
+     """The following is the message of a commit in the <name> repository:\n\n###Message Start###<message>\n###Message End###"
+          \n\nThe diff of the commit is:\n\n###Diff Start###<diff>\n###Diff End###
+          \n\nIs this commit a performance improving commit in terms of execution time? 
+         Answer with 'YES' or 'NO'."""
 }
 
 github: dict[str, str] = {
@@ -40,8 +45,8 @@ github: dict[str, str] = {
 }
 
 likelihood: dict[str, int] = {
-    'min_likelihood': 80,
-    'max_likelihood': 80
+    'min_likelihood': 50,
+    'max_likelihood': 90
 }
 
 test: dict[str, Any] = {

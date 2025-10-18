@@ -39,7 +39,7 @@ class CommitFilter:
             conf.llm['message2'].replace("<name>", self.name).replace("<message>", self.commit.commit.message)
         )])
         res = self.llm.generate(p)
-        logging.info(f"LLM returned:\n{res}")
+        logging.info(f"First LLM returned:\n{res}")
 
         match = re.search(r"Likelihood:\s*([0-9]+(?:\.[0-9]+)?)%", res)
         if match:
@@ -55,24 +55,15 @@ class CommitFilter:
             logging.info(f"Commit {self.commit.sha} in {self.name} has a high likelihood of being a performance commit ({likelihood}%).")
             return True
 
-        """
-        diff = self.get_diff(commit)
+        diff = self.get_diff()
 
-        # Second stage, ask O4
         p = Prompt([Prompt.Message("user",
-                                    f"The following is the message of a commit in the {repo.full_name} repository:\n\n###Message Start###{commit.commit.message}\n###Message End###"
-                                    + f"\n\nThe diff of the commit is:\n\n###Diff Start###{diff}\n###Diff End###"
-                                    + f"\n\nIs this commit a performance improving commit in terms of execution time? Answer with 'YES' or 'NO'."
-                                    )])
+            conf.llm['message3'].replace("<name>", self.name).replace("<message>", self.commit.commit.message).replace("<diff>", diff)
+        )])
 
-        tokens_cnt = len(tiktoken.encoding_for_model("o3").encode(p.messages[0].content))
+        res = OllamaLLM(conf.llm['ollama_model']).generate(p)
+        logging.info(f"Second LLM returned:\n{res}")
 
-        if tokens_cnt > conf.llm['max-o4-tokens']:
-            logging.info(f"Commit {commit.sha} in {repo.full_name} has too many tokens ({tokens_cnt}), skipping.")
-            return False
-
-        res = self.o4.get_response(p)
-        """
         return 'YES' in res and 'NO' not in res
     
 
@@ -105,7 +96,14 @@ class CommitFilter:
                 return True
             
         return False
-
+    
+    def get_diff(self) -> str:
+        diff = ""
+        for f in self.commit.files:
+            if f.patch:
+                diff += f"--- {f.filename}\n"
+                diff += f.patch + '\n'
+        return diff
 
     def cpp_filter(self) -> bool:
         """
