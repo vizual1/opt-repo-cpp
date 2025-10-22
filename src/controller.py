@@ -1,6 +1,6 @@
 
 import logging
-from src.docker.generator import DockerBuilder
+#from src.docker.generator import DockerBuilder
 from src.pipeline import RepositoryPipeline, CommitPipeline, TesterPipeline
 from src.utils.dataclasses import Config
 
@@ -40,9 +40,9 @@ class Controller:
         tester_pipeline.test_commit()
 
     def _docker(self):
-        docker = DockerBuilder()
-        docker.create()
-
+        #docker = DockerBuilder()
+        #docker.create()
+        raise NotImplementedError("docker")
 
 
 

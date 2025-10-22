@@ -26,6 +26,8 @@ class Config:
     storage: dict[str, str] = field(init=False)
     llm: dict[str, Any] = field(init=False)
     likelihood: dict[str, int] = field(init=False)
+    testing: dict[str, Any] = field(init=False)
+    valid_test_dir: set[str] = field(init=False)
 
     access_token: str = field(init=False)
     auth: Auth.Token = field(init=False)
@@ -35,6 +37,8 @@ class Config:
         self.storage = conf.storage
         self.llm = conf.llm
         self.likelihood = conf.likelihood
+        self.testing = conf.testing
+        self.valid_test_dir = conf.valid_test_dir
         
         self.access_token = conf.github['access_token']
         self.auth = Auth.Token(self.access_token)

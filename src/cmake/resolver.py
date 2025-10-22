@@ -5,6 +5,7 @@ from pathlib import Path
 from src.filter.llm.prompt import Prompt
 from src.filter.llm.openai import OpenRouterLLM
 from src.filter.llm.ollama import OllamaLLM
+from docker.models.containers import Container
 
 class DependencyResolver:
 
@@ -23,7 +24,8 @@ class DependencyResolver:
         self.package_handler = self.PackageHandler()
         self.llm = self.LLMResolver()
 
-    def resolve_all(self, dep_names: set[str]) -> tuple[set[str], set[str]]:
+    def resolve_all(self, dep_names: set[str], container: Container) -> tuple[set[str], set[str]]:
+        self.container = container
         unresolved_dependencies: set[str] = set() 
         other_flags: set[str] = set()
         for dep in dep_names:
@@ -71,7 +73,10 @@ class DependencyResolver:
 
         try:
             logging.info(f"Installing {dep_name} via {method}...")
-            subprocess.run(cmd, check=True)
+            if self.container:
+                self.container.exec_run(cmd)
+            else:
+                subprocess.run(cmd, check=True)
             logging.info(f"Installed {dep_name} via {method}")
             return True
         except subprocess.CalledProcessError:
@@ -86,7 +91,7 @@ class DependencyResolver:
             data: dict[str, dict[str, Any]] = json.loads(llm_output)
             data = {k.lower() if isinstance(k, str) else k: v for k, v in data.items()}
             self.cache.mapping.update(data)
-            unresolved_dependencies, other_flags = self.resolve_all(unresolved_dependencies)
+            unresolved_dependencies, other_flags = self.resolve_all(unresolved_dependencies, self.container)
             logging.info(f"Added {data.keys()} to dependency cache")
             return unresolved_dependencies, other_flags
         except json.JSONDecodeError as e:

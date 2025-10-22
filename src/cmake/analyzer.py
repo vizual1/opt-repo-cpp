@@ -1,9 +1,15 @@
 from src.cmake.parser import CMakeParser
+import src.config as conf
+from pathlib import Path
 
 class CMakeAnalyzer:
     """High-level interface for analyzing CMake repositories."""
-    def __init__(self, root: str):
+    def __init__(self, root: Path):
         self.root = root
+        self.parser = CMakeParser(self.root)
+
+    def reset(self) -> None:
+        self.root = self.root
         self.parser = CMakeParser(self.root)
 
     def has_root_cmake(self) -> bool:
@@ -25,3 +31,6 @@ class CMakeAnalyzer:
     
     def get_ubuntu_version(self) -> str:
         return self.parser.get_ubuntu_for_cmake(self.parser.find_cmake_minimum_required())
+
+    def get_docker(self) -> str:
+        return conf.docker_map[self.get_ubuntu_version()]

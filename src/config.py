@@ -2,7 +2,7 @@ import os
 from typing import Any
 
 storage: dict[str, str] = {
-    "store_commits": "data/commits",
+    "store_commits": os.path.join("data", "commits"),
     "store_analyze": "data/analyze",
     "repo_urls": "data/analyze/cpp-base.txt",
     "results": "data/results.txt",
@@ -16,7 +16,7 @@ llm: dict[str, Any] = {
     'base_url': 'https://openrouter.ai/api/v1',
     'model': 'openai/gpt-4.1-nano', #'moonshotai/kimi-k2:free', #'openai/gpt-oss-20b:free' #'deepseek/deepseek-chat-v3.1:free' #'z-ai/glm-4.5-air:free'
 
-    'ollama': False, 
+    'ollama': True, 
     'ollama_model': "mistral", # "phi3:mini" # "qwen2.5:7b-instruct-q4_K_M"
     'ollama_url': "http://host.docker.internal:11434/api/generate", # "http://127.0.0.1:11434/api/generate"
 
@@ -49,7 +49,7 @@ likelihood: dict[str, int] = {
     'max_likelihood': 90
 }
 
-test: dict[str, Any] = {
+testing: dict[str, Any] = {
     # filters repositories and commits by target_link_libraries with gtest, catch2, doctest, etc.
     "no_list_testing": True,
     # number of times to tests the commits
@@ -102,10 +102,17 @@ test_flags_filter: dict[str, list[str]] = {
     ]
 }
 
-
 valid_test_dir: set[str] = {
     'test', 'tests', 'unittest', 'unittests', 
     'src/test', 'src/tests', 'src/unittest', 'src/unittests'
+}
+
+docker_map: dict[str, str] = {
+    "ubuntu:24.04": "cpp-base",
+    "ubuntu:22.04": "cpp-base",
+    "ubuntu:20.04": "cpp-base",
+    "ubuntu:18.04": "cpp-base",
+    "ubuntu:16.04": "cpp-base"
 }
 
 

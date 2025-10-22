@@ -4,6 +4,8 @@ from github.Repository import Repository
 from src.utils.crawler import RepositoryCrawler
 from src.filter.structure_filter import StructureFilter
 from src.filter.commit_filter import CommitFilter
+from src.filter.flags_filter import FlagFilter
+from src.filter.process_filter import ProcessFilter
 from src.utils.stats import RepoStats, CommitStats
 from src.utils.writer import Writer
 from src.utils.tester import CommitTester
@@ -25,7 +27,11 @@ class RepositoryPipeline:
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing repositories..."):
             structure = StructureFilter(repo_id, self.config.git)
-            if self.config.commits or structure.is_valid():
+            process = ProcessFilter(repo_id, self.config)
+            if self.config.commits: 
+                self.valid_repos.append(structure.repo)
+                continue
+            elif structure.is_valid() and process.valid_run():
                 self.valid_repos.append(structure.repo)
                 if self.config.popular or self.config.write:
                     Writer(structure.repo.full_name).write_repo(self.config.write)
@@ -37,7 +43,7 @@ class RepositoryPipeline:
         repo_ids = crawl.get_repos()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Analyzing repositories..."):
             structure = StructureFilter(repo_id, self.config.git)
-            if structure.analyze() and (self.config.popular or self.config.write):
+            if structure.is_valid() and (self.config.popular or self.config.write):
                 Writer(structure.repo.full_name).write_repo(self.config.write)
             self.stats += structure.stats
         self.stats.write_final_log()
@@ -53,19 +59,20 @@ class CommitPipeline():
         self.repo = repo
         self.sha = sha
         if self.sha:
-            self.commits = self.repo.get_commits(sha=sha)
+            self.commits = self.repo.get_commits(sha=sha) 
         else:
-            self.commits = self.repo.get_commits()
+            self.commits = self.repo.get_commits() # TODO: set until to get commits > 2024?
         self.filtered_commits: list[str] = []
 
     def get_commits(self) -> None:
         for commit in tqdm(self.commits, total=self.commits.totalCount, desc=f"{self.repo.full_name} commits"):
             self.stats.num_commits += 1
-            if CommitFilter(commit, self.config.filter, self.repo.full_name).accept():
-                writer = Writer(self.repo.full_name)
-                self.filtered_commits.append(writer.file)
-                self.stats.perf_commits += 1
-                self.stats += writer.write_commit(commit, self.config.separate)
+            if not CommitFilter(commit, self.config.filter, self.repo.full_name).accept():
+                continue
+            writer = Writer(self.repo.full_name)
+            self.filtered_commits.append(writer.file)
+            self.stats.perf_commits += 1
+            self.stats += writer.write_commit(commit, self.config.separate)
         self.stats.write_final_log()
 
 
@@ -80,36 +87,11 @@ class TesterPipeline:
         tester = CommitTester(sha=self.sha)
         for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Testing..."):
             commits, file = tester.get_commits(repo_id)
-            repo = self.config.git.get_repo(repo_id)
-            for (current_sha, parent_sha) in tqdm(commits, total=len(commits), desc=f"Testing filtered commits..."):
-                current_path, parent_path = tester.get_paths(file, current_sha)
-                current_filter = StructureFilter(repo_id, self.config.git, current_path, current_sha)
-                parent_filter = StructureFilter(repo_id, self.config.git, parent_path, parent_sha)
-                logging.info(f"Testing {repo_id} ({current_sha} and {parent_sha})...")
-                if current_filter.commit_test(current_sha):
-                    logging.info(f"commit cmake and ctest successful ({repo_id}/{current_sha})")
-                    if parent_filter.commit_test(parent_sha):
-                        logging.info(f"parent cmake and ctest successful ({repo_id}/{parent_sha})")
-                        current_test_time = current_filter.process.test_time if current_filter.process else 0.0
-                        parent_test_time = parent_filter.process.test_time if parent_filter.process else 0.0
-                        logging.info(f"Average Commit Test Time {current_test_time}")
-                        logging.info(f"Average Parent Test Time {parent_test_time}")
-                    else:
-                        logging.error(f"parent cmake and ctest failed ({repo_id}/{parent_sha})")
-                else:
-                    logging.error(f"commit cmake and ctest failed ({repo_id}/{parent_sha})")
-
-
-    def test_configure(self):
-        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Configuring Repositories..."):
-            return
-
-    def test_build(self):
-        self.test_configure()
-        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Building Repositories..."):
-            return
-    
-    def test_ctest(self):
-        self.test_build()
-        for repo_id in tqdm(self.repo_ids, total=len(self.repo_ids), desc=f"Testing Repositories..."):
-            return 
+            for (new_sha, old_sha) in tqdm(commits, total=len(commits), desc=f"Testing filtered commits..."):
+                new_path, old_path = tester.get_paths(file, new_sha)
+                
+                old_time = ProcessFilter(repo_id, self.config, old_path, old_sha).valid_commit_run("Old")
+                new_time = ProcessFilter(repo_id, self.config, new_path, new_sha).valid_commit_run("New")
+                
+                logging.info(f"Old Final Time: {old_time}")
+                logging.info(f"New Final Time: {new_time}")

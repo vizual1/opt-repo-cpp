@@ -1,39 +1,57 @@
 
-import logging, subprocess, os, shutil, json, time
+import logging, subprocess, os, shutil, time, docker
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
-#from src.cmake.autobuilder import CMakeAutoBuilder
-#from src.cmake.package import CMakePackageHandler
 from src.cmake.resolver import DependencyResolver
-from typing import Any
-#import src.config as conf
+from docker.types import Mount
+from typing import Optional
+import posixpath
 
 vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
 os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
 
 class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
-    def __init__(self, root: str, build: str, test: str, 
-                 flags: list[str], analyzer: CMakeAnalyzer, package_manager: str, jobs: int = 1):
-        self.root = root
-        self.build_path = build
-        self.test_path = test
+    def __init__(self, root: Path, enable_testing_path: Optional[Path], 
+                 flags: list[str], analyzer: CMakeAnalyzer, package_manager: str,
+                 jobs: int = 1):
+        #self.root = root
+        #self.build_path = Path(root, "build")
+        #self.test_path = Path(self.build_path, enable_testing_path if enable_testing_path else "")
+
+        project_root = Path(__file__).resolve().parents[2]
+        self.root = (project_root / root).resolve() if not root.is_absolute() else root.resolve()
+        self.build_path = self.root / "build"
+        self.test_path = self.build_path / (enable_testing_path if enable_testing_path else "")
+
         
         self.flags: list[str] = flags
         self.analyzer = analyzer
         self.package_manager = package_manager
         self.jobs = jobs
 
+        self.docker_image = ""
         self.config_stdout: str = ""
         self.config_stderr: str = ""
         self.build_stdout: str = ""
         self.build_stderr: str = ""
         self.other_flags: set[str] = set()
-
-        #self.auto_builder = CMakeAutoBuilder(self.root)
-        #self.package_handler = CMakePackageHandler(self.analyzer)
         self.resolver = DependencyResolver()
         self.test_time: float = 0.0
+
+    def set_enable_testing(self, enable_testing_path: Path) -> None:
+        self.root = self.root
+        self.test_path = Path(self.build_path, enable_testing_path)
+
+    def set_flags(self, flags: list[str]) -> None:
+        self.flags = flags
+
+    def start_docker_image(self) -> None:
+        self.docker_image = self.analyzer.get_docker()
+        logging.info(f"Docker Version {self.docker_image}")
+        self._start_docker_container()
+
+############### RUNNING ###############
         
     def configure(self) -> bool:
         return self._configure()
@@ -58,13 +76,17 @@ class CMakeProcess:
         save_dependencies = set()
         unresolved_dependencies: set[str] = set() 
 
+        if not self.container:
+            logging.error(f"No docker container started")
+            return False
+
         # TODO: test this
         for attempt in range(max_retries):
             logging.info(f"[Attempt {attempt}/{max_retries}] Configuring project at {self.root}")
 
             if attempt == 0:
                 missing_dependencies = self.analyzer.get_dependencies()
-                unresolv, oflags = self.resolver.resolve_all(missing_dependencies)
+                unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
                 unresolved_dependencies |= unresolv
                 self.other_flags |= oflags
 
@@ -85,7 +107,7 @@ class CMakeProcess:
                 logging.error("Configuration failed but no new missing dependencies detected")
                 break 
 
-            unresolv, oflags = self.resolver.resolve_all(missing_dependencies)
+            unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
             unresolved_dependencies |= unresolv
             self.other_flags |= oflags
             
@@ -100,8 +122,8 @@ class CMakeProcess:
     def _configure(self) -> bool:
         cmd = [
             'cmake', 
-            '-S', self.root, 
-            '-B', self.build_path, 
+            '-S', self.to_container_path(self.root), 
+            '-B', self.to_container_path(self.build_path), 
             '-G', 'Ninja',
 
             '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
@@ -141,43 +163,52 @@ class CMakeProcess:
             try:
                 logging.info("Installing through package manager conan...")
                 install = ['conan', 'install', '.', '-build=missing'] 
-                result = subprocess.run(install, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                logging.info(f"Conan Output:\n{result.stdout}")
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Conan Output (stdout):\n{e.stdout}")
-                logging.error(f"Conan Error (stderr):\n{e.stderr}")
+                exit_code, stdout, stderr = self._run_command_in_docker(install, workdir=self.root, check=False)
+                if exit_code == 0:
+                    logging.info(f"Conan Output:\n{stdout}")
+                else:
+                    logging.error(f"Conan Output (stdout):\n{stdout}")
+                    logging.error(f"Conan Error (stderr):\n{stderr}")
+                    return False
+            except Exception as e:
+                logging.error(f"Conan installation failed: {e}")
                 return False
+            
+        logging.info(" ".join(map(str, cmd)))
+        exit_code, stdout, stderr = self._run_command_in_docker(cmd, check=False)
 
-        try:
-            logging.info(f"{' '.join(cmd)}")
-            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if exit_code == 0:
             logging.info(f"CMake Configuration successful for {self.build_path}")
-            logging.info(f"Output:\n{result.stdout}")
+            logging.info(f"Output:\n{stdout}")
             return True
-        except subprocess.CalledProcessError as e:
-            logging.error(f"CMake configuration failed for {self.build_path} (return code {e.returncode})", exc_info=True)
-            self.config_stdout = e.stdout if e.stdout else ""
-            self.config_stderr = e.stderr if e.stderr else ""
-            logging.error(f"Output (stdout):\n{e.stdout}")
-            logging.error(f"Error (stderr):\n{e.stderr}")
+        else:
+            logging.error(f"CMake configuration failed for {self.build_path} (return code {exit_code})", exc_info=True)
+            self.config_stdout = stdout
+            self.config_stderr = stderr
+            logging.error(f"Output (stdout):\n{stdout}")
+            logging.error(f"Error (stderr):\n{stderr}")
             return False
 
 ############### BUILDING ###############
 
     def _build(self) -> bool:
-        cmd = ['cmake', '--build', self.build_path, '--']
+        cmd = ['cmake', '--build', self.to_container_path(self.build_path), '--']
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
-        try:
-            logging.info(f"{' '.join(cmd)}")
-            result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        logging.info(" ".join(map(str, cmd)))
+        exit_code, stdout, stderr = self._run_command_in_docker(cmd, check=False)
+        
+        if exit_code == 0:
             logging.info(f"CMake build completed for {self.root}")
-            logging.info(f"Output:\n{result.stdout}")
+            logging.info(f"Output:\n{stdout}")
             return True
-        except subprocess.CalledProcessError as e:
-            logging.error(f"CMake build failed for {self.root} (return code {e.returncode})", exc_info=True)
-            logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
-            logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
+        else:
+            logging.error(f"CMake build failed for {self.root} (return code {exit_code})", exc_info=True)
+            self.build_stdout = stdout
+            self.build_stderr = stderr
+            logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+            logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
             return False
 
 ############### TESTING ###############
@@ -194,29 +225,34 @@ class CMakeProcess:
         test_dir = Path(self.test_path)
         if test_exec:
             self._isolated_ctest(test_exec)
-
         cmd = ['ctest', '--output-on-failure']
-
-        start_time = time.perf_counter()
+        
         try:
+            test_time = 0.0
             for _ in range(test_repeat):
-                logging.info(f"{' '.join(cmd)} in {self.test_path}")
-                result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                logging.info(f"{' '.join(map(str, cmd))} in {self.test_path}")
+                start_time = time.perf_counter()
+                exit_code, stdout, stderr = self._run_command_in_docker(cmd, workdir=self.test_path, check=False)
+                #result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 elapsed = time.perf_counter() - start_time
-                self.test_time += elapsed
-                logging.info(f"CTest passed for {self.test_path}")
-                logging.info(f"Output:\n{result.stdout}")
-                logging.info(f"Measured time: {elapsed}")
+                test_time += elapsed
+
+                if exit_code == 0:
+                    logging.info(f"CTest passed for {self.test_path}")
+                    logging.info(f"Output:\n{stdout}")
+                    logging.info(f"Measured time: {elapsed}")
+                else:
+                    logging.error(f"CTest failed for {self.test_path} (return code {exit_code})", exc_info=True)
+                    logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                    logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                    return False
+                    
             self.test_time /= test_repeat
             return True
-        except subprocess.CalledProcessError as e:
-            logging.error(f"CTest failed for {self.test_path} (return code {e.returncode})", exc_info=True)
-            logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
-            logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
-        except FileNotFoundError as e:
-            logging.error(f"FileNotFoundError: {e}", exc_info=True)
-        return False
-        
+            
+        except Exception as e:
+            logging.error(f"CTest execution failed: {e}", exc_info=True)
+            return False
 
     def _isolated_ctest(self, test_exec: list[str]) -> bool:
         test_dir = Path(self.test_path)
@@ -225,12 +261,12 @@ class CMakeProcess:
         for exec in test_exec:
             cmd = [exec, list_test_arg]
             try:
-                logging.info(f"{' '.join(cmd)} {list_test_arg}")
+                logging.info(f"{' '.join(map(str, cmd))} {list_test_arg}")
                 result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 logging.info(f"CTest Output: {result.stdout}")
                 unit_tests[exec] = self.analyzer.parser.find_unit_tests(result.stdout)
             except subprocess.CalledProcessError as e:
-                logging.error(f"{' '.join(cmd)} {list_test_arg} couldn't list unit tests (return code {e.returncode})", exc_info=True)
+                logging.error(f"{' '.join(map(str, cmd))} {list_test_arg} couldn't list unit tests (return code {e.returncode})", exc_info=True)
                 logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
                 logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
         for exec, tests in unit_tests.items():
@@ -258,7 +294,7 @@ class CMakeProcess:
                 return line.split()[1].split("/")[-1]
         return "main" 
 
-    def clone_repo(self, repo_id: str, repo_path: str, branch: str = "main", sha: str = "") -> bool:
+    def clone_repo(self, repo_id: str, repo_path: Path, branch: str = "main", sha: str = "") -> bool:
         url = f"https://github.com/{repo_id}.git"
         
         if os.path.exists(repo_path):
@@ -320,3 +356,71 @@ class CMakeProcess:
                 logging.error(f"Output (stdout):\n{e.stdout}")
                 logging.error(f"Error (stderr):\n{e.stderr}")
                 return False
+            
+############### DOCKER ###############
+
+    def stop_container(self):
+        if self.container:
+            self.container.stop()
+            self.container.remove()
+            self.container = None
+
+    def _start_docker_container(self) -> None:
+        client = docker.from_env()
+        project_root = Path(__file__).resolve().parents[2]
+        #project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        try:
+            self.container = client.containers.run(
+                self.docker_image,
+                command=["sleep", "infinity"],
+                mounts=[Mount(target="/workspace", source=str(project_root), type="bind", read_only=False)],
+                working_dir="/workspace",
+                detach=True,
+                tty=True,
+                remove=False
+            )
+        except Exception as e:
+            logging.error(f"Docker execution failed: {e}")
+
+    def _run_command_in_docker(self, cmd, workdir: Optional[Path] = None, check: bool = True) -> tuple[int, str, str]:
+        """Run command in Docker container if docker_image is set, otherwise locally"""
+        if not self.docker_image:
+            try:
+                result = subprocess.run(cmd, cwd=workdir or self.root, check=check, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                return result.returncode, result.stdout, result.stderr
+            except subprocess.CalledProcessError as e:
+                return e.returncode, e.stdout, e.stderr
+
+        project_root = Path(__file__).resolve().parents[2]
+        rel_root = os.path.relpath(self.root, project_root)
+        rel_root_posix = rel_root.replace("\\", "/")
+
+        container_root = posixpath.join("/workspace", rel_root_posix)
+
+        if workdir:
+            rel_workdir = os.path.relpath(workdir, project_root)
+            rel_workdir_posix = rel_workdir.replace("\\", "/")
+            container_workdir = posixpath.join("/workspace", rel_workdir_posix)
+        else:
+            container_workdir = container_root
+
+        logging.info(f"project_root: {project_root}")
+        logging.info(f"container_root: {container_root}")
+        logging.info(f"rel_root: {rel_root}")
+        logging.info(f"workdir: {workdir}")
+        logging.info(f"container_workdir: {container_workdir}")
+        
+        if not self.container:
+            logging.error(f"No docker container started")
+            return 1, "", ""
+
+        cmd = [str(x) for x in cmd]
+        exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
+        output = output.decode() if output else ""
+        logs = self.container.logs().decode()
+        return exit_code, output, logs
+
+    def to_container_path(self, path: Path) -> str:
+        project_root = Path(__file__).resolve().parents[2]
+        rel = path.relative_to(project_root)
+        return f"/workspace/{rel.as_posix()}"

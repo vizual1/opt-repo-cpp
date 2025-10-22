@@ -1,49 +1,58 @@
 import os, logging, re
 from cmakeast.printer import ast
 from typing import Optional
+from pathlib import Path
 
 class CMakeParser:
-    def __init__(self, root: str):
+    def __init__(self, root: Path):
         self.root = root
-        self.enable_testing_path: list[str] = []
-        self.add_test_path: list[str] = []
-        self.discover_tests_path: list[str] = []
-        self.target_link_path: list[str] = []
+        self.enable_testing_path: list[Path] = []
+        self.add_test_path: list[Path] = []
+        self.discover_tests_path: list[Path] = []
+        self.target_link_path: list[Path] = []
         self.list_test_arg: set[str] = set()
-        self.cmake_files: list[str] = self.find_files(search="CMakeLists.txt")
-        self.find_cmake_files: list[str] = self.find_files(pattern=re.compile(r"Find.*\.cmake$", re.IGNORECASE))
-        self.cmake_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls(self.cmake_files)
+        self.cmake_files: list[Path] = self.find_files(search="CMakeLists.txt")
+        self.find_cmake_files: list[Path] = self.find_files(pattern=re.compile(r"Find.*\.cmake$", re.IGNORECASE))
+        self.cmake_function_calls: list[tuple[ast.FunctionCall, Path]] = self._find_all_function_calls(self.cmake_files)
 
     def has_root_cmake(self) -> bool:
         return os.path.exists(os.path.join(self.root, "CMakeLists.txt"))
 
-    def find_files(self, search: str = "", pattern: Optional[re.Pattern] = None) -> list[str]:
+    def find_files(self, search: str = "", pattern: Optional[re.Pattern] = None) -> list[Path]:
         """Search all files 'search' from root."""
-        found_files: list[str] = []
+        found_files: list[Path] = []
         for root, _, files in os.walk(self.root):
             for file in files: 
                 if file == search or (pattern and pattern.match(file)):
-                    found_files.append(os.path.join(root, file))
+                    found_files.append(Path(root, file))
         return found_files
     
     def find_cmake_minimum_required(self) -> str:
-        cmake_file: str = os.path.join(self.root, "CMakeLists.txt")
-        root_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls([cmake_file]) 
-        call, cf = self._find_function_calls(name="cmake_minimum_required", fcalls=root_function_calls)[0]
-        arguments: list = call.arguments
-        logging.info(f"CMake minimum version required: {arguments}")
+        cmake_file: Path = Path(self.root, "CMakeLists.txt")
+        root_function_calls: list[tuple[ast.FunctionCall, Path]] = self._find_all_function_calls([cmake_file]) 
+        cmake_minimum_calls, cf = self._find_function_calls(name="cmake_minimum_required", fcalls=root_function_calls)[0]
+        
+        if not cmake_minimum_calls:
+            logging.warning("No cmake_minimum_required found, using default 3.16")
+            return "3.16"
+        
+        arguments: list = cmake_minimum_calls.arguments
+
         for arg in arguments:
             arg_str = str(arg)
-            version_match = re.search(r'(\d+\.\d+(?:\.\d+)?)', arg_str)
+            #version_match = re.search(r'(\d+\.\d+(?:\.\d+)?)', arg_str)
+            version_match = re.search(r'(\d+\.\d+(?:\.\d+)*)', arg_str)
             if version_match:
+                logging.info(f"cmake_minimum_required found: {version_match}")
                 return version_match.group(1)
         
+        logging.warning("No cmake_minimum_required found, using default 3.16")
         return "3.16"
     
     def find_ctest_exec(self) -> list[str]:
         logging.info("Searching for ctest executables...")
         test_files = self.find_files("CTestTestfile.cmake")
-        self.ctest_function_calls: list[tuple[ast.FunctionCall, str]] = self._find_all_function_calls(test_files) 
+        self.ctest_function_calls: list[tuple[ast.FunctionCall, Path]] = self._find_all_function_calls(test_files) 
         all_exec: list[str] = []
         calls = self._find_function_calls(name="add_test", fcalls=self.ctest_function_calls)
         for call, tf in calls:
@@ -67,7 +76,7 @@ class CMakeParser:
         calls = self._find_function_calls(name="enable_testing")
         calls += self._find_function_calls(name="include", _args=["CTest"])
         for _, cf in calls:
-            self.enable_testing_path.append(cf)
+            self.enable_testing_path.append(Path(cf))
         if self.enable_testing_path:
             logging.info(f"CMakeLists.txt with enable_testing(): {self.enable_testing_path}.")
             return True
@@ -78,7 +87,7 @@ class CMakeParser:
         logging.info("Search for add_tests...")
         calls = self._find_function_calls(name="add_test")
         for _, cf in calls:
-            self.add_test_path.append(cf)
+            self.add_test_path.append(Path(cf))
         if self.add_test_path:
             logging.info(f"CMakeLists.txt with add_test(): {self.add_test_path}.")
             return True
@@ -89,7 +98,7 @@ class CMakeParser:
         logging.info("Search for *_discover_tests...")
         calls = self._find_function_calls(ends="_discover_tests")
         for _, cf in calls:
-            self.discover_tests_path.append(cf)
+            self.discover_tests_path.append(Path(cf))
         if self.discover_tests_path:
             logging.info(f"CMakeLists.txt with *_discover_tests(): {self.discover_tests_path}.")
             return True
@@ -108,7 +117,7 @@ class CMakeParser:
         ]
 
         logging.info("Searching for target_link_libraries to isolate test cases...")
-        all_calls: list[tuple[ast.FunctionCall, str]] = []
+        all_calls: list[tuple[ast.FunctionCall, Path]] = []
         for library in libraries:
             calls = self._find_function_calls(name="target_link_libraries", _args=[library])
             for _, cf in calls:
@@ -191,7 +200,7 @@ class CMakeParser:
     def find_dependencies(self) -> set[str]:
         """Find CMake dependency names from CMakeLists.txt."""
         logging.info("Searching for possible dependencies...")
-        calls: list[tuple[ast.FunctionCall, str]] = []
+        calls: list[tuple[ast.FunctionCall, Path]] = []
         calls += self._find_function_calls(name="include", starts="Find")
         calls += self._find_function_calls(name="find_package")
         calls += self._find_function_calls(name="pkg_check_modules")
@@ -234,25 +243,25 @@ class CMakeParser:
                 except Exception:
                     continue
 
-    def _find_function_calls(self, name: str = "", _args: list[str] = [], starts: str = "", ends: str = "", fcalls: list[tuple[ast.FunctionCall, str]] = []) -> list[tuple[ast.FunctionCall, str]]:
-        calls: list[tuple[ast.FunctionCall, str]] = []
+    def _find_function_calls(self, name: str = "", _args: list[str] = [], starts: str = "", ends: str = "", fcalls: list[tuple[ast.FunctionCall, Path]] = []) -> list[tuple[ast.FunctionCall, Path]]:
+        calls: list[tuple[ast.FunctionCall, Path]] = []
         if not fcalls:
             fcalls = self.cmake_function_calls
         for statement, cf in fcalls:
             if (name and statement.name == name) or (ends and statement.name.endswith(ends)) or (starts and statement.name.startswith(starts)):
                 arguments: list = statement.arguments
                 if not _args:
-                    calls.append((statement, cf))
+                    calls.append((statement, Path(cf)))
                 count = 0
                 for argument in arguments:
                     if (hasattr(argument, "contents") and argument.contents.strip() in _args):
                         count += 1
                 if count >= len(_args):
-                    calls.append((statement, cf))   
+                    calls.append((statement, Path(cf)))   
         return calls
     
-    def _find_all_function_calls(self, files: list[str]) -> list[tuple[ast.FunctionCall, str]]:
-        calls: list[tuple[ast.FunctionCall, str]] = []
+    def _find_all_function_calls(self, files: list[Path]) -> list[tuple[ast.FunctionCall, Path]]:
+        calls: list[tuple[ast.FunctionCall, Path]] = []
         for cf in files:
             with open(cf, 'r', errors='ignore') as file:
                 content = file.read()
@@ -295,14 +304,29 @@ class CMakeParser:
     
     def get_ubuntu_for_cmake(self, cmake_version: str) -> str:
         version_num = self._version_to_number(cmake_version)
-        if version_num >= 325:
+
+        """
+        if version_num >= 328:
             return "ubuntu:24.04"
-        elif version_num >= 316:
+        elif version_num >= 322:
             return "ubuntu:22.04" 
-        elif version_num >= 310:
+        elif version_num >= 316:
             return "ubuntu:20.04"
+        elif version_num >= 310:
+            return "ubuntu:18.04"
         else:
-            return "ubuntu:24.04" 
+            return "ubuntu:22.04" 
+        """
+        if version_num <= 305:
+            return "ubuntu:16.04"  # CMake 3.5 era, GCC 5–6, very old projects
+        elif version_num <= 310:
+            return "ubuntu:18.04"  # CMake 3.10.x era, GCC 7
+        elif version_num <= 316:
+            return "ubuntu:20.04"  # CMake 3.16.x era, GCC 9
+        elif version_num <= 322:
+            return "ubuntu:22.04"  # CMake 3.22.x era, GCC 11
+        else:
+            return "ubuntu:24.04"  # Modern projects, GCC 13+
         
     def _version_to_number(self, version_str: str) -> int:
         try:
