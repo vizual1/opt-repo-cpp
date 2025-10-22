@@ -74,7 +74,9 @@ class DependencyResolver:
         try:
             logging.info(f"Installing {dep_name} via {method}...")
             if self.container:
-                self.container.exec_run(cmd)
+                exit_code, output = self.container.exec_run(cmd)
+                #output = output.decode() if output else ""
+                return exit_code == 0
             else:
                 subprocess.run(cmd, check=True)
             logging.info(f"Installed {dep_name} via {method}")

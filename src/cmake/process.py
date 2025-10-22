@@ -132,8 +132,8 @@ class CMakeProcess:
             #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
             
             '-DCMAKE_BUILD_TYPE=Debug',
-            '-DCMAKE_C_COMPILER=/usr/bin/clang-16',
-            '-DCMAKE_CXX_COMPILER=/usr/bin/clang++-16',
+            '-DCMAKE_C_COMPILER=/usr/bin/clang',
+            '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
             '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
 
             '-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
