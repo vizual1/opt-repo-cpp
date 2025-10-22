@@ -37,11 +37,12 @@ class StructureFilter:
         
         logging.info(f"CMakeLists.txt at root ({self.repo.full_name})")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
             tmpdir = Path(tmpdir)
             self._get_cmake_lists(tmpdir)
             analyzer = CMakeAnalyzer(tmpdir)
 
+            analyzer.reset()
             if not analyzer.has_testing(nolist=conf.testing['no_list_testing']):
                 logging.warning(f"invalid ctest ({self.repo.full_name})")
                 return False

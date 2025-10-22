@@ -17,7 +17,7 @@ class ProcessFilter:
         self.config = config
 
     def valid_run(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
             tmpdir = Path(tmpdir) 
             analyzer = CMakeAnalyzer(tmpdir)
             process = CMakeProcess(tmpdir, None, [], analyzer, "")
@@ -27,6 +27,10 @@ class ProcessFilter:
                 return False
             
             process.analyzer.reset()
+
+            if not process.analyzer.has_testing(nolist=self.config.testing['no_list_testing']):
+                logging.error(f"invalid ctest ({self.repo.full_name})")
+                return False
             
             flags = FlagFilter(process.analyzer.has_build_testing_flag()).get_valid_flags()
             sorted_testing_path = self.sort_testing_path(process.analyzer.parser.enable_testing_path)

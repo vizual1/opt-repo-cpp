@@ -1,10 +1,10 @@
 import logging
 from tqdm import tqdm
+from datetime import datetime, timezone
 from github.Repository import Repository
 from src.utils.crawler import RepositoryCrawler
 from src.filter.structure_filter import StructureFilter
 from src.filter.commit_filter import CommitFilter
-from src.filter.flags_filter import FlagFilter
 from src.filter.process_filter import ProcessFilter
 from src.utils.stats import RepoStats, CommitStats
 from src.utils.writer import Writer
@@ -58,10 +58,14 @@ class CommitPipeline():
         self.config = config
         self.repo = repo
         self.sha = sha
+
+        since = self.config.commits_since
+        until = datetime.now(timezone.utc)
+
         if self.sha:
             self.commits = self.repo.get_commits(sha=sha) 
         else:
-            self.commits = self.repo.get_commits() # TODO: set until to get commits > 2024?
+            self.commits = self.repo.get_commits(since=since, until=until)
         self.filtered_commits: list[str] = []
 
     def get_commits(self) -> None:
@@ -93,5 +97,7 @@ class TesterPipeline:
                 old_time = ProcessFilter(repo_id, self.config, old_path, old_sha).valid_commit_run("Old")
                 new_time = ProcessFilter(repo_id, self.config, new_path, new_sha).valid_commit_run("New")
                 
-                logging.info(f"Old Final Time: {old_time}")
-                logging.info(f"New Final Time: {new_time}")
+                logging.info(f"Final Time: {old_time} (old), {new_time} (new)")
+
+                if new_time <= 0.9*old_time:
+                    Writer(repo_id).write_improve(new_sha, old_sha)

@@ -1,13 +1,18 @@
 import os
 from typing import Any
+from datetime import datetime, timezone
 
 storage: dict[str, str] = {
     "store_commits": os.path.join("data", "commits"),
     "store_analyze": "data/analyze",
     "repo_urls": "data/analyze/cpp-base.txt",
     "results": "data/results.txt",
-    "cmake-dep": "cache/cmake-dep.json"
+    "cmake-dep": "cache/cmake-dep.json",
+    "performance_commits": os.path.join("data", "performance")
 }
+
+# select commits since -> until
+commits_since: datetime = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
 llm: dict[str, Any] = {
     'cache_file': 'cache/save.txt',
@@ -53,7 +58,7 @@ testing: dict[str, Any] = {
     # filters repositories and commits by target_link_libraries with gtest, catch2, doctest, etc.
     "no_list_testing": True,
     # number of times to tests the commits
-    "commit_test_times": 3,
+    "commit_test_times": 6,
 }
 
 resolver: dict[str, str] = {
@@ -76,7 +81,7 @@ resolver: dict[str, str] = {
         2. Mirror subfolder in vcpkg under '/opt/vcpkg/installed/x64-linux/include'.
         3. Output only valid JSON (no text)
         4. For unknown deps, set "<Ubuntu 22.04 package>" and "<vcpkg port>" to "".
-        5. Generate it for all <dependency> if exists in <deps>.
+        5. Generate it for all <dependency> in <deps>.
         """
 }
 
@@ -107,6 +112,7 @@ valid_test_dir: set[str] = {
     'src/test', 'src/tests', 'src/unittest', 'src/unittests'
 }
 
+# mapping of cmake_minimum_required -> ubuntu version -> docker image
 docker_map: dict[str, str] = {
     "ubuntu:24.04": "cpp-base",
     "ubuntu:22.04": "cpp-base",

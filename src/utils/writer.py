@@ -38,6 +38,7 @@ class Writer:
         self.file = f"{self.owner}_{self.name}_filtered.txt"
         msg = f"{current_sha} | {commit.parents[0].sha or 'None'} | +{total_add} | -{total_del} | {total_add + total_del}\n" 
         path = os.path.join(self.storage['store_commits'], self.file)
+        logging.info(f"Written to {path}")
         self._write(path, msg)
         
         # saves each commit version to file with patch information
@@ -51,6 +52,13 @@ class Writer:
             self._write(path, "\n".join(final_msg))
         
         return stats
+
+    def write_improve(self, new_sha: str, old_sha: str) -> None:
+        self.file = f"{self.owner}_{self.name}.txt"
+        path = os.path.join(self.storage['performance_commits'], self.file)
+        msg = f"{new_sha} | {old_sha}\n" 
+        logging.info(f"Written to {path}")
+        self._write(path, msg)
 
     def _write(self, path: str, msg: str):
         try:

@@ -1,5 +1,5 @@
 
-import logging, subprocess, os, shutil, time, docker
+import logging, subprocess, os, shutil, time, docker, statistics
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.resolver import DependencyResolver
@@ -225,17 +225,32 @@ class CMakeProcess:
         test_dir = Path(self.test_path)
         if test_exec:
             self._isolated_ctest(test_exec)
-        cmd = ['ctest', '--output-on-failure']
+        cmd = ['ctest', '--output-on-failure', '--fail-if-no-tests']
         
         try:
-            test_time = 0.0
-            for _ in range(test_repeat):
+            exit_code, stdout, stderr = self._run_command_in_docker(
+                ['ctest', '--help'], workdir=self.test_path, check=False
+            )
+            if '--fail-if-no-tests' not in stdout:
+                # Fallback for older CMake versions: check if any tests exist
+                check_cmd = ['ctest', '-N']
+                exit_code, stdout_check, _ = self._run_command_in_docker(
+                    check_cmd, workdir=self.test_path, check=False
+                )
+                if 'No tests were found' in stdout_check or 'Test #' not in stdout_check:
+                    logging.error(f"No tests found in {self.test_path}")
+                    return False
+                
+                cmd = ['ctest', '--output-on-failure']
+
+            elapsed_times: list[float] = []
+            for i in range(test_repeat):
                 logging.info(f"{' '.join(map(str, cmd))} in {self.test_path}")
                 start_time = time.perf_counter()
                 exit_code, stdout, stderr = self._run_command_in_docker(cmd, workdir=self.test_path, check=False)
                 #result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 elapsed = time.perf_counter() - start_time
-                test_time += elapsed
+                elapsed_times.append(elapsed)
 
                 if exit_code == 0:
                     logging.info(f"CTest passed for {self.test_path}")
@@ -246,8 +261,12 @@ class CMakeProcess:
                     logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
                     logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
                     return False
-                    
-            self.test_time /= test_repeat
+            
+
+            median_time = statistics.median(elapsed_times[1:])
+            self.test_time = median_time
+            #test_time /= (test_repeat - 1)
+            #self.test_time = test_time
             return True
             
         except Exception as e:
@@ -368,7 +387,6 @@ class CMakeProcess:
     def _start_docker_container(self) -> None:
         client = docker.from_env()
         project_root = Path(__file__).resolve().parents[2]
-        #project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
         try:
             self.container = client.containers.run(
                 self.docker_image,
@@ -404,11 +422,11 @@ class CMakeProcess:
         else:
             container_workdir = container_root
 
-        logging.info(f"project_root: {project_root}")
-        logging.info(f"container_root: {container_root}")
-        logging.info(f"rel_root: {rel_root}")
-        logging.info(f"workdir: {workdir}")
-        logging.info(f"container_workdir: {container_workdir}")
+        #logging.info(f"project_root: {project_root}")
+        #logging.info(f"container_root: {container_root}")
+        #logging.info(f"rel_root: {rel_root}")
+        #logging.info(f"workdir: {workdir}")
+        #logging.info(f"container_workdir: {container_workdir}")
         
         if not self.container:
             logging.error(f"No docker container started")
