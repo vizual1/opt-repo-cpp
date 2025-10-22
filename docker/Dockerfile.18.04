@@ -1,0 +1,43 @@
+FROM ubuntu:18.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PATH="/opt/vcpkg:/opt/venv/bin:$PATH"
+
+# Base build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common gnupg ca-certificates wget curl \
+    build-essential cmake ninja-build pkg-config ccache \
+    python3 python3-pip python3-venv python3-setuptools python3-wheel python3-dev \
+    git zip unzip tar \
+    autoconf automake libtool autoconf-archive \
+    libmount-dev libblkid-dev libcap-dev libselinux1-dev \
+    liblzma-dev zlib1g-dev liblzo2-dev \
+    libudev-dev libseccomp-dev libgcrypt20-dev libgnutls28-dev libssl-dev \
+    gettext libffi-dev libcurl4-openssl-dev libpcre3-dev \
+    clang-6.0 clang++-6.0 lldb-6.0 lld-6.0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade meson/ninja
+RUN python3 -m pip install --no-cache-dir meson ninja
+
+# Core C++ libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libboost-all-dev \
+    libgtest-dev \
+    qtbase5-dev qtbase5-dev-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Useful libs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libeigen3-dev libprotobuf-dev protobuf-compiler \
+    bison flex \
+    && rm -rf /var/lib/apt/lists/*
+
+# vcpkg
+RUN git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg && \
+    /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

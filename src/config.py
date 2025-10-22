@@ -114,11 +114,11 @@ valid_test_dir: set[str] = {
 
 # mapping of cmake_minimum_required -> ubuntu version -> docker image
 docker_map: dict[str, str] = {
-    "ubuntu:24.04": "cpp-base",
-    "ubuntu:22.04": "cpp-base",
-    "ubuntu:20.04": "cpp-base",
-    "ubuntu:18.04": "cpp-base",
-    "ubuntu:16.04": "cpp-base"
+    "ubuntu:24.04": "cpp24",
+    "ubuntu:22.04": "cpp22",
+    "ubuntu:20.04": "cpp20",
+    "ubuntu:18.04": "cpp18",
+    "ubuntu:16.04": "cpp18"
 }
 
 
