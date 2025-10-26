@@ -1,4 +1,4 @@
-import json, logging, subprocess, re, threading
+import json, logging, subprocess, re, threading, jsonschema
 import src.config as conf
 from typing import Any
 from pathlib import Path
@@ -7,45 +7,76 @@ from src.filter.llm.openai import OpenRouterLLM
 from src.filter.llm.ollama import OllamaLLM
 from docker.models.containers import Container
 
-class DependencyResolver:
+LLM_DEP_SCHEMA = {
+    "type": "object",
+    "patternProperties": {
+        "^.+$": {
+            "type": "object",
+            "properties": {
+                "vcpkg": {"type": "string"},
+                "apt": {"type": "string"},
+                "flags": {
+                    "type": "object",
+                    "properties": {
+                        "vcpkg": {"type": "array", "items": {"type": "string"}},
+                        "apt": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["vcpkg", "apt"],
+                    "additionalProperties": False,
+                },
+            },
+            "required": ["vcpkg", "apt", "flags"],
+            "additionalProperties": False,
+        }
+    },
+    "additionalProperties": True,
+}
 
+class DependencyResolver:
+    
     class DependencyCache:
         def __init__(self):
-            self.mapping_path = conf.storage["cmake-dep"]
-            with open(self.mapping_path) as f:
-                self.mapping: dict[str, dict[str, Any]] = json.load(f)
+            self.mapping_path = Path(conf.storage.get("cmake-dep", "cmake-dep.json"))
+            try:
+                with open(self.mapping_path) as f:
+                    self.mapping: dict[str, dict[str, Any]] = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                logging.warning(f"Initializing empty cache ({e})")
+                self.mapping = {}
 
         def save(self):
-            with open(self.mapping_path, "w") as f:
+            tmp_path = self.mapping_path.with_suffix(".tmp")
+            with open(tmp_path, "w") as f:
                 json.dump(self.mapping, f, indent=4)
-    
-    def __init__(self):
-        self.cache = self.DependencyCache()
-        self.package_handler = self.PackageHandler()
-        self.llm = self.LLMResolver()
+            tmp_path.replace(self.mapping_path)
+        
+    def __init__(self, cache=None, handler=None, llm=None):
+        self.cache = cache or self.DependencyCache()
+        self.package_handler = handler or self.PackageHandler()
+        self.llm = llm or self.LLMResolver()
 
     def resolve_all(self, dep_names: set[str], container: Container) -> tuple[set[str], set[str]]:
         self.container = container
-        unresolved_dependencies: set[str] = set() 
-        other_flags: set[str] = set()
-        for dep in dep_names:
-            resolve = self.resolve(dep.lower())
-            if not resolve:
-                unresolved_dependencies.add(dep)
+        unresolved: set[str] = set() 
+        flags: set[str] = set()
+
+        for dep in map(str.lower, dep_names):
+            info = self.resolve(dep)
+            if not info:
                 logging.warning(f"Unresolved dependency {dep}")
+                unresolved.add(dep)
                 continue
-            
-            dep = dep.lower()
-            if self.install(dep, method="apt"):
-                other_flags |= self.flags(dep, method="apt")
-            elif self.install(dep, method="vcpkg"):
-                self.cache.mapping[dep]["apt"] = ""
-                other_flags |= self.flags(dep, method="vcpkg")
-            else:
-                self.cache.mapping[dep]["apt"] = ""
-                self.cache.mapping[dep]["vcpkg"] = ""
+
+            for method in ("apt", "vcpkg"):
+                if self.install(dep, method):
+                    flags |= self.flags(dep, method)
+                    break
+                else:
+                    self.cache.mapping.setdefault(dep, {method: ""})
+
             self.cache.save()
-        return unresolved_dependencies, other_flags
+
+        return unresolved, flags
         
     def resolve(self, dep_name: str) -> dict[str, Any]:
         if dep_name in self.cache.mapping:
@@ -54,28 +85,33 @@ class DependencyResolver:
             return {}
     
     def flags(self, dep_name: str, method: str) -> set[str]:
-        return set(self.cache.mapping[dep_name]["flags"][method])
-    
+        dep = self.cache.mapping.get(dep_name)
+        if not dep:
+            return set()
+
+        flags = dep.get("flags", {})
+        if method not in flags:
+            return set()
+
+        return set(flags[method])
+        
     def install(self, dep_name: str, method: str) -> bool:
         info = self.resolve(dep_name)
-        if not info:
-            logging.warning(f"Unknown dependency: {dep_name}")
-            return False
-        assert method == "apt" or method == "vcpkg"
         pkg_name = info.get(method)
         if not pkg_name:
-            logging.warning(f"{method} mapping for {dep_name} is empty")
+            logging.warning(f"{method} mapping for {dep_name} is missing or empty.")
+            return False
 
         cmd = {
             "vcpkg": ["/opt/vcpkg/vcpkg", "install", pkg_name],
             "apt": ["apt-get", "install", "-y", pkg_name]
         }[method]
 
+        logging.info(f"Installing {dep_name} via {method}...")
         try:
-            logging.info(f"Installing {dep_name} via {method}...")
             if self.container:
                 exit_code, output = self.container.exec_run(cmd)
-                #output = output.decode() if output else ""
+                logging.debug(output.decode(errors="ignore") if output else "")
                 return exit_code == 0
             else:
                 subprocess.run(cmd, check=True)
@@ -83,22 +119,40 @@ class DependencyResolver:
             return True
         except subprocess.CalledProcessError:
             logging.error(f"Failed to install {dep_name} via {method}")
-            return False
+        except FileNotFoundError:
+            logging.error(f"{method} executable not found on system.")
+        return False
         
     def unresolved_dep(self, unresolved_dependencies: set[str]) -> tuple[set[str], set[str]]:
         logging.info(f"All unresolved dependencies {unresolved_dependencies}")
         llm_output = self.llm.llm_prompt(list(unresolved_dependencies), timeout=100)
         logging.info(f"LLM prompt returned:\n{llm_output}")
+
+        if not llm_output.strip():
+            logging.error("LLM returned empty output.")
+            return unresolved_dependencies, set()
+        
         try:
-            data: dict[str, dict[str, Any]] = json.loads(llm_output)
-            data = {k.lower() if isinstance(k, str) else k: v for k, v in data.items()}
-            self.cache.mapping.update(data)
-            unresolved_dependencies, other_flags = self.resolve_all(unresolved_dependencies, self.container)
-            logging.info(f"Added {data.keys()} to dependency cache")
-            return unresolved_dependencies, other_flags
+            data = json.loads(llm_output)
         except json.JSONDecodeError as e:
-            logging.error(f"Invalid JSON for {llm_output}: {e}")
-            return set(), set()
+            logging.error(f"Invalid JSON from LLM output: {e}")
+            return unresolved_dependencies, set()
+        
+        try:
+            jsonschema.validate(instance=data, schema=LLM_DEP_SCHEMA)
+        except jsonschema.ValidationError as e:
+            logging.error(f"LLM output failed schema validation: {e.message}")
+            logging.debug(f"Invalid data: {json.dumps(data, indent=2)}")
+            return unresolved_dependencies, set()
+
+        data = {k.lower() if isinstance(k, str) else k: v for k, v in data.items()}
+        self.cache.mapping.update(data)
+        unresolved_dependencies, other_flags = self.resolve_all(unresolved_dependencies, self.container)
+        self.cache.save()
+        
+        logging.info(f"Added {data.keys()} to dependency cache")
+        return unresolved_dependencies, other_flags
+    
 
     class PackageHandler:
         def get_missing_dependencies(self, stdout: str, stderr: str, cache_path: Path) -> set[str]:
@@ -113,6 +167,10 @@ class DependencyResolver:
             return missing_cache | missing_pkgconfig
 
         def _find_cache_missing(self, cache_path: Path) -> set[str]:
+            if not cache_path.exists():
+                logging.warning(f"No CMakeCache.txt at {cache_path}")
+                return set()
+            
             missing = set()
             with open(cache_path) as f:
                 for line in f:
@@ -120,6 +178,7 @@ class DependencyResolver:
                         missing.add(m.group(1).replace("_DIR", ""))
                     elif m := re.match(r"(\w+_FOUND):BOOL=FALSE", line):
                         missing.add(m.group(1).replace("_FOUND", ""))
+                        
             return missing
         
         def _find_pkgconfig_missing(self, stdout: str, stderr: str) -> set[str]:
@@ -159,7 +218,6 @@ class DependencyResolver:
                     result["out"] = self._clean_json_output(llm_output)
                 except Exception as e:
                     logging.warning(f"LLM call failed {e}")
-                    result["out"] = ""
 
             t = threading.Thread(target=run_llm, daemon=True)
             t.start()
@@ -167,17 +225,15 @@ class DependencyResolver:
 
             if t.is_alive():
                 logging.warning(f"LLM query timed out after {timeout} seconds.")
-                return ""
 
             return result["out"]
         
         def _clean_json_output(self, raw_text: str) -> str:
             """Extract JSON content from LLM output."""
-            match = re.search(r"```json\s*(\{.*\})\s*```", raw_text, re.DOTALL)
+            match = re.search(r"```json\s*(\{.*\})\s*```", raw_text, re.DOTALL) or re.search(r"(\{.*\})", raw_text, re.DOTALL)
             if not match:
-                match = re.search(r"(\{.*\})", raw_text, re.DOTALL)
-            if not match:
-                raise ValueError("No valid JSON found in response.")
+                logging.warning("No JSON block found in LLM output.")
+                return "{}"
             return match.group(1).strip()
         
 

@@ -1,4 +1,4 @@
-import argparse
+import argparse, sys, logging
 from src.controller import Controller
 from src.utils.dataclasses import Config
 
@@ -26,14 +26,19 @@ def start() -> None:
 
     args = parser.parse_args()
     
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
+
+    if args.popular and args.url:
+        logging.warning("Both '--popular' and '-url' were provided. '--popular' takes precedence.")
+
+
     config = Config(
         crawl=args.crawl, commits=args.commits, docker=args.docker, test=args.test,
         popular=args.popular, stars=args.stars, limit=args.limit,
         read=args.read, write=args.write,
         filter=args.filter, separate=args.separate, analyze=args.analyze
     )
-
-    pipeline = Controller(
-        url=args.url, sha=args.sha, config=config
-    )
+    pipeline = Controller(url=args.url, sha=args.sha, config=config)
     pipeline.run()

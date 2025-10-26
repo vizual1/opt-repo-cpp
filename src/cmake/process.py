@@ -19,17 +19,17 @@ class CMakeProcess:
         #self.build_path = Path(root, "build")
         #self.test_path = Path(self.build_path, enable_testing_path if enable_testing_path else "")
 
-        project_root = Path(__file__).resolve().parents[2]
-        self.root = (project_root / root).resolve() if not root.is_absolute() else root.resolve()
+        self.project_root = Path(__file__).resolve().parents[2]
+        self.root = (self.project_root / root).resolve() if not root.is_absolute() else root.resolve()
         self.build_path = self.root / "build"
         self.test_path = self.build_path / (enable_testing_path if enable_testing_path else "")
 
-        
         self.flags: list[str] = flags
         self.analyzer = analyzer
         self.package_manager = package_manager
         self.jobs = jobs
 
+        self.container = None
         self.docker_image = ""
         self.config_stdout: str = ""
         self.config_stderr: str = ""
@@ -103,7 +103,7 @@ class CMakeProcess:
                 logging.error("Configuration failed but no missing dependencies detected")
                 break
             
-            if missing_dependencies in save_dependencies:
+            if missing_dependencies <= save_dependencies:
                 logging.error("Configuration failed but no new missing dependencies detected")
                 break 
 
@@ -114,6 +114,8 @@ class CMakeProcess:
             if unresolved_dependencies:
                 unresolved_dependencies, oflags = self.resolver.unresolved_dep(unresolved_dependencies)
                 self.other_flags |= oflags
+
+            save_dependencies |= missing_dependencies
 
         logging.error("All configuration attempts failed.")
         return False
@@ -136,9 +138,9 @@ class CMakeProcess:
             '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
             '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
 
-            '-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
-            '-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
-            '-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
+            #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
+            #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
+            #'-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
             '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
             '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
 
@@ -221,7 +223,10 @@ class CMakeProcess:
     #      doctest  => --list-test-cases
     #      add_test => probably just scanning all add_test(some_name path/to/executable)
     #                   and take path/to/executable as unit test
-    def _ctest(self, test_exec: list[str], test_repeat: int) -> bool:
+    def _ctest(self, test_exec: list[str], test_repeat: int = 1) -> bool:
+        if test_repeat < 1:
+            return True
+        
         test_dir = Path(self.test_path)
         if test_exec:
             self._isolated_ctest(test_exec)
@@ -263,7 +268,7 @@ class CMakeProcess:
                     return False
             
 
-            median_time = statistics.median(elapsed_times[1:])
+            median_time = statistics.median(elapsed_times[1:]) if len(elapsed_times) > 1 else elapsed_times[0]
             self.test_time = median_time
             #test_time /= (test_repeat - 1)
             #self.test_time = test_time
@@ -421,12 +426,6 @@ class CMakeProcess:
             container_workdir = posixpath.join("/workspace", rel_workdir_posix)
         else:
             container_workdir = container_root
-
-        #logging.info(f"project_root: {project_root}")
-        #logging.info(f"container_root: {container_root}")
-        #logging.info(f"rel_root: {rel_root}")
-        #logging.info(f"workdir: {workdir}")
-        #logging.info(f"container_workdir: {container_workdir}")
         
         if not self.container:
             logging.error(f"No docker container started")

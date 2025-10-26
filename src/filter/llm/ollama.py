@@ -10,7 +10,6 @@ class OllamaLLM(LLMAdapter):
 
     def _send_request(self, prompt: Prompt) -> str:
         full_prompt = "\n".join([m.content for m in prompt.messages]).strip()
-        logging.info(f"LLM prompt: {full_prompt}")
         response = requests.post(conf.llm['ollama_url'], json={
             "model": self.model,
             "prompt": full_prompt,

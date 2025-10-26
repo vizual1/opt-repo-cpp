@@ -9,40 +9,69 @@ class Controller:
     This class builds a Controller to crawl, filter, download, build Dockerfiles or test GitHub repositories.
     """
     def __init__(self, config: Config, url: str = "", sha: str = ""):
-        self.url, self.sha = url, sha
+        self.url = url
+        self.sha = sha
         self.config = config
 
     def run(self):
-        if self.config.crawl:
-            logging.info("Crawling GitHub repositories...")
-            self._crawl()
-        if self.config.test:
-            logging.info("Testing commits...")
-            self._tester()
-        if self.config.docker:
-            logging.info("Building Dockerfile...")
-            self._docker()
+        logging.info("Starting controller...")
+
+        try:
+            if self.config.crawl:
+                self._crawl()
+
+            if self.config.test:
+                self._tester()
+
+            if self.config.docker:
+                self._docker()
+
+            if not any([self.config.crawl, self.config.test, self.config.docker]):
+                logging.warning("No operation selected. Use --crawl, --test, or --docker.")
+
+        except Exception as e:
+            logging.error(f"Controller encountered an error: {e}", exc_info=True)
+
+        finally:
+            logging.info("Controller execution completed.")
         
     def _crawl(self):
+        logging.info("Crawling GitHub repositories...")
+
         repo_pipeline = RepositoryPipeline(self.url, self.config)
+
         if self.config.analyze:
             repo_pipeline.analyze_repos()
-        else:
-            repo_pipeline.get_repos()
-            if self.config.commits:
-                valid_repos = repo_pipeline.valid_repos
-                for repo in valid_repos:
+            logging.info("Repository analysis completed.")
+            return
+
+        repo_pipeline.get_repos()
+        logging.info(f"Found {len(repo_pipeline.valid_repos)} valid repositories.")
+
+        if self.config.commits and repo_pipeline.valid_repos:
+            for repo in repo_pipeline.valid_repos:
+                try:
                     commit_pipeline = CommitPipeline(repo=repo, sha=self.sha, config=self.config)
                     commit_pipeline.get_commits()
+                except Exception as e:
+                    logging.error(f"Failed to process commits for {repo.full_name}: {e}", exc_info=True)
+            logging.info("Commit processing completed.")
 
     def _tester(self):
-        tester_pipeline = TesterPipeline(url=self.url, sha=self.sha, config=self.config)
-        tester_pipeline.test_commit()
+        logging.info("Testing commits...")
+        
+        try:
+            tester_pipeline = TesterPipeline(url=self.url, sha=self.sha, config=self.config)
+            tester_pipeline.test_commit()
+            logging.info("Testing completed successfully.")
+        except Exception as e:
+            logging.error(f"Testing failed: {e}", exc_info=True)
 
     def _docker(self):
         #docker = DockerBuilder()
         #docker.create()
-        raise NotImplementedError("docker")
+        logging.info("Building Docker image...")
+        raise NotImplementedError("Docker pipeline is not yet implemented.")
 
 
 

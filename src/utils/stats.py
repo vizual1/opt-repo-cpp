@@ -17,9 +17,13 @@ class RepoStats:
         self.pack_manager += other.pack_manager
         self.pack_files += other.pack_files
         self.dependencies += other.dependencies
+        self.total_repos += other.total_repos
+        self.valid_repos += other.valid_repos
         return self
 
     def write_final_log(self):
+        logging.info(f"Repositories analyzed: {self.total_repos}")
+        logging.info(f"Valid repositories: {self.valid_repos}")
         logging.info(f"Final Counter: {self.test_dirs}")
         logging.info(f"Final Flags: {self.test_flags}")
         logging.info(f"Final Package Managers: {self.pack_manager}")
@@ -41,13 +45,14 @@ class CommitStats:
         return self
 
     def write_final_log(self):
-        logging.info(f"Number of commits: {self.num_commits}")
-        logging.info(f"Number of filtered commits: {self.perf_commits}")
-        logging.info(f"Optimization Ratio: {self.perf_commits/self.num_commits}")
-        logging.info(f"Number of lines added: {self.lines_added}")
-        logging.info(f"Number of lines deleted: {self.lines_deleted}")
-        logging.info(f"Number of lines changed: {self.lines_added + self.lines_deleted}")
-        logging.info(f"Average number of lines added: {self.lines_added/self.perf_commits}")
-        logging.info(f"Average number of lines deleted: {self.lines_deleted/self.perf_commits}")
-        logging.info(f"Average number of lines changed: {(self.lines_added + self.lines_deleted)/self.perf_commits}")
-    
+        logging.info(f"Total commits analyzed: {self.num_commits}")
+        logging.info(f"Performance-related commits: {self.perf_commits}")
+        if self.num_commits > 0:
+            logging.info(f"Optimization ratio: {self.perf_commits / self.num_commits}")
+        logging.info(f"Lines added: {self.lines_added}")
+        logging.info(f"Lines deleted: {self.lines_deleted}")
+        logging.info(f"Total lines changed: {self.lines_added + self.lines_deleted}")
+        if self.perf_commits > 0:
+            logging.info(f"Average lines added per perf commit: {self.lines_added / self.perf_commits}")
+            logging.info(f"Average lines deleted per perf commit: {self.lines_deleted / self.perf_commits}")
+            logging.info(f"Average lines changed per perf commit: {(self.lines_added + self.lines_deleted) / self.perf_commits}")

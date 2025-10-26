@@ -8,6 +8,7 @@ storage: dict[str, str] = {
     "repo_urls": "data/analyze/cpp-base.txt",
     "results": "data/results.txt",
     "cmake-dep": "cache/cmake-dep.json",
+    "popular": "data/popular_urls.txt",
     "performance_commits": os.path.join("data", "performance")
 }
 
@@ -30,8 +31,8 @@ llm: dict[str, Any] = {
     'message1': 
      """The following is the message of a commit in the <name> repository: 
         ###Message Start###<message>###Message End###
-        Does this commit likely improve performance  in terms of execution time?
-        Answer ONLY: Yes or No""",
+        Does this commit likely improve performance in terms of execution time?
+        Answer with only: 'YES' or 'NO'.""",
     'message2': 
      """The following is the message of a commit in the <name> repository:
         ###Message Start###<message>###Message End###
@@ -59,6 +60,8 @@ testing: dict[str, Any] = {
     "no_list_testing": True,
     # number of times to tests the commits
     "commit_test_times": 6,
+    # percentage of improvement needed to consider the test to be significant
+    "improvement_threshold": 0.1
 }
 
 resolver: dict[str, str] = {
@@ -130,101 +133,3 @@ TEST_KEYWORDS = [
     "benchmark", "perf", "gperf"
 ]
 
-"""
-PACKAGE_MAP = {
-    "openssl": "libssl-dev",
-    "zlib": "zlib1g-dev",
-    "fmt": "libfmt-dev",
-    "spdlog": "libspdlog-dev",
-    "protobuf": "libprotobuf-dev",
-    "curl": "libcurl4-openssl-dev",
-    "openblas": "libopenblas-dev",
-    "openblas64": "libopenblas64-dev",
-    "blas": "libblas-dev",
-    "blas-atlas": "libatlas-base-dev",
-    "dnnl": "libdnnl-dev",
-    "vulkan": "libvulkan-dev",
-    "sqlite3": "libsqlite3-dev",
-    "tbb": "libtbb-dev",
-    "png": "libpng-dev",
-    "opencl": "ocl-icd-opencl-dev",
-    "blis": "libblis-dev",
-    "flexiblas_api": "libflexiblas-dev",
-    "openmp": "libomp-dev",
-    "doxygen": "doxygen",
-    "dot": "graphviz",
-    "libtiff": "libtiff-dev",
-    "tiff": "libtiff-dev",
-    "icu-uc": "libicu-dev",
-    "icu-i18n": "libicu-dev",
-    "i18n": "libicu-dev",
-    "uc": "libicu-dev",
-    "pangocairo": "libpango1.0-dev",
-    "pango": "libpango1.0-dev",
-    "pangoft2": "libpango1.0-dev",
-    "cairo": "libcairo2-dev",
-    "fontconfig": "libfontconfig1-dev",
-    "libarchive": "libarchive-dev",
-    "fontconfig": "libfontconfig1-dev",
-    "gtest": "libgtest-dev",
-    "icu": "libicu-dev",
-    "lept": "libleptonica-dev",
-    "libcurl": "libcurl4-gnutls-dev",
-    "glfw3": "libglfw3-dev",
-    "glfw": "libglfw3-dev",
-    "capstone": "libcapstone-dev",
-    "yara": "libyara-dev",
-    "yara-dev": "libyara-dev",
-    "freetype": "libfreetype6-dev",
-    "mbedtls": "libmbedtls-dev",
-    "libssh2": "libssh2-1-dev",
-    "x11": "libx11-dev",
-    "qt6": "qt6-base-dev",
-    "widgets": "qt6-base-dev",
-    "multimedia": "qt6-multimedia-dev",
-    "core": "qt6-base-dev",
-    "webp": "libwebp-dev",
-    "libavif": "libavif-dev", 
-    "libtommath": "libtommath-dev", 
-    "sdl2": "libsdl2-dev",
-    "ffmpeg": "libavcodec-dev",
-}
-
-NON_APT = {
-    "python3": "Ensure Python 3 interpreter is installed",
-    "cudatoolkit": "Install NVIDIA CUDA toolkit manually",
-    "rocblas": "Use AMD ROCm libraries",
-    "hipblas": "Use AMD ROCm libraries",
-    "mkl": "Use Intel oneAPI MKL",
-    "mkl-sdl": "Use Intel oneAPI MKL",
-    "musatoolkit": "Likely vendor-provided, not on apt",
-    "ggml": "Provided by llama.cpp itself",
-    "llama": "Project-specific (llama.cpp)",
-    "dawn": "Google Dawn WebGPU SDK (build from source)",
-    "onemath": "Intel OneMath library (part of oneAPI)",
-    "glslc": "Install Vulkan SDK (shader compiler)",
-    "hip": "Use AMD HIP/ROCm libraries",
-    "intelsycl": "Install Intel oneAPI DPC++/SYCL SDK",
-    "cpufeaturesndkcompat": "Project-specific / Android NDK library. Install via NDK or project source.",
-    "miniaudio": "Header-only library, usually included in project",
-    "edlib": "Header-only or vendored library, install manually if needed",
-    "coreclrembed": "Project-specific library, install/build manually",
-    "hwy": "Highway hashing library, manual build",
-    "libwoff2dec": "WOFF2 font decoder, manual build",
-    "swifttesting": "Project-specific testing library",
-    "angle": "ANGLE graphics library, manual build",
-    "simdutf": "SIMD UTF library, manual build",
-    "mman": "Part of system libc, skip installation",
-    "openvino": "Intel OpenVINO toolkit. Install manually from Intel's site.",
-    "Runtime": "Part of SDK or project-specific runtime. Install manually.",
-    "flexiblas_api": "Install FlexiBLAS manually or via Intel oneAPI MKL",
-    "libmultiprocess": "Python module, install via pip if needed",
-    "libmultiprocessnative": "Python module, install via pip if needed",
-    "libmultiprocess": "Python module, install via pip if needed",
-}
-
-SKIP_NAMES = {
-    "threads", "openmp", "pkgconfig", "required", "quiet", "lib", "none", "all", "bin", "interpreter", "names", "imported_target", "sw", "${package}",
-    "data", "utils", "base", "common"
-}
-"""

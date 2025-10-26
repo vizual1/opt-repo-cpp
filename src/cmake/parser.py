@@ -1,22 +1,36 @@
 import os, logging, re
 from cmakeast.printer import ast
-from typing import Optional
+from typing import Optional, Generator
 from pathlib import Path
 
 class CMakeParser:
     def __init__(self, root: Path):
         self.root = root
+
         self.enable_testing_path: list[Path] = []
         self.add_test_path: list[Path] = []
         self.discover_tests_path: list[Path] = []
         self.target_link_path: list[Path] = []
         self.list_test_arg: set[str] = set()
-        self.cmake_files: list[Path] = self.find_files(search="CMakeLists.txt")
-        self.find_cmake_files: list[Path] = self.find_files(pattern=re.compile(r"Find.*\.cmake$", re.IGNORECASE))
-        self.cmake_function_calls: list[tuple[ast.FunctionCall, Path]] = self._find_all_function_calls(self.cmake_files)
+
+        self._cmake_files: Optional[list[Path]] = None #self.find_files(search="CMakeLists.txt")
+        #self.find_cmake_files: list[Path] = self.find_files(pattern=re.compile(r"Find.*\.cmake$", re.IGNORECASE))
+        self._cmake_function_calls: Optional[list[tuple[ast.FunctionCall, Path]]] = None # self._find_all_function_calls(self.cmake_files)
+
+    @property
+    def cmake_files(self) -> list[Path]:
+        if self._cmake_files is None:
+            self._cmake_files = self.find_files(search="CMakeLists.txt")
+        return self._cmake_files
+
+    @property
+    def cmake_function_calls(self) -> list[tuple[ast.FunctionCall, Path]]:
+        if self._cmake_function_calls is None:
+            self._cmake_function_calls = self._find_all_function_calls(self.cmake_files)
+        return self._cmake_function_calls
 
     def has_root_cmake(self) -> bool:
-        return os.path.exists(os.path.join(self.root, "CMakeLists.txt"))
+        return (self.root / "CMakeLists.txt").exists()
 
     def find_files(self, search: str = "", pattern: Optional[re.Pattern] = None) -> list[Path]:
         """Search all files 'search' from root."""
@@ -223,11 +237,10 @@ class CMakeParser:
         logging.info(f"Found possible dependencies: {packages}")
         return packages
 
-
-    def _check_cmakeast_class(self, node):
+    def _check_cmakeast_class(self, node) -> bool:
         return hasattr(node, "__class__") and node.__class__.__module__.startswith("cmakeast")
 
-    def _walk_ast(self, node):
+    def _walk_ast(self, node) -> Generator[ast.FunctionCall, None, None]:
         if isinstance(node, list):
             for item in node:
                 yield from self._walk_ast(item)
@@ -327,15 +340,45 @@ class CMakeParser:
             return "ubuntu:22.04"  # CMake 3.22.x era, GCC 11
         else:
             return "ubuntu:24.04"  # Modern projects, GCC 13+
-        
+
     def _version_to_number(self, version_str: str) -> int:
+        """
+        Parses a cmake_minimum_required(VERSION ...) line and returns a numeric version (major*100 + minor).
+        If a range is given, takes the maximum version in the range.
+        If only a single version is given, picks the latest version known to be backward-compatible with it.
+        """
+        COMPATIBILITY_MAP = {
+            208: 300, 305: 322, 310: 327, 316: 327
+        }
+        LATEST_KNOWN = 327
+
         try:
-            clean_version = re.sub(r'[^\d.]', '', version_str)
-            parts = clean_version.split('.')
+            clean_version = re.sub(r'[^\d.\s.]', '', version_str)
+
+            if '...' in version_str:
+                versions = [v.strip() for v in clean_version.split('...') if v.strip()]
+                if len(versions) >= 2:
+                    parts1 = [int(x) for x in versions[0].split('.')]
+                    parts2 = [int(x) for x in versions[1].split('.')]
+                    version_to_use = versions[0] if parts1 > parts2 else versions[1]
+                else:
+                    return LATEST_KNOWN
+            else:
+                parts = clean_version.strip().split('.')
+                major = int(parts[0]) if len(parts) > 0 else 0
+                minor = int(parts[1]) if len(parts) > 1 else 0
+                min_version_num = major * 100 + minor
+
+                for lower_bound, upper_bound in sorted(COMPATIBILITY_MAP.items()):
+                    if min_version_num <= lower_bound:
+                        return upper_bound
+                return LATEST_KNOWN
             
+            parts = version_to_use.split('.')
             major = int(parts[0]) if len(parts) > 0 else 0
             minor = int(parts[1]) if len(parts) > 1 else 0
 
             return major * 100 + minor
+
         except (ValueError, IndexError):
-            return 316
+            return LATEST_KNOWN

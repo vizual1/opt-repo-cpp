@@ -4,6 +4,7 @@ from github import Github
 from github.GitTreeElement import GitTreeElement
 from typing import Optional
 from pathlib import Path
+from github.ContentFile import ContentFile
 
 import src.config as conf
 from src.cmake.analyzer import CMakeAnalyzer
@@ -23,6 +24,7 @@ class StructureFilter:
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
         self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
+        self.root_files = {item.path for item in self.tree if item.type == "blob"}
         self.stats = RepoStats()
         self.testing_flags: dict = {}
         self.process: Optional[CMakeProcess] = None
@@ -32,10 +34,10 @@ class StructureFilter:
         conan = self._has_root_conan()
 
         if not self._has_root_cmake() or not (without_pkg_manager or vcpkg or conan):
-            logging.warning(f"no CMakeLists.txt at root ({self.repo.full_name})")
+            logging.warning(f"[{self.repo_id}] no CMakeLists.txt at root found")
             return False
         
-        logging.info(f"CMakeLists.txt at root ({self.repo.full_name})")
+        logging.info(f"[{self.repo_id}] CMakeLists.txt at root found")
 
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
             tmpdir = Path(tmpdir)
@@ -44,22 +46,22 @@ class StructureFilter:
 
             analyzer.reset()
             if not analyzer.has_testing(nolist=conf.testing['no_list_testing']):
-                logging.warning(f"invalid ctest ({self.repo.full_name})")
+                logging.warning(f"[{self.repo_id}] invalid ctest")
                 return False
             
             test_dirs = self._extract_test_dirs()
             if test_dirs:
-                logging.debug(f"test directories: {test_dirs}")
+                logging.debug(f"[{self.repo_id}] test directories: {test_dirs}")
                 for d in test_dirs:
                     self.stats.test_dirs[d] += 1
                 conv_test_dir = test_dirs & conf.valid_test_dir
 
                 if conv_test_dir:
-                    logging.debug(f"conventional test directories {conv_test_dir}")
+                    logging.debug(f"[{self.repo_id}] conventional test directories {conv_test_dir}")
                     self.testing_flags = analyzer.has_build_testing_flag()
                     self.test_flags = Counter(self.testing_flags.keys())
             
-            logging.info(f"ctest is defined ({self.repo.full_name})")
+            logging.info(f"[{self.repo_id}] ctest is defined")
             return True
         
             #if self._valid_cmake_run(tmpdir, analyzer, vcpkg): #or conan):
@@ -72,46 +74,42 @@ class StructureFilter:
         conan = self._has_root_conan()
 
         if not self._has_root_cmake():
-            logging.error(f"no CMakeLists.txt at root ({self.repo.full_name})")
+            logging.error(f"[{self.repo_id}] no CMakeLists.txt at root found")
             return False
         
-        logging.info(f"CMakeLists.txt at root ({self.repo.full_name})")
+        logging.info(f"[{self.repo_id}] CMakeLists.txt at root found")
         analyzer = CMakeAnalyzer(root)
         self.process = CMakeProcess(root, None, [], analyzer, "")
 
         if not self.process.clone_repo(self.repo_id, root, sha=sha):
-            logging.error(f"git cloning failed ({self.repo.full_name})")
+            logging.error(f"[{self.repo_id}] git cloning failed")
             return False
         
         self.process.analyzer.reset()
         if not self.process.analyzer.has_testing(nolist=conf.testing['no_list_testing']):
-            logging.error(f"invalid ctest ({self.repo.full_name})")
+            logging.error(f"[{self.repo_id}] invalid ctest")
             return False
 
-        logging.info(f"ctest is defined ({self.repo.full_name})")
+        logging.info(f"[{self.repo_id}] ctest is defined")
         return True
     
-    def _has_root_cmake(self) -> str:
+    def _has_root_cmake(self) -> bool:
         return self._has_root_file("CMakeLists.txt")
     
-    def _has_root_vcpkg(self) -> str:
+    def _has_root_vcpkg(self) -> bool:
         return self._has_root_file("vcpkg.json")
     
-    def _has_root_conan(self) -> str:
+    def _has_root_conan(self) -> bool:
         return self._has_root_file("conanfile.txt") or self._has_root_file("conanfile.py")
     
-    def _has_root_bazel(self) -> str:
+    def _has_root_bazel(self) -> bool:
         return self._has_root_file("WORKSPACE") or self._has_root_file("MODULE.bazel")
 
-    def _has_root_meson(self) -> str:
+    def _has_root_meson(self) -> bool:
         return self._has_root_file("meson.build")
     
-    def _has_root_file(self, filename: str) -> str:
-        """Check whether a repo has <filename> at the root."""
-        for item in self.tree:
-            if item.type == "blob" and item.path == filename:
-                return filename
-        return ""
+    def _has_root_file(self, filename: str) -> bool:
+        return filename in self.root_files
 
     def _has_test_dir(self) -> bool:
         """Check whether a repository has valid test directories."""
@@ -127,19 +125,32 @@ class StructureFilter:
         cmake_tree = [item for item in tree if item.type == "blob" and item.path.endswith("CMakeLists.txt")]
         return cmake_tree, tree_paths, tree
     
+    # TODO: test
     def _get_cmake_lists(self, dest: Path) -> list[str]:
         """
         Fetch only CMakeLists.txt files from a GitHub repo using requests, preserving folder structure.
         """
         os.makedirs(dest, exist_ok=True)
-
+        """
         head = self.repo.get_commits()[0]
         sha = head.sha
         owner, name = self.repo.full_name.split("/")
         base_url = f"https://raw.githubusercontent.com/{owner}/{name}/{sha}"
-
+        """
         result_paths = []
         for item in self.cmake_tree:
+            try: 
+                content_file = self.repo.get_contents(item.path, ref=self.sha)
+                target_path = dest / item.path
+                os.makedirs(target_path.parent, exist_ok=True)
+                if isinstance(content_file, ContentFile):
+                    with open(target_path, "wb") as f:
+                        f.write(content_file.decoded_content)
+                    result_paths.append(str(target_path))
+            except Exception as e:
+                logging.warning(f"[{self.repo_id}] Failed to fetch/write {item.path}: {e}")
+
+            """
             url = f"{base_url}/{item.path}"
             try:
                 r = requests.get(url)
@@ -155,7 +166,7 @@ class StructureFilter:
                 logging.warning(f"Error fetching {url}: {e}")
             except (OSError, IOError) as e:
                 logging.error(f"Failed to write {target_path}: {e}", exc_info=True)
-
+            """
         return result_paths
 
     def _extract_test_dirs(self) -> set[str]:
