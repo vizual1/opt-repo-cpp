@@ -1,6 +1,6 @@
 import src.config as conf
 from openai import OpenAI
-from src.filter.llm.prompt import Prompt
+from src.llm.prompt import Prompt
 
 class LLMAdapter():
     def __init__(self, model: str, read_from_cache: bool = False, save_to_cache: bool = False):

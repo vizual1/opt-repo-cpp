@@ -1,5 +1,5 @@
-from src.filter.llm.llmadapter import LLMAdapter 
-from src.filter.llm.prompt import Prompt
+from src.llm.llmadapter import LLMAdapter 
+from src.llm.prompt import Prompt
 from typing import Union
 
 class OpenRouterLLM(LLMAdapter):

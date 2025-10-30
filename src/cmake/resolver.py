@@ -2,9 +2,9 @@ import json, logging, subprocess, re, threading, jsonschema
 import src.config as conf
 from typing import Any
 from pathlib import Path
-from src.filter.llm.prompt import Prompt
-from src.filter.llm.openai import OpenRouterLLM
-from src.filter.llm.ollama import OllamaLLM
+from src.llm.prompt import Prompt
+from src.llm.openai import OpenRouterLLM
+from src.llm.ollama import OllamaLLM
 from docker.models.containers import Container
 
 LLM_DEP_SCHEMA = {

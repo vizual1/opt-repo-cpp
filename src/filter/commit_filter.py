@@ -1,10 +1,10 @@
 import re, logging, os, json
 from github.Commit import Commit
 from github.Repository import Repository
-from src.filter.llm.prompt import Prompt
-from src.filter.llm.openai import OpenRouterLLM
-from src.filter.llm.ollama import OllamaLLM
-from typing import Optional, Any
+from src.llm.prompt import Prompt
+from src.llm.openai import OpenRouterLLM
+from src.llm.ollama import OllamaLLM
+from typing import Optional
 from src.utils.dataclasses import Config
 
 perf_label_keywords = {

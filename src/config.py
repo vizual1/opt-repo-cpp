@@ -24,7 +24,7 @@ commits: dict[str, Any] = {
 }
 
 llm: dict[str, Any] = {
-    'cache_file': 'cache/save.txt',
+    'cache_file': 'cache/commit.json',
     'api_key': os.environ['api_key'],
     'base': True,
     'base_url': 'https://openrouter.ai/api/v1',

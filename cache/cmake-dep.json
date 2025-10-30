@@ -1047,22 +1047,6 @@
                 "-DFREETYPE_INCLUDE_DIR=/opt/vcpkg/installed/x64-linux/include/freetype2",
                 "-DFREETYPE_LIBRARY=/opt/vcpkg/installed/x64-linux/lib/libfreetype.so"
             ]
-        },
-        "04-targets": {
-            "apt": "",
-            "vcpkg": ""
-        },
-        "01-core": {
-            "apt": "",
-            "vcpkg": ""
-        },
-        "utils": {
-            "apt": "",
-            "vcpkg": ""
-        },
-        "05-summary": {
-            "apt": "",
-            "vcpck": ""
         }
     },
     "mbedtls": {
