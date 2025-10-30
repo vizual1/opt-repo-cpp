@@ -3,17 +3,25 @@ from typing import Any
 from datetime import datetime, timezone
 
 storage: dict[str, str] = {
-    "store_commits": os.path.join("data", "commits"),
+    "popular": os.path.join("data", "popular_urls.txt"),
+    "commits": os.path.join("data", "commits"),
+    "performance": os.path.join("data", "performance"),
+    "repos": os.path.join("data", "repo_urls.txt"),
+    
     "store_analyze": "data/analyze",
-    "repo_urls": "data/analyze/cpp-base.txt",
+    
     "results": "data/results.txt",
     "cmake-dep": "cache/cmake-dep.json",
-    "popular": "data/popular_urls.txt",
-    "performance_commits": os.path.join("data", "performance")
 }
 
-# select commits since -> until
-commits_since: datetime = datetime(2024, 1, 1, tzinfo=timezone.utc)
+commits: dict[str, Any] = {
+    # select commits since -> until
+    'since': datetime(2024, 1, 1, tzinfo=timezone.utc),
+    'until': datetime.now(timezone.utc),
+    
+    'min-exec-time-improvement': 0.05,
+    'min-p-value': 0.05
+}
 
 llm: dict[str, Any] = {
     'cache_file': 'cache/save.txt',
@@ -23,27 +31,24 @@ llm: dict[str, Any] = {
     'model': 'openai/gpt-4.1-nano', #'moonshotai/kimi-k2:free', #'openai/gpt-oss-20b:free' #'deepseek/deepseek-chat-v3.1:free' #'z-ai/glm-4.5-air:free'
 
     'ollama': True, 
-    'ollama_model': "mistral", # "phi3:mini" # "qwen2.5:7b-instruct-q4_K_M"
-    'ollama_url': "http://host.docker.internal:11434/api/generate", # "http://127.0.0.1:11434/api/generate"
+    'ollama_stage1_model': "qwen2.5:7b-instruct-q4_K_M",
+    'ollama_stage2_model': "codellama:7b-instruct", #"codellama:13b-instruct",
+    'ollama_resolver_model': "qwen2.5:7b-instruct-q4_K_M",
+    #'ollama_model': "mistral", # "phi3:mini" # "qwen2.5:7b-instruct-q4_K_M"
+    'ollama_url': "http://127.0.0.1:11434/api/generate", #"http://host.docker.internal:11434/api/generate", 
 
-    'twostage': False,
     # <name> for repository name and <message> for commit message to be filtered
-    'message1': 
-     """The following is the message of a commit in the <name> repository: 
-        ###Message Start###<message>###Message End###
-        Does this commit likely improve performance in terms of execution time?
-        Answer with only: 'YES' or 'NO'.""",
-    'message2': 
+    'stage1': 
      """The following is the message of a commit in the <name> repository:
         ###Message Start###<message>###Message End###
         How likely is it for this commit to be a performance improving commit in terms of execution time? 
-        Answer by only writing the likelihood in the following format for x: int with no comments:
+        Answer strictly by only writing the likelihood in the following format:
         Likelihood: x%""",
-    'message3':
+    'stage2':
      """The following is the message of a commit in the <name> repository:\n\n###Message Start###<message>\n###Message End###"
           \n\nThe diff of the commit is:\n\n###Diff Start###<diff>\n###Diff End###
           \n\nIs this commit a performance improving commit in terms of execution time? 
-         Answer with 'YES' or 'NO'."""
+         Answer strictly with 'YES' or 'NO'."""
 }
 
 github: dict[str, str] = {
@@ -58,10 +63,9 @@ likelihood: dict[str, int] = {
 testing: dict[str, Any] = {
     # filters repositories and commits by target_link_libraries with gtest, catch2, doctest, etc.
     "no_list_testing": True,
-    # number of times to tests the commits
-    "commit_test_times": 6,
-    # percentage of improvement needed to consider the test to be significant
-    "improvement_threshold": 0.1
+    # number of times to tests the commits (warmup + commit_test_times)
+    "warmup": 1,
+    "commit_test_times": 5,
 }
 
 resolver: dict[str, str] = {

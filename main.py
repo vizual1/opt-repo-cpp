@@ -1,4 +1,4 @@
-import logging
+import logging, sys
 from datetime import datetime
 from pathlib import Path
 from src.input import start 
@@ -13,6 +13,8 @@ logging.basicConfig(filename=log_filename,
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                     datefmt='%H:%M:%S',
                     level=logging.INFO)
+
+logging.info(f"Command run: {' '.join(sys.argv)}")
 
 def main() -> None:
     logging.info("Starting the GitHub repository pipeline...")

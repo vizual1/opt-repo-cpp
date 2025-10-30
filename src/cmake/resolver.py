@@ -44,7 +44,7 @@ class DependencyResolver:
                 logging.warning(f"Initializing empty cache ({e})")
                 self.mapping = {}
 
-        def save(self):
+        def save(self) -> None:
             tmp_path = self.mapping_path.with_suffix(".tmp")
             with open(tmp_path, "w") as f:
                 json.dump(self.mapping, f, indent=4)
@@ -201,7 +201,7 @@ class DependencyResolver:
     class LLMResolver:
         def __init__(self):
             if conf.llm["ollama"]:
-                self.llm = OllamaLLM(conf.llm['ollama_model'])
+                self.llm = OllamaLLM(conf.llm['ollama_resolver_model'])
             else:
                 self.llm = OpenRouterLLM(conf.llm['model'])
 

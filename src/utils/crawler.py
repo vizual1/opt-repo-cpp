@@ -1,25 +1,20 @@
-import os, logging, time
+import logging, time
 from tqdm import tqdm
-import src.config as conf
 from src.utils.dataclasses import Config
 from github.GithubException import GithubException, RateLimitExceededException
 
 class RepositoryCrawler:
-    def __init__(self, config: Config, url: str = "", language: str = "C++"):
-        self.url = url
+    def __init__(self, config: Config, language: str = "C++"):
         self.language = language
         self.config = config
-        self.storage: dict[str, str] = conf.storage
-        self.popular_file = self.storage["popular"]
 
     def get_repos(self) -> list[str]:
         if self.config.popular:
             repos = self._query_popular_repos()
-            self._write_popular_urls(repos)
             return repos
 
-        path = self.config.read or self.storage.get("repo_urls", "")
-        return self._get_repo_ids(path, self.url)
+        path = self.config.input or self.config.storage["repos"]
+        return self._get_repo_ids(path)
     
     def _query_popular_repos(self) -> list[str]:
         ok_language = [
@@ -52,7 +47,6 @@ class RepositoryCrawler:
                         languages = repo.get_languages() 
                         cpp = languages.get("C++", 0)
                         total_bytes = sum(languages.values())
-                        #cmake = languages.get("CMake", 0)
 
                         if total_bytes == 0:
                             continue
@@ -85,22 +79,25 @@ class RepositoryCrawler:
         logging.info(f"Collected {len(results)} popular repositories.")
         return results
     
-    def _get_repo_ids(self, path: str, url: str = "") -> list[str]:
+    def _get_repo_ids(self, path: str) -> list[str]:
         """Extract repository IDs (owner/repo) from GitHub URLs."""
         repo_ids: list[str] = []
 
-        if url:
-            repo_ids.append(url.removeprefix("https://github.com/").strip())
+        if self.config.repo_url:
+            repo_ids.append(self.config.repo_url.removeprefix("https://github.com/").strip())
             return repo_ids
         
         try:
             with open(path, 'r', errors='ignore') as f:
                 lines = f.readlines()
-            print("TEST1")
             for line in lines:
                 line = line.strip()
-                if not line or not line.startswith("https://github.com/"):
+                if not line:
                     continue
+                if len(line.split('|')) > 1:
+                    # case if commits sha were given and extract owner/repo of the form owner_repo_filtered.txt
+                    repo_ids.append("/".join(path.split('/')[-1].split('_')[0:2]))
+                    break
                 repo_ids.append(line.removeprefix("https://github.com/").strip())
 
             logging.info(f"Loaded {len(repo_ids)} repository URLs from {path}")
@@ -110,12 +107,3 @@ class RepositoryCrawler:
 
         return repo_ids
     
-    def _write_popular_urls(self, repos: list[str]) -> None:
-        """Write fetched repository URLs to file."""
-        try:
-            with open(self.popular_file, "w", encoding="utf-8") as f:
-                for repo in repos:
-                    f.write(f"https://github.com/{repo}\n")
-            logging.info(f"Popular repos written to {self.popular_file}")
-        except (OSError, IOError) as e:
-            logging.error(f"Failed to write {self.popular_file}: {e}", exc_info=True)

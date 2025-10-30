@@ -6,17 +6,23 @@ from typing import Optional, Any
 
 @dataclass
 class Config:
-    crawl: bool = False 
-    commits: bool = False 
-    docker: bool = False
-    test: bool = False
     popular: bool = False
-    stars: int = 1000
+    testcrawl: bool = False 
+    commits: bool = False 
+    testcommits: bool = False
+    
     limit: int = 10
-    read: str = ""
-    write: str = ""
-    write_fail: str = "data/fail.txt"
+    stars: int = 1000
+    repo_url: str = ""
+    input: str = ""
+    output: str = ""
+    output_fail: str = "data/fail.txt"
+    sha: str = ""
+    newsha: str = ""
+    oldsha: str = ""
+
     filter: str = "simple"
+    docker: str = ""
     separate: bool = False
     analyze: bool = False
 
@@ -24,22 +30,19 @@ class Config:
     llm: dict[str, Any] = field(default_factory=lambda: conf.llm)
     likelihood: dict[str, int] = field(default_factory=lambda: conf.likelihood)
     testing: dict[str, Any] = field(default_factory=lambda: conf.testing)
-    improvement_threshold: float = field(init=False)
     valid_test_dir: set[str] = field(default_factory=lambda: conf.valid_test_dir)
-    commits_since: datetime = field(default_factory=lambda: conf.commits_since)
+    commits_dict: dict[str, Any] = field(default_factory=lambda: conf.commits)
     docker_map: dict[str, str] = field(default_factory=lambda: conf.docker_map)
 
     access_token: str = field(default_factory=lambda: conf.github.get("access_token", ""))
     auth: Auth.Token = field(init=False)
     git: Github = field(init=False)
 
-
     def __post_init__(self):
         self.storage = conf.storage
         self.llm = conf.llm
         self.likelihood = conf.likelihood
         self.testing = conf.testing
-        self.improvement_threshold = self.testing['improvement_threshold']
         self.valid_test_dir = conf.valid_test_dir
 
         if not self.access_token:
@@ -51,7 +54,7 @@ class Config:
         self._validate()
 
 
-    def _validate(self):
+    def _validate(self) -> None:
         """Perform basic consistency checks."""
         if self.filter not in ("simple", "llm", "custom"):
             raise ValueError(f"Unknown filter type: {self.filter}")

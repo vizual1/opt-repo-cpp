@@ -6,21 +6,18 @@ from typing import Optional
 from pathlib import Path
 
 class Writer:
-    def __init__(self, repo_name: str):
+    def __init__(self, repo: str, output_path: str):
         try:
-            self.owner, self.name = repo_name.split("/", 1)
+            self.owner, self.name = repo.split("/", 1)
         except ValueError:
-            raise ValueError(f"Invalid repo name format: '{repo_name}'. Expected '<owner>/<repo>'.")
+            raise ValueError(f"Invalid repo name format: '{repo}'. Expected '<owner>/<repo>'.")
         
-        self.storage = conf.storage
+        self.output_path = output_path
         self.file: Optional[str] = None
 
-        for key, path in self.storage.items():
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
-
-    def write_repo(self, write: str = "") -> None:
-        msg = f"https://github.com/{self.owner}/{self.name}\n"
-        path = Path(write or self.storage["repo_urls"])
+    def write_repo(self) -> None:
+        msg = f"{self.owner}/{self.name}\n"
+        path = Path(self.output_path)
         self._write(path, msg)
 
     def write_commit(self, commit: Commit, separate: bool) -> CommitStats:
@@ -37,8 +34,8 @@ class Writer:
         parent_sha = commit.parents[0].sha if commit.parents else "None"
 
         self.file = f"{self.owner}_{self.name}_filtered.txt"
-        msg = f"{current_sha} | {parent_sha} | +{total_add} | -{total_del} | {total_add + total_del}\n" 
-        path = Path(self.storage["store_commits"]) / self.file
+        msg = f"{current_sha} | {parent_sha}\n" 
+        path = Path(self.output_path) / self.file
         self._write(path, msg)
         
         # saves each commit version to file with patch information
@@ -48,14 +45,14 @@ class Writer:
             final_msg: list[str] = [msg, commit.commit.message]
             for f in commit.files:
                 final_msg.append(f.patch)
-            path = Path(self.storage["store_commits"]) / file
+            path = Path(self.output_path) / file
             self._write(path, "\n".join(final_msg))
 
         return stats
 
     def write_improve(self, new_sha: str, old_sha: str) -> None:
         self.file = f"{self.owner}_{self.name}.txt"
-        path = Path(self.storage["performance_commits"]) / self.file
+        path = Path(self.output_path) / self.file
         msg = f"{new_sha} | {old_sha}\n"
         self._write(path, msg)
 

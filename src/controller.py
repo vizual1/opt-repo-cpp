@@ -1,78 +1,72 @@
 
 import logging
-#from src.docker.generator import DockerBuilder
-from src.pipeline import RepositoryPipeline, CommitPipeline, TesterPipeline
+from src.pipeline import CrawlerPipeline, RepositoryPipeline, CommitPipeline, CommitTesterPipeline
 from src.utils.dataclasses import Config
 
 class Controller:
     """
-    This class builds a Controller to crawl, filter, download, build Dockerfiles or test GitHub repositories.
+    The Controller class initiates the main operations of the system based on the configurations.
+    It is the central manager for pipelines that handle various stages of GitHub repository analysis.
+    
+    This class supports the following operations:
+    - **Crawl popular repositories** from GitHub to build a dataset.
+    - **Filter, test and validate repositories** for structure, build and test success.
+    - **Gather and filter commits** from repositories.
+    - **Build and test commits and their parents** to evaluate performance.
     """
-    def __init__(self, config: Config, url: str = "", sha: str = ""):
-        self.url = url
-        self.sha = sha
+    def __init__(self, config: Config):
         self.config = config
 
-    def run(self):
+    def run(self) -> None:
         logging.info("Starting controller...")
 
         try:
-            if self.config.crawl:
-                self._crawl()
+            if self.config.popular:
+                self._popular()
+            
+            if self.config.testcrawl:
+                self._testcrawl()
 
-            if self.config.test:
-                self._tester()
+            if self.config.commits:
+                self._commits()
 
-            if self.config.docker:
-                self._docker()
+            if self.config.testcommits:
+                self._testcommits()
 
-            if not any([self.config.crawl, self.config.test, self.config.docker]):
-                logging.warning("No operation selected. Use --crawl, --test, or --docker.")
+            if not any([self.config.popular, self.config.testcrawl, self.config.commits, self.config.testcommits]):
+                logging.warning("No operation selected. Use --popular, --testcrawl, --commits, or --testcommits.")
 
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
 
         finally:
             logging.info("Controller execution completed.")
-        
-    def _crawl(self):
-        logging.info("Crawling GitHub repositories...")
 
-        repo_pipeline = RepositoryPipeline(self.url, self.config)
+    def _popular(self) -> None:
+        logging.info("Crawling popular GitHub repositories...")
+        CrawlerPipeline(self.config).get_repos()
+        
+    def _testcrawl(self) -> None:
+        logging.info("Testing and validating GitHub repositories...")
+
+        repo_pipeline = RepositoryPipeline(self.config)
 
         if self.config.analyze:
             repo_pipeline.analyze_repos()
             logging.info("Repository analysis completed.")
             return
 
-        repo_pipeline.get_repos()
+        repo_pipeline.test_repos()
         logging.info(f"Found {len(repo_pipeline.valid_repos)} valid repositories.")
 
-        if self.config.commits and repo_pipeline.valid_repos:
-            for repo in repo_pipeline.valid_repos:
-                try:
-                    commit_pipeline = CommitPipeline(repo=repo, sha=self.sha, config=self.config)
-                    commit_pipeline.get_commits()
-                except Exception as e:
-                    logging.error(f"Failed to process commits for {repo.full_name}: {e}", exc_info=True)
-            logging.info("Commit processing completed.")
+    def _commits(self) -> None:
+        logging.info("Gathering and filtering commits...")
+        repos = RepositoryPipeline(self.config).get_repos()
+        logging.info(f"Found {len(repos)} repositories.")
+        for repo in repos:
+            CommitPipeline(repo, self.config).get_commits()
 
-    def _tester(self):
+    def _testcommits(self) -> None:
         logging.info("Testing commits...")
-        
-        try:
-            tester_pipeline = TesterPipeline(url=self.url, sha=self.sha, config=self.config)
-            tester_pipeline.test_commit()
-            logging.info("Testing completed successfully.")
-        except Exception as e:
-            logging.error(f"Testing failed: {e}", exc_info=True)
-
-    def _docker(self):
-        #docker = DockerBuilder()
-        #docker.create()
-        logging.info("Building Docker image...")
-        raise NotImplementedError("Docker pipeline is not yet implemented.")
-
-
-
-
+        tester_pipeline = CommitTesterPipeline(self.config)
+        tester_pipeline.test_commit()

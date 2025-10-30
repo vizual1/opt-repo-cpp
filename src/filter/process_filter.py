@@ -1,5 +1,5 @@
 import tempfile, logging
-from src.cmake.process import CMakeProcess
+from src.cmake.process import CMakeProcess, GitHandler
 from src.cmake.analyzer import CMakeAnalyzer
 from src.utils.dataclasses import Config
 from src.filter.structure_filter import StructureFilter
@@ -15,13 +15,13 @@ class ProcessFilter:
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
-    def valid_run(self):
+    def valid_run(self, container_name: str) -> bool:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
             tmp_path = Path(tmpdir) 
             analyzer = CMakeAnalyzer(tmp_path)
             process = CMakeProcess(tmp_path, None, [], analyzer, "")
 
-            if not process.clone_repo(self.repo_id, tmp_path):
+            if not GitHandler().clone_repo(self.repo_id, tmp_path):
                 logging.error(f"[{self.repo_id}] git cloning failed")
                 return False
             
@@ -41,12 +41,12 @@ class ProcessFilter:
             if test_path.name == "CMakeLists.txt":
                 test_path = test_path.parent
             enable_testing_path = test_path.relative_to(tmp_path)
-            #enable_testing_path = sorted_testing_path[0].removesuffix("\\CMakeLists.txt").removesuffix("/CMakeLists.txt").removeprefix(tmpdir)
             logging.info(f"[{self.repo_id}] path to enable_testing(): '{enable_testing_path}'")
             try:
                 process.set_enable_testing(enable_testing_path)
                 process.set_flags(flags)
-                process.start_docker_image()
+                process.docker_image = self.config.docker
+                process.start_docker_image(container_name)
             
                 if not process.build():
                     logging.error(f"[{self.repo_id}] build failed")
@@ -62,29 +62,34 @@ class ProcessFilter:
 
             finally:
                 try:
-                    process.stop_container()
+                    process.docker.stop_container()
                 except Exception as e:
                     logging.warning(f"[{self.repo_id}] Failed to stop container: {e}")
             
             return True
         
-    def valid_commit_run(self, msg: str) -> float:
+    def valid_commit_run(
+        self, 
+        msg: str, 
+        container_name: str, 
+        docker_image: str = ""
+    ) -> tuple[list[float], Optional[StructureFilter]]:
         structure = StructureFilter(self.repo_id, self.config.git, self.root, self.sha)
 
         logging.info(f"[{self.repo_id}] Testing {self.sha}...")
         if self.root and not structure.is_valid_commit(self.root, self.sha):
             logging.error(f"[{self.repo_id}] commit cmake and ctest failed ({self.sha})")
-            return 0.0
+            return [], None
         
         if not structure.process:
             logging.error(f"[{self.repo_id}] CMakeProcess for {self.repo_id} couldn't be found")
-            return 0.0
+            return [], None
         
         flags = FlagFilter(structure.process.analyzer.has_build_testing_flag()).get_valid_flags()
         sorted_testing_path = self.sort_testing_path(structure.process.analyzer.parser.enable_testing_path)
         if len(sorted_testing_path) == 0:
             logging.error(f"[{self.repo_id}] path to enable_testing() was not found in {self.root}: {sorted_testing_path}")
-            return 0.0
+            return [], None
         
         test_path = sorted_testing_path[0]
         if test_path.name == "CMakeLists.txt":
@@ -94,30 +99,26 @@ class ProcessFilter:
         try:
             structure.process.set_enable_testing(enable_testing_path)
             structure.process.set_flags(flags)
-            structure.process.start_docker_image()
+            structure.process.docker_image = self.config.docker
+            if docker_image:
+                structure.process.set_docker(self.config.docker or docker_image, new=False)
+            structure.process.start_docker_image(container_name)
             
             if not structure.process.build():
                 logging.error(f"[{self.repo_id}] {msg} build failed ({self.sha})")
-                return 0.0
+                return [], None
                 
-            if not structure.process.test([], test_repeat=self.config.testing['commit_test_times']):
+            if not structure.process.test([], warmup=self.config.testing['warmup'] , test_repeat=self.config.testing['commit_test_times']):
                 logging.error(f"[{self.repo_id}] {msg} test failed ({self.sha})")
-                return 0.0
+                return [], None
             
             test_time = structure.process.test_time
             logging.info(f"[{self.repo_id}] {msg} build and test successful ({self.sha})")
-            logging.info(f"[{self.repo_id}] {msg} Average Test Time {test_time}")
-            return test_time
+            return test_time, structure
         
         except Exception as e:
             logging.exception(f"[{self.repo_id}] Unexpected error during process run: {e}")
-            return False
-
-        finally:
-            try:
-                structure.process.stop_container()
-            except Exception as e:
-                logging.warning(f"[{self.repo_id}] Failed to stop container: {e}")
+            return [], None
 
     def _sort_key(self, y: Path) -> tuple[int, int]:
         valid_test_dirs = [Path(x) for x in self.config.valid_test_dir]

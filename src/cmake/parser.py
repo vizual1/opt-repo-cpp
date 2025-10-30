@@ -1,6 +1,6 @@
 import os, logging, re
 from cmakeast.printer import ast
-from typing import Optional, Generator
+from typing import Optional, Generator, Union
 from pathlib import Path
 
 class CMakeParser:
@@ -331,15 +331,15 @@ class CMakeParser:
             return "ubuntu:22.04" 
         """
         if version_num <= 305:
-            return "ubuntu:16.04"  # CMake 3.5 era, GCC 5–6, very old projects
+            return "ubuntu:16.04"
         elif version_num <= 310:
-            return "ubuntu:18.04"  # CMake 3.10.x era, GCC 7
+            return "ubuntu:18.04"
         elif version_num <= 316:
-            return "ubuntu:20.04"  # CMake 3.16.x era, GCC 9
+            return "ubuntu:20.04"
         elif version_num <= 322:
-            return "ubuntu:22.04"  # CMake 3.22.x era, GCC 11
+            return "ubuntu:22.04"
         else:
-            return "ubuntu:24.04"  # Modern projects, GCC 13+
+            return "ubuntu:24.04"
 
     def _version_to_number(self, version_str: str) -> int:
         """
@@ -382,3 +382,36 @@ class CMakeParser:
 
         except (ValueError, IndexError):
             return LATEST_KNOWN
+
+
+    def parse_ctest_output(self, output: str) -> dict[str, Union[int, float]]:
+        """Parse CTest output text to extract key test statistics."""
+        stats: dict[str, Union[int, float]] = {
+            "passed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "total": 0,
+            "total_time_sec": 0.0,
+            "pass_rate": 0,
+        }
+
+        m = re.search(r"(\d+)% tests passed,\s*(\d+)\s*tests failed out of\s*(\d+)", output)
+        if m:
+            pass_rate, failed, total = map(int, m.groups())
+            passed = total - failed
+            stats.update({
+                "passed": passed,
+                "failed": failed,
+                "total": total,
+                "pass_rate": pass_rate
+            })
+
+        m = re.search(r"(\d+)\s*tests skipped", output)
+        if m:
+            stats["skipped"] = int(m.group(1))
+
+        m = re.search(r"Total Test time \(real\)\s*=\s*([\d\.]+)\s*sec", output)
+        if m:
+            stats["total_time_sec"] = float(m.group(1))
+
+        return stats

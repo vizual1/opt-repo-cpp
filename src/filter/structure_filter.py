@@ -8,7 +8,7 @@ from github.ContentFile import ContentFile
 
 import src.config as conf
 from src.cmake.analyzer import CMakeAnalyzer
-from src.cmake.process import CMakeProcess
+from src.cmake.process import CMakeProcess, GitHandler
 from src.utils.stats import RepoStats
 from src.filter.flags_filter import FlagFilter
 #from src.docker.generator import DockerBuilder
@@ -63,11 +63,6 @@ class StructureFilter:
             
             logging.info(f"[{self.repo_id}] ctest is defined")
             return True
-        
-            #if self._valid_cmake_run(tmpdir, analyzer, vcpkg): #or conan):
-            #    logging.info(f"cmake and ctest run successfully ({self.repo.full_name})")
-            #else:
-            #    logging.warning(f"cmake and ctest failed ({self.repo.full_name})")
                 
     def is_valid_commit(self, root: Path, sha: str) -> bool:
         vcpkg = self._has_root_vcpkg()
@@ -81,7 +76,7 @@ class StructureFilter:
         analyzer = CMakeAnalyzer(root)
         self.process = CMakeProcess(root, None, [], analyzer, "")
 
-        if not self.process.clone_repo(self.repo_id, root, sha=sha):
+        if not GitHandler().clone_repo(self.repo_id, root, sha=sha):
             logging.error(f"[{self.repo_id}] git cloning failed")
             return False
         
@@ -111,14 +106,6 @@ class StructureFilter:
     def _has_root_file(self, filename: str) -> bool:
         return filename in self.root_files
 
-    def _has_test_dir(self) -> bool:
-        """Check whether a repository has valid test directories."""
-        for item in self.tree_paths:
-            for tdir in conf.valid_test_dir:
-                if item.startswith(tdir):
-                    return True
-        return False
-
     def _get_repo_tree(self) -> tuple[list[GitTreeElement], list[str], list[GitTreeElement]]:
         tree = self.repo.get_git_tree(self.sha, recursive=True).tree
         tree_paths = [item.path for item in tree]
@@ -131,12 +118,6 @@ class StructureFilter:
         Fetch only CMakeLists.txt files from a GitHub repo using requests, preserving folder structure.
         """
         os.makedirs(dest, exist_ok=True)
-        """
-        head = self.repo.get_commits()[0]
-        sha = head.sha
-        owner, name = self.repo.full_name.split("/")
-        base_url = f"https://raw.githubusercontent.com/{owner}/{name}/{sha}"
-        """
         result_paths = []
         for item in self.cmake_tree:
             try: 
@@ -150,23 +131,6 @@ class StructureFilter:
             except Exception as e:
                 logging.warning(f"[{self.repo_id}] Failed to fetch/write {item.path}: {e}")
 
-            """
-            url = f"{base_url}/{item.path}"
-            try:
-                r = requests.get(url)
-                r.raise_for_status()
-
-                target_path = os.path.join(dest, item.path)
-                os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                with open(target_path, "wb") as f:
-                    f.write(r.content)
-
-                result_paths.append(target_path)
-            except requests.exceptions.RequestException as e:
-                logging.warning(f"Error fetching {url}: {e}")
-            except (OSError, IOError) as e:
-                logging.error(f"Failed to write {target_path}: {e}", exc_info=True)
-            """
         return result_paths
 
     def _extract_test_dirs(self) -> set[str]:

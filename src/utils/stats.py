@@ -21,7 +21,7 @@ class RepoStats:
         self.valid_repos += other.valid_repos
         return self
 
-    def write_final_log(self):
+    def write_final_log(self) -> None:
         logging.info(f"Repositories analyzed: {self.total_repos}")
         logging.info(f"Valid repositories: {self.valid_repos}")
         logging.info(f"Final Counter: {self.test_dirs}")
@@ -44,7 +44,7 @@ class CommitStats:
         self.lines_deleted += other.lines_deleted
         return self
 
-    def write_final_log(self):
+    def write_final_log(self) -> None:
         logging.info(f"Total commits analyzed: {self.num_commits}")
         logging.info(f"Performance-related commits: {self.perf_commits}")
         if self.num_commits > 0:
