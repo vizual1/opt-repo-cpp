@@ -1,8 +1,7 @@
-import os, logging
-import src.config as conf
+import logging
 from pathlib import Path
 
-class CommitTester:
+class Commit:
     def __init__(self, output_path: str):
         self.output_path = output_path
         Path(self.output_path).mkdir(parents=True, exist_ok=True)

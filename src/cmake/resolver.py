@@ -1,4 +1,4 @@
-import json, logging, subprocess, re, threading, jsonschema
+import json, logging, subprocess, re, threading, jsonschema, uuid
 import src.config as conf
 from typing import Any
 from pathlib import Path
@@ -44,11 +44,36 @@ class DependencyResolver:
                 logging.warning(f"Initializing empty cache ({e})")
                 self.mapping = {}
 
-        def save(self) -> None:
+        def save(self):
+            def reset_permissions(path: Path):
+                """Reset file permissions to writable"""
+                try:
+                    if path.exists():
+                        path.chmod(0o666)  # Read/write for all
+                except Exception:
+                    pass
+            
             tmp_path = self.mapping_path.with_suffix(".tmp")
-            with open(tmp_path, "w") as f:
-                json.dump(self.mapping, f, indent=4)
-            tmp_path.replace(self.mapping_path)
+
+            reset_permissions(self.mapping_path)
+            reset_permissions(tmp_path)
+            
+            try:
+                with open(tmp_path, "w") as f:
+                    json.dump(self.mapping, f, indent=4)
+                
+                if self.mapping_path.exists():
+                    self.mapping_path.unlink()
+                tmp_path.replace(self.mapping_path)
+                
+            except PermissionError as e:
+                try:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
+                except PermissionError:
+                    pass
+                logging.error(f"Failed to save cache: {e}")
+                raise
         
     def __init__(self, cache=None, handler=None, llm=None):
         self.cache = cache or self.DependencyCache()

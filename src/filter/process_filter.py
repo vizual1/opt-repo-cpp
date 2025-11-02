@@ -1,7 +1,8 @@
 import tempfile, logging
-from src.cmake.process import CMakeProcess, GitHandler
+from src.cmake.process import CMakeProcess
+from src.gh.clone import GitHandler
 from src.cmake.analyzer import CMakeAnalyzer
-from src.utils.dataclasses import Config
+from src.utils.config import Config
 from src.filter.structure_filter import StructureFilter
 from src.filter.flags_filter import FlagFilter
 from pathlib import Path
@@ -74,10 +75,10 @@ class ProcessFilter:
         container_name: str, 
         docker_image: str = ""
     ) -> tuple[list[float], Optional[StructureFilter]]:
-        structure = StructureFilter(self.repo_id, self.config.git, self.root, self.sha)
+        structure = StructureFilter(self.repo_id, self.config, self.root, self.sha)
 
         logging.info(f"[{self.repo_id}] Testing {self.sha}...")
-        if self.root and not structure.is_valid_commit(self.root, self.sha):
+        if self.root and not structure.is_valid_commit(self.root, self.sha, docker_test_dir=self.config.testing['docker_test_dir']):
             logging.error(f"[{self.repo_id}] commit cmake and ctest failed ({self.sha})")
             return [], None
         
@@ -112,6 +113,7 @@ class ProcessFilter:
                 logging.error(f"[{self.repo_id}] {msg} test failed ({self.sha})")
                 return [], None
             
+            commands = structure.process.commands
             test_time = structure.process.test_time
             logging.info(f"[{self.repo_id}] {msg} build and test successful ({self.sha})")
             return test_time, structure

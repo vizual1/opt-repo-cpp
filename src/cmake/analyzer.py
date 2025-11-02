@@ -35,6 +35,3 @@ class CMakeAnalyzer:
 
     def get_docker(self) -> str:
         return conf.docker_map[self.get_ubuntu_version()]
-
-    def parse_ctest_output(self, output: str) -> dict[str, Union[int, float]]:
-        return self.parser.parse_ctest_output(output)

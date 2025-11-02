@@ -1,5 +1,5 @@
 import os
-from typing import Any
+from typing import Any, Union, Optional
 from datetime import datetime, timezone
 
 storage: dict[str, str] = {
@@ -9,7 +9,6 @@ storage: dict[str, str] = {
     "repos": os.path.join("data", "repo_urls.txt"),
     
     "store_analyze": "data/analyze",
-    
     "results": "data/results.txt",
     "cmake-dep": "cache/cmake-dep.json",
 }
@@ -66,6 +65,7 @@ testing: dict[str, Any] = {
     # number of times to tests the commits (warmup + commit_test_times)
     "warmup": 1,
     "commit_test_times": 5,
+    "docker_test_dir": "/test_workspace"
 }
 
 resolver: dict[str, str] = {
@@ -129,7 +129,7 @@ docker_map: dict[str, str] = {
 }
 
 
-TEST_KEYWORDS = [
+test_keywords = [
     "test", "tests", "unittest", "unittests", "testing",
 
     "gtest", "googletest",
@@ -137,3 +137,10 @@ TEST_KEYWORDS = [
     "benchmark", "perf", "gperf"
 ]
 
+resource_limits: dict[str, Any] = {
+    'cpuset_cpus': '2,3',
+    'mem_limit': '8g',
+    'memswap_limit': '8g',
+    'cpu_quota': 200000,
+    'cpu_period': 100000 
+}

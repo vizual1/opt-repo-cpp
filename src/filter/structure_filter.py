@@ -1,4 +1,4 @@
-import logging, tempfile, os, requests
+import logging, tempfile, os
 from collections import Counter
 from github import Github
 from github.GitTreeElement import GitTreeElement
@@ -6,20 +6,20 @@ from typing import Optional
 from pathlib import Path
 from github.ContentFile import ContentFile
 
-import src.config as conf
+from src.utils.config import Config
 from src.cmake.analyzer import CMakeAnalyzer
-from src.cmake.process import CMakeProcess, GitHandler
+from src.cmake.process import CMakeProcess
+from src.gh.clone import GitHandler
 from src.utils.stats import RepoStats
-from src.filter.flags_filter import FlagFilter
-#from src.docker.generator import DockerBuilder
 
 class StructureFilter:
     """
     This class analyses and filters the structure of a repository.
     """
-    def __init__(self, repo_id: str, git: Github, root: Optional[Path] = None, sha: str = ""):
+    def __init__(self, repo_id: str, config: Config, root: Optional[Path] = None, sha: str = ""):
         self.repo_id = repo_id
-        self.repo = git.get_repo(self.repo_id)
+        self.config = config
+        self.repo = self.config.git.get_repo(self.repo_id)
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
@@ -45,7 +45,7 @@ class StructureFilter:
             analyzer = CMakeAnalyzer(tmpdir)
 
             analyzer.reset()
-            if not analyzer.has_testing(nolist=conf.testing['no_list_testing']):
+            if not analyzer.has_testing(nolist=self.config.testing['no_list_testing']):
                 logging.warning(f"[{self.repo_id}] invalid ctest")
                 return False
             
@@ -54,7 +54,7 @@ class StructureFilter:
                 logging.debug(f"[{self.repo_id}] test directories: {test_dirs}")
                 for d in test_dirs:
                     self.stats.test_dirs[d] += 1
-                conv_test_dir = test_dirs & conf.valid_test_dir
+                conv_test_dir = test_dirs & self.config.valid_test_dir
 
                 if conv_test_dir:
                     logging.debug(f"[{self.repo_id}] conventional test directories {conv_test_dir}")
@@ -64,7 +64,7 @@ class StructureFilter:
             logging.info(f"[{self.repo_id}] ctest is defined")
             return True
                 
-    def is_valid_commit(self, root: Path, sha: str) -> bool:
+    def is_valid_commit(self, root: Path, sha: str, docker_test_dir: str) -> bool:
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 
@@ -74,14 +74,14 @@ class StructureFilter:
         
         logging.info(f"[{self.repo_id}] CMakeLists.txt at root found")
         analyzer = CMakeAnalyzer(root)
-        self.process = CMakeProcess(root, None, [], analyzer, "")
+        self.process = CMakeProcess(root, None, [], analyzer, "", docker_test_dir=docker_test_dir)
 
         if not GitHandler().clone_repo(self.repo_id, root, sha=sha):
             logging.error(f"[{self.repo_id}] git cloning failed")
             return False
         
         self.process.analyzer.reset()
-        if not self.process.analyzer.has_testing(nolist=conf.testing['no_list_testing']):
+        if not self.process.analyzer.has_testing(nolist=self.config.testing['no_list_testing']):
             logging.error(f"[{self.repo_id}] invalid ctest")
             return False
 
@@ -142,7 +142,7 @@ class StructureFilter:
             parts = path.split("/")
 
             for i, part in enumerate(parts[:-1]):
-                if any(keyword in part for keyword in conf.TEST_KEYWORDS):
+                if any(keyword in part for keyword in self.config.test_keywords):
                     test_dir = "/".join(parts[:i+1])
                     test_dirs.add(test_dir)
 

@@ -5,7 +5,7 @@ from src.llm.prompt import Prompt
 from src.llm.openai import OpenRouterLLM
 from src.llm.ollama import OllamaLLM
 from typing import Optional
-from src.utils.dataclasses import Config
+from src.utils.config import Config
 
 perf_label_keywords = {
     'performance', 'perf', 'optimization', 'optimisation', 'optimize', 'optimize',

@@ -1,6 +1,6 @@
 import logging, time
 from tqdm import tqdm
-from src.utils.dataclasses import Config
+from src.utils.config import Config
 from github.GithubException import GithubException, RateLimitExceededException
 
 class RepositoryCrawler:

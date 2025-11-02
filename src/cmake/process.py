@@ -1,11 +1,12 @@
 
-import logging, subprocess, os, shutil, docker
+import logging, subprocess, os, shutil
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.resolver import DependencyResolver
-from docker.types import Mount
+from src.utils.parser import parse_ctest_output
+from src.docker.manager import DockerManager
 from typing import Optional
-import posixpath
+
 
 vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
 os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
@@ -19,13 +20,15 @@ class CMakeProcess:
         flags: list[str], 
         analyzer: CMakeAnalyzer, 
         package_manager: str,
-        jobs: int = 1
+        jobs: int = 1,
+        docker_test_dir: str = ""
     ):
         self.project_root = Path(__file__).resolve().parents[2]
         self.root = (self.project_root / root).resolve() if not root.is_absolute() else root.resolve()
-        self.build_path = self.root / "build"
+        self.docker_test_dir = docker_test_dir
+        self.build_path = Path(self.to_container_path(self.root / "build"))
         self.test_path = self.build_path / (enable_testing_path if enable_testing_path else "")
-
+        
         self.flags: list[str] = flags
         self.analyzer = analyzer
         self.package_manager = package_manager
@@ -40,6 +43,7 @@ class CMakeProcess:
         self.other_flags: set[str] = set()
         self.resolver = DependencyResolver()
         self.test_time: list[float] = []
+        self.commands: list[str] = []
 
     def set_enable_testing(self, enable_testing_path: Path) -> None:
         self.root = self.root
@@ -49,7 +53,7 @@ class CMakeProcess:
         self.flags = flags
 
     def set_docker(self, docker_image: str, new: bool):
-        self.docker = DockerManager(self.root, docker_image, new)
+        self.docker = DockerManager(self.root.parent, docker_image, self.docker_test_dir, new)
 
     def start_docker_image(self, container_name: str, new: bool = True) -> None:
         if not self.docker_image:
@@ -59,11 +63,61 @@ class CMakeProcess:
         self.docker.start_docker_container(container_name)
         self.container = self.docker.container
 
-    def save_docker_image(self, repo_id: str, sha: str) -> None:
+        copy_cmd = ["cp", "-r", "/workspace", self.docker_test_dir]
+        exit_code, stdout, stderr = self.docker.run_command_in_docker(copy_cmd, self.root, check=False)
+        if exit_code != 0:
+            logging.error(f"Copy files failed with exit code {exit_code}")
+            if stdout: logging.info(f"stdout: {stdout}")
+            if stderr: logging.warning(f"stderr: {stderr}")
+
+    def save_docker_image(self, repo_id: str, sha: str, new_cmd: list[str], old_cmd: list[str]) -> None:
         image_name = ("_".join(repo_id.split("/")) + f"_{sha}").lower()
         container_id = self.container.id if self.container and self.container.id else "test"
-        subprocess.run(["docker", "commit", container_id, image_name])
-        subprocess.run(["docker", "save", image_name, "-o", f"{image_name}.tar"])
+        
+        self.copy_log_to_container(container_id)
+        self.copy_commands_to_container(new_cmd, old_cmd)
+
+        result = subprocess.run(["docker", "commit", container_id, image_name], capture_output=True, text=True)
+        if result.returncode != 0:
+            logging.error(f"docker commit failed: {result.stderr}")
+        
+        result = subprocess.run(["docker", "save", image_name, "-o", f"{image_name}.tar"], capture_output=True, text=True)
+        if result.returncode != 0:
+            logging.error(f"docker save failed: {result.stderr}")
+
+    def copy_log_to_container(self, container_id: str) -> None:
+        for handler in logging.getLogger().handlers:
+            if isinstance(handler, logging.FileHandler):
+                log_path = Path(handler.baseFilename)
+                result = subprocess.run([
+                    "docker", "cp", str(log_path), f"{container_id}:{self.docker_test_dir}/logs"
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    logging.error(f"Copying log file with docker cp failed: {result.stderr}")
+                else:
+                    logging.info(f"Copied log file {log_path} to {container_id}:{self.docker_test_dir}/logs")
+                break
+
+    def copy_commands_to_container(self, new_cmd: list[str], old_cmd: list[str]) -> None:
+        for i, c in enumerate(new_cmd): 
+            if i < 2:
+                save = "build"
+            else:
+                save = "test"
+            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/new_{save}.sh"]
+            exit_code, _, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
+            if exit_code != 0:
+                logging.error(f"Copying the build and test commands failed with: {exit_code}")
+        for i, c in enumerate(old_cmd):
+            if i < 2:
+                save = "build"
+            else:
+                save = "test"
+            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/old_{save}.sh"]
+            exit_code, _, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
+            if exit_code != 0:
+                logging.error(f"Copying the build and test commands failed with: {exit_code}")
 
 ############### RUNNING ###############
         
@@ -104,6 +158,7 @@ class CMakeProcess:
             missing_dependencies = self.resolver.package_handler.get_missing_dependencies(
                 self.config_stdout, 
                 self.config_stderr, 
+
                 Path(self.build_path) / "CMakeCache.txt"
             )
 
@@ -133,7 +188,7 @@ class CMakeProcess:
         cmd = [
             'cmake', 
             '-S', self.to_container_path(self.root), 
-            '-B', self.to_container_path(self.build_path), 
+            '-B', self.build_path, 
             '-G', 'Ninja',
 
             '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
@@ -173,7 +228,7 @@ class CMakeProcess:
             try:
                 logging.info("Installing through package manager conan...")
                 install = ['conan', 'install', '.', '-build=missing'] 
-                exit_code, stdout, stderr = self.docker._run_command_in_docker(install, workdir=self.root, check=False)
+                exit_code, stdout, stderr = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
                 if exit_code == 0:
                     logging.info(f"Conan Output:\n{stdout}")
                 else:
@@ -183,9 +238,10 @@ class CMakeProcess:
             except Exception as e:
                 logging.error(f"Conan installation failed: {e}")
                 return False
-            
+        
+        self.commands.append(" ".join(map(str, cmd)))
         logging.info(" ".join(map(str, cmd)))
-        exit_code, stdout, stderr = self.docker._run_command_in_docker(cmd, check=False)
+        exit_code, stdout, stderr = self.docker.run_command_in_docker(cmd, self.root, check=False)
 
         if exit_code == 0:
             logging.info(f"CMake Configuration successful for {self.build_path}")
@@ -202,12 +258,13 @@ class CMakeProcess:
 ############### BUILDING ###############
 
     def _build(self) -> bool:
-        cmd = ['cmake', '--build', self.to_container_path(self.build_path), '--']
+        cmd = ['cmake', '--build', self.build_path, '--']
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
 
+        self.commands.append(" ".join(map(str, cmd)))
         logging.info(" ".join(map(str, cmd)))
-        exit_code, stdout, stderr = self.docker._run_command_in_docker(cmd, check=False)
+        exit_code, stdout, stderr = self.docker.run_command_in_docker(cmd, self.root, check=False)
         
         if exit_code == 0:
             logging.info(f"CMake build completed for {self.root}")
@@ -235,20 +292,19 @@ class CMakeProcess:
         if test_repeat < 1:
             return True
         
-        test_dir = Path(self.test_path)
         if test_exec:
             self._isolated_ctest(test_exec)
         cmd = ['ctest', '--output-on-failure', '--fail-if-no-tests']
         
         try:
-            exit_code, stdout, stderr = self.docker._run_command_in_docker(
-                ['ctest', '--help'], workdir=self.test_path, check=False
+            exit_code, stdout, stderr = self.docker.run_command_in_docker(
+                ['ctest', '--help'], self.root, workdir=self.test_path, check=False
             )
             if '--fail-if-no-tests' not in stdout:
                 # Fallback for older CMake versions: check if any tests exist
                 check_cmd = ['ctest', '-N']
-                exit_code, stdout_check, _ = self.docker._run_command_in_docker(
-                    check_cmd, workdir=self.test_path, check=False
+                exit_code, stdout_check, _ = self.docker.run_command_in_docker(
+                    check_cmd, self.root, workdir=self.test_path, check=False
                 )
                 if 'No tests were found' in stdout_check or 'Test #' not in stdout_check:
                     logging.error(f"No tests found in {self.test_path}")
@@ -256,13 +312,15 @@ class CMakeProcess:
                 
                 cmd = ['ctest', '--output-on-failure']
 
+            self.commands.append(f"cd {str(self.docker_test_dir/self.test_path)}")
+            self.commands.append(" ".join(map(str, cmd)))
             elapsed_times: list[float] = []
             for i in range(warmup + test_repeat):
                 logging.info(f"{' '.join(map(str, cmd))} in {self.test_path}")
-                exit_code, stdout, stderr = self.docker._run_command_in_docker(
-                    cmd, workdir=self.test_path, check=False
+                exit_code, stdout, stderr = self.docker.run_command_in_docker(
+                    cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
                 )
-                stats = self.analyzer.parse_ctest_output(stdout)
+                stats = parse_ctest_output(stdout)
                 elapsed: float = stats['total_time_sec']
                 elapsed_times.append(elapsed)
 
@@ -283,6 +341,7 @@ class CMakeProcess:
             logging.error(f"CTest execution failed: {e}", exc_info=True)
             return False
 
+    # TODO
     def _isolated_ctest(self, test_exec: list[str]) -> bool:
         test_dir = Path(self.test_path)
         list_test_arg = self.analyzer.get_list_test_arg()[0]
@@ -312,149 +371,7 @@ class CMakeProcess:
     
     def to_container_path(self, path: Path) -> str:
         rel = path.relative_to(self.root.parent)
-        return f"/workspace/{rel.as_posix()}"
+        return f"{self.docker_test_dir}/workspace/{rel.as_posix()}"
     
-
-class GitHandler:
-    def _get_default_branch(self, repo_url: str) -> str:
-        result = subprocess.run(
-            ["git", "ls-remote", "--symref", repo_url, "HEAD"],
-            capture_output=True, text=True
-        )
-
-        for line in result.stdout.splitlines():
-            if line.startswith("ref:"):
-                return line.split()[1].split("/")[-1]
-        return "main" 
-
-    def clone_repo(self, repo_id: str, repo_path: Path, branch: str = "main", sha: str = "") -> bool:
-        url = f"https://github.com/{repo_id}.git"
-        
-        if os.path.exists(repo_path):
-            shutil.rmtree(repo_path)
-        
-        if sha:
-            logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
-            try:
-                subprocess.run(
-                    ["git", "config", "--global", "--add", "safe.directory", "*"],
-                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                )
-
-                subprocess.run(
-                    ["git", "clone", "--depth=1", url, repo_path],
-                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                )
-                
-                subprocess.run(
-                    ["git", "fetch", "--depth=1", "origin", sha],
-                    cwd=repo_path,
-                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                )
-                
-                subprocess.run(
-                    ["git", "checkout", sha],
-                    cwd=repo_path,
-                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                )
-                
-                subprocess.run(
-                    ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
-                    cwd=repo_path,
-                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                )
-                
-                logging.info(f"Repository checked out to commit {sha} successfully")
-                return True
-                
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to clone/checkout commit {sha}", exc_info=True)
-                logging.error(f"Output (stdout):\n{e.stdout}")
-                logging.error(f"Error (stderr):\n{e.stderr}")
-                return False
-
-        if branch == "main":
-            branch = self._get_default_branch(url)
-        
-        logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
-        try:
-            result = subprocess.run(
-                ["git", "clone", "--recurse-submodules", "--shallow-submodules", 
-                 "--branch", branch, "--depth=1", url, repo_path], 
-                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-            )
-            logging.info(f"Repository cloned successfully")
-            return True
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to clone repository {url} (branch: {branch})", exc_info=True)
-            logging.error(f"Output (stdout):\n{e.stdout}")
-            logging.error(f"Error (stderr):\n{e.stderr}")
-            return False
         
         
-class DockerManager:
-    def __init__(self, root: Path, docker_image: str, new: bool):
-        self.root = root
-        self.docker_image = docker_image
-        self.new = new
-
-    def stop_container(self) -> None:
-        if self.container:
-            self.container.stop()
-            self.container.remove()
-            self.container = None
-
-    def start_docker_container(self, container_name: str) -> None:
-        client = docker.from_env()
-        try:
-            try:
-                self.container = client.containers.get(container_name)
-                logging.info(f"Reusing existing container {container_name}")
-                return
-            except docker.errors.NotFound: # type: ignore
-                pass
-            
-            mount = Mount(
-                target="/workspace", source=str(self.root.parent), type="bind", read_only=False
-            )
-            self.container = client.containers.run(
-                self.docker_image,
-                command=["sleep", "infinity"],
-                name=container_name,
-                mounts=[mount],
-                working_dir="/workspace",
-                detach=True,
-                tty=True,
-                remove=False
-            )
-        except Exception as e:
-            logging.error(f"Docker execution failed: {e}")
-
-    def _run_command_in_docker(self, cmd, workdir: Optional[Path] = None, check: bool = True) -> tuple[int, str, str]:
-        """Run command in Docker container if docker_image is set, otherwise locally"""
-        if not self.docker_image:
-            try:
-                result = subprocess.run(cmd, cwd=workdir or self.root, check=check, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                return result.returncode, result.stdout, result.stderr
-            except subprocess.CalledProcessError as e:
-                return e.returncode, e.stdout, e.stderr
-            
-        rel_root = os.path.relpath(self.root, self.root.parent)
-        container_root = posixpath.join("/workspace", rel_root.replace("\\", "/"))
-
-        if workdir:
-            rel_workdir = os.path.relpath(workdir, self.root.parent).replace("\\", "/")
-            container_workdir = posixpath.join("/workspace", rel_workdir)
-        else:
-            container_workdir = container_root
-        
-        if not self.container:
-            logging.error(f"No docker container started")
-            return 1, "", ""
-
-        cmd = [str(x) for x in cmd]
-        exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
-        output = output.decode(errors="ignore") if output else ""
-        self.container.exec_run(["bash", "-c", f"echo '{output}' >> /workspace/logs/{'new' if self.new else 'old'}.log"])
-        logs = self.container.logs().decode()
-        return exit_code, output, logs
