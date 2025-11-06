@@ -6,6 +6,7 @@ from src.llm.openai import OpenRouterLLM
 from src.llm.ollama import OllamaLLM
 from typing import Optional
 from src.utils.config import Config
+from github.GithubException import UnknownObjectException
 
 perf_label_keywords = {
     'performance', 'perf', 'optimization', 'optimisation', 'optimize', 'optimize',
@@ -43,7 +44,7 @@ class CommitFilter:
             result = (self._simple_filter() or self._performance_issue_commit_filter()) and self._only_cpp_source_modified()
             self._save_cache(self.commit, result)
         elif self.config.filter == "llm":
-            result = self._only_cpp_source_modified() and (self._performance_issue_commit_filter() or self._llm_filter(max_msg_size=max_msg_size))
+            result = self._only_cpp_source_modified() and self.fixed_performance_issue() is not None #(self._performance_issue_commit_filter() or self._llm_filter(max_msg_size=max_msg_size))
             self._save_cache(self.commit, result, extra=f"_{name}")
         else:
             result = False
@@ -257,3 +258,173 @@ class CommitFilter:
 
         # None of the linked issues/PRs look performance-related
         return False
+    
+    def extract_fixed_issues(self) -> set[int]:
+        """
+        Extract issue numbers from commit message that are explicitly closed/fixed.
+        
+        Args:
+            commit_message: The commit message to parse
+            repo: The GitHub repository object
+            
+        Returns:
+            Set of issue numbers that are explicitly closed by this commit
+            
+        Examples:
+            - "Fixes #123" -> {123}
+            - "Closes #456 and resolves #789" -> {456, 789}
+            - "Fix GH-123" -> {123}
+            - "Resolves owner/repo#456" -> {456} (if matches current repo)
+        """
+        commit_message = self.commit.commit.message
+        if not commit_message:
+            return set()
+            
+        msg = commit_message.strip()
+        out: set[int] = set()
+
+        # Enhanced regex patterns to catch more formats
+        closing_prefix = r'(?:(?<![A-Za-z])(?:fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved|address|addresses|addressed))(?:\s*[:\-])?\s+'
+        
+        # Individual issue reference patterns (without named groups to avoid conflicts)
+        issue_patterns = [
+            r'#(\d+)',  # #123
+            r'GH-(\d+)',  # GH-123
+            r'issue\s*#(\d+)',  # issue #123
+            r'bug\s*#(\d+)',  # bug #123
+        ]
+        
+        # Full repository reference patterns
+        full_repo_patterns = [
+            r'([\w.-]+/[\w.-]+)#(\d+)',  # owner/repo#123
+            r'https?://github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)',  # Full URL
+        ]
+        
+        # PR patterns (to be filtered out)
+        pr_patterns = [
+            r'https?://github\.com/([\w.-]+/[\w.-]+)/pull/(\d+)',  # PR URL
+        ]
+        
+        # Compile all patterns
+        all_issue_patterns = issue_patterns + full_repo_patterns
+        compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in all_issue_patterns]
+        compiled_pr_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in pr_patterns]
+        
+        # Main fix block pattern (simplified to avoid group conflicts)
+        fix_block = re.compile(
+            closing_prefix + r'(?:' + '|'.join(all_issue_patterns) + r')(?:\s*(?:,|\band\b|&|\bor\b|\|)\s*(?:' + '|'.join(all_issue_patterns) + r'))*', 
+            re.IGNORECASE | re.MULTILINE
+        )
+
+        # Cache for API calls to avoid duplicate requests
+        issue_cache = {}
+        
+        def is_issue(n: int) -> bool:
+            """Check if the number refers to an issue (not a PR)."""
+            # Check cache first
+            if n in issue_cache:
+                return issue_cache[n]
+                
+            try:
+                issue = self.repo.get_issue(n)
+                is_issue_result = getattr(issue, "pull_request", None) is None
+                issue_cache[n] = is_issue_result
+                return is_issue_result
+            except UnknownObjectException:
+                # Issue doesn't exist or is private
+                issue_cache[n] = False
+                return False
+            except Exception as e:
+                # Handle rate limiting and other API errors
+                logging.warning(f"Error checking issue #{n} in {self.repo.full_name}: {e}")
+                issue_cache[n] = False  # Assume it's an issue to be safe
+                return False
+
+        try:
+            # Find all fix blocks in the commit message
+            for block in fix_block.finditer(msg):
+                block_text = block.group(0)
+                logging.debug(f"Found fix block: '{block_text}'")
+                
+                # Extract issue references using individual patterns
+                for pattern in compiled_patterns:
+                    for match in pattern.finditer(block_text):
+                        issue_number = None
+                        
+                        if len(match.groups()) == 1:
+                            # Simple patterns like #123, GH-123, issue #123, bug #123
+                            issue_number = int(match.group(1))
+                        elif len(match.groups()) == 2:
+                            # Full repo patterns like owner/repo#123 or full URLs
+                            repo_name = match.group(1)
+                            if repo_name.lower() == self.repo.full_name.lower():
+                                issue_number = int(match.group(2))
+                        
+                        if issue_number is not None and issue_number > 0:
+                            if is_issue(issue_number):
+                                out.add(issue_number)
+                
+                # Check for PR references to skip them
+                for pr_pattern in compiled_pr_patterns:
+                    for match in pr_pattern.finditer(block_text):
+                        logging.debug(f"Skipping PR reference: {match.group(0)}")
+                            
+        except Exception as e:
+            logging.error(f"Error parsing commit message for issues: {e}")
+            # Return what we found so far rather than failing completely
+            return out
+
+        return out
+
+    def fixed_performance_issue(self) -> Optional[int]:
+        msg = self.commit.commit.message or ""
+
+        issue_refs = self.extract_fixed_issues()
+
+        if not issue_refs:
+            return None
+
+        issue_title_body_tuples = []
+        for number in issue_refs:
+            try:
+                gh_issue = self.repo.get_issue(number)
+
+                if gh_issue.pull_request is not None:
+                    continue
+
+                title = gh_issue.title or ""
+                body = gh_issue.body or ""
+
+                issue_title_body_tuples.append((number, title, body))
+
+                p = Prompt(messages=[Prompt.Message("user",
+                    f"The following is an issue in the {self.repo.full_name} repository:\n\n###Issue Title###{title}\n###Issue Title End###\n\n###Issue Body###{body}\n###Issue Body End###"
+                    + f"\n\nThe following is the commit message that fixes this issue:\n\n###Commit Message###{msg}\n###Commit Message End###"
+                    + f"\n\nIs this issue likely to be related to improving execution time? Answer by only one word: 'yes' or 'no' (without any other text or punctuation). If you do not have enough information to decide, say 'no'."
+                )])
+                if self.config.llm["ollama"]:
+                    self.llm = OllamaLLM(self.config.llm['ollama_stage1_model'])
+                res = self.llm.generate(p)
+
+                if "yes" in res.lower().strip():
+                    logging.info(f"Commit {self.commit.sha} in {self.repo.full_name} is related to a likely performance issue prompted by GPT5_Nano (#{number}).")
+
+                    # Also check with gpt5_codex
+                    p = Prompt(messages=[Prompt.Message("user",
+                        f"The following is an issue in the {self.repo.full_name} repository:\n\n###Issue Title###{title}\n###Issue Title End###\n\n###Issue Body###{body}\n###Issue Body End###"
+                        + f"\n\nThe following is the commit message that fixes this issue:\n\n###Commit Message###{msg}\n###Commit Message End###"
+                        + f"\n\nIs this issue related to improving execution time? Answer by only one word: 'yes' or 'no' (without any other text or punctuation). If you do not have enough information to decide, say 'no'.")], 
+                    )
+                    if self.config.llm["ollama"]:
+                        self.llm = OllamaLLM(self.config.llm['ollama_stage2_model'])
+                    res = self.llm.generate(p)
+
+                    if "yes" in res.lower().strip():
+                        logging.info(f"Commit {self.commit.sha} in {self.repo.full_name} is related to a likely performance issue prompted by GPT5_Codex (#{number}).")
+                        return number
+
+            except UnknownObjectException:
+                continue
+            
+        logging.info(f"Commit {self.commit.sha} in {self.repo.full_name} is not fixing performance issues.")
+        return None

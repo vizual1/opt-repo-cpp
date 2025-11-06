@@ -61,10 +61,10 @@ likelihood: dict[str, int] = {
 
 testing: dict[str, Any] = {
     # filters repositories and commits by target_link_libraries with gtest, catch2, doctest, etc.
-    "no_list_testing": True,
+    "no_list_testing": False,
     # number of times to tests the commits (warmup + commit_test_times)
     "warmup": 1,
-    "commit_test_times": 5,
+    "commit_test_times": 30,
     "docker_test_dir": "/test_workspace"
 }
 

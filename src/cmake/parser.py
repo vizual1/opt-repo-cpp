@@ -147,7 +147,7 @@ class CMakeParser:
                     # run individual tests with ./test_executable TESTNAME
                     self.list_test_arg.add("--list-test-cases") #maybe also --list-test-suites possible
                 elif "boost" in library.lower():
-                    # run individual tests wiht ./test_executable --run_test=suite/test
+                    # run individual tests with ./test_executable --run_test=suite/test
                     self.list_test_arg.add("--list_content")
                 elif "qt" in library.lower():
                     # run individual tests wiht ./test_executable TESTNAME
