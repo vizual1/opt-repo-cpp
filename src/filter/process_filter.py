@@ -16,18 +16,17 @@ class ProcessFilter:
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
-    def valid_run(self, container_name: str) -> bool:
+    def valid_run(self, container_name: str, docker_test_dir: str) -> bool:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
             tmp_path = Path(tmpdir) 
             analyzer = CMakeAnalyzer(tmp_path)
-            process = CMakeProcess(tmp_path, None, [], analyzer, "")
+            process = CMakeProcess(tmp_path, None, [], analyzer, "", docker_test_dir=docker_test_dir)
 
             if not GitHandler().clone_repo(self.repo_id, tmp_path):
                 logging.error(f"[{self.repo_id}] git cloning failed")
                 return False
             
             process.analyzer.reset()
-
             if not process.analyzer.has_testing(nolist=self.config.testing['no_list_testing']):
                 logging.error(f"[{self.repo_id}] invalid ctest")
                 return False

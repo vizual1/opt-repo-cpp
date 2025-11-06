@@ -57,7 +57,7 @@ class RepositoryPipeline(BasePipeline):
                 structure = StructureFilter(repo, self.config)
                 process = ProcessFilter(repo, self.config)
 
-                if structure.is_valid() and process.valid_run("_".join(repo.split("/"))):
+                if structure.is_valid() and process.valid_run("_".join(repo.split("/")), self.config.testing['docker_test_dir']):
                     self.valid_repos.append(structure.repo)
                     if self.config.popular or self.config.output:
                         Writer(structure.repo.full_name, self.config.output).write_repo()

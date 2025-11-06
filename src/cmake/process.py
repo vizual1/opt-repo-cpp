@@ -59,7 +59,7 @@ class CMakeProcess:
         if not self.docker_image:
             self.docker_image = self.analyzer.get_docker()
         logging.info(f"Docker Version {self.docker_image}")
-        self.set_docker(self.docker_image, new)
+        self.set_docker(self.docker_image, new, commit=commit)
         self.docker.start_docker_container(container_name)
         self.container = self.docker.container
 
