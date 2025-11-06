@@ -30,8 +30,8 @@ llm: dict[str, Any] = {
     'model': 'openai/gpt-4.1-nano', #'moonshotai/kimi-k2:free', #'openai/gpt-oss-20b:free' #'deepseek/deepseek-chat-v3.1:free' #'z-ai/glm-4.5-air:free'
 
     'ollama': True, 
-    'ollama_stage1_model': "qwen2.5:7b-instruct-q4_K_M",
-    'ollama_stage2_model': "codellama:7b-instruct", #"codellama:13b-instruct",
+    'ollama_stage1_model': "mistral", #"qwen2.5:7b-instruct-q4_K_M",
+    'ollama_stage2_model': "llama3:8b-instruct-q4_0", #"codellama:7b-instruct", #"codellama:13b-instruct",
     'ollama_resolver_model': "qwen2.5:7b-instruct-q4_K_M",
     #'ollama_model': "mistral", # "phi3:mini" # "qwen2.5:7b-instruct-q4_K_M"
     'ollama_url': "http://127.0.0.1:11434/api/generate", #"http://host.docker.internal:11434/api/generate", 
