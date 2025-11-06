@@ -98,7 +98,10 @@ class RepositoryCrawler:
                     # case if commits sha were given and extract owner/repo of the form owner_repo_filtered.txt
                     repo_ids.append("/".join(path.split('/')[-1].split('_')[0:2]))
                     break
-                repo_ids.append(line.removeprefix("https://github.com/").strip())
+                elif len(line.split(',')) > 1:
+                    repo_ids.append(line.split(',')[0].removeprefix("https://github.com/").strip())
+                else:
+                    repo_ids.append(line.removeprefix("https://github.com/").strip())
 
             logging.info(f"Loaded {len(repo_ids)} repository URLs from {path}")
 

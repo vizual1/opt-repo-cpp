@@ -60,7 +60,7 @@ class RepositoryPipeline(BasePipeline):
                 if structure.is_valid() and process.valid_run("_".join(repo.split("/")), self.config.testing['docker_test_dir']):
                     self.valid_repos.append(structure.repo)
                     if self.config.popular or self.config.output:
-                        Writer(structure.repo.full_name, self.config.output).write_repo()
+                        Writer(structure.repo.full_name, self.config.output).write_repo(process.list_test_arg[0:1])
 
                 elif self.config.output:
                     Writer(structure.repo.full_name, self.config.output_fail).write_repo()

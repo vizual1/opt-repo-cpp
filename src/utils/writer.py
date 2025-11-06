@@ -15,8 +15,9 @@ class Writer:
         self.output_path = output_path
         self.file: Optional[str] = None
 
-    def write_repo(self) -> None:
-        msg = f"{self.owner}/{self.name}\n"
+    def write_repo(self, m: list[str] = []) -> None:
+        msg = ",".join([f"{self.owner}/{self.name}"] + m)
+        msg += "\n"
         path = Path(self.output_path)
         self._write(path, msg)
 

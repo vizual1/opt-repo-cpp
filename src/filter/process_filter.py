@@ -17,8 +17,10 @@ class ProcessFilter:
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
     def valid_run(self, container_name: str, docker_test_dir: str) -> bool:
-        with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
-            tmp_path = Path(tmpdir) 
+        tmp_root = Path.cwd()/"tmp"
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=tmp_root) as tmpdir:
+            tmp_path = Path(tmpdir)
             analyzer = CMakeAnalyzer(tmp_path)
             process = CMakeProcess(tmp_path, None, [], analyzer, "", docker_test_dir=docker_test_dir)
 
@@ -31,6 +33,8 @@ class ProcessFilter:
                 logging.error(f"[{self.repo_id}] invalid ctest")
                 return False
             
+            self.list_test_arg = list(process.analyzer.parser.list_test_arg)
+
             flags = FlagFilter(process.analyzer.has_build_testing_flag()).get_valid_flags()
             sorted_testing_path = self.sort_testing_path(process.analyzer.parser.enable_testing_path)
             if len(sorted_testing_path) == 0:
@@ -46,7 +50,7 @@ class ProcessFilter:
                 process.set_enable_testing(enable_testing_path)
                 process.set_flags(flags)
                 process.docker_image = self.config.docker
-                process.start_docker_image(container_name, commit=False)
+                process.start_docker_image(container_name)
             
                 if not process.build():
                     logging.error(f"[{self.repo_id}] build failed")
