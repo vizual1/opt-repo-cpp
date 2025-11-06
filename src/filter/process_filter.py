@@ -47,7 +47,7 @@ class ProcessFilter:
                 process.set_enable_testing(enable_testing_path)
                 process.set_flags(flags)
                 process.docker_image = self.config.docker
-                process.start_docker_image(container_name)
+                process.start_docker_image(container_name, commit=False)
             
                 if not process.build():
                     logging.error(f"[{self.repo_id}] build failed")

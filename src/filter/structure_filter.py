@@ -112,7 +112,6 @@ class StructureFilter:
         cmake_tree = [item for item in tree if item.type == "blob" and item.path.endswith("CMakeLists.txt")]
         return cmake_tree, tree_paths, tree
     
-    # TODO: test
     def _get_cmake_lists(self, dest: Path) -> list[str]:
         """
         Fetch only CMakeLists.txt files from a GitHub repo using requests, preserving folder structure.

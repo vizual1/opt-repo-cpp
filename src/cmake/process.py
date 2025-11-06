@@ -52,10 +52,10 @@ class CMakeProcess:
     def set_flags(self, flags: list[str]) -> None:
         self.flags = flags
 
-    def set_docker(self, docker_image: str, new: bool):
-        self.docker = DockerManager(self.root.parent, docker_image, self.docker_test_dir, new)
+    def set_docker(self, docker_image: str, new: bool, commit: bool = True):
+        self.docker = DockerManager(self.root.parent if commit else self.root, docker_image, self.docker_test_dir, new)
 
-    def start_docker_image(self, container_name: str, new: bool = True) -> None:
+    def start_docker_image(self, container_name: str, new: bool = True, commit: bool = True) -> None:
         if not self.docker_image:
             self.docker_image = self.analyzer.get_docker()
         logging.info(f"Docker Version {self.docker_image}")

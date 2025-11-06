@@ -138,9 +138,9 @@ test_keywords = [
 ]
 
 resource_limits: dict[str, Any] = {
-    'cpuset_cpus': '2,3',
-    'mem_limit': '8g',
-    'memswap_limit': '8g',
-    'cpu_quota': 200000,
+    'cpuset_cpus': '2,3,4,5',
+    'mem_limit': '12g',
+    'memswap_limit': '12g',
+    'cpu_quota': 400000,
     'cpu_period': 100000 
 }
