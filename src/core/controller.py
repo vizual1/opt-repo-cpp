@@ -56,7 +56,7 @@ class Controller:
     def _popular(self) -> None:
         logging.info("Crawling popular GitHub repositories...")
         pipeline = CrawlerPipeline(self.config)
-        pipeline.get_repos()
+        pipeline.query_popular_repos()
         logging.info("Popular repository crawling completed.")
         
     def _testcrawl(self) -> None:
