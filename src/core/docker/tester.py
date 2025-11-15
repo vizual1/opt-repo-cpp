@@ -1,17 +1,19 @@
-import logging, subprocess, os, stat
-from src.cmake.process import DockerManager
+import logging, subprocess, os, stat, shutil
+from src.core.docker.manager import DockerManager
 from src.cmake.analyzer import CMakeAnalyzer
-from src.filter.structure_filter import StructureFilter
-from src.filter.process_filter import ProcessFilter
-from src.utils.config import Config
-from src.utils.stats import is_exec_time_improvement_significant
+from src.core.filter.structure_filter import StructureFilter
+from src.core.filter.process_filter import ProcessFilter
+from src.config.config import Config
+from src.utils.test_analyzer import TestAnalyzer
 from pathlib import Path
 from src.utils.parser import parse_ctest_output
 from src.utils.writer import Writer
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, Optional, Any
-import shutil
+from github.Repository import Repository
+from github.Commit import Commit
+from src.core.filter.commit_filter import CommitFilter
 
 class DockerTester:
     def __init__(self, config: Config):
@@ -20,7 +22,7 @@ class DockerTester:
 
     def run_commit_pair(
         self,
-        repo: str,
+        repo: Repository,
         new_sha: str,
         old_sha: str,
         new_path: Path,
@@ -31,37 +33,52 @@ class DockerTester:
                 repo, self.config, new_path, old_path, new_sha, old_sha
             ) as (new_times, old_times, new_struct, old_struct):
                 logging.info(f"Times Old: {old_times}, New: {new_times}")
-                warmup = self.config.testing["warmup"]
+                
+                if new_struct and new_struct.process and old_struct and old_struct.process:
+                    warmup = self.config.testing.warmup
+                    commit_test_times = self.config.testing.commit_test_times
 
-                if is_exec_time_improvement_significant(
-                    self.config.commits_dict['min-exec-time-improvement'], 
-                    self.config.commits_dict['min-p-value'], 
-                    new_times[warmup:], old_times[warmup:]
-                ):
-                    if new_struct and new_struct.process and old_struct and old_struct.process:
+                    new_test_outputs = new_struct.process.ctest_output
+                    old_test_outputs = old_struct.process.ctest_output
+
+                    test = TestAnalyzer(self.config, new_test_outputs, old_test_outputs, warmup, commit_test_times)
+                    significant_test_time_changes = test.get_significant_test_time_changes()
+
+                    total_improvement = test.get_improvement_p_value(
+                        new_times[warmup:], old_times[warmup:]
+                    ) < self.config.commits_time['min-p-value']
+
+                    # TODO: https://github.com/khesoem/opt-repo/blob/2e768c0643599146f614724721943f410d17a143/src/gh/commit_analysis/utils/mvn_log_analyzer.py#L77
+                    if total_improvement:
                         new_cmd = new_struct.process.commands
                         old_cmd = old_struct.process.commands
-                        old_struct.process.save_docker_image(repo, new_sha, new_cmd, old_cmd)
-
-                    logging.info(f"[{repo}] ({new_sha}) significantly improves execution time.")
-                    Writer(repo, self.config.output or self.config.storage["performance"]).write_improve(new_sha, old_sha)
+                        
+                        commit = repo.get_commit(new_sha)
+                        results = test.create_test_log(
+                            commit, repo, old_sha, new_sha, 
+                            old_times,new_times, old_cmd, new_cmd
+                        )
+                        
+                        old_struct.process.save_docker_image(repo.full_name, new_sha, new_cmd, old_cmd, results)
+                
+                        logging.info(f"[{repo.full_name}] ({new_sha}) significantly improves execution time.")
+                        Writer(repo.full_name, self.config.output_file or self.config.storage_paths["performance"]).write_improve(new_sha, old_sha)
 
         except Exception as e:
-            logging.exception(f"[{repo}] Error running commit pair test: {e}")
+            logging.exception(f"[{repo.full_name}] Error running commit pair test: {e}")
 
         finally:
             for struct in [new_struct, old_struct]:
                 try:
                     if struct and struct.process:
                         struct.process.docker.stop_container()
-                        break
                 except Exception as e:
-                    logging.warning(f"[{repo}] Failed to stop container: {e}")
+                    logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
 
     @contextmanager
     def _commit_pair_test(
         self, 
-        repo: str, 
+        repo: Repository, 
         config: Config, 
         new_path: Path, 
         old_path: Path, 
@@ -101,20 +118,18 @@ class DockerTester:
                 try:
                     if struct and struct.process:
                         struct.process.docker.stop_container()
-                        break
                 except Exception as e:
-                    logging.warning(f"[{repo}] Failed to stop container: {e}")
+                    logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
                 
     def _on_rm_error(self, func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)
         func(path)
 
-
     def test_input_folder(self) -> None:
         """Test all Docker images in input folder"""
-        input_path = Path(self.config.input)
+        input_path = Path(self.config.input_file)
         if not input_path.exists():
-            raise ValueError(f"Input folder {self.config.input} does not exist")
+            raise ValueError(f"Input folder {self.config.input_file} does not exist")
         
         for tar_file in input_path.glob("*.tar"):
             image_name = tar_file.stem
@@ -130,29 +145,27 @@ class DockerTester:
         subprocess.run(cmd)
 
         try:
-            docker = DockerManager(Path(), image_name, self.config.testing['docker_test_dir'])
+            docker = DockerManager(self.config, Path(), image_name, self.config.testing.docker_test_dir)
             docker.start_docker_container(image_name)
 
             new_times: list[float] = []
             old_times: list[float] = []
-            warmup: int = self.config.testing['warmup']
-            for _ in range(warmup + self.config.testing['commit_test_times']):
-                cmd = ["bash", f"{self.config.testing['docker_test_dir']}/new_test.sh"]
+            warmup: int = self.config.testing.warmup
+            for _ in range(warmup + self.config.testing.commit_test_times):
+                cmd = ["bash", f"{self.config.testing.docker_test_dir}/new_test.sh"]
                 exit_code, stdout, stderr = docker.run_command_in_docker(cmd, Path())
                 stats = parse_ctest_output(stdout)
                 elapsed: float = stats['total_time_sec']
                 new_times.append(elapsed)
 
-                cmd = ["bash", f"{self.config.testing['docker_test_dir']}/old_test.sh"]
+                cmd = ["bash", f"{self.config.testing.docker_test_dir}/old_test.sh"]
                 exit_code, stdout, stderr = docker.run_command_in_docker(cmd, Path())
                 stats = parse_ctest_output(stdout)
                 elapsed: float = stats['total_time_sec']
                 old_times.append(elapsed)
-
-            return is_exec_time_improvement_significant(
-                self.config.commits_dict['min-exec-time-improvement'],
-                self.config.commits_dict['min-p-value'],
-                new_times[warmup:], old_times[warmup:])
+                
+            test = TestAnalyzer(self.config, [], [], warmup, self.config.testing.commit_test_times)
+            return test.get_improvement_p_value(new_times[warmup:], old_times[warmup:]) < self.config.commits_time['min-p-value']
         
         except:
             logging.error("")
@@ -174,5 +187,7 @@ class DockerTester:
             cmd = ["docker", "load", "-i", str(docker_image)]
             subprocess.run(cmd)
             docker_image = docker_image.removesuffix(".tar")
-        docker = DockerManager(mount_dir, docker_image, self.config.testing['docker_test_dir'])
+        docker = DockerManager(self.config, mount_dir, docker_image, self.config.testing.docker_test_dir)
         docker.start_docker_container(docker_image)
+
+    

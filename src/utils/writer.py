@@ -1,5 +1,4 @@
 import logging
-import src.config as conf
 from github.Commit import Commit
 from src.utils.stats import CommitStats
 from typing import Optional

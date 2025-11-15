@@ -1,12 +1,12 @@
 
-import logging, subprocess, os, shutil
+import logging, subprocess, os, tempfile, time, json
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.resolver import DependencyResolver
-from src.utils.parser import parse_ctest_output
-from src.docker.manager import DockerManager
-from typing import Optional
-
+from src.utils.parser import parse_ctest_output, parse_framework_output
+from typing import Optional, Union
+from src.core.docker.manager import DockerManager
+from src.config.config import Config
 
 vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
 os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
@@ -15,6 +15,7 @@ class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
     def __init__(
         self, 
+        config: Config,
         root: Path, 
         enable_testing_path: Optional[Path], 
         flags: list[str], 
@@ -23,9 +24,11 @@ class CMakeProcess:
         jobs: int = 1,
         docker_test_dir: str = ""
     ):
+        self.config = config
+
         self.project_root = Path(__file__).resolve().parents[2]
         self.root = (self.project_root / root).resolve() if not root.is_absolute() else root.resolve()
-        self.docker_test_dir = docker_test_dir
+        self.docker_test_dir = docker_test_dir.replace("\\", "/")
         self.build_path = Path(self.to_container_path(self.root / "build"))
         self.test_path = self.build_path / (enable_testing_path if enable_testing_path else "")
         
@@ -41,9 +44,14 @@ class CMakeProcess:
         self.build_stdout: str = ""
         self.build_stderr: str = ""
         self.other_flags: set[str] = set()
-        self.resolver = DependencyResolver()
+        self.resolver = DependencyResolver(self.config)
         self.test_time: list[float] = []
         self.commands: list[str] = []
+
+        self.cmake_config_output: list[str] = []
+        self.cmake_build_output: list[str] = []
+        self.ctest_output: list[str] = []
+        self.per_test_times: dict[str, list[float]] = {}
 
     def set_enable_testing(self, enable_testing_path: Path) -> None:
         self.root = self.root
@@ -52,30 +60,51 @@ class CMakeProcess:
     def set_flags(self, flags: list[str]) -> None:
         self.flags = flags
 
-    def set_docker(self, docker_image: str, new: bool, commit: bool = True):
-        self.docker = DockerManager(self.root.parent, docker_image, self.docker_test_dir, new)
+    def set_docker(self, config: Config, docker_image: str, new: bool):
+        self.docker = DockerManager(config, self.root.parent, docker_image, self.docker_test_dir, new)
 
-    def start_docker_image(self, container_name: str, new: bool = True) -> None:
+    def start_docker_image(self, config: Config, container_name: str, new: bool = True) -> None:
         if not self.docker_image:
             self.docker_image = self.analyzer.get_docker()
-        logging.info(f"Docker Version {self.docker_image}")
-        self.set_docker(self.docker_image, new)
+        logging.info(f"Started Docker Image: {self.docker_image}")
+        self.set_docker(config, self.docker_image, new)
         self.docker.start_docker_container(container_name)
         self.container = self.docker.container
 
         copy_cmd = ["cp", "-r", "/workspace", self.docker_test_dir]
         exit_code, stdout, stderr = self.docker.run_command_in_docker(copy_cmd, self.root, check=False)
         if exit_code != 0:
-            logging.error(f"Copy files failed with exit code {exit_code}")
+            logging.error(f"Copy files failed with exit code {exit_code}: {' '.join(map(str, copy_cmd))}")
             if stdout: logging.info(f"stdout: {stdout}")
             if stderr: logging.warning(f"stderr: {stderr}")
+        else:
+            logging.info(f"Files copied into docker: {' '.join(map(str, copy_cmd))}")
+            if stdout: logging.info(f"stdout: {stdout}")
 
-    def save_docker_image(self, repo_id: str, sha: str, new_cmd: list[str], old_cmd: list[str]) -> None:
+    def save_docker_image(self, repo_id: str, sha: str, new_cmd: list[str], old_cmd: list[str], results_json: dict) -> None:
+        """
+        TODO: Saved docker image structure:
+        | /workspace -- mount folder
+        | /test_workspace 
+            | /workspace
+                | /old -- old commit => OK
+                | /new -- new commit => OK
+            | /logs => OK
+                | full.log -- full log of configure, build and test output
+                | config.log -- log of configure run
+                | build.log -- log of build run
+                | test.log -- log of test run
+                | results.json -- tested results, statistics, metadata and other informations
+            | old_build.sh -- old configure and build code used => OK
+            | new_build.sh -- new configure and build code used => OK
+            | old_test.sh -- old ctest used => OK
+            | new_test.sh -- new ctest used => OK
+        """
         image_name = ("_".join(repo_id.split("/")) + f"_{sha}").lower()
         container_id = self.container.id if self.container and self.container.id else "test"
         
-        self.copy_log_to_container(container_id)
-        self.copy_commands_to_container(new_cmd, old_cmd)
+        self.copy_log_to_container(container_id, results_json)
+        self.docker.copy_commands_to_container(self.root, new_cmd, old_cmd)
 
         result = subprocess.run(["docker", "commit", container_id, image_name], capture_output=True, text=True)
         if result.returncode != 0:
@@ -85,39 +114,33 @@ class CMakeProcess:
         if result.returncode != 0:
             logging.error(f"docker save failed: {result.stderr}")
 
-    def copy_log_to_container(self, container_id: str) -> None:
-        for handler in logging.getLogger().handlers:
-            if isinstance(handler, logging.FileHandler):
-                log_path = Path(handler.baseFilename)
-                result = subprocess.run([
-                    "docker", "cp", str(log_path), f"{container_id}:{self.docker_test_dir}/logs"
-                ], capture_output=True, text=True)
-                
-                if result.returncode != 0:
-                    logging.error(f"Copying log file with docker cp failed: {result.stderr}")
-                else:
-                    logging.info(f"Copied log file {log_path} to {container_id}:{self.docker_test_dir}/logs")
-                break
+    def copy_log_to_container(self, container_id: str, results_json: dict) -> None:
+        log_config: str = f"Configuration output:\n" + '\n'.join(self.cmake_config_output) + "\n"
+        log_build: str = f"Build output:\n" + '\n'.join(self.cmake_build_output) + "\n"
+        log_test: str = f"Test output:\n" + '\n'.join(self.ctest_output) + "\n"
+        log_full: str = log_config + log_build + log_test
+        results: dict = results_json
+        
+        logs: list[Union[str, dict]] = [log_full, log_config, log_build, log_test, results]
+        name: list[str] = ["full", "config", "build", "test", "results"]
 
-    def copy_commands_to_container(self, new_cmd: list[str], old_cmd: list[str]) -> None:
-        for i, c in enumerate(new_cmd): 
-            if i < 2:
-                save = "build"
+        for log, n in zip(logs, name):
+            data_type = ".log" if name != "results" else ".json"
+            with tempfile.NamedTemporaryFile("w", delete=False, suffix=data_type) as tmp_file:
+                if isinstance(log, str):
+                    tmp_file.write(log)
+                else:
+                    json.dump(results, tmp_file, indent=4)
+                tmp_path = Path(tmp_file.name)
+
+            dest_path = f"{container_id}:{self.docker_test_dir}/logs/{n}{data_type}"
+            result = subprocess.run(["docker", "cp", str(tmp_path), dest_path],
+                                    capture_output=True, text=True)
+
+            if result.returncode != 0:
+                logging.error(f"Copying log file failed: {result.stderr}")
             else:
-                save = "test"
-            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/new_{save}.sh"]
-            exit_code, _, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
-            if exit_code != 0:
-                logging.error(f"Copying the build and test commands failed with: {exit_code}")
-        for i, c in enumerate(old_cmd):
-            if i < 2:
-                save = "build"
-            else:
-                save = "test"
-            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/old_{save}.sh"]
-            exit_code, _, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
-            if exit_code != 0:
-                logging.error(f"Copying the build and test commands failed with: {exit_code}")
+                logging.info(f"Copied log file to {dest_path}")
 
 ############### RUNNING ###############
         
@@ -130,8 +153,8 @@ class CMakeProcess:
         else:
             return self._configure_with_retries() and self._build()
     
-    def test(self, test_exec: list[str], warmup: int = 0, test_repeat: int = 1) -> bool:
-        return self._ctest(test_exec, warmup, test_repeat)
+    def test(self, warmup: int = 0, test_repeat: int = 1) -> bool:
+        return self._ctest(warmup, test_repeat)
     
 ############### CONFIGURATION ###############
     
@@ -144,7 +167,7 @@ class CMakeProcess:
             return False
 
         for attempt in range(max_retries):
-            logging.info(f"[Attempt {attempt}/{max_retries}] Configuring project at {self.root}")
+            logging.info(f"[Attempt {attempt+1}/{max_retries}] Configuring project at {self.root}")
 
             if attempt == 0:
                 missing_dependencies = self.analyzer.get_dependencies()
@@ -188,7 +211,7 @@ class CMakeProcess:
         cmd = [
             'cmake', 
             '-S', self.to_container_path(self.root), 
-            '-B', self.build_path, 
+            '-B', str(self.build_path).replace("\\", "/"), 
             '-G', 'Ninja',
 
             '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
@@ -224,11 +247,11 @@ class CMakeProcess:
             logging.info("Installing through package manager vcpkg...")
             cmd.append('-DVCPKG_MANIFEST_MODE=ON')
         elif self.package_manager.startswith("conanfile"):
-            # TODO: test this
             try:
                 logging.info("Installing through package manager conan...")
                 install = ['conan', 'install', '.', '-build=missing'] 
                 exit_code, stdout, stderr = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
+                self.cmake_config_output.append(stdout)
                 if exit_code == 0:
                     logging.info(f"Conan Output:\n{stdout}")
                 else:
@@ -245,7 +268,7 @@ class CMakeProcess:
 
         if exit_code == 0:
             logging.info(f"CMake Configuration successful for {self.build_path}")
-            logging.info(f"Output:\n{stdout}")
+            logging.debug(f"Output:\n{stdout}")
             return True
         else:
             logging.error(f"CMake configuration failed for {self.build_path} (return code {exit_code})", exc_info=True)
@@ -258,17 +281,18 @@ class CMakeProcess:
 ############### BUILDING ###############
 
     def _build(self) -> bool:
-        cmd = ['cmake', '--build', self.build_path, '--']
+        cmd = ['cmake', '--build', str(self.build_path).replace("\\", "/"), '--']
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
 
         self.commands.append(" ".join(map(str, cmd)))
         logging.info(" ".join(map(str, cmd)))
+
         exit_code, stdout, stderr = self.docker.run_command_in_docker(cmd, self.root, check=False)
-        
+        self.cmake_build_output.append(stdout)
         if exit_code == 0:
             logging.info(f"CMake build completed for {self.root}")
-            logging.info(f"Output:\n{stdout}")
+            logging.debug(f"Output:\n{stdout}")
             return True
         else:
             logging.error(f"CMake build failed for {self.root} (return code {exit_code})", exc_info=True)
@@ -280,28 +304,18 @@ class CMakeProcess:
 
 ############### TESTING ###############
 
-    # TODO: ensure that the tests are each run in isolation
-    # check CTestTestfile.cmake -> check add_test(some_name path/to/executable)
-    # use path/to/executable 
-    #      Catch2   => --list-tests 
-    #      GTest    => --gtest_list_tests
-    #      doctest  => --list-test-cases
-    #      add_test => probably just scanning all add_test(some_name path/to/executable)
-    #                   and take path/to/executable as unit test
-    def _ctest(self, test_exec: list[str], warmup: int = 0, test_repeat: int = 1) -> bool:
+    def _ctest(self, warmup: int = 0, test_repeat: int = 1) -> bool:
         if test_repeat < 1:
             return True
-        
-        if test_exec:
-            self._isolated_ctest(test_exec)
+
         cmd = ['ctest', '--output-on-failure', '--fail-if-no-tests']
-        
         try:
+            # check if any tests exist
             exit_code, stdout, stderr = self.docker.run_command_in_docker(
                 ['ctest', '--help'], self.root, workdir=self.test_path, check=False
             )
             if '--fail-if-no-tests' not in stdout:
-                # Fallback for older CMake versions: check if any tests exist
+                # fallback for older cmake versions
                 check_cmd = ['ctest', '-N']
                 exit_code, stdout_check, _ = self.docker.run_command_in_docker(
                     check_cmd, self.root, workdir=self.test_path, check=False
@@ -312,6 +326,11 @@ class CMakeProcess:
                 
                 cmd = ['ctest', '--output-on-failure']
 
+            # tries to run the unit tests individually
+            test_exec_flag = self.analyzer.get_list_test_arg()
+            if test_exec_flag and self._isolated_ctest(test_exec_flag, warmup, test_repeat):
+                return True
+
             self.commands.append(f"cd {str(self.docker_test_dir/self.test_path)}")
             self.commands.append(" ".join(map(str, cmd)))
             elapsed_times: list[float] = []
@@ -320,9 +339,12 @@ class CMakeProcess:
                 exit_code, stdout, stderr = self.docker.run_command_in_docker(
                     cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
                 )
+
+                # parse the times returned
                 stats = parse_ctest_output(stdout)
                 elapsed: float = stats['total_time_sec']
                 elapsed_times.append(elapsed)
+                self.ctest_output.append(stdout)
 
                 if exit_code == 0:
                     logging.info(f"CTest passed for {self.test_path}")
@@ -341,34 +363,122 @@ class CMakeProcess:
             logging.error(f"CTest execution failed: {e}", exc_info=True)
             return False
 
-    # TODO
-    def _isolated_ctest(self, test_exec: list[str]) -> bool:
-        test_dir = Path(self.test_path)
-        list_test_arg = self.analyzer.get_list_test_arg()[0]
+    def _isolated_ctest(self, test_exec_flag: list[tuple[str, str]], warmup: int, test_repeat: int) -> bool:
+        framework, test_flag = test_exec_flag[0]
+
+        path = str(self.docker_test_dir / self.test_path / 'CTestTestfile.cmake').replace("\\", "/")
+        cmd = ["cat", f"{path}"]
+        exit_code, stdout, stderr = self.docker.run_command_in_docker(
+            cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+        )
+
+        logging.info(f"CTestTestfile.cmake output:\n{stdout}")
+        test_exec: set[str] = set(self.analyzer.parse_ctest_file(stdout))
+
+        subdirs = self.analyzer.parse_subdirs(stdout)
+        for subdir in subdirs:
+            path = str(self.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
+            cmd = ["cat", f"{path}"]
+            exit_code, stdout, stderr = self.docker.run_command_in_docker(
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+            )
+
+            logging.info(f"CTestTestfile.cmake output:\n{stdout}")
+            test_exec |= set(self.analyzer.parse_ctest_file(stdout))
+
+        if not test_exec:
+            logging.info("No test executables found.")
+            return False
+
         unit_tests: dict[str, list[str]] = {}
-        for exec in test_exec:
-            cmd = [exec, list_test_arg]
-            try:
-                logging.info(f"{' '.join(map(str, cmd))} {list_test_arg}")
-                result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                logging.info(f"CTest Output: {result.stdout}")
-                unit_tests[exec] = self.analyzer.parser.find_unit_tests(result.stdout)
-            except subprocess.CalledProcessError as e:
-                logging.error(f"{' '.join(map(str, cmd))} {list_test_arg} couldn't list unit tests (return code {e.returncode})", exc_info=True)
-                logging.error(f"Output (stdout):\n{e.stdout}", exc_info=True)
-                logging.error(f"Error (stderr):\n{e.stderr}", exc_info=True)
-        for exec, tests in unit_tests.items():
-            for test in tests:
-                # TODO: run this tests, each with different profile
-                cmd = ['LLVM_PROFILE_FILE=coverage/%t.profraw', exec, test]
-                try:
-                    result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                except:
-                    logging.error("", exc_info=True)
-                    # TODO: extract the profraw coverage without the test and build folders
-            # TODO: extract coverage data and create
-        return False
+        for exe_path in test_exec:
+            cmd = [exe_path, test_flag]
+            logging.info(' '.join(map(str, cmd)))
+            exit_code, stdout, stderr = self.docker.run_command_in_docker(
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+            )
+            logging.debug(f"{test_flag} output:\n{stdout}")
+            unit_tests[exe_path] = self.analyzer.find_unit_tests(stdout, framework)
+
+        logging.debug(f"unit tests: {unit_tests}")
+
+        if not unit_tests:
+            logging.info("No unit tests found.")
+            return False
+
+        elapsed_times: list[float] = []
+        total_time: float = 0.0
+        for exe_path, test_names in unit_tests.items():
+            for test_name in test_names:
+                self.per_test_times[test_name] = []
+                all_stdout = ""
+                
+                for i in range(warmup + test_repeat):
+                    #cmd = ["ctest", "-R", test_name, "--output-on-failure"]
+                    #exit_code, stdout, stderr = self.docker.run_command_in_docker(
+                    #    cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+                    #)
+                    exit_code, stdout, stderr = self._run_single_test(exe_path, framework, test_name)
+
+                    elapsed: float = parse_framework_output(stdout, framework, test_name)
+                    
+                    if elapsed <= 0.0:
+                        start = time.perf_counter()
+                        exit_code, stdout, stderr = self._run_single_test(exe_path, framework, test_name)
+                        end = time.perf_counter()
+                        elapsed = end - start
+
+                    self.per_test_times[test_name].append(elapsed)
+                    total_time += elapsed
+                    all_stdout += f"{stdout}\n"
+
+                    if exit_code == 0:
+                        logging.debug(f"CTest passed for {self.test_path}")
+                        logging.debug(f"Output:\n{stdout}")
+                        logging.info(f"[{test_name}] Time elapsed: {elapsed} s")
+                    else:
+                        logging.error(f"CTest failed for {self.test_path} (return code {exit_code})", exc_info=True)
+                        logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                        logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                        return False
+                    
+                elapsed_times.append(total_time)
+                self.ctest_output.append(all_stdout)
+
+        self.test_time = elapsed_times
+        return True
     
+            # TODO: run this tests, each with different profile
+            #cmd = ['LLVM_PROFILE_FILE=coverage/%t.profraw', exec, test_name]
+            #try:
+            #    result = subprocess.run(cmd, cwd=test_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            #except:
+            #    logging.error("", exc_info=True)
+            # extract the profraw coverage without the test and build folders
+            # extract coverage data and create
+        
+    
+
+    def _run_single_test(self, exe_path: str, framework: str, test_name: str):
+        if framework == "gtest":
+            cmd = [f"{exe_path}", f"--gtest_filter={test_name}"]
+        elif framework == "catch":
+            cmd = [f"{exe_path}", f"\"{test_name}\"", "--durations", "yes"]
+        elif framework == "doctest":
+            cmd = [f"{exe_path}", f"\"{test_name}\""]
+        elif framework == "boost":
+            cmd = [f"{exe_path}", f"--run_test={test_name}"]
+        elif framework == "qt":
+            cmd = [f"{exe_path}", f"{test_name}"]
+        else:
+            raise ValueError(f"Unknown framework for {exe_path}")
+
+        exit_code, stdout, stderr = self.docker.run_command_in_docker(
+            cmd, self.root, check=False
+        )
+        return exit_code, stdout, stderr
+    
+
     def to_container_path(self, path: Path) -> str:
         rel = path.relative_to(self.root.parent)
         return f"{self.docker_test_dir}/workspace/{rel.as_posix()}"

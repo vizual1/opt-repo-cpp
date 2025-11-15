@@ -1,6 +1,6 @@
 import os, logging, re
 from cmakeast.printer import ast
-from typing import Optional, Generator, Union
+from typing import Optional, Generator
 from pathlib import Path
 
 class CMakeParser:
@@ -11,11 +11,10 @@ class CMakeParser:
         self.add_test_path: list[Path] = []
         self.discover_tests_path: list[Path] = []
         self.target_link_path: list[Path] = []
-        self.list_test_arg: set[str] = set()
+        self.list_test_arg: set[tuple[str, str]] = set()
 
-        self._cmake_files: Optional[list[Path]] = None #self.find_files(search="CMakeLists.txt")
-        #self.find_cmake_files: list[Path] = self.find_files(pattern=re.compile(r"Find.*\.cmake$", re.IGNORECASE))
-        self._cmake_function_calls: Optional[list[tuple[ast.FunctionCall, Path]]] = None # self._find_all_function_calls(self.cmake_files)
+        self._cmake_files: Optional[list[Path]] = None
+        self._cmake_function_calls: Optional[list[tuple[ast.FunctionCall, Path]]] = None
 
     @property
     def cmake_files(self) -> list[Path]:
@@ -54,17 +53,16 @@ class CMakeParser:
 
         for arg in arguments:
             arg_str = str(arg)
-            #version_match = re.search(r'(\d+\.\d+(?:\.\d+)?)', arg_str)
             version_match = re.search(r'(\d+\.\d+(?:\.\d+)*)', arg_str)
             if version_match:
-                logging.info(f"cmake_minimum_required found: {version_match}")
+                logging.info(f"cmake_minimum_required found: {version_match.group()}")
                 return version_match.group(1)
         
         logging.warning("No cmake_minimum_required found, using default 3.16")
         return "3.16"
     
     def find_ctest_exec(self) -> list[str]:
-        logging.info("Searching for ctest executables...")
+        logging.debug("Searching for ctest executables...")
         test_files = self.find_files("CTestTestfile.cmake")
         self.ctest_function_calls: list[tuple[ast.FunctionCall, Path]] = self._find_all_function_calls(test_files) 
         all_exec: list[str] = []
@@ -76,9 +74,9 @@ class CMakeParser:
                 exec = arguments[1].contents if hasattr(arguments[1], "contents") else ""
                 if exec:
                     all_exec.append(exec)
-        logging.info("Found ctest executables:")
+        logging.debug("Found ctest executables:")
         for exec in all_exec:
-            logging.info(f"  -./{exec}")
+            logging.debug(f"  -./{exec}")
         return all_exec
     
     def find_enable_testing(self) -> bool:
@@ -86,24 +84,24 @@ class CMakeParser:
         Checks if enable_testing() is called anywhere in CMakeLists.txt. 
         Either CMakeLists.txt calls enable_testing() directly or it calls enable_testing() via include(CTest).
         """
-        logging.info("Searching for enable_testing()...")
+        logging.debug("Searching for enable_testing()...")
         calls = self._find_function_calls(name="enable_testing")
         calls += self._find_function_calls(name="include", _args=["CTest"])
         for _, cf in calls:
             self.enable_testing_path.append(Path(cf))
         if self.enable_testing_path:
-            logging.info(f"CMakeLists.txt with enable_testing(): {self.enable_testing_path}.")
+            logging.debug(f"CMakeLists.txt with enable_testing(): {str(self.enable_testing_path)}.")
             return True
         
         return False
     
     def find_add_tests(self) -> bool:
-        logging.info("Search for add_tests...")
+        logging.debug("Search for add_tests...")
         calls = self._find_function_calls(name="add_test")
         for _, cf in calls:
             self.add_test_path.append(Path(cf))
         if self.add_test_path:
-            logging.info(f"CMakeLists.txt with add_test(): {self.add_test_path}.")
+            logging.debug(f"CMakeLists.txt with add_test(): {str(self.add_test_path)}.")
             return True
         
         return False
@@ -114,7 +112,7 @@ class CMakeParser:
         for _, cf in calls:
             self.discover_tests_path.append(Path(cf))
         if self.discover_tests_path:
-            logging.info(f"CMakeLists.txt with *_discover_tests(): {self.discover_tests_path}.")
+            logging.info(f"CMakeLists.txt with *_discover_tests(): {str(self.discover_tests_path)}.")
             return True
         
         return False
@@ -130,31 +128,31 @@ class CMakeParser:
             "Qt::Test", "Qt5::Test", "Qt6::Test"
         ]
 
-        logging.info("Searching for target_link_libraries to isolate test cases...")
+        logging.debug("Searching for target_link_libraries to isolate test cases...")
         all_calls: list[tuple[ast.FunctionCall, Path]] = []
         for library in libraries:
             calls = self._find_function_calls(name="target_link_libraries", _args=[library])
             for _, cf in calls:
-                logging.info(f"target_link_libraries found {library} in {cf}.")
+                logging.debug(f"target_link_libraries found {library} in {cf}.")
                 all_calls += calls
                 if "gtest" in library.lower():
                     # run individual tests with ./test_executable --gtest_filter=TESTNAME
-                    self.list_test_arg.add("--gtest_list_tests")
+                    self.list_test_arg.add(("gtest", "--gtest_list_tests"))
                 elif "catch" in library.lower():
                     # run individual tests with ./test_executable TESTNAME
-                    self.list_test_arg.add("--list-tests") #maybe also --list-test-cases possible
+                    self.list_test_arg.add(("catch", "--list-tests")) #maybe also --list-test-cases possible
                 elif "doctest" in library.lower():
                     # run individual tests with ./test_executable TESTNAME
-                    self.list_test_arg.add("--list-test-cases") #maybe also --list-test-suites possible
+                    self.list_test_arg.add(("doctest", "--list-test-cases")) #maybe also --list-test-suites possible
                 elif "boost" in library.lower():
                     # run individual tests with ./test_executable --run_test=suite/test
-                    self.list_test_arg.add("--list_content")
+                    self.list_test_arg.add(("boost", "--list_content"))
                 elif "qt" in library.lower():
                     # run individual tests wiht ./test_executable TESTNAME
-                    self.list_test_arg.add("-functions")
+                    self.list_test_arg.add(("qt", "-functions"))
 
         if all_calls:
-            logging.info(f"target_link_libraries(...) to isolate test cases found.")
+            logging.debug(f"target_link_libraries(...) to isolate test cases found.")
             return True
 
         return False
@@ -162,7 +160,7 @@ class CMakeParser:
     def find_test_flags(self) -> dict[str, dict[str, str]]:
         test_flags = {}
 
-        logging.info("Searching for possible test flags...")
+        logging.debug("Searching for possible test flags...")
         if "BUILD_TESTING" not in test_flags and self._find_function_calls(name="include", _args=["CTest"]):
             test_flags["BUILD_TESTING"] = {
                 "desc": "Enable CTest-based testing",
@@ -201,19 +199,67 @@ class CMakeParser:
                 if arg_name and self._valid_name(arg_name) and "TEST" in arg_name.upper():
                     test_flags[arg_name] = {"type": "BOOL", "desc": f"Implicit test flag used in {cf}", "default": "undefined"}
 
-        logging.info("Discovered test flags:")
+        logging.debug("Discovered test flags:")
         for k, v in test_flags.items():
-            logging.info(f"  - {k} (default={v['default']}): {v['desc']}")
+            logging.debug(f"  - {k} (default={v['default']}): {v['desc']}")
 
         return test_flags
 
-    def find_unit_tests(self, text: str) -> list[str]:
-        # TODO: extract the list tests to unit tests
-        return []
+    def parse_ctest_file(self, text: str) -> list[str]:
+        executables = set()
+        # 1. Handle new form: add_test(NAME ... COMMAND ...)
+        for match in re.finditer(r"add_test\s*\(\s*NAME\s+\S+\s+COMMAND\s+([^\s\)]+)", text):
+            exec_path = match.group(1)
+            if not exec_path.startswith("$"):
+                executables.add(exec_path.strip('"').strip("'"))
+
+        # 2. Handle old form: add_test(<name> <exec>)
+        for match in re.finditer(r"add_test\s*\(\s*[^\s\)]+\s+([^\s\)]+)", text):
+            exec_path = match.group(1)
+            if not exec_path.startswith("$"):
+                executables.add(exec_path.strip('"').strip("'"))
+
+        return sorted(executables)
+    
+    def parse_subdirs(self, text: str) -> list[str]:
+        subdirs: list[str] = re.findall(r'subdirs\("([^"]+)"\)', text)
+        return [s.replace("\\", "/") for s in subdirs]
+    
+    def find_unit_tests(self, text: str, framework: str) -> list[str]:
+        tests = []
+
+        if framework == "gtest":
+            # Example:
+            # MySuite.
+            #   TestA
+            #   TestB
+            current_suite = ""
+            for line in text.splitlines():
+                if line.endswith('.'):
+                    current_suite = line.strip().strip('.')
+                elif line.strip():
+                    tests.append(f"{current_suite}.{line.strip()}")
+        elif framework == "catch":
+            tests = [line.strip() for line in text.splitlines() 
+                     if line.strip() and 
+                     not "All available test cases:" in line.strip() and 
+                     not "test cases" in line.strip() and
+                     not line.strip().startswith("[") and 
+                     not line.strip().endswith("]")]
+        elif framework in {"catch", "doctest"}:
+            # Each line is a test name
+            tests = [line.strip() for line in text.splitlines() if line.strip()]
+        elif framework == "boost":
+            # Boost lists suites/tests as suite/test
+            tests = [line.strip() for line in text.splitlines() if "/" in line]
+        elif framework == "qt":
+            # QTest lists test functions prefixed with "PASS", "FAIL", etc. when run
+            tests = [line.strip() for line in text.splitlines() if line.strip()]
+        return tests
 
     def find_dependencies(self) -> set[str]:
         """Find CMake dependency names from CMakeLists.txt."""
-        logging.info("Searching for possible dependencies...")
+        logging.debug("Searching for possible dependencies...")
         calls: list[tuple[ast.FunctionCall, Path]] = []
         calls += self._find_function_calls(name="include", starts="Find")
         calls += self._find_function_calls(name="find_package")
@@ -234,7 +280,7 @@ class CMakeParser:
                     else:
                         packages.add(arg_name)
 
-        logging.info(f"Found possible dependencies: {packages}")
+        logging.debug(f"Found possible dependencies: {packages}")
         return packages
 
     def _check_cmakeast_class(self, node) -> bool:
@@ -318,18 +364,6 @@ class CMakeParser:
     def get_ubuntu_for_cmake(self, cmake_version: str) -> str:
         version_num = self._version_to_number(cmake_version)
 
-        """
-        if version_num >= 328:
-            return "ubuntu:24.04"
-        elif version_num >= 322:
-            return "ubuntu:22.04" 
-        elif version_num >= 316:
-            return "ubuntu:20.04"
-        elif version_num >= 310:
-            return "ubuntu:18.04"
-        else:
-            return "ubuntu:22.04" 
-        """
         if version_num <= 305:
             return "ubuntu:16.04"
         elif version_num <= 310:

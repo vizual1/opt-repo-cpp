@@ -1,12 +1,12 @@
 import logging, tempfile, os
 from collections import Counter
-from github import Github
 from github.GitTreeElement import GitTreeElement
+from github.Repository import Repository
 from typing import Optional
 from pathlib import Path
 from github.ContentFile import ContentFile
 
-from src.utils.config import Config
+from src.config.config import Config
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.process import CMakeProcess
 from src.gh.clone import GitHandler
@@ -16,10 +16,9 @@ class StructureFilter:
     """
     This class analyses and filters the structure of a repository.
     """
-    def __init__(self, repo_id: str, config: Config, root: Optional[Path] = None, sha: str = ""):
-        self.repo_id = repo_id
+    def __init__(self, repo: Repository, config: Config, root: Optional[Path] = None, sha: str = ""):
         self.config = config
-        self.repo = self.config.git.get_repo(self.repo_id)
+        self.repo = repo
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
@@ -34,10 +33,10 @@ class StructureFilter:
         conan = self._has_root_conan()
 
         if not self._has_root_cmake() or not (without_pkg_manager or vcpkg or conan):
-            logging.warning(f"[{self.repo_id}] no CMakeLists.txt at root found")
+            logging.warning(f"[{self.repo.full_name}] no CMakeLists.txt at root found")
             return False
         
-        logging.info(f"[{self.repo_id}] CMakeLists.txt at root found")
+        logging.info(f"[{self.repo.full_name}] CMakeLists.txt at root found")
 
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
             tmpdir = Path(tmpdir)
@@ -45,23 +44,23 @@ class StructureFilter:
             analyzer = CMakeAnalyzer(tmpdir)
 
             analyzer.reset()
-            if not analyzer.has_testing(nolist=self.config.testing['no_list_testing']):
-                logging.warning(f"[{self.repo_id}] invalid ctest")
+            if not analyzer.has_testing(nolist=self.config.testing.no_list_testing):
+                logging.warning(f"[{self.repo.full_name}] invalid ctest")
                 return False
             
             test_dirs = self._extract_test_dirs()
             if test_dirs:
-                logging.debug(f"[{self.repo_id}] test directories: {test_dirs}")
+                logging.debug(f"[{self.repo.full_name}] test directories: {test_dirs}")
                 for d in test_dirs:
                     self.stats.test_dirs[d] += 1
-                conv_test_dir = test_dirs & self.config.valid_test_dir
+                conv_test_dir = test_dirs & self.config.valid_test_dirs
 
                 if conv_test_dir:
-                    logging.debug(f"[{self.repo_id}] conventional test directories {conv_test_dir}")
+                    logging.debug(f"[{self.repo.full_name}] conventional test directories {conv_test_dir}")
                     self.testing_flags = analyzer.has_build_testing_flag()
                     self.test_flags = Counter(self.testing_flags.keys())
             
-            logging.info(f"[{self.repo_id}] ctest is defined")
+            logging.info(f"[{self.repo.full_name}] ctest is defined")
             return True
                 
     def is_valid_commit(self, root: Path, sha: str, docker_test_dir: str) -> bool:
@@ -69,23 +68,23 @@ class StructureFilter:
         conan = self._has_root_conan()
 
         if not self._has_root_cmake():
-            logging.error(f"[{self.repo_id}] no CMakeLists.txt at root found")
+            logging.error(f"[{self.repo.full_name}] no CMakeLists.txt at root found")
             return False
         
-        logging.info(f"[{self.repo_id}] CMakeLists.txt at root found")
+        logging.info(f"[{self.repo.full_name}] CMakeLists.txt at root found")
         analyzer = CMakeAnalyzer(root)
-        self.process = CMakeProcess(root, None, [], analyzer, "", docker_test_dir=docker_test_dir)
+        self.process = CMakeProcess(self.config, root, None, [], analyzer, "", docker_test_dir=docker_test_dir)
 
-        if not GitHandler().clone_repo(self.repo_id, root, sha=sha):
-            logging.error(f"[{self.repo_id}] git cloning failed")
+        if not GitHandler().clone_repo(self.repo.full_name, root, sha=sha):
+            logging.error(f"[{self.repo.full_name}] git cloning failed")
             return False
         
         self.process.analyzer.reset()
-        if not self.process.analyzer.has_testing(nolist=self.config.testing['no_list_testing']):
-            logging.error(f"[{self.repo_id}] invalid ctest")
+        if not self.process.analyzer.has_testing(nolist=self.config.testing.no_list_testing):
+            logging.error(f"[{self.repo.full_name}] invalid ctest")
             return False
 
-        logging.info(f"[{self.repo_id}] ctest is defined")
+        logging.info(f"[{self.repo.full_name}] ctest is defined")
         return True
     
     def _has_root_cmake(self) -> bool:
@@ -128,7 +127,7 @@ class StructureFilter:
                         f.write(content_file.decoded_content)
                     result_paths.append(str(target_path))
             except Exception as e:
-                logging.warning(f"[{self.repo_id}] Failed to fetch/write {item.path}: {e}")
+                logging.warning(f"[{self.repo.full_name}] Failed to fetch/write {item.path}: {e}")
 
         return result_paths
 

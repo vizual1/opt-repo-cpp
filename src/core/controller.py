@@ -1,13 +1,13 @@
 
 import logging
-from src.pipeline import (
+from src.core.pipelines.pipeline import (
     CrawlerPipeline, 
     RepositoryPipeline, 
     CommitPipeline, 
     CommitTesterPipeline, 
     TesterPipeline
 )
-from src.utils.config import Config
+from src.config.config import Config
 
 class Controller:
     """

@@ -1,4 +1,4 @@
-import os, subprocess, shutil, logging
+import os, stat, subprocess, shutil, logging
 from pathlib import Path
 
 class GitHandler:
@@ -17,7 +17,7 @@ class GitHandler:
         url = f"https://github.com/{repo_id}.git"
         
         if os.path.exists(repo_path):
-            shutil.rmtree(repo_path)
+            shutil.rmtree(repo_path, onerror=self._on_rm_error)
         
         if sha:
             logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
@@ -72,3 +72,7 @@ class GitHandler:
             logging.error(f"Output (stdout):\n{e.stdout}")
             logging.error(f"Error (stderr):\n{e.stderr}")
             return False
+        
+    def _on_rm_error(self, func, path, exc_info):
+        os.chmod(path, stat.S_IWRITE)
+        func(path)

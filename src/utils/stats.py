@@ -1,7 +1,5 @@
 import logging
 from collections import Counter
-import numpy as np
-from scipy import stats
 
 class RepoStats:
     def __init__(self):
@@ -58,22 +56,3 @@ class CommitStats:
             logging.info(f"Average lines added per perf commit: {self.lines_added / self.perf_commits}")
             logging.info(f"Average lines deleted per perf commit: {self.lines_deleted / self.perf_commits}")
             logging.info(f"Average lines changed per perf commit: {(self.lines_added + self.lines_deleted) / self.perf_commits}")
-
-def is_exec_time_improvement_significant(
-    min_exec_time_improvement: float,
-    min_p_value: float,
-    v1_times: list[float],
-    v2_times: list[float]
-) -> bool:
-    if len(v1_times) != len(v2_times):
-        raise ValueError("v1_times and v2_times must have the same length")
-    v1 = np.asarray(v1_times, dtype=float)
-    v2 = np.asarray(v2_times, dtype=float)
-
-    c = 1.0 - min_exec_time_improvement # we test μ1 < c * μ2
-    v2_scaled = c * v2
-
-    # Welch's t-test, one-sided: H1: mean(v1) < mean(v2_scaled)
-    res = stats.ttest_ind(v1, v2_scaled, equal_var=False, alternative='less')
-    logging.info(f"T-test result: {res.statistic} (statistic), {res.pvalue} (pvalue)") # type: ignore
-    return bool(res.pvalue < min_p_value) # type: ignore

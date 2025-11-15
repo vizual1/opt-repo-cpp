@@ -3,9 +3,11 @@ import src.config as conf
 from pathlib import Path
 from docker.types import Mount
 from typing import Optional
+from src.config.config import Config
 
 class DockerManager:
-    def __init__(self, mount: Path, docker_image: str, docker_test_dir: str, new: bool = False):
+    def __init__(self, config: Config, mount: Path, docker_image: str, docker_test_dir: str, new: bool = False):
+        self.config = config
         self.mount = mount
         self.docker_image = docker_image
         self.new = new
@@ -27,6 +29,7 @@ class DockerManager:
             except docker.errors.NotFound: # type: ignore
                 pass
             
+            logging.info(f"Run docker image ({self.docker_image}) mounted on {str(self.mount)}.")
             mount = Mount(
                 target="/workspace", source=str(self.mount), type="bind", read_only=False
             )
@@ -40,17 +43,15 @@ class DockerManager:
                 tty=True,
                 remove=False,
 
-                cpuset_cpus=conf.resource_limits['cpuset_cpus'],
-                mem_limit=conf.resource_limits['mem_limit'],
+                cpuset_cpus=self.config.resources.cpuset_cpus,
+                mem_limit=self.config.resources.mem_limit,
                 #memswap_limit=conf.resource_limits['memswap_limit'],
-                cpu_quota=conf.resource_limits['cpu_quota'],
-                cpu_period=conf.resource_limits['cpu_period']
+                cpu_quota=self.config.resources.cpu_quota,
+                cpu_period=self.config.resources.cpu_period
             )
             mkdir_cmd = ["mkdir", "-p", f"{self.docker_test_dir}"]
             self.container.exec_run(mkdir_cmd)
             mkdir_cmd = ["mkdir", "-p", f"{self.docker_test_dir}/logs"]
-            self.container.exec_run(mkdir_cmd)
-            mkdir_cmd = ["mkdir", "-p", f"{self.docker_test_dir}/workspace"]
             self.container.exec_run(mkdir_cmd)
         except Exception as e:
             logging.error(f"Docker execution failed: {e}")
@@ -75,3 +76,24 @@ class DockerManager:
         logs = self.container.logs().decode()
         self.container.exec_run(["bash", "-c", f"echo '{output}\n{logs}' >> {self.docker_test_dir}/logs/{'new' if self.new else 'old'}.log"])
         return exit_code, output, logs
+    
+
+    def copy_commands_to_container(self, project_root: Path, new_cmd: list[str], old_cmd: list[str]) -> None:
+        for i, c in enumerate(new_cmd): 
+            if i < 2:
+                save = "build"
+            else:
+                save = "test"
+            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/new_{save}.sh"]
+            exit_code, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
+            if exit_code != 0:
+                logging.error(f"Copying the build and test commands failed with: {exit_code}")
+        for i, c in enumerate(old_cmd):
+            if i < 2:
+                save = "build"
+            else:
+                save = "test"
+            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/old_{save}.sh"]
+            exit_code, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
+            if exit_code != 0:
+                logging.error(f"Copying the build and test commands failed with: {exit_code}")

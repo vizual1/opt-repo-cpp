@@ -1,5 +1,42 @@
 import re
 from typing import Union
+from collections import defaultdict
+
+def parse_framework_output(output: str, framework: str, test_name: str) -> float:
+    if framework == "gtest":
+        pattern = rf"\[\s*OK\s*\].*{re.escape(test_name)}.*\((\d+)\s*ms\)"
+        match = re.search(pattern, output)
+        if match:
+            ms = int(match.group(1))
+            return ms / 1000.0
+        return -1.0
+    elif framework == "catch":
+        pattern = rf"(\d+\.\d+)\s+s:\s+{re.escape(test_name)}"
+        match = re.search(pattern, output)
+        if match:
+            return float(match.group(1))
+        return -1.0
+    elif framework == "doctest":
+        pattern = rf"\[{re.escape(test_name)}\]\s+passed\s+in\s+(\d+\.\d+)s"
+        match = re.search(pattern, output)
+        if match:
+            return float(match.group(1))
+        return -1.0
+    elif framework == "boost":
+        pattern = rf"{re.escape(test_name)}.*passed in (\d+\.\d+) sec"
+        match = re.search(pattern, output)
+        if match:
+            return float(match.group(1))
+        return -1.0
+    elif framework == "qt":
+        pattern = rf"PASS\s*:\s*{re.escape(test_name)}\s*\((\d+\.\d+)\s*seconds\)"
+        match = re.search(pattern, output)
+        if match:
+            return float(match.group(1))
+        return -1.0
+    else:
+        raise ValueError(f"Unknown framework {framework}")
+
 
 def parse_ctest_output(output: str) -> dict[str, Union[int, float]]:
     """Parse CTest output text to extract key test statistics."""
@@ -32,3 +69,60 @@ def parse_ctest_output(output: str) -> dict[str, Union[int, float]]:
         stats["total_time_sec"] = float(m.group(1))
 
     return stats
+
+def parse_single_ctest_output(output: str, previous_results: dict = {}) -> dict[str, list[float]]:
+    """
+    Parse ctest output into a dictionary mapping test names to a list of runtimes.
+
+    Args:
+        output (str): The raw ctest output as a string.
+        previous_results (dict, optional): A previous dictionary to merge with.
+
+    Returns:
+        dict: {test_name: [times]}
+    """
+
+    if not previous_results:
+        results = defaultdict(list)
+    else:
+        results = defaultdict(list, {k: v[:] for k, v in previous_results.items()})
+
+    patterns = [
+        # pattern 1: [OK] test_name (time ms)
+        r"\[\s*OK\s*\]\s*(.+?)\s*\((\d+)\s*ms\)",
+        
+        # pattern 2: time s: test_name
+        r"(\d+\.\d+)\s+s:\s+(.+)",
+
+        # pattern 3: [test_name] passed in time s
+        r"\[(.+?)\]\s+passed\s+in\s+(\d+\.\d+)s",
+
+        # pattern 4: test_name passed in time sec
+        r"(.+?)\s+passed\s+in\s+(\d+\.\d+)\s+sec",
+
+        # pattern 5: PASS : test_name (time seconds)
+        r"PASS\s*:\s*(.+?)\s*\((\d+\.\d+)\s*seconds\)",
+
+        # pattern 6: Test #number: test_name ... Passed time sec
+        r"Test\s+#\d+:\s+([\w\.\-]+)\s+.*Passed\s+([\d\.]+)\s+sec",
+    ]
+
+    for pattern in patterns:
+        for match in re.finditer(pattern, output):
+            if pattern == patterns[1]:
+                # pattern 2 swaps order: time, then test name
+                time = float(match.group(1))
+                test_name = match.group(2)
+            else:
+                test_name = match.group(1)
+                time = match.group(2)
+
+            # Normalize time to seconds (convert ms to seconds if needed)
+            if "ms" in pattern:
+                time = int(time) / 1000.0
+            else:
+                time = float(time)
+
+            results[test_name].append(time)
+
+    return dict(results)

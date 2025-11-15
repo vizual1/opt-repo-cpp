@@ -1,4 +1,4 @@
-import json, logging, subprocess, re, threading, jsonschema, uuid
+import json, logging, subprocess, re, threading, jsonschema
 import src.config as conf
 from typing import Any
 from pathlib import Path
@@ -6,6 +6,7 @@ from src.llm.prompt import Prompt
 from src.llm.openai import OpenRouterLLM
 from src.llm.ollama import OllamaLLM
 from docker.models.containers import Container
+from src.config.config import Config
 
 LLM_DEP_SCHEMA = {
     "type": "object",
@@ -35,8 +36,8 @@ LLM_DEP_SCHEMA = {
 class DependencyResolver:
     
     class DependencyCache:
-        def __init__(self):
-            self.mapping_path = Path(conf.storage.get("cmake-dep", "cmake-dep.json"))
+        def __init__(self, config: Config):
+            self.mapping_path = Path(config.storage_paths.get("cmake-dep", "cmake-dep.json"))
             try:
                 with open(self.mapping_path) as f:
                     self.mapping: dict[str, dict[str, Any]] = json.load(f)
@@ -75,10 +76,11 @@ class DependencyResolver:
                 logging.error(f"Failed to save cache: {e}")
                 raise
         
-    def __init__(self, cache=None, handler=None, llm=None):
-        self.cache = cache or self.DependencyCache()
+    def __init__(self, config: Config, cache=None, handler=None, llm=None):
+        self.config = config
+        self.cache = cache or self.DependencyCache(self.config)
         self.package_handler = handler or self.PackageHandler()
-        self.llm = llm or self.LLMResolver()
+        self.llm = llm or self.LLMResolver(self.config)
 
     def resolve_all(self, dep_names: set[str], container: Container) -> tuple[set[str], set[str]]:
         self.container = container
@@ -224,11 +226,12 @@ class DependencyResolver:
         
     
     class LLMResolver:
-        def __init__(self):
-            if conf.llm["ollama"]:
-                self.llm = OllamaLLM(conf.llm['ollama_resolver_model'])
+        def __init__(self, config: Config):
+            self.config = config 
+            if self.config.llm.ollama_enabled:
+                self.llm = OllamaLLM(self.config, self.config.llm.ollama_resolver_model)
             else:
-                self.llm = OpenRouterLLM(conf.llm['model'])
+                self.llm = OpenRouterLLM(self.config, self.config.llm.ollama_resolver_model)
 
         def llm_prompt(self, deps: list[str], timeout: int = 60) -> str:
             result: dict[str, str] = {"out": ""}
@@ -236,7 +239,7 @@ class DependencyResolver:
             def run_llm():
                 p = Prompt([Prompt.Message(
                     "user",
-                    conf.resolver['resolver_message'].replace("<deps>", f"{deps}")
+                    self.config.resolver_prompt.replace("<deps>", f"{deps}")
                 )])
                 try:
                     llm_output = self.llm.generate(p)
