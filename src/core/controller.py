@@ -74,13 +74,14 @@ class Controller:
 
     def _commits(self) -> None:
         logging.info("Gathering and filtering commits...")
-        repos = RepositoryPipeline(self.config).get_repos()
-        logging.info(f"Found {len(repos)} repositories for commit filtering.")
-        if not repos:
+        repo_ids = RepositoryPipeline(self.config).get_repos()
+        logging.info(f"Found {len(repo_ids)} repositories for commit filtering.")
+        if not repo_ids:
             logging.warning("No repositories found for commit filtering.")
             return
         
-        for repo in repos:
+        for repo_id in repo_ids:
+            repo = self.config.git_client.get_repo(repo_id)
             CommitPipeline(repo, self.config).filter_commits()
 
     def _testcommits(self) -> None:

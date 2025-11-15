@@ -15,7 +15,7 @@ STORAGE_PATHS = {
 }
 
 COMMIT_TIME = {
-    'since': datetime(2024, 1, 1, tzinfo=timezone.utc),
+    'since': datetime(2020, 1, 1, tzinfo=timezone.utc),
     'until': datetime.now(timezone.utc),
     'min-exec-time-improvement': 0.05,
     'min-p-value': 0.05

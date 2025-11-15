@@ -22,13 +22,14 @@ class CommitTesterPipeline:
 
     def _input_tester(self) -> None:
         crawler = RepositoryCrawler(self.config)
-        repos = crawler.get_repos()  
-        if not repos:
+        repo_ids = crawler.get_repos()  
+        if not repo_ids:
             logging.warning("No repositories found for commit testing.")
             return
         
-        for repo in tqdm(repos, total=len(repos), desc=f"Testing..."):
+        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing..."):
             try: 
+                repo = self.config.git_client.get_repo(repo_id)
                 commits, file = self.commit.get_commits(repo.full_name)
                 for (new_sha, old_sha) in tqdm(commits, total=len(commits), desc=f"Testing filtered commits..."):
                     try:

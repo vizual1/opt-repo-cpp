@@ -17,20 +17,21 @@ class RepositoryPipeline:
         self.stats = RepoStats()
         self.valid_repos: list[Repository] = []
 
-    def get_repos(self) -> list[Repository]:
+    def get_repos(self) -> list[str]:
         crawler = RepositoryCrawler(config=self.config)
         return crawler.get_repos()
 
     def test_repos(self) -> None:
         crawler = RepositoryCrawler(self.config)
-        repos = crawler.get_repos()
-        if not repos:
+        repo_ids = crawler.get_repos()
+        if not repo_ids:
             logging.warning("No repositories found.")
             return
 
-        logging.info(f"Found {len(repos)} repositories.")
-        for repo in tqdm(repos, total=len(repos), desc=f"Testing repositories..."):
+        logging.info(f"Found {len(repo_ids)} repositories.")
+        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing repositories..."):
             try:
+                repo = self.config.git_client.get_repo(repo_id)
                 structure = StructureFilter(repo, self.config)
                 process = ProcessFilter(repo, self.config)
 
@@ -49,14 +50,15 @@ class RepositoryPipeline:
            
     def analyze_repos(self) -> None:
         crawler = RepositoryCrawler(config=self.config)
-        repos = crawler.get_repos()
-        if not repos:
+        repo_ids = crawler.get_repos()
+        if not repo_ids:
             logging.warning("No repositories found.")
             return
         
-        logging.info(f"Found {len(repos)} repositories.")
-        for repo in tqdm(repos, total=len(repos), desc=f"Analyzing repositories..."):
+        logging.info(f"Found {len(repo_ids)} repositories.")
+        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Analyzing repositories..."):
             try:
+                repo = self.config.git_client.get_repo(repo_id)
                 structure = StructureFilter(repo, self.config)
                 if structure.is_valid() and (self.config.popular or self.config.output_file):
                     Writer(structure.repo.full_name, self.config.output_file).write_repo()

@@ -9,16 +9,12 @@ class RepositoryCrawler:
         self.language = language
         self.config = config
 
-    def get_repos(self) -> list[Repository]:
-        if self.config.popular:
-            repos = self._query_popular_repos()
-            return repos
-
+    def get_repos(self) -> list[str]:
         path = self.config.input_file or self.config.storage_paths["repos"]
         logging.debug(f"{self.config.input_file} and {path}")
         return self._get_repo_ids(path)
     
-    def _query_popular_repos(self) -> list[Repository]:
+    def query_popular_repos(self) -> list[Repository]:
         ok_language = [
             "C++", "CMake", "Shell", "C", "Makefile", "Dockerfile",
             "Meson", "Bazel", "Ninja", "QMake", "Gradle", "JSON", "YAML",
@@ -81,13 +77,13 @@ class RepositoryCrawler:
         logging.info(f"Collected {len(results)} popular repositories.")
         return results
     
-    def _get_repo_ids(self, path: str) -> list[Repository]:
+    def _get_repo_ids(self, path: str) -> list[str]:
         """Extract repository IDs (owner/repo) from GitHub URLs."""
         repo_ids: list[str] = []
 
         if self.config.repo_url:
             repo_ids.append(self.config.repo_url.removeprefix("https://github.com/").strip())
-            return [self.config.git_client.get_repo(r) for r in repo_ids]
+            return repo_ids #[self.config.git_client.get_repo(r) for r in repo_ids]
         
         try:
             with open(path, 'r', errors='ignore') as f:
@@ -111,5 +107,5 @@ class RepositoryCrawler:
         except (OSError, IOError) as e:
             logging.error(f"Failed to read repo list from {path}: {e}", exc_info=True)
 
-        return [self.config.git_client.get_repo(r) for r in repo_ids]
+        return repo_ids #[self.config.git_client.get_repo(r) for r in repo_ids]
     
