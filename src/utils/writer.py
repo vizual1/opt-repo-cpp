@@ -50,10 +50,15 @@ class Writer:
 
         return stats
 
-    def write_improve(self, new_sha: str, old_sha: str) -> None:
+    def write_improve(self, results: dict) -> None:
         self.file = f"{self.owner}_{self.name}.txt"
         path = Path(self.output_path) / self.file
-        msg = f"{new_sha} | {old_sha}\n"
+        new_sha: str = results['commit_info']["new_sha"]
+        old_sha: str = results['commit_info']["old_sha"]
+        repo_id: str = results['metadata']['repository_name']
+        p_value: float = results['performance_analysis']['p_value']
+        rel_improv: float = results['performance_analysis']['relative_improvement']
+        msg = f"{new_sha} | {old_sha} | {repo_id} | {p_value} | {rel_improv}\n"
         self._write(path, msg)
 
     def _write(self, path: Path, msg: str) -> None:

@@ -358,7 +358,13 @@ class CommitFilter:
 
                 ref_type = ref_type.replace('_', ' ')
                 p = Prompt(messages=[
-                    Prompt.Message("system", "You are a strict binary classifier. Always respond with only one of two JSON answers: {\"answer\": \"yes\"} or {\"answer\": \"no\"}."),
+                    Prompt.Message("system", 
+                        "You are a strict binary classifier. "
+                        "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
+                        "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
+                        "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
+                        "If you do not have enough information to decide, say {\"answer\": \"no\"}."
+                        "Do not add any explanation or commentary."),
                     Prompt.Message("user",
                         f"The following is a {ref_type} in the {self.repo.full_name} repository:\n\n"
                         f"###{ref_type} Title###{title}\n###{ref_type} Title End###\n\n"
@@ -379,7 +385,13 @@ class CommitFilter:
                     logging.info(f"Commit {self.commit.sha} in {self.repo.full_name} is related to a likely performance issue (#{number}).")
 
                     p = Prompt(messages=[
-                        Prompt.Message("system", "You are a strict binary classifier. Always respond with only one of two JSON answers: {\"answer\": \"yes\"} or {\"answer\": \"no\"}."),
+                        Prompt.Message("system", 
+                            "You are a strict binary classifier. "
+                            "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
+                            "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
+                            "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
+                            "If you do not have enough information to decide, say {\"answer\": \"no\"}."
+                            "Do not add any explanation or commentary."),
                         Prompt.Message("user",
                             f"The following is a {ref_type} in the {self.repo.full_name} repository:\n\n"
                             f"###{ref_type} Title###{title}\n###{ref_type} Title End###\n\n"

@@ -435,7 +435,7 @@ class CMakeProcess:
                     if exit_code == 0:
                         logging.debug(f"CTest passed for {self.test_path}")
                         logging.debug(f"Output:\n{stdout}")
-                        logging.info(f"[{test_name}] Time elapsed: {elapsed} s")
+                        logging.debug(f"[{test_name}] Time elapsed: {elapsed} s")
                     else:
                         logging.error(f"CTest failed for {self.test_path} (return code {exit_code})", exc_info=True)
                         logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
@@ -472,7 +472,8 @@ class CMakeProcess:
             cmd = [f"{exe_path}", f"{test_name}"]
         else:
             raise ValueError(f"Unknown framework for {exe_path}")
-
+        
+        self.commands.append(" ".join(map(str, cmd)))
         exit_code, stdout, stderr = self.docker.run_command_in_docker(
             cmd, self.root, check=False
         )

@@ -25,7 +25,9 @@ class TestAnalyzer:
 
     def relative_improvement(self, old_times: list[float], new_times: list[float]):
         """relative improvement of new_times to old_times"""
-        return (sum(old_times) - sum(new_times)) / sum(old_times)
+        if sum(old_times) > 0.0:
+            return (sum(old_times) - sum(new_times)) / sum(old_times)
+        return 0.0
     
     def get_improvement_p_value(
         self,
@@ -128,7 +130,17 @@ class TestAnalyzer:
             "commit_message": message,
             "commit_date": commit.commit.author.date.isoformat(),
             "patch": patches,
-            "files_changed": commit.files,
+            "files_changed": [
+                {
+                    "filename": f.filename,
+                    "status": f.status,
+                    "additions": f.additions,
+                    "deletions": f.deletions,
+                    "changes": f.changes,
+                    "patch": f.patch
+                }
+                for f in commit.files or []
+            ],
             "lines_added": commit.stats.additions,
             "lines_removed": commit.stats.deletions, 
         }
