@@ -71,14 +71,6 @@ def setup_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def validate_args(args: argparse.Namespace) -> None:
-    """Post-parse validation for logical argument combinations."""
-    if args.commits and not args.repo:
-        sys.exit("Error: --commits requires --repo.")
-    if args.test and not (args.docker or args.mount):
-        sys.exit("Error: --test requires at least one of --docker or --mount.")
-
-
 def create_config(args: argparse.Namespace) -> Config:
     """Create a Config object from argparse arguments."""
     # Unpack all args directly into Config (thanks to dataclasses)
@@ -89,8 +81,6 @@ def create_config(args: argparse.Namespace) -> Config:
 def start() -> None:
     parser = setup_parser()
     args = parser.parse_args()
-
-    validate_args(args)
 
     config = create_config(args)
     pipeline = Controller(config=config)
