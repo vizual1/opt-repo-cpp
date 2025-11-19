@@ -397,7 +397,7 @@ class CMakeProcess:
             cmd = [exe_path, test_flag]
             logging.info(' '.join(map(str, cmd)))
             exit_code, stdout, stderr = self.docker.run_command_in_docker(
-                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=120
             )
             logging.debug(f"{test_flag} output:\n{stdout}")
             unit_tests[exe_path] = self.analyzer.find_unit_tests(stdout, framework)

@@ -1,5 +1,4 @@
-import logging, posixpath, docker, os
-import src.config as conf
+import logging, posixpath, docker, os, time
 from pathlib import Path
 from docker.types import Mount
 from typing import Optional
@@ -20,10 +19,10 @@ class DockerManager:
             self.container = None
 
     def start_docker_container(self, container_name: str) -> None:
-        client = docker.from_env()
+        self.client = docker.from_env()
         try:
             try:
-                self.container = client.containers.get(container_name)
+                self.container = self.client.containers.get(container_name)
                 logging.info(f"Reusing existing container {container_name}")
                 return
             except docker.errors.NotFound: # type: ignore
@@ -33,7 +32,7 @@ class DockerManager:
             mount = Mount(
                 target="/workspace", source=str(self.mount), type="bind", read_only=False
             )
-            self.container = client.containers.run(
+            self.container = self.client.containers.run(
                 self.docker_image,
                 command=["/bin/bash"],
                 name=container_name,
@@ -56,7 +55,7 @@ class DockerManager:
         except Exception as e:
             logging.error(f"Docker execution failed: {e}")
 
-    def run_command_in_docker(self, cmd: list[str], root: Path, workdir: Optional[Path] = None, check: bool = True) -> tuple[int, str, str]:
+    def run_command_in_docker(self, cmd: list[str], root: Path, workdir: Optional[Path] = None, check: bool = True, timeout: int = -1) -> tuple[int, str, str]:
         rel_root = os.path.relpath(root, self.mount)
         container_root = posixpath.join(f"/workspace", rel_root.replace("\\", "/"))
 
@@ -71,9 +70,42 @@ class DockerManager:
             return 1, "", ""
 
         cmd = [str(x) for x in cmd]
-        exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
-        output = output.decode(errors="ignore") if output else ""
-        logs = self.container.logs().decode()
+
+        #exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
+        #output = output.decode(errors="ignore") if output else ""
+        #logs = self.container.logs().decode()
+
+        exec_id = self.client.api.exec_create(
+            self.container.id,
+            cmd,
+            workdir=container_workdir,
+            stdout=True,
+            stderr=True
+        )["Id"]
+
+
+        self.client.api.exec_start(exec_id, detach=True)
+
+        start = time.time()
+        while True:
+            info = self.client.api.exec_inspect(exec_id)
+            if not info["Running"]:
+                break  # finished normally
+
+            if timeout > 0 and (time.time() - start) > timeout:
+                pid = info.get("Pid", None)
+                logging.error("Docker exec timed out -> killing process")
+                if pid and pid > 0:
+                    # Kill the exec process inside container
+                    self.container.exec_run(["kill", "-9", str(pid)])
+                break
+
+            time.sleep(0.1)
+
+        output = self.client.api.exec_start(exec_id).decode(errors="ignore")
+        exit_code = self.client.api.exec_inspect(exec_id)["ExitCode"]
+        logs = self.container.logs().decode(errors="ignore")
+
         self.container.exec_run(["bash", "-c", f"echo '{output}\n{logs}' >> {self.docker_test_dir}/logs/{'new' if self.new else 'old'}.log"])
         return exit_code, output, logs
     
