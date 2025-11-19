@@ -49,6 +49,7 @@ class GitHandler:
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
+                self.set_permission(str(repo_path))
                 logging.info(f"Repository checked out to commit {sha} successfully")
                 return True
                 
@@ -79,3 +80,12 @@ class GitHandler:
     def _on_rm_error(self, func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)
         func(path)
+
+    
+    def set_permission(self, path: str):
+        for root, dirs, files in os.walk(path):
+            os.chmod(root, 0o777)
+            for d in dirs:
+                os.chmod(os.path.join(root, d), 0o777)
+            for f in files:
+                os.chmod(os.path.join(root, f), 0o777)
