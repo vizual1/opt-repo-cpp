@@ -18,6 +18,8 @@ class GitHandler:
         
         if os.path.exists(repo_path):
             shutil.rmtree(repo_path, onerror=self._on_rm_error)
+
+        repo_path.mkdir(parents=True, exist_ok=True)
         
         if sha:
             logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
