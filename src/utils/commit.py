@@ -28,7 +28,9 @@ class Commit:
         Returns paths for {old,new} commit directories to be tested.
         Example: data/commits/<file_prefix>_<sha>/{old,new}
         """
-        commit_root = Path(self.output_path) / f"{file_prefix}_{sha}"
+        output = Path(self.output_path)
+        output.chmod(0o777)
+        commit_root = output / f"{file_prefix}_{sha}"
         old_path = commit_root / "old"
         new_path = commit_root / "new"
         return new_path, old_path
