@@ -12,8 +12,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, Optional, Any
 from github.Repository import Repository
-from github.Commit import Commit
-from src.core.filter.commit_filter import CommitFilter
 
 class DockerTester:
     def __init__(self, config: Config):
@@ -41,8 +39,7 @@ class DockerTester:
                     old_single_tests = old_struct.process.per_test_times
 
                     test = TestAnalyzer(
-                        self.config, 
-                        new_single_tests, old_single_tests
+                        self.config, new_single_tests, old_single_tests
                     )
 
                     total_improvement = test.get_improvement_p_value(
