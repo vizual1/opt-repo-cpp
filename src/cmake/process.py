@@ -7,6 +7,7 @@ from src.utils.parser import parse_ctest_output, parse_framework_output, parse_s
 from typing import Optional, Union
 from src.core.docker.manager import DockerManager
 from src.config.config import Config
+from tqdm import tqdm
 
 vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
 os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
@@ -334,7 +335,7 @@ class CMakeProcess:
             self.commands.append(f"cd {str(self.docker_test_dir/self.test_path)}")
             self.commands.append(" ".join(map(str, cmd)))
             elapsed_times: list[float] = []
-            for i in range(warmup + test_repeat):
+            for i in tqdm(range(warmup + test_repeat), total=warmup+test_repeat, desc=f"Tests"):
                 logging.info(f"{' '.join(map(str, cmd))} in {self.test_path}")
                 exit_code, stdout, stderr = self.docker.run_command_in_docker(
                     cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
@@ -408,15 +409,13 @@ class CMakeProcess:
             return False
 
         elapsed_times: list[float] = []
-        for exe_path, test_names in unit_tests.items():
+        for exe_path, test_names in tqdm(unit_tests.items(), desc="Isolated Tests"):
             for test_name in test_names:
                 self.per_test_times[test_name] = []
                 all_stdout = ""
                 
                 parsed_time: list[float] = []
-                parsed_stdout = ""
                 measured_time: list[float] = []
-                measured_stdout = ""
                 for i in range(warmup + test_repeat):
                     #cmd = ["ctest", "-R", test_name, "--output-on-failure"]
                     #exit_code, stdout, stderr = self.docker.run_command_in_docker(
