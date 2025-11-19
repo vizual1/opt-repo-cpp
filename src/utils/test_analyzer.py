@@ -9,19 +9,15 @@ from src.core.filter.commit_filter import CommitFilter
 from src.config.config import Config
 
 class TestAnalyzer:
-    def __init__(self, config: Config, new_test_outputs: list[str], old_test_outputs: list[str], warmup: int, commit_test_times: int):
+    def __init__(self, config: Config, new_single_tests: dict[str, list[float]], old_single_tests: dict[str, list[float]]):
         self.config = config
-        self.new_outputs = new_test_outputs
-        self.old_outputs = old_test_outputs
-        self.warmup = warmup
-        self.commit_test_times = commit_test_times
+        self.new_single_tests = new_single_tests
+        self.old_single_tests = old_single_tests
+
+        self.warmup = self.config.testing.warmup
+        self.commit_test_times = self.config.testing.commit_test_times
         self.min_exec_time_improvement: float = self.config.commits_time['min-exec-time-improvement']
         self.min_p_value: float = self.config.commits_time['min-p-value']
-
-    def get_single_execution_times(self) -> dict[str, list[float]]:
-        new_output = parse_single_ctest_output(f"\n".join(self.new_outputs))
-        total_output = parse_single_ctest_output(f"\n".join(self.old_outputs), new_output)
-        return total_output
 
     def relative_improvement(self, old_times: list[float], new_times: list[float]):
         """relative improvement of new_times to old_times"""
@@ -30,22 +26,17 @@ class TestAnalyzer:
         return 0.0
     
     def get_overall_change(self) -> float:
-        individual_test_times = self.get_single_execution_times()
-        combined_times = self.warmup + self.commit_test_times
-        
         total_old = 0.0
         total_new = 0.0
-        
-        for test_name, test_times in individual_test_times.items():
-            new_times = test_times[self.warmup:combined_times]
-            old_times = test_times[combined_times + self.warmup : 2 * combined_times]
-            
-            total_old += sum(old_times)
-            total_new += sum(new_times)
 
-        if total_old == 0:
+        for test_name in self.new_single_tests.keys():
+            new_times = self.new_single_tests[test_name][self.warmup:]
+            old_times = self.old_single_tests[test_name][self.warmup:]
+            total_new += sum(new_times)
+            total_old += sum(old_times)
+
+        if total_old == 0.0:
             return 0.0
-            
         return (total_old - total_new) / total_old
 
     
@@ -110,11 +101,9 @@ class TestAnalyzer:
     def get_significant_test_time_changes(self) -> dict[str, list[str]]:
         significant_test_time_changes = {'old_outperforms_new': [], 'new_outperforms_old': []}
 
-        combined_times = self.warmup + self.commit_test_times
-        individual_test_times = self.get_single_execution_times()
-        for test_name, test_times in individual_test_times.items():
-            new_times = test_times[self.warmup:combined_times]
-            old_times = test_times[combined_times+self.warmup:2*combined_times]
+        for test_name in self.new_single_tests.keys():
+            new_times = self.new_single_tests[test_name][self.warmup:]
+            old_times = self.old_single_tests[test_name][self.warmup:]
             if self.get_improvement_p_value(new_times, old_times) < self.min_p_value:
                 significant_test_time_changes['old_outperforms_new'].append(test_name)
                 logging.info(f"old_outperforms_new improvement: {self.relative_improvement(old_times, new_times)*100}%")
@@ -193,21 +182,18 @@ class TestAnalyzer:
             "new_times_s": new_full_times
         }
 
-
-        combined_times = self.warmup + self.commit_test_times
-        individual_test_times = self.get_single_execution_times()
         significant_test_time_changes = self.get_significant_test_time_changes()
         tests = {
-            "total_tests": len(individual_test_times.keys()),
+            "total_tests": len(self.new_single_tests.keys()),
             "significant_improvements": len(significant_test_time_changes['new_outperforms_old']),
             "significant_improvements_tests": significant_test_time_changes['new_outperforms_old'],
             "significant_regressions": len(significant_test_time_changes['old_outperforms_new']),
             "significant_regressions_tests": significant_test_time_changes['old_outperforms_new'],
             "tests": []
         }
-        for test_name, test_times in individual_test_times.items():
-            new_times = test_times[self.warmup:combined_times]
-            old_times = test_times[combined_times+self.warmup:2*combined_times]
+        for test_name in self.new_single_tests.keys():
+            new_times = self.new_single_tests[test_name][self.warmup:]
+            old_times = self.old_single_tests[test_name][self.warmup:]
             pvalue = self.get_improvement_p_value(new_times, old_times) 
             tests["tests"].append({
                 "test_name": test_name,

@@ -21,7 +21,7 @@ class ProcessFilter:
         tmp_root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=tmp_root) as tmpdir:
             tmp_path = Path(tmpdir)
-            process = CMakeProcess(self.config, tmp_path, None, [], CMakeAnalyzer(tmp_path), "", docker_test_dir=self.config.testing.docker_test_dir)
+            process = CMakeProcess(self.config, tmp_path, None, [], CMakeAnalyzer(tmp_path), "", jobs=self.config.resources.jobs, docker_test_dir=self.config.testing.docker_test_dir)
 
             if not GitHandler().clone_repo(self.repo.full_name, tmp_path):
                 logging.error(f"[{self.repo.full_name}] git cloning failed")

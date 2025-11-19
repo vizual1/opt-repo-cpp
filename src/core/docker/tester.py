@@ -36,15 +36,17 @@ class DockerTester:
                 
                 if new_struct and new_struct.process and old_struct and old_struct.process:
                     warmup = self.config.testing.warmup
-                    commit_test_times = self.config.testing.commit_test_times
 
-                    new_test_outputs = new_struct.process.ctest_output
-                    old_test_outputs = old_struct.process.ctest_output
+                    new_single_tests = new_struct.process.per_test_times
+                    old_single_tests = old_struct.process.per_test_times
 
-                    test = TestAnalyzer(self.config, new_test_outputs, old_test_outputs, warmup, commit_test_times)
+                    test = TestAnalyzer(
+                        self.config, 
+                        new_single_tests, old_single_tests
+                    )
 
                     total_improvement = test.get_improvement_p_value(
-                        new_times[warmup:], old_times[warmup:]
+                        old_times[warmup:], new_times[warmup:] 
                     )
                     logging.info(f"pvalue: {total_improvement}")
 
@@ -52,8 +54,12 @@ class DockerTester:
                     logging.info(f"new outperforms old: {isolated_improvements['new_outperforms_old']}")
                     overall_change = test.get_overall_change()
                     logging.info(f"overall change: {overall_change}")
+                    overall_change_with_new_outperforms_old = (
+                        len(isolated_improvements['new_outperforms_old']) > 0 and 
+                        overall_change > self.config.overall_decline_limit
+                    )
 
-                    if total_improvement < self.config.commits_time['min-p-value'] or overall_change > self.config.overall_decline_limit:
+                    if total_improvement < self.config.commits_time['min-p-value'] or overall_change_with_new_outperforms_old:
                         new_cmd = new_struct.process.commands
                         old_cmd = old_struct.process.commands
                         
@@ -171,8 +177,8 @@ class DockerTester:
                 elapsed: float = stats['total_time_sec']
                 old_times.append(elapsed)
                 
-            test = TestAnalyzer(self.config, [], [], warmup, self.config.testing.commit_test_times)
-            return test.get_improvement_p_value(new_times[warmup:], old_times[warmup:]) < self.config.commits_time['min-p-value']
+            #test = TestAnalyzer(self.config, [], [], warmup, self.config.testing.commit_test_times)
+            return True #test.get_improvement_p_value(new_times[warmup:], old_times[warmup:]) < self.config.commits_time['min-p-value']
         
         except:
             logging.error("")

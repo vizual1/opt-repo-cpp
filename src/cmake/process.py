@@ -3,7 +3,7 @@ import logging, subprocess, os, tempfile, time, json
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.resolver import DependencyResolver
-from src.utils.parser import parse_ctest_output, parse_framework_output
+from src.utils.parser import parse_ctest_output, parse_framework_output, parse_single_ctest_output
 from typing import Optional, Union
 from src.core.docker.manager import DockerManager
 from src.config.config import Config
@@ -345,6 +345,7 @@ class CMakeProcess:
                 elapsed: float = stats['total_time_sec']
                 elapsed_times.append(elapsed)
                 self.ctest_output.append(stdout)
+                self.per_test_times = parse_single_ctest_output(stdout, self.per_test_times)
 
                 if exit_code == 0:
                     logging.info(f"CTest passed for {self.test_path}")
@@ -407,29 +408,27 @@ class CMakeProcess:
             return False
 
         elapsed_times: list[float] = []
-        total_time: float = 0.0
         for exe_path, test_names in unit_tests.items():
             for test_name in test_names:
                 self.per_test_times[test_name] = []
                 all_stdout = ""
                 
+                parsed_time: list[float] = []
+                parsed_stdout = ""
+                measured_time: list[float] = []
+                measured_stdout = ""
                 for i in range(warmup + test_repeat):
                     #cmd = ["ctest", "-R", test_name, "--output-on-failure"]
                     #exit_code, stdout, stderr = self.docker.run_command_in_docker(
                     #    cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
                     #)
-                    exit_code, stdout, stderr = self._run_single_test(exe_path, framework, test_name)
-
+                    
+                    exit_code, stdout, stderr, time = self._run_single_test(exe_path, framework, test_name)
                     elapsed: float = parse_framework_output(stdout, framework, test_name)
                     
-                    if elapsed <= 0.0:
-                        start = time.perf_counter()
-                        exit_code, stdout, stderr = self._run_single_test(exe_path, framework, test_name)
-                        end = time.perf_counter()
-                        elapsed = end - start
+                    parsed_time.append(elapsed)
+                    measured_time.append(time)
 
-                    self.per_test_times[test_name].append(elapsed)
-                    total_time += elapsed
                     all_stdout += f"{stdout}\n"
 
                     if exit_code == 0:
@@ -441,8 +440,14 @@ class CMakeProcess:
                         logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
                         logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
                         return False
-                    
-                elapsed_times.append(total_time)
+                
+                if 0.0 in parsed_time:
+                    elapsed_times.append(sum(measured_time))
+                    self.per_test_times[test_name] = measured_time
+                else:
+                    elapsed_times.append(sum(parsed_time))
+                    self.per_test_times[test_name] = parsed_time
+
                 self.ctest_output.append(all_stdout)
 
         self.test_time = elapsed_times
@@ -474,10 +479,12 @@ class CMakeProcess:
             raise ValueError(f"Unknown framework for {exe_path}")
         
         self.commands.append(" ".join(map(str, cmd)))
+        start = time.perf_counter()
         exit_code, stdout, stderr = self.docker.run_command_in_docker(
             cmd, self.root, check=False
         )
-        return exit_code, stdout, stderr
+        end = time.perf_counter()
+        return exit_code, stdout, stderr, end-start
     
 
     def to_container_path(self, path: Path) -> str:

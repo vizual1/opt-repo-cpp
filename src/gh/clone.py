@@ -23,13 +23,14 @@ class GitHandler:
             logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
             try:
                 subprocess.run(
-                    ["git", "config", "--global", "--add", "safe.directory", "*"],
+                    ["git", "config", "--global", "--add", "safe.directory", str(repo_path)],
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
                 subprocess.run(
                     ["git", "clone", "--depth=1", url, repo_path],
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
+                subprocess.run(["chmod", "-R", "777", str(repo_path)], check=True)
                 subprocess.run(
                     ["git", "fetch", "--depth=1", "origin", sha],
                     cwd=repo_path,
@@ -65,6 +66,7 @@ class GitHandler:
                  "--branch", branch, "--depth=1", url, repo_path], 
                 check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
+            subprocess.run(["chmod", "-R", "777", str(repo_path)], check=True)
             logging.info(f"Repository cloned successfully")
             return True
         except subprocess.CalledProcessError as e:
