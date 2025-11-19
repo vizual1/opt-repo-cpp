@@ -29,6 +29,26 @@ class TestAnalyzer:
             return (sum(old_times) - sum(new_times)) / sum(old_times)
         return 0.0
     
+    def get_overall_change(self) -> float:
+        individual_test_times = self.get_single_execution_times()
+        combined_times = self.warmup + self.commit_test_times
+        
+        total_old = 0.0
+        total_new = 0.0
+        
+        for test_name, test_times in individual_test_times.items():
+            new_times = test_times[self.warmup:combined_times]
+            old_times = test_times[combined_times + self.warmup : 2 * combined_times]
+            
+            total_old += sum(old_times)
+            total_new += sum(new_times)
+
+        if total_old == 0:
+            return 0.0
+            
+        return (total_old - total_new) / total_old
+
+    
     def get_improvement_p_value(
         self,
         old_times: list[float],
@@ -95,10 +115,10 @@ class TestAnalyzer:
         for test_name, test_times in individual_test_times.items():
             new_times = test_times[self.warmup:combined_times]
             old_times = test_times[combined_times+self.warmup:2*combined_times]
-            if self.get_improvement_p_value(old_times, new_times) < self.min_p_value:
+            if self.get_improvement_p_value(new_times, old_times) < self.min_p_value:
                 significant_test_time_changes['old_outperforms_new'].append(test_name)
                 logging.info(f"old_outperforms_new improvement: {self.relative_improvement(old_times, new_times)*100}%")
-            elif self.get_improvement_p_value(new_times, old_times) < self.min_p_value:
+            elif self.get_improvement_p_value(old_times, new_times) < self.min_p_value:
                 significant_test_time_changes['new_outperforms_old'].append(test_name)
                 logging.info(f"new_outperforms_old improvement: {self.relative_improvement(new_times, old_times)*100}%")
 

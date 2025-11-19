@@ -63,6 +63,7 @@ class Config:
     # Commit analysis settings
     min_exec_time_improvement: float = 0.05
     min_p_value: float = 0.05
+    overall_decline_limit: float = -0.01
     min_likelihood: int = 50
     max_likelihood: int = 90
     

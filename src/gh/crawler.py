@@ -15,6 +15,10 @@ class RepositoryCrawler:
         return self._get_repo_ids(path)
     
     def query_popular_repos(self) -> list[Repository]:
+        repo_ids: list[str] = []
+        if self.config.input_file:
+            repo_ids = self._get_repo_ids(self.config.input_file)
+
         ok_language = [
             "C++", "CMake", "Shell", "C", "Makefile", "Dockerfile",
             "Meson", "Bazel", "Ninja", "QMake", "Gradle", "JSON", "YAML",
@@ -41,6 +45,8 @@ class RepositoryCrawler:
             try:
                 repos = self.config.git_client.search_repositories(query=query, sort="stars", order="desc")
                 for repo in repos:
+                    if repo.full_name in repo_ids:
+                        continue #skip: repo already in the list
                     try:
                         languages = repo.get_languages() 
                         cpp = languages.get("C++", 0)

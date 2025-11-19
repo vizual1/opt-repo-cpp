@@ -1,4 +1,4 @@
-import logging
+import logging, json
 from github.Commit import Commit
 from src.utils.stats import CommitStats
 from typing import Optional
@@ -60,6 +60,15 @@ class Writer:
         rel_improv: float = results['performance_analysis']['relative_improvement']
         msg = f"{new_sha} | {old_sha} | {repo_id} | {p_value} | {rel_improv}\n"
         self._write(path, msg)
+
+    def write_results(self, results: dict) -> None:
+        new_sha: str = results['commit_info']["new_sha"]
+        file = f"{self.owner}_{self.name}_{new_sha}.json"
+        path = Path(self.output_path) / file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+        logging.info(f"[{self.owner}/{self.name}] Wrote results to {path}")
 
     def _write(self, path: Path, msg: str) -> None:
         try:

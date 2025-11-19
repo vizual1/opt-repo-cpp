@@ -45,12 +45,15 @@ class DockerTester:
 
                     total_improvement = test.get_improvement_p_value(
                         new_times[warmup:], old_times[warmup:]
-                    ) < self.config.commits_time['min-p-value']
-
+                    )
                     logging.info(f"pvalue: {total_improvement}")
 
-                    # TODO: https://github.com/khesoem/opt-repo/blob/2e768c0643599146f614724721943f410d17a143/src/gh/commit_analysis/utils/mvn_log_analyzer.py#L77
-                    if total_improvement:
+                    isolated_improvements = test.get_significant_test_time_changes()
+                    logging.info(f"new outperforms old: {isolated_improvements['new_outperforms_old']}")
+                    overall_change = test.get_overall_change()
+                    logging.info(f"overall change: {overall_change}")
+
+                    if total_improvement < self.config.commits_time['min-p-value'] or overall_change > self.config.overall_decline_limit:
                         new_cmd = new_struct.process.commands
                         old_cmd = old_struct.process.commands
                         
@@ -64,7 +67,9 @@ class DockerTester:
                         old_struct.process.save_docker_image(repo.full_name, new_sha, new_cmd, old_cmd, results)
                 
                         logging.info(f"[{repo.full_name}] ({new_sha}) significantly improves execution time.")
-                        Writer(repo.full_name, self.config.output_file or self.config.storage_paths["performance"]).write_improve(results)
+                        writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths["performance"])
+                        writer.write_improve(results)
+                        writer.write_results(results)
 
         except Exception as e:
             logging.exception(f"[{repo.full_name}] Error running commit pair test: {e}")
