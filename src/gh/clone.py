@@ -49,7 +49,7 @@ class GitHandler:
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-                self.set_permission(str(repo_path))
+                self.set_permission(str(repo_path.parent))
                 logging.info(f"Repository checked out to commit {sha} successfully")
                 return True
                 
@@ -69,6 +69,7 @@ class GitHandler:
                  "--branch", branch, "--depth=1", url, repo_path], 
                 check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
+            self.set_permission(str(repo_path))
             logging.info(f"Repository cloned successfully")
             return True
         except subprocess.CalledProcessError as e:
