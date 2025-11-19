@@ -44,7 +44,7 @@ class ResourceSettings:
     """Docker resource limits."""
     cpuset_cpus: str = '4,5'
     mem_limit: str = '8g'
-    memswap_limit: str = '8g'
+    memswap_limit: str = '16g'
     cpu_quota: int = 200000
     cpu_period: int = 100000
     jobs: int = 2

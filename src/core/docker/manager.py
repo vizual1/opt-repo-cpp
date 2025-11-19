@@ -45,7 +45,7 @@ class DockerManager:
 
                 cpuset_cpus=self.config.resources.cpuset_cpus,
                 mem_limit=self.config.resources.mem_limit,
-                #memswap_limit=conf.resource_limits['memswap_limit'],
+                memswap_limit=self.config.resources.memswap_limit,
                 cpu_quota=self.config.resources.cpu_quota,
                 cpu_period=self.config.resources.cpu_period
             )
