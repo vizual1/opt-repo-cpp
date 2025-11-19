@@ -49,7 +49,7 @@ class GitHandler:
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-                self.set_permission(str(repo_path.parent))
+                self.set_permission(str(repo_path))
                 logging.info(f"Repository checked out to commit {sha} successfully")
                 return True
                 
