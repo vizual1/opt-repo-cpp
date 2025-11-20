@@ -56,23 +56,23 @@ class DockerTester:
                         overall_change > self.config.overall_decline_limit
                     )
 
+                    new_cmd = new_struct.process.commands
+                    old_cmd = old_struct.process.commands
+                    
+                    commit = repo.get_commit(new_sha)
+                    results = test.create_test_log(
+                        commit, repo, old_sha, new_sha, 
+                        old_times, new_times, old_cmd, new_cmd
+                    )
+                    logging.info(f"Results: {results['performance_analysis']}")
+                    writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths["performance"])
+                    writer.write_results(results)
+
                     if total_improvement < self.config.commits_time['min-p-value'] or overall_change_with_new_outperforms_old:
-                        new_cmd = new_struct.process.commands
-                        old_cmd = old_struct.process.commands
-                        
-                        commit = repo.get_commit(new_sha)
-                        results = test.create_test_log(
-                            commit, repo, old_sha, new_sha, 
-                            old_times, new_times, old_cmd, new_cmd
-                        )
-                        logging.info(f"Results: {results['performance_analysis']}")
-                        
                         old_struct.process.save_docker_image(repo.full_name, new_sha, new_cmd, old_cmd, results)
-                
                         logging.info(f"[{repo.full_name}] ({new_sha}) significantly improves execution time.")
-                        writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths["performance"])
                         writer.write_improve(results)
-                        writer.write_results(results)
+                        
 
         except Exception as e:
             logging.exception(f"[{repo.full_name}] Error running commit pair test: {e}")
@@ -114,6 +114,13 @@ class DockerTester:
             old_times, old_structure = old_pf.valid_commit_run("Old", container_name=new_sha, docker_image=docker_image)
 
             yield new_times, old_times, new_structure, old_structure
+        except Exception:
+            for struct in [new_structure, old_structure]:
+                try:
+                    if struct and struct.process:
+                        struct.process.docker.stop_container()
+                except Exception as e:
+                    logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
             
         finally:
             try:

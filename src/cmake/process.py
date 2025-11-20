@@ -382,9 +382,13 @@ class CMakeProcess:
             path = str(self.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
             cmd = ["cat", f"{path}"]
             exit_code, stdout, stderr = self.docker.run_command_in_docker(
-                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
             )
-
+            if exit_code != 0:
+                logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
+                logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                return False
             logging.info(f"CTestTestfile.cmake output:\n{stdout}")
             test_exec |= set(self.analyzer.parse_ctest_file(stdout))
 
@@ -397,9 +401,14 @@ class CMakeProcess:
             cmd = [exe_path, test_flag]
             logging.info(' '.join(map(str, cmd)))
             exit_code, stdout, stderr = self.docker.run_command_in_docker(
-                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=120
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
             )
-            logging.debug(f"{test_flag} output:\n{stdout}")
+            if exit_code != 0:
+                logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
+                logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                return False
+            logging.info(f"{test_flag} output:\n{stdout}")
             unit_tests[exe_path] = self.analyzer.find_unit_tests(stdout, framework)
 
         logging.debug(f"unit tests: {unit_tests}")
@@ -409,7 +418,7 @@ class CMakeProcess:
             return False
 
         elapsed_times: list[float] = []
-        for exe_path, test_names in tqdm(unit_tests.items(), desc="Isolated Tests"):
+        for exe_path, test_names in tqdm(unit_tests.items(), desc=f"Running {exe_path}..."):
             for test_name in test_names:
                 self.per_test_times[test_name] = []
                 all_stdout = ""
@@ -433,7 +442,7 @@ class CMakeProcess:
                     if exit_code == 0:
                         logging.debug(f"CTest passed for {self.test_path}")
                         logging.debug(f"Output:\n{stdout}")
-                        logging.debug(f"[{test_name}] Time elapsed: {elapsed} s")
+                        logging.info(f"[{test_name}] Time elapsed: {elapsed} s")
                     else:
                         logging.error(f"CTest failed for {self.test_path} (return code {exit_code})", exc_info=True)
                         logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
@@ -461,8 +470,6 @@ class CMakeProcess:
             # extract the profraw coverage without the test and build folders
             # extract coverage data and create
         
-    
-
     def _run_single_test(self, exe_path: str, framework: str, test_name: str):
         if framework == "gtest":
             cmd = [f"{exe_path}", f"--gtest_filter={test_name}"]
@@ -478,13 +485,13 @@ class CMakeProcess:
             raise ValueError(f"Unknown framework for {exe_path}")
         
         self.commands.append(" ".join(map(str, cmd)))
+        logging.debug(" ".join(map(str, cmd)))
         start = time.perf_counter()
         exit_code, stdout, stderr = self.docker.run_command_in_docker(
             cmd, self.root, check=False
         )
         end = time.perf_counter()
         return exit_code, stdout, stderr, end-start
-    
 
     def to_container_path(self, path: Path) -> str:
         rel = path.relative_to(self.root.parent)

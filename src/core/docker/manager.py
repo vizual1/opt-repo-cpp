@@ -70,42 +70,11 @@ class DockerManager:
             return 1, "", ""
 
         cmd = [str(x) for x in cmd]
-
-        #exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
-        #output = output.decode(errors="ignore") if output else ""
-        #logs = self.container.logs().decode()
-
-        exec_id = self.client.api.exec_create(
-            self.container.id,
-            cmd,
-            workdir=container_workdir,
-            stdout=True,
-            stderr=True
-        )["Id"]
-
-
-        self.client.api.exec_start(exec_id, detach=True)
-
-        start = time.time()
-        while True:
-            info = self.client.api.exec_inspect(exec_id)
-            if not info["Running"]:
-                break  # finished normally
-
-            if timeout > 0 and (time.time() - start) > timeout:
-                pid = info.get("Pid", None)
-                logging.error("Docker exec timed out -> killing process")
-                if pid and pid > 0:
-                    # Kill the exec process inside container
-                    self.container.exec_run(["kill", "-9", str(pid)])
-                break
-
-            time.sleep(0.1)
-
-        output = self.client.api.exec_start(exec_id).decode(errors="ignore")
-        exit_code = self.client.api.exec_inspect(exec_id)["ExitCode"]
-        logs = self.container.logs().decode(errors="ignore")
-
+        if timeout > 0:
+            cmd = ["timeout", f"{timeout}s"] + cmd
+        exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
+        output = output.decode(errors="ignore") if output else ""
+        logs = self.container.logs().decode()
         self.container.exec_run(["bash", "-c", f"echo '{output}\n{logs}' >> {self.docker_test_dir}/logs/{'new' if self.new else 'old'}.log"])
         return exit_code, output, logs
     

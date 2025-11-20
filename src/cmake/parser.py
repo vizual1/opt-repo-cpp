@@ -246,9 +246,17 @@ class CMakeParser:
                      not "test cases" in line.strip() and
                      not line.strip().startswith("[") and 
                      not line.strip().endswith("]")]
-        elif framework in {"catch", "doctest"}:
-            # Each line is a test name
-            tests = [line.strip() for line in text.splitlines() if line.strip()]
+        elif framework == "doctest":
+            tests = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("[doctest]"):
+                    continue
+                if set(line) == {"="}:
+                    continue
+                tests.append(line)
         elif framework == "boost":
             # Boost lists suites/tests as suite/test
             tests = [line.strip() for line in text.splitlines() if "/" in line]
