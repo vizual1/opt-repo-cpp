@@ -418,9 +418,12 @@ class CMakeProcess:
             return False
 
         elapsed_times: list[float] = []
+        ctest_output: list[str] = []
+        per_test_times: dict = {}
+        commands: list[str] = []
         for exe_path, test_names in tqdm(unit_tests.items(), desc=f"Running {exe_path}..."):
             for test_name in test_names:
-                self.per_test_times[test_name] = []
+                per_test_times[test_name] = []
                 all_stdout = ""
                 
                 parsed_time: list[float] = []
@@ -431,11 +434,15 @@ class CMakeProcess:
                     #    cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
                     #)
                     
-                    exit_code, stdout, stderr, time = self._run_single_test(exe_path, framework, test_name)
+                    exit_code, stdout, stderr, time, command = self._run_single_test(exe_path, framework, test_name)
                     elapsed: float = parse_framework_output(stdout, framework, test_name)
                     
+                    if elapsed < 0.0:
+                        return False
+
                     parsed_time.append(elapsed)
                     measured_time.append(time)
+                    commands.append(command)
 
                     all_stdout += f"{stdout}\n"
 
@@ -451,13 +458,15 @@ class CMakeProcess:
                 
                 if 0.0 in parsed_time:
                     elapsed_times.append(sum(measured_time))
-                    self.per_test_times[test_name] = measured_time
+                    per_test_times[test_name] = measured_time
                 else:
                     elapsed_times.append(sum(parsed_time))
-                    self.per_test_times[test_name] = parsed_time
-
-                self.ctest_output.append(all_stdout)
-
+                    per_test_times[test_name] = parsed_time
+                ctest_output.append(all_stdout)
+                
+        self.commands += commands
+        self.per_test_times.update(per_test_times)
+        self.ctest_output += ctest_output
         self.test_time = elapsed_times
         return True
     
@@ -484,14 +493,15 @@ class CMakeProcess:
         else:
             raise ValueError(f"Unknown framework for {exe_path}")
         
-        self.commands.append(" ".join(map(str, cmd)))
-        logging.debug(" ".join(map(str, cmd)))
+        command = " ".join(map(str, cmd))
+        logging.debug(command)
         start = time.perf_counter()
         exit_code, stdout, stderr = self.docker.run_command_in_docker(
             cmd, self.root, check=False
         )
         end = time.perf_counter()
-        return exit_code, stdout, stderr, end-start
+        logging.info(f"Isolated CTest stdout:\n{stdout}")
+        return exit_code, stdout, stderr, end-start, command
 
     def to_container_path(self, path: Path) -> str:
         rel = path.relative_to(self.root.parent)

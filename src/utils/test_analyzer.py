@@ -90,11 +90,11 @@ class TestAnalyzer:
         new = np.asarray(new_times, dtype=float)
 
         c = 1.0 - self.min_exec_time_improvement # we test μ1 < c * μ2
-        new_scaled = c * new
+        old_scaled = c * old
 
         # Welch's t-test, one-sided: H1: mean(v1) < mean(v2_scaled)
-        res = stats.ttest_ind(old, new_scaled, equal_var=False, alternative='less')
-        logging.info(f"T-test result: {res.pvalue} (pvalue)") # type: ignore
+        res = stats.ttest_ind(new, old_scaled, equal_var=False, alternative='less')
+        logging.debug(f"T-test result: {res.pvalue} (pvalue)") # type: ignore
         return float(res.pvalue) # type: ignore
     
     

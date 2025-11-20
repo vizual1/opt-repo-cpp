@@ -27,6 +27,8 @@ class CommitTesterPipeline:
             logging.warning("No repositories found for commit testing.")
             return
         
+        #TODO: s-hould return "commits (new_sha, old_sha)" and "file_prefix"
+        #self.commit.get_commits()
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing..."):
             try: 
                 repo = self.config.git_client.get_repo(repo_id)

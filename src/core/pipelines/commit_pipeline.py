@@ -43,7 +43,7 @@ class CommitPipeline:
                 writer = Writer(self.repo.full_name, self.config.output_file or self.config.storage_paths['commits'])
                 self.filtered_commits.append(writer.file or "")
                 self.stats.perf_commits += 1
-                self.stats += writer.write_commit(commit, self.config.separate)
+                self.stats += writer.write_commit(commit, self.config.separate, self.config.filter_type)
 
             except Exception as e:
                 logging.exception(f"[{self.repo.full_name}] Error processing commit: {e}")

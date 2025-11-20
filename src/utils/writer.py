@@ -5,11 +5,12 @@ from typing import Optional
 from pathlib import Path
 
 class Writer:
-    def __init__(self, repo: str, output_path: str):
+    def __init__(self, repo_id: str, output_path: str):
+        self.repo_id = repo_id
         try:
-            self.owner, self.name = repo.split("/", 1)
+            self.owner, self.name = self.repo_id.split("/", 1)
         except ValueError:
-            raise ValueError(f"Invalid repo name format: '{repo}'. Expected '<owner>/<repo>'.")
+            raise ValueError(f"Invalid repo name format: '{repo_id}'. Expected '<owner>/<repo>'.")
         
         self.output_path = output_path
         self.file: Optional[str] = None
@@ -20,7 +21,7 @@ class Writer:
         path = Path(self.output_path)
         self._write(path, msg)
 
-    def write_commit(self, commit: Commit, separate: bool) -> CommitStats:
+    def write_commit(self, commit: Commit, separate: bool, filter: str) -> CommitStats:
         stats = CommitStats()
 
         stats.perf_commits += 1
@@ -33,8 +34,8 @@ class Writer:
         current_sha = commit.sha
         parent_sha = commit.parents[0].sha if commit.parents else "None"
 
-        self.file = f"{self.owner}_{self.name}_filtered.txt"
-        msg = f"{current_sha} | {parent_sha}\n" 
+        self.file = "filtered.txt"
+        msg = f"{self.repo_id} | {current_sha} | {parent_sha} | {filter}\n" 
         path = Path(self.output_path) / self.file
         self._write(path, msg)
         

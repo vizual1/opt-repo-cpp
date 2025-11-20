@@ -9,9 +9,9 @@ def setup_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Examples:
-        python main.py --popular --stars 1000 --limit 10
-        python main.py --testcrawl --input data/crawl.txt
-        python main.py --commits --repo gabime/spdlog
+        python main.py --popular --stars=1000 --limit=10 --output=data/crawl.txt
+        python main.py --testcrawl --input=data/crawl.txt --output=data/test.txt
+        python main.py --commits --repo=gabime/spdlog
         python main.py --testcommits --input data/test.txt
         python main.py --test --mount data/repo --docker cpp-base
         """
