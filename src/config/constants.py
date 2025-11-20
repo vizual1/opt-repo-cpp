@@ -28,7 +28,7 @@ TEST_KEYWORDS = [
 ]
 
 VALID_TEST_DIRS = {
-    'test', 'tests', 'unittest', 'unittests', 
+    'test', 'tests', 'unittest', 'unittests', 'bench',
     'src/test', 'src/tests', 'src/unittest', 'src/unittests'
 }
 

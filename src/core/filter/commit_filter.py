@@ -191,7 +191,7 @@ class CommitFilter:
         """Check whether a commit has modified a file in test directories."""
         for f in self.commit.files:
             for tdir in self.config.valid_test_dirs:
-                if f.filename.startswith(tdir):
+                if f.filename.startswith(tdir) or tdir in f.filename:
                     return True
         return False
     
