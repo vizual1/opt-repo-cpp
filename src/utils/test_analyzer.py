@@ -45,45 +45,6 @@ class TestAnalyzer:
         old_times: list[float],
         new_times: list[float]
     ) -> float:
-        """
-        Perform a one-sided Welch's t-test to determine whether the *new* version
-        is significantly faster than the *old* version by at least the configured
-        minimum improvement threshold.
-
-        What hypothesis we test:
-            Let old_times = X, new_times = Y.
-            Let δ = min_exec_time_improvement (e.g., 0.05 = require 5% speedup).
-
-            We test the hypothesis:
-
-                H0: mean(X) >= (1 - δ) * mean(Y)
-                H1: mean(X) <  (1 - δ) * mean(Y)
-
-            Meaning:
-                H0: The old version is NOT slower than the new version by δ.
-                H1: The old version IS slower than the new version by δ
-                    -> new version is faster by at least δ.
-
-        Why the scaling (c * new):
-            We rewrite the inequality:
-                mean(X) < (1 - δ) * mean(Y)
-
-            Let c = (1 - δ).
-            We test mean(X) < mean(c * Y).
-
-            This allows us to use a standard one-sided Welch t-test comparing
-            X vs. (c * Y).
-
-        Interpretation of the p-value:
-            - Low p-value (< min_p_value) means:
-                    Strong evidence that the new version is significantly faster
-                    by at least the requested threshold (δ).
-            - High p-value means:
-                    We cannot conclude the new version is faster by δ.
-
-        Returns:
-            float: p-value of the hypothesis test.
-        """
         if len(old_times) != len(new_times):
             raise ValueError("v1_times and v2_times must have the same length")
         old = np.asarray(old_times, dtype=float)
@@ -161,7 +122,7 @@ class TestAnalyzer:
             "build_system": "cmake"
         }
 
-        pvalue = self.get_improvement_p_value(new_full_times[self.warmup:], old_full_times[self.warmup:]) 
+        pvalue = self.get_improvement_p_value(old_full_times[self.warmup:], new_full_times[self.warmup:], ) 
         old = np.asarray(old_full_times[self.warmup:], float)
         new = np.asarray(new_full_times[self.warmup:], float)
         performance_analysis = {
