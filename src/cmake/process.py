@@ -485,7 +485,7 @@ class CMakeProcess:
         elif framework == "catch":
             cmd = [f"{exe_path}", f"\"{test_name}\"", "--durations", "yes"]
         elif framework == "doctest":
-            cmd = [f"{exe_path}", f"\"{test_name}\"", "--test-case-execution"]
+            cmd = [f"{exe_path}", f"\"{test_name}\""]
         elif framework == "boost":
             cmd = [f"{exe_path}", f"--run_test={test_name}"]
         elif framework == "qt":
