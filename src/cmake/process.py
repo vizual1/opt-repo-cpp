@@ -449,7 +449,7 @@ class CMakeProcess:
                     if exit_code == 0:
                         logging.debug(f"CTest passed for {self.test_path}")
                         logging.debug(f"Output:\n{stdout}")
-                        logging.info(f"[{test_name}] Time elapsed: {elapsed} s")
+                        logging.info(f"[{test_name}] Time elapsed: {elapsed or time} s")
                     else:
                         logging.error(f"CTest failed for {self.test_path} (return code {exit_code})", exc_info=True)
                         logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
@@ -500,7 +500,7 @@ class CMakeProcess:
             cmd, self.root, check=False
         )
         end = time.perf_counter()
-        logging.info(f"Isolated CTest stdout:\n{stdout}")
+        logging.debug(f"Isolated CTest stdout:\n{stdout}")
         return exit_code, stdout, stderr, end-start, command
 
     def to_container_path(self, path: Path) -> str:
