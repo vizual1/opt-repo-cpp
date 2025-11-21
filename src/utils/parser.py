@@ -17,7 +17,8 @@ def parse_framework_output(output: str, framework: str, test_name: str) -> float
             return float(match.group(1))
         return -1.0
     elif framework == "doctest":
-        pattern = rf"\[{re.escape(test_name)}\]\s+passed\s+in\s+(\d+\.\d+)s"
+        #pattern = rf"\[{re.escape(test_name)}\]\s+passed\s+in\s+(\d+\.\d+)s"
+        pattern = rf"{re.escape(test_name)}.*\((\d+\.\d+)s\)"
         match = re.search(pattern, output)
         if match:
             return float(match.group(1))
