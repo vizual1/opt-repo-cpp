@@ -67,7 +67,7 @@ class TestAnalyzer:
             old_times = self.old_single_tests[test_name][self.warmup:]
             if self.get_improvement_p_value(old_times, new_times) < self.min_p_value:
                 significant_test_time_changes['new_outperforms_old'].append(test_name)
-                logging.info(f"new_outperforms_old improvement: {self.relative_improvement(new_times, old_times)*100}%")
+                logging.info(f"new_outperforms_old improvement: {self.relative_improvement(old_times, old_times)*100}%")
             if self.get_improvement_p_value(new_times, old_times) < self.min_p_value:
                 significant_test_time_changes['old_outperforms_new'].append(test_name)
                 logging.info(f"old_outperforms_new improvement: {self.relative_improvement(old_times, new_times)*100}%")
@@ -128,7 +128,7 @@ class TestAnalyzer:
         performance_analysis = {
             "is_significant": pvalue < self.min_p_value,
             "p_value": pvalue,
-            "relative_improvement": self.relative_improvement(new_full_times[self.warmup:], old_full_times[self.warmup:]),
+            "relative_improvement": self.relative_improvement(old_full_times[self.warmup:], new_full_times[self.warmup:]),
             "absolute_improvement_ms": float((np.mean(old) - np.mean(new)) * 1000),
             "old_mean_ms": float(np.mean(old) * 1000),
             "new_mean_ms": float(np.mean(new) * 1000),
@@ -155,12 +155,12 @@ class TestAnalyzer:
         for test_name in self.new_single_tests.keys():
             new_times = self.new_single_tests[test_name][self.warmup:]
             old_times = self.old_single_tests[test_name][self.warmup:]
-            pvalue = self.get_improvement_p_value(new_times, old_times) 
+            pvalue = self.get_improvement_p_value(old_times, new_times) 
             tests["tests"].append({
                 "test_name": test_name,
                 "is_significant": pvalue < self.min_p_value,
                 "p_value": pvalue,
-                "relative_improvement": self.relative_improvement(new_times, old_times),
+                "relative_improvement": self.relative_improvement(old_times, new_times),
                 "absolute_improvement_ms": float((np.mean(old_times) - np.mean(new_times)) * 1000),
                 "old_mean_ms": float(np.mean(old_times) * 1000),
                 "new_mean_ms": float(np.mean(new_times) * 1000),

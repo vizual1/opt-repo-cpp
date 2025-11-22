@@ -457,10 +457,16 @@ class CMakeProcess:
                         return False
                 
                 if 0.0 in parsed_time:
-                    elapsed_times.append(sum(measured_time))
+                    if elapsed_times:
+                        elapsed_times = [a+b for a, b in zip(elapsed_times, measured_time)]
+                    else:
+                        elapsed_times = measured_time
                     per_test_times[test_name] = measured_time
                 else:
-                    elapsed_times.append(sum(parsed_time))
+                    if elapsed_times:
+                        elapsed_times = [a+b for a, b in zip(elapsed_times, parsed_time)]
+                    else:
+                        elapsed_times = parsed_time
                     per_test_times[test_name] = parsed_time
                 ctest_output.append(all_stdout)
                 
@@ -485,7 +491,7 @@ class CMakeProcess:
         elif framework == "catch":
             cmd = [f"{exe_path}", f"\"{test_name}\"", "--durations", "yes"]
         elif framework == "doctest":
-            cmd = [f"{exe_path}", f"\"{test_name}\""]
+            cmd = [f"{exe_path}", f"--test-case={test_name}"]
         elif framework == "boost":
             cmd = [f"{exe_path}", f"--run_test={test_name}"]
         elif framework == "qt":
@@ -497,7 +503,7 @@ class CMakeProcess:
         logging.debug(command)
         start = time.perf_counter()
         exit_code, stdout, stderr = self.docker.run_command_in_docker(
-            cmd, self.root, check=False
+            cmd, self.root, check=False #workdir=self.docker_test_dir/self.test_path, check=False
         )
         end = time.perf_counter()
         logging.debug(f"Isolated CTest stdout:\n{stdout}")
