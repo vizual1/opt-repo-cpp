@@ -1,4 +1,4 @@
-import logging, posixpath, docker, os, time
+import logging, posixpath, docker, os, time, shlex
 from pathlib import Path
 from docker.types import Mount
 from typing import Optional
@@ -55,7 +55,7 @@ class DockerManager:
         except Exception as e:
             logging.error(f"Docker execution failed: {e}")
 
-    def run_command_in_docker(self, cmd: list[str], root: Path, workdir: Optional[Path] = None, check: bool = True, timeout: int = -1) -> tuple[int, str, str]:
+    def run_command_in_docker(self, cmd: list[str], root: Path, workdir: Optional[Path] = None, check: bool = True, timeout: int = -1) -> tuple[int, str, str, float]:
         rel_root = os.path.relpath(root, self.mount)
         container_root = posixpath.join(f"/workspace", rel_root.replace("\\", "/"))
 
@@ -67,16 +67,20 @@ class DockerManager:
         
         if not self.container:
             logging.error(f"No docker container started")
-            return 1, "", ""
+            return 1, "", "", -1.0
 
         cmd = [str(x) for x in cmd]
         if timeout > 0:
             cmd = ["timeout", f"{timeout}s"] + cmd
-        exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
+        shell_cmd = shlex.join(cmd)
+        timed_cmd = ["/usr/bin/time", "-p", "sh", "-c", shell_cmd]
+        start = time.perf_counter()
+        exit_code, output = self.container.exec_run(timed_cmd, workdir=str(container_workdir))
+        end = time.perf_counter()
         output = output.decode(errors="ignore") if output else ""
         logs = self.container.logs().decode()
         self.container.exec_run(["bash", "-c", f"echo '{output}\n{logs}' >> {self.docker_test_dir}/logs/{'new' if self.new else 'old'}.log"])
-        return exit_code, output, logs
+        return exit_code, output, logs, start-end
     
 
     def copy_commands_to_container(self, project_root: Path, new_cmd: list[str], old_cmd: list[str]) -> None:
@@ -86,7 +90,7 @@ class DockerManager:
             else:
                 save = "test"
             cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/new_{save}.sh"]
-            exit_code, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
+            exit_code, _, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
             if exit_code != 0:
                 logging.error(f"Copying the build and test commands failed with: {exit_code}")
         for i, c in enumerate(old_cmd):
@@ -95,6 +99,6 @@ class DockerManager:
             else:
                 save = "test"
             cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/old_{save}.sh"]
-            exit_code, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
+            exit_code, _, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
             if exit_code != 0:
                 logging.error(f"Copying the build and test commands failed with: {exit_code}")

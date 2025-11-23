@@ -3,7 +3,7 @@ import logging, subprocess, os, tempfile, time, json
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.resolver import DependencyResolver
-from src.utils.parser import parse_ctest_output, parse_framework_output, parse_single_ctest_output
+from src.utils.parser import *
 from typing import Optional, Union
 from src.core.docker.manager import DockerManager
 from src.config.config import Config
@@ -73,7 +73,7 @@ class CMakeProcess:
         self.container = self.docker.container
 
         copy_cmd = ["cp", "-r", "/workspace", self.docker_test_dir]
-        exit_code, stdout, stderr = self.docker.run_command_in_docker(copy_cmd, self.root, check=False)
+        exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(copy_cmd, self.root, check=False)
         if exit_code != 0:
             logging.error(f"Copy files failed with exit code {exit_code}: {' '.join(map(str, copy_cmd))}")
             if stdout: logging.info(f"stdout: {stdout}")
@@ -251,7 +251,7 @@ class CMakeProcess:
             try:
                 logging.info("Installing through package manager conan...")
                 install = ['conan', 'install', '.', '-build=missing'] 
-                exit_code, stdout, stderr = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
+                exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
                 self.cmake_config_output.append(stdout)
                 if exit_code == 0:
                     logging.info(f"Conan Output:\n{stdout}")
@@ -265,7 +265,7 @@ class CMakeProcess:
         
         self.commands.append(" ".join(map(str, cmd)))
         logging.info(" ".join(map(str, cmd)))
-        exit_code, stdout, stderr = self.docker.run_command_in_docker(cmd, self.root, check=False)
+        exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
 
         if exit_code == 0:
             logging.info(f"CMake Configuration successful for {self.build_path}")
@@ -289,7 +289,7 @@ class CMakeProcess:
         self.commands.append(" ".join(map(str, cmd)))
         logging.info(" ".join(map(str, cmd)))
 
-        exit_code, stdout, stderr = self.docker.run_command_in_docker(cmd, self.root, check=False)
+        exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
         self.cmake_build_output.append(stdout)
         if exit_code == 0:
             logging.info(f"CMake build completed for {self.root}")
@@ -312,13 +312,13 @@ class CMakeProcess:
         cmd = ['ctest', '--output-on-failure', '--fail-if-no-tests']
         try:
             # check if any tests exist
-            exit_code, stdout, stderr = self.docker.run_command_in_docker(
+            exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(
                 ['ctest', '--help'], self.root, workdir=self.test_path, check=False
             )
             if '--fail-if-no-tests' not in stdout:
                 # fallback for older cmake versions
                 check_cmd = ['ctest', '-N']
-                exit_code, stdout_check, _ = self.docker.run_command_in_docker(
+                exit_code, stdout_check, _, _ = self.docker.run_command_in_docker(
                     check_cmd, self.root, workdir=self.test_path, check=False
                 )
                 if 'No tests were found' in stdout_check or 'Test #' not in stdout_check:
@@ -337,7 +337,7 @@ class CMakeProcess:
             elapsed_times: list[float] = []
             for i in tqdm(range(warmup + test_repeat), total=warmup+test_repeat, desc=f"Tests"):
                 logging.info(f"{' '.join(map(str, cmd))} in {self.test_path}")
-                exit_code, stdout, stderr = self.docker.run_command_in_docker(
+                exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                     cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
                 )
 
@@ -370,7 +370,7 @@ class CMakeProcess:
 
         path = str(self.docker_test_dir / self.test_path / 'CTestTestfile.cmake').replace("\\", "/")
         cmd = ["cat", f"{path}"]
-        exit_code, stdout, stderr = self.docker.run_command_in_docker(
+        exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
             cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
         )
 
@@ -381,7 +381,7 @@ class CMakeProcess:
         for subdir in subdirs:
             path = str(self.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
             cmd = ["cat", f"{path}"]
-            exit_code, stdout, stderr = self.docker.run_command_in_docker(
+            exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
             )
             if exit_code != 0:
@@ -400,7 +400,7 @@ class CMakeProcess:
         for exe_path in test_exec:
             cmd = [exe_path, test_flag]
             logging.info(' '.join(map(str, cmd)))
-            exit_code, stdout, stderr = self.docker.run_command_in_docker(
+            exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
             )
             if exit_code != 0:
@@ -439,6 +439,9 @@ class CMakeProcess:
                     
                     if elapsed < 0.0:
                         return False
+                    
+                    if elapsed == 0.0:
+                        elapsed = parse_usr_bin_time(stdout)
 
                     parsed_time.append(elapsed)
                     measured_time.append(time)
@@ -501,13 +504,11 @@ class CMakeProcess:
         
         command = " ".join(map(str, cmd))
         logging.debug(command)
-        start = time.perf_counter()
-        exit_code, stdout, stderr = self.docker.run_command_in_docker(
+        exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
             cmd, self.root, check=False #workdir=self.docker_test_dir/self.test_path, check=False
         )
-        end = time.perf_counter()
         logging.debug(f"Isolated CTest stdout:\n{stdout}")
-        return exit_code, stdout, stderr, end-start, command
+        return exit_code, stdout, stderr, time, command
 
     def to_container_path(self, path: Path) -> str:
         rel = path.relative_to(self.root.parent)

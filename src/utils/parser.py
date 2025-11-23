@@ -130,3 +130,9 @@ def parse_single_ctest_output(output: str, previous_results: dict = {}) -> dict[
             results[test_name].append(time)
 
     return dict(results)
+
+def parse_usr_bin_time(output: str) -> float:
+    match = re.search(r'^real\s+([0-9]*\.?[0-9]+)', output, re.MULTILINE)
+    if match:
+        return float(match.group(1))
+    return 0.0
