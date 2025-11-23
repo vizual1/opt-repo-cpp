@@ -132,7 +132,10 @@ def parse_single_ctest_output(output: str, previous_results: dict = {}) -> dict[
     return dict(results)
 
 def parse_usr_bin_time(output: str) -> float:
-    match = re.search(r'^real\s+([0-9]*\.?[0-9]+)', output, re.MULTILINE)
+    match = re.search(r"real\s+([0-9]+)m([0-9.]+)s", output, re.MULTILINE)
     if match:
-        return float(match.group(1))
+        minutes = float(match.group(1))
+        seconds = float(match.group(2))
+        real_time = minutes * 60 + seconds
+        return real_time
     return 0.0

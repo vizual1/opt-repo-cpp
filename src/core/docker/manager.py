@@ -73,7 +73,7 @@ class DockerManager:
         if timeout > 0:
             cmd = ["timeout", f"{timeout}s"] + cmd
         shell_cmd = shlex.join(cmd)
-        timed_cmd = ["/usr/bin/time", "-p", "sh", "-c", shell_cmd]
+        timed_cmd = ["sh", "-c", f'time {shell_cmd}']
         start = time.perf_counter()
         exit_code, output = self.container.exec_run(timed_cmd, workdir=str(container_workdir))
         end = time.perf_counter()
