@@ -16,8 +16,8 @@ class Writer:
         self.file: Optional[str] = None
 
     def write_repo(self, m: list[str] = []) -> None:
-        msg = ",".join([f"{self.owner}/{self.name}"] + m)
-        msg += "\n"
+        msg = " | ".join([f"{self.owner}/{self.name}"] + m)
+        msg += f"\n"
         path = Path(self.output_path)
         self._write(path, msg)
 
@@ -52,14 +52,14 @@ class Writer:
         return stats
 
     def write_improve(self, results: dict) -> None:
-        self.file = f"{self.owner}_{self.name}.txt"
+        self.file = f"improved.txt"
         path = Path(self.output_path) / self.file
         new_sha: str = results['commit_info']["new_sha"]
         old_sha: str = results['commit_info']["old_sha"]
         repo_id: str = results['metadata']['repository_name']
         p_value: float = results['performance_analysis']['p_value']
         rel_improv: float = results['performance_analysis']['relative_improvement']
-        msg = f"{new_sha} | {old_sha} | {repo_id} | {p_value} | {rel_improv}\n"
+        msg = f"{repo_id} | {new_sha} | {old_sha} | {p_value} | {rel_improv}\n"
         self._write(path, msg)
 
     def write_results(self, results: dict) -> None:
