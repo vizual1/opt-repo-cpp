@@ -1,10 +1,11 @@
-import logging, tempfile, os
+import logging, tempfile, os, time
 from collections import Counter
 from github.GitTreeElement import GitTreeElement
 from github.Repository import Repository
 from typing import Optional
 from pathlib import Path
 from github.ContentFile import ContentFile
+from github.GithubException import GithubException, RateLimitExceededException
 
 from src.config.config import Config
 from src.cmake.analyzer import CMakeAnalyzer
@@ -42,8 +43,8 @@ class StructureFilter:
             tmpdir = Path(tmpdir)
             self._get_cmake_lists(tmpdir)
             analyzer = CMakeAnalyzer(tmpdir)
-
             analyzer.reset()
+
             if not analyzer.has_testing(nolist=self.config.testing.no_list_testing):
                 logging.warning(f"[{self.repo.full_name}] invalid ctest")
                 return False
@@ -119,17 +120,35 @@ class StructureFilter:
         result_paths = []
         for item in self.cmake_tree:
             try: 
-                content_file = self.repo.get_contents(item.path, ref=self.sha)
+                content_file = self._attempts(item.path) #.repo.get_contents(item.path, ref=self.sha)
                 target_path = dest / item.path
                 os.makedirs(target_path.parent, exist_ok=True)
                 if isinstance(content_file, ContentFile):
                     with open(target_path, "wb") as f:
                         f.write(content_file.decoded_content)
                     result_paths.append(str(target_path))
+                time.sleep(0.2)
             except Exception as e:
                 logging.warning(f"[{self.repo.full_name}] Failed to fetch/write {item.path}: {e}")
 
         return result_paths
+    
+    def _attempts(self, path: str):
+        for attempt in range(5):
+            try:
+                return self.repo.get_contents(path, ref=self.sha)
+            except RateLimitExceededException:
+                reset = self.config.git_client.get_rate_limit().rate.reset.timestamp()
+                sleep_for = max(0, reset - time.time()) + 5
+                logging.warning(f"Rate limit exceeded. Sleeping for {sleep_for:.0f} seconds...")
+                time.sleep(sleep_for)
+                continue
+            except GithubException as e:
+                if e.status in (500, 502, 503, 504):
+                    logging.warning(f"Server error {e.status}, retrying...")
+                    time.sleep(5 * (attempt + 1))
+                else:
+                    raise e
 
     def _extract_test_dirs(self) -> set[str]:
         """Extracts all directories that look like test directories from a PyGithub GitTree."""
