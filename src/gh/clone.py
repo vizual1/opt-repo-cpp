@@ -81,7 +81,6 @@ class GitHandler:
     def _on_rm_error(self, func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)
         func(path)
-
     
     def set_permission(self, path: str):
         for root, dirs, files in os.walk(path):

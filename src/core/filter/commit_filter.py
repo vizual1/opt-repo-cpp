@@ -8,8 +8,6 @@ from typing import Optional
 from src.config.config import Config
 from github.GithubException import UnknownObjectException
 
-# TODO: add links to pull requests?
-
 perf_label_keywords = {
     'performance', 'perf', 'optimization', 'optimisation', 'optimize', 'optimize',
     'speed', 'latency', 'throughput', 'regression: performance', 'perf regression',
@@ -342,15 +340,10 @@ class CommitFilter:
         if not refs:
             return None
 
-        #has_issues = any(ref_type == "issue" for ref_type in refs.values())
         issue_title_body_tuples = []
         for number, ref_type in refs.items():
             try:
                 gh_issue = self.repo.get_issue(number)
-
-                #if ref_type == "pull_request" and has_issues:
-                #    logging.info(f"Skipping PR #{number} (issues present)")
-                #    continue
 
                 title = gh_issue.title or ""
                 body = gh_issue.body or ""

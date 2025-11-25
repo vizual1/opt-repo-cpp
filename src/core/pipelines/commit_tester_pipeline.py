@@ -2,7 +2,7 @@ import logging
 from tqdm import tqdm
 from src.config.config import Config
 from src.utils.commit import Commit
-from src.gh.crawler import RepositoryCrawler
+#from src.gh.collector import RepositoryCollector
 from src.core.docker.tester import DockerTester
 
 class CommitTesterPipeline:
@@ -21,14 +21,23 @@ class CommitTesterPipeline:
             self._sha_tester()
 
     def _input_tester(self) -> None:
-        crawler = RepositoryCrawler(self.config)
-        repo_ids = crawler.get_repos()  
-        if not repo_ids:
-            logging.warning("No repositories found for commit testing.")
-            return
+        #collector = RepositoryCollector(self.config)
+        #repo_ids = collector.get_repos()  
+        #if not repo_ids:
+        #    logging.warning("No repositories found for commit testing.")
+        #    return
         
-        #TODO: s-hould return "commits (new_sha, old_sha)" and "file_prefix"
-        #self.commit.get_commits()
+        #TODO: test
+        commits = self.commit.get_commits()
+        for repo_id, new_sha, old_sha in tqdm(commits, total=len(commits), desc="Commits testing..."):
+            file = self.commit.get_file_prefix(repo_id)
+            new_path, old_path = self.commit.get_paths(file, new_sha)
+            repo = self.config.git_client.get_repo(repo_id)
+            try:
+                self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
+            except Exception as e:
+                logging.exception(f"[{repo_id}] Error testing commits: {e}")
+        """
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing..."):
             try: 
                 repo = self.config.git_client.get_repo(repo_id)
@@ -43,6 +52,7 @@ class CommitTesterPipeline:
 
             except Exception as e:
                 logging.exception(f"[{repo}] Error testing repository: {e}")
+        """
 
     def _sha_tester(self):
         if self.config.sha:

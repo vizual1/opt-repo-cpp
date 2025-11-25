@@ -6,7 +6,7 @@ CACHE_DIR = Path("cache")
 
 STORAGE_PATHS = {
     "popular": DATA_DIR / "popular_urls.txt",
-    "commits": DATA_DIR / "commits",
+    "commits": DATA_DIR / "performance" / "filtered.txt",
     "performance": DATA_DIR / "performance",
     "repos": DATA_DIR / "repo_urls.txt",
     "store_analyze": DATA_DIR / "analyze",

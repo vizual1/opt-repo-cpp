@@ -6,7 +6,7 @@ from src.core.filter.process_filter import ProcessFilter
 from src.config.config import Config
 from src.utils.test_analyzer import TestAnalyzer
 from pathlib import Path
-from src.utils.parser import parse_ctest_output
+from src.utils.parser import *
 from src.utils.writer import Writer
 from contextlib import contextmanager
 from pathlib import Path
@@ -170,13 +170,13 @@ class DockerTester:
             warmup: int = self.config.testing.warmup
             for _ in range(warmup + self.config.testing.commit_test_times):
                 cmd = ["bash", f"{self.config.testing.docker_test_dir}/new_test.sh"]
-                exit_code, stdout, stderr = docker.run_command_in_docker(cmd, Path())
+                exit_code, stdout, stderr, time = docker.run_command_in_docker(cmd, Path())
                 stats = parse_ctest_output(stdout)
                 elapsed: float = stats['total_time_sec']
                 new_times.append(elapsed)
 
                 cmd = ["bash", f"{self.config.testing.docker_test_dir}/old_test.sh"]
-                exit_code, stdout, stderr = docker.run_command_in_docker(cmd, Path())
+                exit_code, stdout, stderr, time = docker.run_command_in_docker(cmd, Path())
                 stats = parse_ctest_output(stdout)
                 elapsed: float = stats['total_time_sec']
                 old_times.append(elapsed)

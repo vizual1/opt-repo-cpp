@@ -1,11 +1,12 @@
 import logging, time
 from tqdm import tqdm
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from src.config.config import Config
 from github.GithubException import GithubException, RateLimitExceededException
 from github.Repository import Repository
 
-class RepositoryCrawler:
+class RepositoryCollector:
 
     # languages considered acceptable alongside C++
     ACCEPTABLE_LANGUAGES = {
@@ -34,25 +35,37 @@ class RepositoryCrawler:
         Returns:
             List of Repository objects that match language and composition criteria
         """
-        existing_repo_ids = set()
+        # TODO: test
+        seen_repo_ids = set()
         if self.config.input_file:
-            existing_repo_ids = set(self._get_repo_ids(self.config.input_file))
-            logging.info(f"Loaded {len(existing_repo_ids)} existing repositories to skip")
+            seen_repo_ids = set(self._get_repo_ids(self.config.input_file))
+            logging.info(f"Loaded {len(seen_repo_ids)} existing repositories to skip")
 
         results: list[Repository] = []
-        upper = self.config.stars 
-        lower = upper
+        #upper = self.config.stars 
+        #lower = upper
         limit = self.config.limit
         count = 0
 
         logging.info(f"Starting GitHub query for popular {self.language} repos...")
-        logging.info(f"Target: {limit} repos with stars <= {upper}")
+        logging.info(f"Target: {limit} repos") #with stars <= {upper}")
 
+        start_boundary = self.config.commits_time['since'] #datetime.strptime(, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        window_end = datetime.now(timezone.utc)
+        window_size = timedelta(days=1)
+            
         with tqdm(desc="Discovering repos", unit="repo") as pbar:
-            while lower > 0 and count < limit:
-                upper = lower
-                lower = int(self.STAR_REDUCTION_FACTOR * upper)
-                query = f"language:{self.language} stars:{lower}..{upper}"
+            while window_end > start_boundary and count < limit:
+            #while lower > 0 and count < limit:
+            #    upper = lower
+            #    lower = int(self.STAR_REDUCTION_FACTOR * upper)
+                window_start = max(start_boundary, window_end - window_size)
+                pushed_range = f"pushed:{window_start.date()}..{window_end.date()}"
+                #query = f"language:{self.language} stars:{lower}..{upper}"
+                query = f"{pushed_range} language:{self.language} archived:false"
+
+                if getattr(self.config, "stars", None):
+                    query += f" stars:<= {self.config.stars}"
 
                 logging.info(f"Query: {query}")
 
@@ -61,19 +74,16 @@ class RepositoryCrawler:
                         query=query, sort="stars", order="desc"
                     )
                     for repo in repos:
-                        if repo.full_name in existing_repo_ids:
+                        if repo.full_name in seen_repo_ids:
                             logging.debug(f"Skipping {repo.full_name}: already in input list")
                             continue
                         
                         if self._is_valid_repo(repo):
                             results.append(repo)
-                            existing_repo_ids.add(repo.full_name)
+                            seen_repo_ids.add(repo.full_name)
                             count += 1
                             pbar.update(1)
-                            pbar.set_postfix({
-                                "matched": count,
-                                "stars": f"{lower}-{upper}"
-                            })
+                            pbar.set_postfix({"matched": count})
 
                             if count >= limit:
                                 break
@@ -83,10 +93,13 @@ class RepositoryCrawler:
                 except RateLimitExceededException:
                     logging.warning("Rate limit exceeded. Waiting 60 seconds...")
                     time.sleep(60)
+                    continue
                 except GithubException as e:
                     logging.error(f"GitHub API error: {e}")
                     time.sleep(5)
                     continue
+
+                window_end = window_start
             
         logging.info(f"Collected {len(results)} repositories matching criteria")
         return results

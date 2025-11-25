@@ -11,6 +11,7 @@ class TesterPipeline:
         self.docker = DockerTester(self.config)
 
     def test(self):
+        # TODO
         if self.config.input_file:
             self.docker.test_input_folder()
         

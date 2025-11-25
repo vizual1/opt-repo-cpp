@@ -3,7 +3,7 @@ from tqdm import tqdm
 from src.config.config import Config
 from src.utils.stats import RepoStats
 from github.Repository import Repository
-from src.gh.crawler import RepositoryCrawler
+from src.gh.collector import RepositoryCollector
 from src.core.filter.structure_filter import StructureFilter
 from src.core.filter.process_filter import ProcessFilter
 from src.utils.writer import Writer
@@ -18,53 +18,51 @@ class RepositoryPipeline:
         self.valid_repos: list[Repository] = []
 
     def get_repos(self) -> list[str]:
-        crawler = RepositoryCrawler(config=self.config)
-        return crawler.get_repos()
+        collector = RepositoryCollector(config=self.config)
+        return collector.get_repos()
 
     def test_repos(self) -> None:
-        crawler = RepositoryCrawler(self.config)
-        repo_ids = crawler.get_repos()
+        collector = RepositoryCollector(self.config)
+        repo_ids = collector.get_repos()
         if not repo_ids:
             logging.warning("No repositories found.")
             return
 
         logging.info(f"Found {len(repo_ids)} repositories.")
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing repositories..."):
+            repo = self.config.git_client.get_repo(repo_id)
+            structure = StructureFilter(repo, self.config)
+            #process = ProcessFilter(repo, self.config)
+            # TODO: test
             try:
-                repo = self.config.git_client.get_repo(repo_id)
-                structure = StructureFilter(repo, self.config)
-                process = ProcessFilter(repo, self.config)
-
-                if structure.is_valid() and process.valid_run("_".join(repo.full_name.split("/"))):
-                    self.valid_repos.append(structure.repo)
+                if structure.is_valid(): #and process.valid_run("_".join(repo.full_name.split("/"))):
+                    self.valid_repos.append(repo)
                     if self.config.popular or self.config.output_file:
-                        #msg = [process.list_test_arg[0]] if process.list_test_arg else ["None"]
-                        Writer(structure.repo.full_name, self.config.output_file).write_repo()
-
+                        Writer(repo_id, self.config.output_file).write_repo()
+            
                 elif self.config.output_file:
-                    Writer(structure.repo.full_name, self.config.output_fail).write_repo()
+                    Writer(repo_id, self.config.output_fail).write_repo()
 
             except Exception as e:
-                logging.exception(f"[{repo}] Error processing repository: {e}")
-
-           
+                logging.exception(f"[{repo_id}] Error processing repository: {e}")
+            
     def analyze_repos(self) -> None:
-        crawler = RepositoryCrawler(config=self.config)
-        repo_ids = crawler.get_repos()
+        collector = RepositoryCollector(config=self.config)
+        repo_ids = collector.get_repos()
         if not repo_ids:
             logging.warning("No repositories found.")
             return
         
         logging.info(f"Found {len(repo_ids)} repositories.")
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Analyzing repositories..."):
+            repo = self.config.git_client.get_repo(repo_id)
+            structure = StructureFilter(repo, self.config)
             try:
-                repo = self.config.git_client.get_repo(repo_id)
-                structure = StructureFilter(repo, self.config)
                 if structure.is_valid() and (self.config.popular or self.config.output_file):
-                    Writer(structure.repo.full_name, self.config.output_file).write_repo()
+                    Writer(repo_id, self.config.output_file).write_repo()
                 self.stats += structure.stats
 
             except Exception as e:
-                logging.exception(f"[{repo}] Error analyzing: {e}")
+                logging.exception(f"[{repo_id}] Error analyzing: {e}")
 
         self.stats.write_final_log()

@@ -15,7 +15,7 @@ class Config:
     testcrawl: bool = False 
     commits: bool = False 
     testcommits: bool = False
-    test: bool = False
+    testdocker: bool = False
     
     # Limits and filters
     limit: int = 10

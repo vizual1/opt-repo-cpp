@@ -13,6 +13,7 @@ class CommitPipeline:
     def __init__(self, repo: Repository, config: Config):
         self.config = config
         self.repo = repo
+        self.repo_id = self.repo.full_name
         self.stats = CommitStats()
         self.filtered_commits: list[str] = []
 
@@ -25,27 +26,26 @@ class CommitPipeline:
             else:
                 self.commits = self.repo.get_commits(sha=self.repo.default_branch, since=since, until=until)
         except Exception as e:
-            logging.exception(f"[{self.repo.full_name}] Error fetching commits: {e}")
+            logging.exception(f"[{self.repo_id}] Error fetching commits: {e}")
             self.commits = []
         
 
     def filter_commits(self) -> None:
         if not self.commits:
-            logging.warning(f"[{self.repo.full_name}] No commits found")
+            logging.warning(f"[{self.repo_id}] No commits found")
             return
         
-        for commit in tqdm(self.commits, desc=f"{self.repo.full_name} commits"):
+        for commit in tqdm(self.commits, desc=f"{self.repo_id} commits"):
+            self.stats.num_commits += 1
             try:
-                self.stats.num_commits += 1
                 if not CommitFilter(commit, self.config, self.repo).accept():
                     continue
-                
-                writer = Writer(self.repo.full_name, self.config.output_file or self.config.storage_paths['commits'])
-                self.filtered_commits.append(writer.file or "")
-                self.stats.perf_commits += 1
-                self.stats += writer.write_commit(commit, self.config.separate, self.config.filter_type)
-
             except Exception as e:
-                logging.exception(f"[{self.repo.full_name}] Error processing commit: {e}")
+                logging.exception(f"[{self.repo_id}] Error processing commit: {e}")
+            
+            writer = Writer(self.repo_id, self.config.output_file or self.config.storage_paths['commits'])
+            self.filtered_commits.append(writer.file or "")
+            self.stats.perf_commits += 1
+            self.stats += writer.write_commit(commit, self.config.separate, self.config.filter_type)
 
         self.stats.write_final_log()

@@ -1,7 +1,7 @@
 
 import logging
 from src.core.pipelines.pipeline import (
-    CrawlerPipeline, 
+    CollectionPipeline, 
     RepositoryPipeline, 
     CommitPipeline, 
     CommitTesterPipeline, 
@@ -41,11 +41,11 @@ class Controller:
             if self.config.testcommits:
                 self._testcommits()
 
-            if self.config.test:
-                self._test()
+            if self.config.testdocker:
+                self._testdocker()
 
-            if not any([self.config.popular, self.config.testcrawl, self.config.commits, self.config.testcommits, self.config.test]):
-                logging.warning("No operation selected. Use --popular, --testcrawl, --commits, --testcommits, or --test")
+            if not any([self.config.popular, self.config.testcrawl, self.config.commits, self.config.testcommits, self.config.testdocker]):
+                logging.warning("No operation selected. Use --popular, --testcrawl, --commits, --testcommits, or --testdocker")
 
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
@@ -54,10 +54,10 @@ class Controller:
             logging.info("Controller execution completed.")
 
     def _popular(self) -> None:
-        logging.info("Crawling popular GitHub repositories...")
-        pipeline = CrawlerPipeline(self.config)
+        logging.info("Collecting popular GitHub repositories...")
+        pipeline = CollectionPipeline(self.config)
         pipeline.query_popular_repos()
-        logging.info("Popular repository crawling completed.")
+        logging.info("Popular repository colelction completed.")
         
     def _testcrawl(self) -> None:
         logging.info("Testing and validating GitHub repositories...")
@@ -90,7 +90,7 @@ class Controller:
         tester_pipeline.test_commit()
         logging.info("Commit testing completed.")
 
-    def _test(self) -> None:
+    def _testdocker(self) -> None:
         logging.info("Testing...")
         tester_pipeline = TesterPipeline(self.config)
         tester_pipeline.test()

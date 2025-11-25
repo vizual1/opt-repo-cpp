@@ -1,7 +1,6 @@
-import argparse, sys
+import argparse
 from src.core.controller import Controller
 from src.config.config import Config
-
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -27,7 +26,7 @@ def setup_parser() -> argparse.ArgumentParser:
                       help="Gather and filter commits from a repository.")
     mode.add_argument("--testcommits", action="store_true",
                       help="Test commits between two versions or commit file.")
-    mode.add_argument("--test", action="store_true",
+    mode.add_argument("--testdocker", action="store_true",
                       help="Test Docker images or compare mounted and old commit.")
 
     # === Input / Output ===
@@ -73,7 +72,6 @@ def setup_parser() -> argparse.ArgumentParser:
 
 def create_config(args: argparse.Namespace) -> Config:
     """Create a Config object from argparse arguments."""
-    # Unpack all args directly into Config (thanks to dataclasses)
     cfg = Config(**vars(args))
     return cfg
 

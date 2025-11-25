@@ -84,7 +84,7 @@ class CMakeProcess:
 
     def save_docker_image(self, repo_id: str, sha: str, new_cmd: list[str], old_cmd: list[str], results_json: dict) -> None:
         """
-        TODO: Saved docker image structure:
+        Saved docker image structure:
         | /workspace -- mount folder
         | /test_workspace 
             | /workspace
@@ -98,6 +98,7 @@ class CMakeProcess:
                 | results.json -- tested results, statistics, metadata and other informations
             | old_build.sh -- old configure and build code used => OK
             | new_build.sh -- new configure and build code used => OK
+            TODO: test restructuring?
             | old_test.sh -- old ctest used => OK
             | new_test.sh -- new ctest used => OK
         """
