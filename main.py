@@ -1,6 +1,6 @@
 import logging
 from src.input import start
-from src.utils.logging_setup import logging_setup
+from src.utils.logging import logging_setup
 
 def main() -> None:
     logging.info("Starting the GitHub repository pipeline...")
