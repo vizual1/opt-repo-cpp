@@ -2,9 +2,11 @@ import logging
 from pathlib import Path
 
 class Commit:
-    def __init__(self, input_path: str):
-        self.input_path = input_path
-        Path(self.input_path).mkdir(parents=True, exist_ok=True)
+    def __init__(self, input_file: str, output_path: str):
+        self.input_file = input_file
+        self.output_path = output_path
+        #Path(self.input_file).mkdir(parents=True, exist_ok=True)
+        #Path(self.output_path).mkdir(parents=True, exist_ok=True)
     
     # repo_id: str
     def get_commits(self) -> list[tuple[str, str, str]]:
@@ -16,7 +18,7 @@ class Commit:
         
         #file_prefix = f"{owner}_{name}"
         #filename = f"{file_prefix}_filtered.txt"
-        file_path = Path(self.input_path) #/ filename
+        file_path = Path(self.input_file) #/ filename
 
         commits = self._get_filtered_commits(file_path)
         if not commits:
@@ -29,7 +31,7 @@ class Commit:
         Returns paths for {old,new} commit directories to be tested.
         Example: data/commits/<file_prefix>_<sha>/{old,new}
         """
-        output = Path(self.input_path)
+        output = Path(self.output_path)
         output.chmod(0o777)
         commit_root = output / f"{file_prefix}_{sha}"
         old_path = commit_root / "old"

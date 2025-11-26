@@ -38,10 +38,10 @@ class RepositoryPipeline:
                 if structure.is_valid(): #and process.valid_run("_".join(repo.full_name.split("/"))):
                     self.valid_repos.append(repo)
                     if self.config.popular or self.config.output_file:
-                        Writer(repo_id, self.config.output_file).write_repo()
+                        Writer(repo_id, self.config.output_file or self.config.storage_paths['testcrawl']).write_repo()
             
                 elif self.config.output_file:
-                    Writer(repo_id, self.config.output_fail).write_repo()
+                    Writer(repo_id, self.config.storage_paths['fail']).write_repo()
 
             except Exception as e:
                 logging.exception(f"[{repo_id}] Error processing repository: {e}")

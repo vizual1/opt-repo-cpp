@@ -46,13 +46,20 @@ class CMakeProcess:
         self.build_stderr: str = ""
         self.other_flags: set[str] = set()
         self.resolver = DependencyResolver(self.config)
-        self.test_time: list[float] = []
+        # self.test_time: list[float] = []
+        self.test_time: dict[str, list[float]] = {
+            "parsed": [0.0 for _ in range(self.config.testing.warmup + self.config.testing.commit_test_times)], 
+            "time": [0.0 for _ in range(self.config.testing.warmup + self.config.testing.commit_test_times)]
+        }
         self.commands: list[str] = []
 
         self.cmake_config_output: list[str] = []
         self.cmake_build_output: list[str] = []
         self.ctest_output: list[str] = []
-        self.per_test_times: dict[str, list[float]] = {}
+        # self.per_test_times: dict[str, list[float]] = {}
+        self.per_test_times: dict[str, dict[str, list[float]]] = {}
+        self.framework: str = ""
+        self.unit_tests_map: dict[str, dict[str, str]] = {}
 
     def set_enable_testing(self, enable_testing_path: Path) -> None:
         self.root = self.root
@@ -155,8 +162,13 @@ class CMakeProcess:
         else:
             return self._configure_with_retries() and self._build()
     
-    def test(self, warmup: int = 0, test_repeat: int = 1) -> bool:
-        return self._ctest(warmup, test_repeat)
+    #def test(self, warmup: int = 0, test_repeat: int = 1, no_run: bool = False) -> bool:
+    #    return self._ctest(warmup, test_repeat, no_run)
+    def test(self, cmd: str) -> bool:
+        return self._ctest(cmd)
+
+    def collect_tests(self) -> bool:
+        return self._ctest_collection()
     
 ############### CONFIGURATION ###############
     
@@ -279,7 +291,11 @@ class CMakeProcess:
             logging.error(f"Output (stdout):\n{stdout}")
             logging.error(f"Error (stderr):\n{stderr}")
             return False
-
+        
+    def to_container_path(self, path: Path) -> str:
+        rel = path.relative_to(self.root.parent)
+        return f"{self.docker_test_dir}/workspace/{rel.as_posix()}"
+    
 ############### BUILDING ###############
 
     def _build(self) -> bool:
@@ -306,35 +322,28 @@ class CMakeProcess:
 
 ############### TESTING ###############
 
-    def _ctest(self, warmup: int = 0, test_repeat: int = 1) -> bool:
+    """
+    def _ctest(self, warmup: int = 0, test_repeat: int = 1, no_run: bool = False) -> bool:
         if test_repeat < 1:
             return True
 
-        cmd = ['ctest', '--output-on-failure', '--fail-if-no-tests']
         try:
             # check if any tests exist
-            exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(
-                ['ctest', '--help'], self.root, workdir=self.test_path, check=False
-            )
-            if '--fail-if-no-tests' not in stdout:
-                # fallback for older cmake versions
-                check_cmd = ['ctest', '-N']
-                exit_code, stdout_check, _, _ = self.docker.run_command_in_docker(
-                    check_cmd, self.root, workdir=self.test_path, check=False
-                )
-                if 'No tests were found' in stdout_check or 'Test #' not in stdout_check:
-                    logging.error(f"No tests found in {self.test_path}")
-                    return False
-                
-                cmd = ['ctest', '--output-on-failure']
+            cmd = self._check_tests_exists()
+            if not cmd:
+                return False
 
             # tries to run the unit tests individually
             test_exec_flag = self.analyzer.get_list_test_arg()
-            if test_exec_flag and self._isolated_ctest(test_exec_flag, warmup, test_repeat):
+            if test_exec_flag and self._isolated_ctest(test_exec_flag, warmup, test_repeat, no_run):
                 return True
 
             self.commands.append(f"cd {str(self.docker_test_dir/self.test_path)}")
             self.commands.append(" ".join(map(str, cmd)))
+
+            if no_run:
+                return True
+
             elapsed_times: list[float] = []
             for i in tqdm(range(warmup + test_repeat), total=warmup+test_repeat, desc=f"Tests"):
                 logging.info(f"{' '.join(map(str, cmd))} in {self.test_path}")
@@ -365,8 +374,10 @@ class CMakeProcess:
         except Exception as e:
             logging.error(f"CTest execution failed: {e}", exc_info=True)
             return False
-
-    def _isolated_ctest(self, test_exec_flag: list[tuple[str, str]], warmup: int, test_repeat: int) -> bool:
+        """
+    
+    """
+    def _isolated_ctest(self, test_exec_flag: list[tuple[str, str]], warmup: int, test_repeat: int, no_run: bool) -> bool:
         framework, test_flag = test_exec_flag[0]
 
         path = str(self.docker_test_dir / self.test_path / 'CTestTestfile.cmake').replace("\\", "/")
@@ -430,12 +441,11 @@ class CMakeProcess:
                 parsed_time: list[float] = []
                 measured_time: list[float] = []
                 for i in range(warmup + test_repeat):
-                    #cmd = ["ctest", "-R", test_name, "--output-on-failure"]
-                    #exit_code, stdout, stderr = self.docker.run_command_in_docker(
-                    #    cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
-                    #)
-                    
-                    exit_code, stdout, stderr, time, command = self._run_single_test(exe_path, framework, test_name)
+                    exit_code, stdout, stderr, time, command = self._run_single_test(exe_path, framework, test_name, no_run)
+                    if no_run:
+                        self.commands.append(command)
+                        break
+
                     elapsed: float = parse_framework_output(stdout, framework, test_name)
                     
                     if elapsed < 0.0:
@@ -447,7 +457,6 @@ class CMakeProcess:
                     parsed_time.append(elapsed)
                     measured_time.append(time)
                     commands.append(command)
-
                     all_stdout += f"{stdout}\n"
 
                     if exit_code == 0:
@@ -460,6 +469,9 @@ class CMakeProcess:
                         logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
                         return False
                 
+                if no_run:
+                    continue
+
                 if 0.0 in parsed_time:
                     if elapsed_times:
                         elapsed_times = [a+b for a, b in zip(elapsed_times, measured_time)]
@@ -489,7 +501,7 @@ class CMakeProcess:
             # extract the profraw coverage without the test and build folders
             # extract coverage data and create
         
-    def _run_single_test(self, exe_path: str, framework: str, test_name: str):
+    def _run_single_test(self, exe_path: str, framework: str, test_name: str, no_run: bool):
         if framework == "gtest":
             cmd = [f"{exe_path}", f"--gtest_filter={test_name}"]
         elif framework == "catch":
@@ -499,11 +511,14 @@ class CMakeProcess:
         elif framework == "boost":
             cmd = [f"{exe_path}", f"--run_test={test_name}"]
         elif framework == "qt":
-            cmd = [f"{exe_path}", f"{test_name}"]
+            cmd = [f"{exe_path}", f"\"{test_name}\""]
         else:
             raise ValueError(f"Unknown framework for {exe_path}")
         
         command = " ".join(map(str, cmd))
+        if no_run:
+            return 0, "", "", 0.0, command
+        
         logging.debug(command)
         exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
             cmd, self.root, check=False #workdir=self.docker_test_dir/self.test_path, check=False
@@ -511,9 +526,218 @@ class CMakeProcess:
         logging.debug(f"Isolated CTest stdout:\n{stdout}")
         return exit_code, stdout, stderr, time, command
 
-    def to_container_path(self, path: Path) -> str:
-        rel = path.relative_to(self.root.parent)
-        return f"{self.docker_test_dir}/workspace/{rel.as_posix()}"
+    """
+    
     
         
+    def _ctest_collection(self) -> bool:
+        cmd = self._check_tests_exists()
+        if not cmd:
+            return False
         
+        test_exec_flag = self.analyzer.get_list_test_arg()
+        if test_exec_flag and self._individual_tests_collection(test_exec_flag):
+            return True
+
+        self.commands.append(f"cd {str(self.docker_test_dir/self.test_path)}")
+        self.commands.append(" ".join(map(str, cmd)))
+        return True
+
+
+    def _individual_tests_collection(self, test_exec_flag: list[tuple[str, str]]):
+        framework, test_flag = test_exec_flag[0]
+
+        path = str(self.docker_test_dir / self.test_path / 'CTestTestfile.cmake').replace("\\", "/")
+        cmd = ["cat", f"{path}"]
+        exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
+            cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+        )
+
+        logging.info(f"CTestTestfile.cmake output:\n{stdout}")
+        test_exec: set[str] = set(self.analyzer.parse_ctest_file(stdout))
+
+        subdirs = self.analyzer.parse_subdirs(stdout)
+        for subdir in subdirs:
+            path = str(self.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
+            cmd = ["cat", f"{path}"]
+            exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
+            )
+            if exit_code != 0:
+                logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
+                logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                return False
+            logging.info(f"CTestTestfile.cmake output:\n{stdout}")
+            test_exec |= set(self.analyzer.parse_ctest_file(stdout))
+
+        if not test_exec:
+            logging.info("No test executables found.")
+            return False
+
+        unit_tests: dict[str, list[str]] = {}
+        for exe_path in test_exec:
+            cmd = [exe_path, test_flag]
+            logging.info(' '.join(map(str, cmd)))
+            exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
+            )
+            if exit_code != 0:
+                logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
+                logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                return False
+            logging.info(f"{test_flag} output:\n{stdout}")
+            unit_tests[exe_path] = self.analyzer.find_unit_tests(stdout, framework)
+
+        logging.debug(f"unit tests: {unit_tests}")
+
+        if not unit_tests:
+            logging.info("No unit tests found.")
+            return False
+
+        for exe_path, test_names in tqdm(unit_tests.items(), desc=f"Running {exe_path}..."):
+            for test_name in test_names:
+                self.per_test_times[test_name] = {"parsed": [], "time": []}
+                command = self._single_test_collection(exe_path, framework, test_name)
+                self.commands.append(command)
+                self.unit_tests_map[command] = {"name": test_name, "exe": exe_path}
+
+        self.framework = framework
+        return True
+
+    def _single_test_collection(self, exe_path: str, framework: str, test_name: str) -> str:
+        if framework == "gtest":
+            cmd = [f"{exe_path}", f"--gtest_filter={test_name}"]
+        elif framework == "catch":
+            cmd = [f"{exe_path}", f"\"{test_name}\"", "--durations", "yes"]
+        elif framework == "doctest":
+            cmd = [f"{exe_path}", f"--test-case={test_name}"]
+        elif framework == "boost":
+            cmd = [f"{exe_path}", f"--run_test={test_name}"]
+        elif framework == "qt":
+            cmd = [f"{exe_path}", f"\"{test_name}\""]
+        else:
+            raise ValueError(f"Unknown framework for {exe_path}")
+        
+        command = " ".join(map(str, cmd))
+        return command
+    
+
+    def _check_tests_exists(self) -> list[str]:
+        cmd = ['ctest', '--output-on-failure', '--fail-if-no-tests']
+        try:
+            # check if any tests exist
+            exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(
+                ['ctest', '--help'], self.root, workdir=self.test_path, check=False
+            )
+            if '--fail-if-no-tests' not in stdout:
+                # fallback for older cmake versions
+                check_cmd = ['ctest', '-N']
+                exit_code, stdout_check, _, _ = self.docker.run_command_in_docker(
+                    check_cmd, self.root, workdir=self.test_path, check=False
+                )
+                if 'No tests were found' in stdout_check or 'Test #' not in stdout_check:
+                    logging.error(f"No tests found in {self.test_path}")
+                    return []
+                
+                cmd = ['ctest', '--output-on-failure']
+            
+            return cmd
+        
+        except Exception as e:
+            logging.error(f"CTest checking failed: {e}", exc_info=True)
+            return cmd
+        
+    def _ctest(self, command: str) -> bool:
+        cmd = command.split(" ")
+
+        test_exec_flag = self.analyzer.get_list_test_arg()
+        if test_exec_flag and self._isolated_ctest(command):
+            return True
+        
+        try:
+            logging.info(f"{' '.join(map(str, cmd))} in {self.test_path}")
+            exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+            )
+
+            # parse the times returned
+            stats = parse_ctest_output(stdout)
+            elapsed: float = stats['total_time_sec']
+            self.test_time['parsed'].append(elapsed)
+            self.test_time['time'].append(time)
+            self.ctest_output.append(stdout)
+            self.per_test_times = parse_single_ctest_output(stdout, self.per_test_times)
+
+            if exit_code == 0:
+                logging.info(f"CTest passed for {self.test_path}")
+                logging.info(f"Output:\n{stdout}")
+                logging.info(f"Tests run: {stats['total']}, Failures: {stats['failed']}, Skipped: {stats['skipped']}, Time elapsed: {elapsed} s")
+            else:
+                logging.error(f"CTest failed for {self.test_path} (return code {exit_code})", exc_info=True)
+                logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                return False
+
+            return True
+            
+        except Exception as e:
+            logging.error(f"CTest execution failed: {e}", exc_info=True)
+            return False
+        
+
+    def _isolated_ctest(self, command: str) -> bool:
+        cmd = command.split(" ")
+        unit_map = self.unit_tests_map[command]
+        test_name = unit_map['name']
+        exe_path = unit_map['exe']
+
+        logging.debug(command)
+        exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
+            cmd, self.root, check=False
+        )
+        logging.debug(f"Isolated CTest stdout:\n{stdout}")
+
+        elapsed: float = parse_framework_output(stdout, self.framework, test_name)
+                    
+        if elapsed < 0.0:
+            return False
+        
+        if elapsed == 0.0:
+            elapsed = parse_usr_bin_time(stdout)
+
+        #parsed_time.append(elapsed)
+        #measured_time.append(time)
+
+        self.per_test_times[test_name]['parsed'].append(elapsed)
+        self.per_test_times[test_name]['time'].append(time)
+        ntest = len(self.per_test_times[test_name]['parsed'])
+        self.test_time['parsed'][ntest] += elapsed
+        self.test_time['time'][ntest] += time
+
+        if exit_code == 0:
+            logging.debug(f"CTest passed for {self.test_path}")
+            logging.debug(f"Output:\n{stdout}")
+            logging.info(f"[{test_name}] Time elapsed: {elapsed or time} s")
+        else:
+            logging.error(f"CTest failed for {self.test_path} (return code {exit_code})", exc_info=True)
+            logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+            logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+            return False
+        """
+        if 0.0 in parsed_time:
+            if elapsed_times:
+                elapsed_times = [a+b for a, b in zip(elapsed_times, measured_time)]
+            else:
+                elapsed_times = measured_time
+            self.per_test_times[test_name] = measured_time
+        else:
+            if elapsed_times:
+                elapsed_times = [a+b for a, b in zip(elapsed_times, parsed_time)]
+            else:
+                elapsed_times = parsed_time
+            self.per_test_times[test_name] = parsed_time
+        """
+        self.ctest_output.append(stdout)
+        return True

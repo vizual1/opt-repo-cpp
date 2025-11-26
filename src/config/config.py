@@ -28,15 +28,13 @@ class Config:
     repo: str = ""
 
     # File paths
-    repo_url: str = field(init=False)
+    repo_id: str = field(init=False)
     input_file: str = field(init=False)
     output_file: str = field(init=False)
     output_fail: str = "data/fail.txt"
     
     # Commit SHAs
     sha: str = ""
-    newsha: str = ""
-    oldsha: str = ""
     
     # Docker settings
     docker: str = ""
@@ -78,7 +76,7 @@ class Config:
 
     def __post_init__(self):
         self.filter_type = self.filter
-        self.repo_url = self.repo
+        self.repo_id = self.repo.removeprefix("https://github.com/").strip()
         self.input_file = self.input
         self.output_file = self.output
         self.docker_image = self.docker
@@ -96,12 +94,12 @@ class Config:
 
         if str(self.testing.docker_test_dir) == "/workspace":
             raise ValueError("Docker test directory cannot be '/workspace' to avoid data loss")
-        
-        if self.limit > 1000:
-            logging.warning("High limit value may result in rate limiting or timeouts")
             
         if not self.github.access_token:
             raise ValueError("GitHub access token is required")
+        
+        if self.sha and not self.repo:
+            raise ValueError("SHA value needs an accompanying repository owner/name")
 
     def _setup_github(self):
         """Initialize GitHub client."""

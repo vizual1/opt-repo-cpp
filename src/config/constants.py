@@ -5,13 +5,16 @@ DATA_DIR = Path("data")
 CACHE_DIR = Path("cache")
 
 STORAGE_PATHS = {
-    "popular": DATA_DIR / "popular_urls.txt",
-    "commits": DATA_DIR / "performance" / "filtered.txt",
     "performance": DATA_DIR / "performance",
-    "repos": DATA_DIR / "repo_urls.txt",
-    "store_analyze": DATA_DIR / "analyze",
-    "results": DATA_DIR / "results.txt",
-    "cmake-dep": CACHE_DIR / "cmake-dep.json",
+    "clones": DATA_DIR / "commits",
+
+    "popular": DATA_DIR / "popular.txt",
+    "commits": DATA_DIR / "commits.txt",
+    "repos": DATA_DIR / "repos.txt",
+    "testcrawl": DATA_DIR / "testcrawl.txt",
+    "fail": DATA_DIR / "fail.txt",
+
+    "cmake-dep": CACHE_DIR / "cmake-dep.json"
 }
 
 COMMIT_TIME = {

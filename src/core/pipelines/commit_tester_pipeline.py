@@ -11,11 +11,11 @@ class CommitTesterPipeline:
     """
     def __init__(self, config: Config):
         self.config = config
-        self.commit = Commit(self.config.input_file or self.config.storage_paths['commits'])   
+        self.commit = Commit(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])   
         self.docker = DockerTester(self.config) 
 
     def test_commit(self) -> None:
-        if self.config.input_file or self.config.repo_url:
+        if self.config.input_file or self.config.repo_id:
             self._input_tester()
         else:
             self._sha_tester()
@@ -55,32 +55,16 @@ class CommitTesterPipeline:
         """
 
     def _sha_tester(self):
-        if self.config.sha:
-            commits = self.config.git_client.search_commits(f"hash:{self.config.sha}")
-            for commit in commits:
-                repo = commit.repository
-                if not repo.fork:
-                    file = "_".join(repo.full_name.split("/"))
-                    commit = repo.get_commit(self.config.sha)
-                    new_sha = self.config.sha
-                    if not commit.parents:
-                        logging.info(f"[{repo.full_name}] Commit {self.config.sha} has no parents (root commit).")
-                        return
-                    old_sha = commit.parents[0].sha
-                    new_path, old_path = self.commit.get_paths(file, new_sha)
-                    self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
-                    break
-            
-        elif self.config.newsha and self.config.oldsha:
-            commits = self.config.git_client.search_commits(f"hash:{self.config.newsha}")
-            for commit in commits:
-                repo = commit.repository
-                if not repo.fork:
-                    file = "_".join(repo.full_name.split("/"))
-                    new_sha = self.config.newsha
-                    old_sha = self.config.oldsha
-                    new_path, old_path = self.commit.get_paths(file, new_sha)
-                    self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
-                    break
+        if self.config.sha and self.config.repo_id:
+            repo = self.config.git_client.get_repo(self.config.repo_id)
+            commit = repo.get_commit(self.config.sha)
+            file_prefix = "_".join(repo.full_name.split("/"))
+            new_sha = self.config.sha
+            if not commit.parents:
+                logging.info(f"[{repo.full_name}] Commit {self.config.sha} has no parents (root commit).")
+                return
+            old_sha = commit.parents[0].sha
+            new_path, old_path = self.commit.get_paths(file_prefix, new_sha)
+            self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
         else:
             logging.error("Wrong sha input")

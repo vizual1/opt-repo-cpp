@@ -15,7 +15,7 @@ class ProcessFilter:
         self.repo = repo
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
-
+    """
     def valid_run(self, container_name: str) -> bool:
         tmp_root = Path.cwd()/"tmp"
         tmp_root.mkdir(parents=True, exist_ok=True)
@@ -71,7 +71,84 @@ class ProcessFilter:
                     logging.warning(f"[{self.repo.full_name}] Failed to stop container: {e}")
             
             return True
+        """
+    # TODO: commit_setup_build? remove tests and put them separately later?
+    def commit_setup_and_build(
+        self, 
+        msg: str, 
+        container_name: str, 
+        docker_image: str = ""
+    ) -> Optional[StructureFilter]:
+        structure = StructureFilter(self.repo, self.config, self.root, self.sha)
         
+        logging.info(f"[{self.repo.full_name}] Testing {self.sha}...")
+        if self.root and not structure.is_valid_commit(self.root, self.sha, docker_test_dir=self.config.testing.docker_test_dir):
+            logging.error(f"[{self.repo.full_name}] commit cmake and ctest failed ({self.sha})")
+            return None
+        
+        process = structure.process
+        if not process:
+            logging.error(f"[{self.repo.full_name}] CMakeProcess for {self.repo.full_name} couldn't be found")
+            return None
+        
+        analyzer = process.analyzer
+        flags = FlagFilter(self.config.valid_test_flags, analyzer.has_build_testing_flag()).get_valid_flags()
+        sorted_testing_path = self.sort_testing_path(analyzer.get_enable_testing_path())
+        if len(sorted_testing_path) == 0:
+            logging.error(f"[{self.repo.full_name}] path to enable_testing() was not found in {self.root}: {sorted_testing_path}")
+            return None
+
+        if len(sorted_testing_path) > 1:
+            logging.warning(f"[{self.repo.full_name}] multiple paths to enable_testing() was found in {self.root}. For testing: {sorted_testing_path[0]}")
+
+        test_path = sorted_testing_path[0]
+        if test_path.name == "CMakeLists.txt":
+            test_path = test_path.parent
+        enable_testing_path = test_path.relative_to(self.root) if self.root else Path()
+        logging.info(f"[{self.repo.full_name}] path to enable_testing(): '{enable_testing_path}'")
+        try:
+            process.set_enable_testing(enable_testing_path)
+            process.set_flags(flags)
+            process.docker_image = self.config.docker_image
+            if docker_image:
+                new = False
+            else:
+                new = True
+            process.start_docker_image(self.config, container_name, new)
+            
+            if not process.build():
+                logging.error(f"[{self.repo.full_name}] {msg} build failed ({self.sha})")
+                return None
+            
+            if not process.collect_tests():
+                logging.error(f"[{self.repo.full_name}] {msg} generating test commands failed ({self.sha})")
+                return None
+            
+            logging.info(f"[{self.repo.full_name}] {msg} build successful ({self.sha})")
+            return structure
+        
+        except Exception as e:
+            logging.exception(f"[{self.repo.full_name}] Unexpected error during process run: {e}")
+            return None
+        
+    def test_run(self, msg: str, command: str, structure: StructureFilter) -> bool:
+        if structure.process:
+            process = structure.process
+            try:
+                #if not process.test(warmup=self.config.testing.warmup , test_repeat=self.config.testing.commit_test_times):
+                if not process.test(command):
+                    logging.error(f"[{self.repo.full_name}] {msg} test failed ({self.sha})")
+                    return False
+                
+                logging.info(f"[{self.repo.full_name}] {msg} build and test successful ({self.sha})")
+                return True
+            except Exception as e:
+                logging.exception(f"[{self.repo.full_name}] Unexpected error during process run: {e}")
+                return False
+        else:
+            logging.error(f"[{self.repo.full_name}] CMakeProcess to run the test is not defined ({self.sha})")
+            return False
+    """
     def valid_commit_run(
         self, 
         msg: str, 
@@ -127,7 +204,7 @@ class ProcessFilter:
         except Exception as e:
             logging.exception(f"[{self.repo.full_name}] Unexpected error during process run: {e}")
             return [], None
-
+    """
     def _sort_key(self, y: Path) -> tuple[int, int]:
         valid_test_dirs = [Path(x) for x in self.config.valid_test_dirs]
         try:

@@ -17,10 +17,5 @@ class TesterPipeline:
         
         if self.config.docker_image and self.config.mount_path:
             self.docker.test_mounted_against_docker(self.config.docker_image, self.config.mount_path)
-        
-        if self.config.newsha:
-            raise NotImplementedError("not implemented")
-        
-        if self.config.oldsha:
-            raise NotImplementedError("not implemented")
+
         

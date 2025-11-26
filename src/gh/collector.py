@@ -156,8 +156,8 @@ class RepositoryCollector:
         """
         repo_ids: list[str] = []
 
-        if self.config.repo_url:
-            repo_id = self.config.repo_url.removeprefix("https://github.com/").strip()
+        if self.config.repo_id:
+            repo_id = self.config.repo_id
             repo_ids.append(repo_id)
             logging.info(f"Using single repository from URL: {repo_id}")
             return repo_ids

@@ -74,7 +74,7 @@ def parse_ctest_output(output: str) -> dict[str, Union[int, float]]:
 
     return stats
 
-def parse_single_ctest_output(output: str, previous_results: dict = {}) -> dict[str, list[float]]:
+def parse_single_ctest_output(output: str, previous_results: dict[str, dict[str, list[float]]] = {}) -> dict[str, dict[str, list[float]]]:
     """
     Parse ctest output into a dictionary mapping test names to a list of runtimes.
 
@@ -87,9 +87,9 @@ def parse_single_ctest_output(output: str, previous_results: dict = {}) -> dict[
     """
 
     if not previous_results:
-        results = defaultdict(list)
+        results: dict[str, dict[str, list[float]]] = defaultdict(dict)
     else:
-        results = defaultdict(list, {k: v[:] for k, v in previous_results.items()})
+        results: dict[str, dict[str, list[float]]] = defaultdict(dict, {k: v for k, v in previous_results.items()})
 
     patterns = [
         # pattern 1: [OK] test_name (time ms)
@@ -127,7 +127,8 @@ def parse_single_ctest_output(output: str, previous_results: dict = {}) -> dict[
             else:
                 time = float(time)
 
-            results[test_name].append(time)
+            results[test_name]['parsed'].append(time)
+            results[test_name]['time'].append(time)
 
     return dict(results)
 

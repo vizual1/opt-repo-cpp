@@ -42,10 +42,6 @@ def setup_parser() -> argparse.ArgumentParser:
     commit_group = parser.add_argument_group("Commit Options")
     commit_group.add_argument("--sha", type=str,
                               help="SHA for testing.")
-    commit_group.add_argument("--newsha", type=str,
-                              help="New commit SHA for comparison.")
-    commit_group.add_argument("--oldsha", type=str,
-                              help="Old commit SHA for comparison.")
     commit_group.add_argument("--separate", action="store_true",
                               help="Save each filtered commit separately with commit message and diff.")
 
