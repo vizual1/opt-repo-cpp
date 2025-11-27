@@ -7,6 +7,7 @@ from src.utils.parser import *
 from typing import Optional, Union
 from src.core.docker.manager import DockerManager
 from src.config.config import Config
+from src.utils.permission import check_and_fix_path_permissions
 
 vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
 os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
@@ -139,6 +140,7 @@ class CMakeProcess:
                 tmp_path = Path(tmp_file.name)
 
                 dest_path = f"{container_id}:{self.docker_test_dir}/logs/{n}{data_type}"
+                check_and_fix_path_permissions(self.root)
                 result = subprocess.run(["docker", "cp", str(tmp_path), dest_path],
                                         capture_output=True, text=True)
 
