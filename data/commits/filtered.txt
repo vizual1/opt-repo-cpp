@@ -1,3 +1,1 @@
-gabime/spdlog | bd5a81df7092c899b63c3f1bc3792a5f97113cc4 | 4accce5d7b57c268ea37e566a268e51a485b8581
-jupp0r/prometheus-cpp | 1b01f361563bddd4b42ff04212390dd4ee978740 | 7aaecba2c3f14540fed794d9f1c811e4ee44585e
 xtensor-stack/xsimd | 59c407d500534db7299c7b6e3ae9c92fe6cba561 | be9dcb5df413a893fb6646fa950eeb4aeac70ffc

@@ -130,7 +130,7 @@ class CMakeProcess:
         name: list[str] = ["full", "config", "build", "test", "results"]
 
         for log, n in zip(logs, name):
-            data_type = ".log" if name != "results" else ".json"
+            data_type = ".log" if n != "results" else ".json"
             with tempfile.NamedTemporaryFile("w", delete=False, suffix=data_type) as tmp_file:
                 if isinstance(log, str):
                     tmp_file.write(log)
@@ -138,14 +138,14 @@ class CMakeProcess:
                     json.dump(results, tmp_file, indent=4)
                 tmp_path = Path(tmp_file.name)
 
-            dest_path = f"{container_id}:{self.docker_test_dir}/logs/{n}{data_type}"
-            result = subprocess.run(["docker", "cp", str(tmp_path), dest_path],
-                                    capture_output=True, text=True)
+                dest_path = f"{container_id}:{self.docker_test_dir}/logs/{n}{data_type}"
+                result = subprocess.run(["docker", "cp", str(tmp_path), dest_path],
+                                        capture_output=True, text=True)
 
-            if result.returncode != 0:
-                logging.error(f"Copying log file failed: {result.stderr}")
-            else:
-                logging.info(f"Copied log file to {dest_path}")
+                if result.returncode != 0:
+                    logging.error(f"Copying log file failed: {result.stderr}")
+                else:
+                    logging.info(f"Copied log file to {dest_path}")
 
 ############### RUNNING ###############
         
@@ -520,7 +520,7 @@ class CMakeProcess:
         if exit_code == 0:
             logging.debug(f"CTest passed for {self.test_path}")
             logging.debug(f"Output:\n{stdout}")
-            logging.info(f"[{test_name}] Time elapsed: {elapsed or time} s")
+            logging.debug(f"[{test_name}] Time elapsed: {elapsed or time} s")
         else:
             logging.error(f"CTest failed for {self.test_path} (return code {exit_code}) with command {' '.join(command)}", exc_info=True)
             logging.error(f"Output (stdout):\n{stdout}", exc_info=True)

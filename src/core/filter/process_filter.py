@@ -82,7 +82,7 @@ class ProcessFilter:
                     logging.error(f"[{self.repo.full_name}] {msg} test failed ({self.sha})")
                     return False
                 
-                logging.info(f"[{self.repo.full_name}] {msg} build and test successful ({self.sha})")
+                logging.debug(f"[{self.repo.full_name}] {msg} build and test successful ({self.sha})")
                 return True
             except Exception as e:
                 logging.exception(f"[{self.repo.full_name}] Unexpected error during process run: {e}")
