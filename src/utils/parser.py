@@ -121,12 +121,15 @@ def parse_single_ctest_output(output: str, previous_results: dict[str, dict[str,
                 test_name = match.group(1)
                 time = match.group(2)
 
+            if not results[test_name]:
+                results[test_name] = {'parsed': [], 'time': []}
+
             # Normalize time to seconds (convert ms to seconds if needed)
             if "ms" in pattern:
                 time = int(time) / 1000.0
             else:
                 time = float(time)
-
+            
             results[test_name]['parsed'].append(time)
             results[test_name]['time'].append(time)
 

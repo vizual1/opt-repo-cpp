@@ -76,7 +76,7 @@ class Config:
 
     def __post_init__(self):
         self.filter_type = self.filter
-        self.repo_id = self.repo.removeprefix("https://github.com/").strip()
+        self.repo_id = self.repo.removeprefix("https://github.com/").strip() if self.repo else self.repo
         self.input_file = self.input
         self.output_file = self.output
         self.docker_image = self.docker

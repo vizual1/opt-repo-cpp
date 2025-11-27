@@ -131,12 +131,11 @@ class ProcessFilter:
             logging.exception(f"[{self.repo.full_name}] Unexpected error during process run: {e}")
             return None
         
-    def test_run(self, msg: str, command: str, structure: StructureFilter) -> bool:
+    def test_run(self, msg: str, command: list[str], structure: StructureFilter, has_list_args: bool) -> bool:
         if structure.process:
             process = structure.process
             try:
-                #if not process.test(warmup=self.config.testing.warmup , test_repeat=self.config.testing.commit_test_times):
-                if not process.test(command):
+                if not process.test(command, has_list_args):
                     logging.error(f"[{self.repo.full_name}] {msg} test failed ({self.sha})")
                     return False
                 
@@ -146,7 +145,7 @@ class ProcessFilter:
                 logging.exception(f"[{self.repo.full_name}] Unexpected error during process run: {e}")
                 return False
         else:
-            logging.error(f"[{self.repo.full_name}] CMakeProcess to run the test is not defined ({self.sha})")
+            logging.error(f"[{self.repo.full_name}] CMakeProcess is not defined ({self.sha})")
             return False
     """
     def valid_commit_run(

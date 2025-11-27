@@ -235,22 +235,28 @@ class CMakeParser:
             #   TestB
             current_suite = ""
             for line in text.splitlines():
+                if line.endswith("ms"):
+                    continue
                 if line.endswith('.'):
                     current_suite = line.strip().strip('.')
                 elif line.strip():
                     tests.append(f"{current_suite}.{line.strip()}")
+                
         elif framework == "catch":
             tests = [line.strip() for line in text.splitlines() 
                      if line.strip() and 
                      not "All available test cases:" in line.strip() and 
                      not "test cases" in line.strip() and
                      not line.strip().startswith("[") and 
-                     not line.strip().endswith("]")]
+                     not line.strip().endswith("]") and 
+                     not line.strip().endswith("ms")]
         elif framework == "doctest":
             tests = []
             for line in text.splitlines():
                 line = line.strip()
                 if not line:
+                    continue
+                if line.endswith("ms"):
                     continue
                 if line.startswith("[doctest]"):
                     continue
@@ -259,10 +265,10 @@ class CMakeParser:
                 tests.append(line)
         elif framework == "boost":
             # Boost lists suites/tests as suite/test
-            tests = [line.strip() for line in text.splitlines() if "/" in line]
+            tests = [line.strip() for line in text.splitlines() if "/" in line and not line.endswith("ms")]
         elif framework == "qt":
             # QTest lists test functions prefixed with "PASS", "FAIL", etc. when run
-            tests = [line.strip() for line in text.splitlines() if line.strip()]
+            tests = [line.strip() for line in text.splitlines() if line.strip() and not line.endswith("ms")]
         return tests
 
     def find_dependencies(self) -> set[str]:

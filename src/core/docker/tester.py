@@ -1,4 +1,5 @@
 import logging, subprocess, os, stat, shutil, random
+from tqdm import tqdm
 from src.core.docker.manager import DockerManager
 from src.cmake.analyzer import CMakeAnalyzer
 from src.core.filter.structure_filter import StructureFilter
@@ -38,6 +39,8 @@ class DockerTester:
                     new_single_tests_d = new_struct.process.per_test_times 
                     old_single_tests_d = old_struct.process.per_test_times
 
+                    logging.info(f"NEW TEST: {new_single_tests_d}")
+                    logging.info(f"OLD TEST: {old_single_tests_d}")
                     # TODO: test
                     new_single_tests = {
                         test: (
@@ -56,6 +59,9 @@ class DockerTester:
                         )
                         for test in old_single_tests_d.keys()
                     }
+
+                    logging.info(f"NEW TESTs: {new_single_tests}")
+                    logging.info(f"OLD TESTs: {old_single_tests}")
                     
                     test = TestAnalyzer(
                         self.config, new_single_tests, old_single_tests
@@ -75,8 +81,8 @@ class DockerTester:
                         overall_change > self.config.overall_decline_limit
                     )
 
-                    new_cmd = new_struct.process.commands
-                    old_cmd = old_struct.process.commands
+                    new_cmd = [" ".join(s) for s in new_struct.process.commands]
+                    old_cmd = [" ".join(s) for s in old_struct.process.commands]
                     
                     commit = repo.get_commit(new_sha)
                     results = test.create_test_log(
@@ -101,6 +107,8 @@ class DockerTester:
                 try:
                     if struct and struct.process:
                         struct.process.docker.stop_container()
+                        logging.info(f"[{repo.full_name}] Stopped the container")
+                        break
                 except Exception as e:
                     logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
 
@@ -135,15 +143,16 @@ class DockerTester:
             if new_structure and new_structure.process and old_structure and old_structure.process:
                 new_test_cmd = new_structure.process.commands[2:]
                 old_test_cmd = old_structure.process.commands[2:]
+                logging.debug(f"New test cmd: {new_test_cmd}")
+                logging.debug(f"Old test cmd: {old_test_cmd}")
                 assert len(new_test_cmd) == len(old_test_cmd)
 
                 warmup = self.config.testing.warmup
                 test_repeat = self.config.testing.commit_test_times
+                has_list_args = len(new_test_cmd) > 1
 
-                for _ in range(warmup + test_repeat):
+                for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test"):
                     for new_cmd, old_cmd in zip(new_test_cmd, old_test_cmd):
-                        #new_pf.test_run("New", new_cmd, new_structure)
-                        #old_pf.test_run("Old", old_cmd, old_structure)
                         order = [
                             ("New", new_cmd, new_structure, new_pf),
                             ("Old", old_cmd, old_structure, old_pf),
@@ -151,7 +160,7 @@ class DockerTester:
                         random.shuffle(order)
 
                         for label, cmd, structure, pf in order:
-                            pf.test_run(label, cmd, structure)
+                            pf.test_run(label, cmd, structure, has_list_args)
 
             new_cmd_times = new_structure.process.test_time if new_structure and new_structure.process else {}
             old_cmd_times = old_structure.process.test_time if old_structure and old_structure.process else {} 
@@ -164,11 +173,14 @@ class DockerTester:
             #old_times, old_structure = old_pf.valid_commit_run("Old", container_name=new_sha, docker_image=docker_image)
             
             yield new_times, old_times, new_structure, old_structure
-        except Exception:
+        except Exception as e:
+            logging.error(f"Commit pair test failed: {e}")
             for struct in [new_structure, old_structure]:
                 try:
                     if struct and struct.process:
                         struct.process.docker.stop_container()
+                        logging.info(f"[{repo.full_name}] Stopped the container")
+                        break
                 except Exception as e:
                     logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
             

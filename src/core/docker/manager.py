@@ -84,7 +84,7 @@ class DockerManager:
         output = output.decode(errors="ignore") if output else ""
         logs = self.container.logs().decode()
         self.container.exec_run(["bash", "-c", f"echo '{output}\n{logs}' >> {self.docker_test_dir}/logs/{'new' if self.new else 'old'}.log"])
-        return exit_code, output, logs, start-end
+        return exit_code, output, logs, end-start
     
 
     def copy_commands_to_container(self, project_root: Path, new_cmd: list[str], old_cmd: list[str]) -> None:
