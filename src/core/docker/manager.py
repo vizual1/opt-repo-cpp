@@ -3,6 +3,7 @@ from pathlib import Path
 from docker.types import Mount
 from typing import Optional
 from src.config.config import Config
+from src.utils.permission import check_and_fix_path_permissions
 
 class DockerManager:
     def __init__(self, config: Config, mount: Path, docker_image: str, docker_test_dir: str, new: bool = False):
@@ -28,6 +29,9 @@ class DockerManager:
             except docker.errors.NotFound: # type: ignore
                 pass
             
+            if not check_and_fix_path_permissions(self.mount):
+                return
+
             logging.info(f"Run docker image ({self.docker_image}) mounted on {str(self.mount)}.")
             mount = Mount(
                 target="/workspace", source=str(self.mount), type="bind", read_only=False

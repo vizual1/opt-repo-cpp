@@ -39,8 +39,6 @@ class DockerTester:
                     new_single_tests_d = new_struct.process.per_test_times 
                     old_single_tests_d = old_struct.process.per_test_times
 
-                    logging.info(f"NEW TEST: {new_single_tests_d}")
-                    logging.info(f"OLD TEST: {old_single_tests_d}")
                     # TODO: test
                     new_single_tests = {
                         test: (
@@ -59,9 +57,6 @@ class DockerTester:
                         )
                         for test in old_single_tests_d.keys()
                     }
-
-                    logging.info(f"NEW TESTs: {new_single_tests}")
-                    logging.info(f"OLD TESTs: {old_single_tests}")
                     
                     test = TestAnalyzer(
                         self.config, new_single_tests, old_single_tests
@@ -151,7 +146,7 @@ class DockerTester:
                 test_repeat = self.config.testing.commit_test_times
                 has_list_args = len(new_test_cmd) > 1
 
-                for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test"):
+                for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=1, leave=False):
                     for new_cmd, old_cmd in zip(new_test_cmd, old_test_cmd):
                         order = [
                             ("New", new_cmd, new_structure, new_pf),

@@ -32,8 +32,7 @@ class RepositoryPipeline:
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing repositories..."):
             repo = self.config.git_client.get_repo(repo_id)
             structure = StructureFilter(repo, self.config)
-            #process = ProcessFilter(repo, self.config)
-            # TODO: test
+
             try:
                 if structure.is_valid(): #and process.valid_run("_".join(repo.full_name.split("/"))):
                     self.valid_repos.append(repo)

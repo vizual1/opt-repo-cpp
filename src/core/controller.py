@@ -80,9 +80,7 @@ class Controller:
             logging.warning("No repositories found for commit filtering.")
             return
         
-        for repo_id in repo_ids:
-            repo = self.config.git_client.get_repo(repo_id)
-            CommitPipeline(repo, self.config).filter_commits()
+        CommitPipeline(repo_ids, self.config).filter_all_commits()
 
     def _testcommits(self) -> None:
         logging.info("Testing commits...")
