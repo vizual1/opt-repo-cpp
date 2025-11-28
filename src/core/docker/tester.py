@@ -120,40 +120,42 @@ class DockerTester:
             # TODO: test
             new_structure = new_pf.commit_setup_and_build("New", container_name=new_sha)
             docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
-            old_structure = old_pf.commit_setup_and_build("Old", container_name=new_sha, docker_image=docker_image)
             
-            if new_structure and new_structure.process and old_structure and old_structure.process:
-                new_test_cmd = new_structure.process.commands[2:]
-                old_test_cmd = old_structure.process.commands[2:]
-                logging.debug(f"New test cmd: {new_test_cmd}")
-                logging.debug(f"Old test cmd: {old_test_cmd}")
-                assert len(new_test_cmd) == len(old_test_cmd)
+            if new_structure and new_structure.process:
+                old_structure = old_pf.commit_setup_and_build("Old", container_name=new_sha, docker_image=docker_image)
+            
+                if old_structure and old_structure.process:
+                    new_test_cmd = new_structure.process.commands[2:]
+                    old_test_cmd = old_structure.process.commands[2:]
+                    logging.debug(f"New test cmd: {new_test_cmd}")
+                    logging.debug(f"Old test cmd: {old_test_cmd}")
+                    assert len(new_test_cmd) == len(old_test_cmd)
 
-                warmup = self.config.testing.warmup
-                test_repeat = self.config.testing.commit_test_times
-                has_list_args = len(new_test_cmd) > 1
+                    warmup = self.config.testing.warmup
+                    test_repeat = self.config.testing.commit_test_times
+                    has_list_args = len(new_test_cmd) > 1
 
-                for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=1, leave=False):
-                    for new_cmd, old_cmd in zip(new_test_cmd, old_test_cmd):
-                        order = [
-                            ("New", new_cmd, new_structure, new_pf),
-                            ("Old", old_cmd, old_structure, old_pf),
-                        ]
-                        random.shuffle(order)
+                    for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=1, leave=False):
+                        for new_cmd, old_cmd in zip(new_test_cmd, old_test_cmd):
+                            order = [
+                                ("New", new_cmd, new_structure, new_pf),
+                                ("Old", old_cmd, old_structure, old_pf),
+                            ]
+                            random.shuffle(order)
 
-                        for label, cmd, structure, pf in order:
-                            pf.test_run(label, cmd, structure, has_list_args)
+                            for label, cmd, structure, pf in order:
+                                pf.test_run(label, cmd, structure, has_list_args)
 
-                new_cmd_times = new_structure.process.test_time
-                old_cmd_times = old_structure.process.test_time
+                    new_cmd_times = new_structure.process.test_time
+                    old_cmd_times = old_structure.process.test_time
 
-                new_times = new_cmd_times['time'] if 0.0 in new_cmd_times['parsed'] else new_cmd_times['parsed']
-                old_times = old_cmd_times['time'] if 0.0 in old_cmd_times['parsed'] else old_cmd_times['parsed']
-                #new_times, new_structure = new_pf.valid_commit_run("New", container_name=new_sha)
-                #docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
-                
-                #old_times, old_structure = old_pf.valid_commit_run("Old", container_name=new_sha, docker_image=docker_image)
-                
+                    new_times = new_cmd_times['time'] if 0.0 in new_cmd_times['parsed'] else new_cmd_times['parsed']
+                    old_times = old_cmd_times['time'] if 0.0 in old_cmd_times['parsed'] else old_cmd_times['parsed']
+                    #new_times, new_structure = new_pf.valid_commit_run("New", container_name=new_sha)
+                    #docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
+                    
+                    #old_times, old_structure = old_pf.valid_commit_run("Old", container_name=new_sha, docker_image=docker_image)
+                    
             yield new_times, old_times, new_structure, old_structure
 
         except Exception as e:
