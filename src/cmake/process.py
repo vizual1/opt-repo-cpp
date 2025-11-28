@@ -224,6 +224,7 @@ class CMakeProcess:
             'cmake', 
             '-E', 'env', f'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
             '--',
+            'cmake',
             '-S', self.to_container_path(self.root), 
             '-B', str(self.build_path).replace("\\", "/"), 
             '-G', 'Ninja',
