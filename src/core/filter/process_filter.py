@@ -61,10 +61,12 @@ class ProcessFilter:
             
             if not process.build():
                 logging.error(f"[{self.repo.full_name}] {msg} build failed ({self.sha})")
+                process.docker.stop_container()
                 return None
             
             if not process.collect_tests():
                 logging.error(f"[{self.repo.full_name}] {msg} generating test commands failed ({self.sha})")
+                process.docker.stop_container()
                 return None
             
             logging.info(f"[{self.repo.full_name}] {msg} build successful ({self.sha})")
@@ -80,6 +82,7 @@ class ProcessFilter:
             try:
                 if not process.test(command, has_list_args):
                     logging.error(f"[{self.repo.full_name}] {msg} test failed ({self.sha})")
+                    process.docker.stop_container()
                     return False
                 
                 logging.debug(f"[{self.repo.full_name}] {msg} build and test successful ({self.sha})")
