@@ -9,8 +9,8 @@ from src.core.docker.manager import DockerManager
 from src.config.config import Config
 from src.utils.permission import check_and_fix_path_permissions
 
-vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
-os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
+#vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
+#os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
 
 class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
@@ -222,6 +222,8 @@ class CMakeProcess:
     def _configure(self) -> bool:
         cmd = [
             'cmake', 
+            '-E', 'env', f'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
+            '--',
             '-S', self.to_container_path(self.root), 
             '-B', str(self.build_path).replace("\\", "/"), 
             '-G', 'Ninja',
@@ -258,6 +260,7 @@ class CMakeProcess:
         if self.package_manager.startswith("vcpkg"):
             logging.info("Installing through package manager vcpkg...")
             cmd.append('-DVCPKG_MANIFEST_MODE=ON')
+
         elif self.package_manager.startswith("conanfile"):
             try:
                 logging.info("Installing through package manager conan...")

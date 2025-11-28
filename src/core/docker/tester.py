@@ -39,7 +39,6 @@ class DockerTester:
                 new_single_tests_d = new_struct.process.per_test_times 
                 old_single_tests_d = old_struct.process.per_test_times
 
-                # TODO: test
                 new_single_tests = {
                     test: (
                         new_single_tests_d[test]['parsed']
@@ -117,7 +116,6 @@ class DockerTester:
         old_times = []
         
         try:
-            # TODO: test
             new_structure = new_pf.commit_setup_and_build("New", container_name=new_sha)
             docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
             
