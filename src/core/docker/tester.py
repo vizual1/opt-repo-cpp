@@ -27,85 +27,72 @@ class DockerTester:
         new_path: Path,
         old_path: Path,
     ) -> None:
-        try:
-            with self._commit_pair_test(
-                repo, self.config, new_path, old_path, new_sha, old_sha
-            ) as (new_times, old_times, new_struct, old_struct):
-                logging.info(f"Times Old: {old_times}, New: {new_times}")
+        
+        with self._commit_pair_test(
+            repo, self.config, new_path, old_path, new_sha, old_sha
+        ) as (new_times, old_times, new_struct, old_struct):
+            logging.info(f"Times Old: {old_times}, New: {new_times}")
+            
+            if new_struct and new_struct.process and old_struct and old_struct.process:
+                warmup = self.config.testing.warmup
+
+                new_single_tests_d = new_struct.process.per_test_times 
+                old_single_tests_d = old_struct.process.per_test_times
+
+                # TODO: test
+                new_single_tests = {
+                    test: (
+                        new_single_tests_d[test]['parsed']
+                        if 0.0 not in new_single_tests_d[test]['parsed']
+                        else new_single_tests_d[test]['time']
+                    )
+                    for test in new_single_tests_d.keys()
+                }
+
+                old_single_tests = {
+                    test: (
+                        old_single_tests_d[test]['parsed']
+                        if 0.0 not in old_single_tests_d[test]['parsed']
+                        else old_single_tests_d[test]['time']
+                    )
+                    for test in old_single_tests_d.keys()
+                }
                 
-                if new_struct and new_struct.process and old_struct and old_struct.process:
-                    warmup = self.config.testing.warmup
+                test = TestAnalyzer(
+                    self.config, new_single_tests, old_single_tests
+                )
 
-                    new_single_tests_d = new_struct.process.per_test_times 
-                    old_single_tests_d = old_struct.process.per_test_times
+                total_improvement = test.get_improvement_p_value(
+                    old_times[warmup:], new_times[warmup:] 
+                )
+                logging.info(f"pvalue: {total_improvement}")
 
-                    # TODO: test
-                    new_single_tests = {
-                        test: (
-                            new_single_tests_d[test]['parsed']
-                            if 0.0 not in new_single_tests_d[test]['parsed']
-                            else new_single_tests_d[test]['time']
-                        )
-                        for test in new_single_tests_d.keys()
-                    }
+                isolated_improvements = test.get_significant_test_time_changes()
+                logging.info(f"new outperforms old: {isolated_improvements['new_outperforms_old']}")
+                overall_change = test.get_overall_change()
+                logging.info(f"overall change: {overall_change}")
+                overall_change_with_new_outperforms_old = (
+                    len(isolated_improvements['new_outperforms_old']) > 0 and 
+                    overall_change > self.config.overall_decline_limit
+                )
 
-                    old_single_tests = {
-                        test: (
-                            old_single_tests_d[test]['parsed']
-                            if 0.0 not in old_single_tests_d[test]['parsed']
-                            else old_single_tests_d[test]['time']
-                        )
-                        for test in old_single_tests_d.keys()
-                    }
-                    
-                    test = TestAnalyzer(
-                        self.config, new_single_tests, old_single_tests
-                    )
+                new_cmd = [" ".join(s) for s in new_struct.process.commands]
+                old_cmd = [" ".join(s) for s in old_struct.process.commands]
+                
+                commit = repo.get_commit(new_sha)
+                results = test.create_test_log(
+                    commit, repo, old_sha, new_sha, 
+                    old_times, new_times, old_cmd, new_cmd
+                )
+                logging.info(f"Results: {results['performance_analysis']}")
+                writer = Writer(repo.full_name, self.config.storage_paths["performance"])
+                writer.write_results(results)
 
-                    total_improvement = test.get_improvement_p_value(
-                        old_times[warmup:], new_times[warmup:] 
-                    )
-                    logging.info(f"pvalue: {total_improvement}")
-
-                    isolated_improvements = test.get_significant_test_time_changes()
-                    logging.info(f"new outperforms old: {isolated_improvements['new_outperforms_old']}")
-                    overall_change = test.get_overall_change()
-                    logging.info(f"overall change: {overall_change}")
-                    overall_change_with_new_outperforms_old = (
-                        len(isolated_improvements['new_outperforms_old']) > 0 and 
-                        overall_change > self.config.overall_decline_limit
-                    )
-
-                    new_cmd = [" ".join(s) for s in new_struct.process.commands]
-                    old_cmd = [" ".join(s) for s in old_struct.process.commands]
-                    
-                    commit = repo.get_commit(new_sha)
-                    results = test.create_test_log(
-                        commit, repo, old_sha, new_sha, 
-                        old_times, new_times, old_cmd, new_cmd
-                    )
-                    logging.info(f"Results: {results['performance_analysis']}")
-                    writer = Writer(repo.full_name, self.config.storage_paths["performance"])
-                    writer.write_results(results)
-
-                    if total_improvement < self.config.commits_time['min-p-value'] or overall_change_with_new_outperforms_old:
-                        old_struct.process.save_docker_image(repo.full_name, new_sha, new_cmd, old_cmd, results)
-                        logging.info(f"[{repo.full_name}] ({new_sha}) significantly improves execution time.")
-                        writer.write_improve(results)
+                if total_improvement < self.config.commits_time['min-p-value'] or overall_change_with_new_outperforms_old:
+                    old_struct.process.save_docker_image(repo.full_name, new_sha, new_cmd, old_cmd, results)
+                    logging.info(f"[{repo.full_name}] ({new_sha}) significantly improves execution time.")
+                    writer.write_improve(results)
                         
-
-        except Exception as e:
-            logging.exception(f"[{repo.full_name}] Error running commit pair test: {e}")
-
-        finally:
-            for struct in [new_struct, old_struct]:
-                try:
-                    if struct and struct.process:
-                        struct.process.docker.stop_container()
-                        logging.info(f"[{repo.full_name}] Stopped the container")
-                        break
-                except Exception as e:
-                    logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
 
     @contextmanager
     def _commit_pair_test(
@@ -157,46 +144,43 @@ class DockerTester:
                         for label, cmd, structure, pf in order:
                             pf.test_run(label, cmd, structure, has_list_args)
 
-            new_cmd_times = new_structure.process.test_time if new_structure and new_structure.process else {}
-            old_cmd_times = old_structure.process.test_time if old_structure and old_structure.process else {} 
+                new_cmd_times = new_structure.process.test_time
+                old_cmd_times = old_structure.process.test_time
 
-            new_times = new_cmd_times['time'] if 0.0 in new_cmd_times['parsed'] else new_cmd_times['parsed']
-            old_times = old_cmd_times['time'] if 0.0 in old_cmd_times['parsed'] else old_cmd_times['parsed']
-            #new_times, new_structure = new_pf.valid_commit_run("New", container_name=new_sha)
-            #docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
-            
-            #old_times, old_structure = old_pf.valid_commit_run("Old", container_name=new_sha, docker_image=docker_image)
-            
+                new_times = new_cmd_times['time'] if 0.0 in new_cmd_times['parsed'] else new_cmd_times['parsed']
+                old_times = old_cmd_times['time'] if 0.0 in old_cmd_times['parsed'] else old_cmd_times['parsed']
+                #new_times, new_structure = new_pf.valid_commit_run("New", container_name=new_sha)
+                #docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
+                
+                #old_times, old_structure = old_pf.valid_commit_run("Old", container_name=new_sha, docker_image=docker_image)
+                
             yield new_times, old_times, new_structure, old_structure
+
         except Exception as e:
             logging.error(f"Commit pair test failed: {e}")
-            for struct in [new_structure, old_structure]:
-                try:
-                    if struct and struct.process:
-                        struct.process.docker.stop_container()
-                        logging.info(f"[{repo.full_name}] Stopped the container")
-                        break
-                except Exception as e:
-                    logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
-            
+            yield [], [], None, None
+
         finally:
             try:
                 if new_path.exists():
                     shutil.rmtree(new_path, onerror=self._on_rm_error)
                 if old_path.exists():
                     shutil.rmtree(old_path, onerror=self._on_rm_error)
-                # TODO: test
                 if old_path.parent.exists():
                     shutil.rmtree(old_path.parent, onerror=self._on_rm_error)
             except PermissionError as e:
                 logging.warning(f"[{repo}] Failed to delete {new_path} or {old_path}")
 
-            for struct in [new_structure, old_structure]:
-                try:
-                    if struct and struct.process:
-                        struct.process.docker.stop_container()
-                except Exception as e:
-                    logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
+            try:
+                if new_structure and new_structure.process and new_structure.process.docker.container:
+                    new_structure.process.docker.stop_container()
+                    logging.info(f"[{repo.full_name}] Stopped the container")
+                elif old_structure and old_structure.process and old_structure.process.docker.container:
+                    old_structure.process.docker.stop_container()
+                    logging.info(f"[{repo.full_name}] Stopped the container")
+            except Exception as e:
+                logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
+
                 
     def _on_rm_error(self, func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)
