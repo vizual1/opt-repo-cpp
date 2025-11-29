@@ -1,18 +1,18 @@
 WerWolv/ImHex | 38ef00548ad1e4ad2215f4a09af1de3a5567e336 | c78c8072e92c787bfb28f1b019d19026f093dd3d | issue
 WerWolv/ImHex | e0b4931a54f5be79d7b688e180c5fa6f4f8f718e | a587c5ff743321ad99906c1aec030cad46e6c2df | issue
-tesseract-ocr/tesseract | 64bcdce60755dcc9c32865308a4c195e99ff3e0f | f36c0d019be59cae3b96da0d89d870dbe83e9714 | issue
-tesseract-ocr/tesseract | 158c84522878b6780167353b04bae77b07102422 | 4333b2cea31b1a214812b179b6e64f5df326cf4f | issue
-SerenityOS/serenity | 787c439271240fe013739de142192d739226cc0d | c2a157118365f48c21c9cf71d8ae70bf4a87cc10 | issue
-SerenityOS/serenity | ea35a77eb8a37ac4e623146d5091b9526dfd9549 | a1882c37a9ab8679c5a7e895cb81fd7b62f665ea | issue
-SerenityOS/serenity | e8fe2f4ffeeb863bdb616a96ae36c0524a9a2f65 | 2a164dc923da2ebac45777c9b78986231524548d | issue
-SerenityOS/serenity | b1ee5c8738d6aac06ab78c8b7362454ce1cbe14d | 005bdd210aaf132fa1cecb450a124978bb5aa2e3 | issue
-SerenityOS/serenity | c30c6eb1c14ae7f72d05da6170e285d4bfc28c3f | 2046a670b3b12d77fcff35db372839b38debfb0e | issue
-SerenityOS/serenity | 1dd22582da24d02adca114b42062a1cbfda71eb1 | a3a6ee9865dde0c8b0ce4287d010029f1be511dc | issue
-SerenityOS/serenity | 48e4fb239a1466a8a89520abd7fb851963267c60 | fc519d43baaa926aae2213d5df526abd60b493e2 | issue
-SerenityOS/serenity | 1fd547bf0b6b1cad1314f71668c5efc066295613 | 33eea1f72293e711faeb774381ecdb23392dc260 | issue
-SerenityOS/serenity | 3f5eb6446ba2366eb091bfd35cfc416c672cd508 | 4bbf954ad037e456da48e71fe85dfbbfca84275f | issue
-SerenityOS/serenity | 9f8d518e829b1c0b35258f5124c9ca77bd974c88 | 71910983560e29c05d026c31b76ca593b27926fe | issue
-SerenityOS/serenity | a82c56f9f7eb19fa6ac8a09cb7845cf681006f47 | 0e900ca5df0aaf3350bf486ec8a4d86de9e2d21b | issue
+# tesseract-ocr/tesseract | 64bcdce60755dcc9c32865308a4c195e99ff3e0f | f36c0d019be59cae3b96da0d89d870dbe83e9714 | issue
+# tesseract-ocr/tesseract | 158c84522878b6780167353b04bae77b07102422 | 4333b2cea31b1a214812b179b6e64f5df326cf4f | issue
+# SerenityOS/serenity | 787c439271240fe013739de142192d739226cc0d | c2a157118365f48c21c9cf71d8ae70bf4a87cc10 | issue
+# SerenityOS/serenity | ea35a77eb8a37ac4e623146d5091b9526dfd9549 | a1882c37a9ab8679c5a7e895cb81fd7b62f665ea | issue
+# SerenityOS/serenity | e8fe2f4ffeeb863bdb616a96ae36c0524a9a2f65 | 2a164dc923da2ebac45777c9b78986231524548d | issue
+# SerenityOS/serenity | b1ee5c8738d6aac06ab78c8b7362454ce1cbe14d | 005bdd210aaf132fa1cecb450a124978bb5aa2e3 | issue
+# SerenityOS/serenity | c30c6eb1c14ae7f72d05da6170e285d4bfc28c3f | 2046a670b3b12d77fcff35db372839b38debfb0e | issue
+# SerenityOS/serenity | 1dd22582da24d02adca114b42062a1cbfda71eb1 | a3a6ee9865dde0c8b0ce4287d010029f1be511dc | issue
+# SerenityOS/serenity | 48e4fb239a1466a8a89520abd7fb851963267c60 | fc519d43baaa926aae2213d5df526abd60b493e2 | issue
+# SerenityOS/serenity | 1fd547bf0b6b1cad1314f71668c5efc066295613 | 33eea1f72293e711faeb774381ecdb23392dc260 | issue
+# SerenityOS/serenity | 3f5eb6446ba2366eb091bfd35cfc416c672cd508 | 4bbf954ad037e456da48e71fe85dfbbfca84275f | issue
+# SerenityOS/serenity | 9f8d518e829b1c0b35258f5124c9ca77bd974c88 | 71910983560e29c05d026c31b76ca593b27926fe | issue
+# SerenityOS/serenity | a82c56f9f7eb19fa6ac8a09cb7845cf681006f47 | 0e900ca5df0aaf3350bf486ec8a4d86de9e2d21b | issue
 keepassxreboot/keepassxc | 44b152eb70b44fa98b687574af3a442cef18872e | 16b3d32ca57d08216735c13824d80dcd06131967 | issue
 keepassxreboot/keepassxc | 41061cfde8067317d7b13363a5bcadfc9630db71 | d8da81d87caf0b2d297b6cbab0b9571ebdc203a9 | issue
 catchorg/Catch2 | 0c9fe16537cdda0deecf9a6d788358c380b9e174 | d02ea5adeecb094966ca09f80e027c9c3c11f502 | issue
