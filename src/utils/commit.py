@@ -54,7 +54,7 @@ class Commit:
             with open(path, 'r', errors='ignore') as f:
                 for line_no, line in enumerate(f, start=1):
                     stripped = line.strip()
-                    if not stripped:
+                    if not stripped or stripped.startswith("#"):
                         continue
 
                     parts = [p.strip() for p in stripped.split("|") if p.strip()]

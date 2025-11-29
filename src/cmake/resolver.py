@@ -212,11 +212,18 @@ class DependencyResolver:
             patterns = [
                 r"No package '([a-zA-Z0-9_\-\+\.]+)' found",
                 r"Could NOT find ([A-Za-z0-9_\-\+\.]+)",
+                r"Could not find ([A-Za-z0-9_\-\+\.]+), missing",
                 r"Could not find a package configuration file provided by \"([^\"]+)\"",
                 r"Could not find a configuration file for package \"([^\"]+)\"",
                 r"([A-Za-z0-9_\-\+\.]+)\s+package NOT found",
                 r"No module named ['\"]([^'\"]+)['\"]",
                 r"executable '([a-zA-Z0-9_\-\+\.]+)' not found",
+                r"Package '([a-zA-Z0-9_\-\+\.]+)'.*not found",
+                r"package '([^']+)' not found",
+                r"Dependency '([^']+)' is required but was not found",
+                r"Failed to find ([A-Za-z0-9_\-\+\.]+)",
+                r"Looking for ([A-Za-z0-9_\-\+\.]+) - not found",
+                r"Dependency ([A-Za-z0-9_\-\+\.]+) not found"
             ]
             missing = set()
             for pattern in patterns:

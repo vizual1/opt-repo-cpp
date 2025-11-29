@@ -43,7 +43,8 @@ class CMakeParser:
     def find_cmake_minimum_required(self) -> str:
         cmake_file: Path = Path(self.root, "CMakeLists.txt")
         root_function_calls: list[tuple[ast.FunctionCall, Path]] = self._find_all_function_calls([cmake_file]) 
-        cmake_minimum_calls, cf = self._find_function_calls(name="cmake_minimum_required", fcalls=root_function_calls)[0]
+        all_function_calls = self._find_function_calls(name="cmake_minimum_required", fcalls=root_function_calls)
+        cmake_minimum_calls, cf = all_function_calls[0] if 0 < len(all_function_calls) else ('', '')
         
         if not cmake_minimum_calls:
             logging.warning("No cmake_minimum_required found, using default 3.16")

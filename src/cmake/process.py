@@ -219,72 +219,76 @@ class CMakeProcess:
         return False
     
 
-    def _configure(self) -> bool:
-        cmd = [
-            'cmake', 
-            '-E', 'env', f'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
-            '--',
-            'cmake',
-            '-S', self.to_container_path(self.root), 
-            '-B', str(self.build_path).replace("\\", "/"), 
-            '-G', 'Ninja',
+    def _configure(self, commands: list[str] = []) -> bool:
+        if not commands:
+            cmd = [
+                'cmake', 
+                '-E', 'env', 
+                'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
+                'CMAKE_PREFIX_PATH=/opt/vcpkg/installed/x64-linux',
+                'LD_LIBRARY_PATH=/opt/vcpkg/installed/x64-linux/lib',
 
-            '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
-            #'-DVCPKG_MANIFEST_MODE=ON',
-            #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
-            #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
-            
-            '-DCMAKE_BUILD_TYPE=Debug',
-            '-DCMAKE_C_COMPILER=/usr/bin/clang',
-            '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
-            '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+                'cmake',
+                '-S', self.to_container_path(self.root), 
+                '-B', str(self.build_path).replace("\\", "/"), 
+                '-G', 'Ninja',
 
-            #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
-            #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
-            #'-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
-            '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
-            '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
+                '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
+                #'-DVCPKG_MANIFEST_MODE=ON',
+                #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
+                #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
+                
+                '-DCMAKE_BUILD_TYPE=Debug',
+                '-DCMAKE_C_COMPILER=/usr/bin/clang',
+                '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
+                '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
 
-            #'-DCMAKE_VERBOSE_MAKEFILE=ON',
-            #'-DCMAKE_FIND_DEBUG_MODE=ON',
-        ]
+                #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
+                #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
+                #'-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
+                '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
+                '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
 
-        for flag in self.flags:
-            if 'disable' in flag.lower():
-                cmd.append(f'-D{flag}=OFF')
-            else:
-                cmd.append(f'-D{flag}=ON')
+                #'-DCMAKE_VERBOSE_MAKEFILE=ON',
+                #'-DCMAKE_FIND_DEBUG_MODE=ON',
+            ]
 
-        for flag in self.other_flags:
-            cmd.append(flag)
-        
-        if self.package_manager.startswith("vcpkg"):
-            logging.info("Installing through package manager vcpkg...")
-            cmd.append('-DVCPKG_MANIFEST_MODE=ON')
-
-        elif self.package_manager.startswith("conanfile"):
-            try:
-                logging.info("Installing through package manager conan...")
-                install = ['conan', 'install', '.', '-build=missing'] 
-                exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
-                self.cmake_config_output.append(stdout)
-                if exit_code == 0:
-                    logging.info(f"Conan Output:\n{stdout}")
+            for flag in self.flags:
+                if 'disable' in flag.lower():
+                    cmd.append(f'-D{flag}=OFF')
                 else:
-                    if stdout: logging.error(f"Conan Output (stdout):\n{stdout}")
-                    if stderr: logging.error(f"Conan Error (stderr):\n{stderr}")
-                    return False
-            except Exception as e:
-                logging.error(f"Conan installation failed: {e}")
-                return False
+                    cmd.append(f'-D{flag}=ON')
         
-        self.commands.append(list(map(str, cmd)))
-        logging.info(" ".join(map(str, cmd)))
+            if self.package_manager.startswith("vcpkg"):
+                logging.info("Installing through package manager vcpkg...")
+                cmd.append('-DVCPKG_MANIFEST_MODE=ON')
+
+            elif self.package_manager.startswith("conanfile"):
+                try:
+                    logging.info("Installing through package manager conan...")
+                    install = ['conan', 'install', '.', '-build=missing'] 
+                    exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
+                    self.cmake_config_output.append(stdout)
+                    if exit_code == 0:
+                        logging.info(f"Conan Output:\n{stdout}")
+                    else:
+                        if stdout: logging.error(f"Conan Output (stdout):\n{stdout}")
+                        if stderr: logging.error(f"Conan Error (stderr):\n{stderr}")
+                        return False
+                except Exception as e:
+                    logging.error(f"Conan installation failed: {e}")
+                    return False
+        
+            logging.info(" ".join(map(str, cmd)))
+        else:
+            cmd = commands
+
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
 
         if exit_code == 0:
             logging.info(f"CMake Configuration successful for {self.build_path}")
             logging.debug(f"Output:\n{stdout}")
+            self.commands.append(list(map(str, cmd)))
             return True
         else:
             logging.error(f"CMake configuration failed for {self.build_path} (return code {exit_code})", exc_info=True)
@@ -292,6 +296,12 @@ class CMakeProcess:
             self.config_stderr = stderr
             if stdout: logging.error(f"Output (stdout):\n{stdout}")
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
+            if not commands:
+                for flag in self.other_flags:
+                    cmd.append(flag)
+                if "--" in stdout:
+                    cmd.remove("--")
+                return self._configure(cmd)
             return False
         
     def to_container_path(self, path: Path) -> str:
