@@ -233,7 +233,6 @@ class CMakeProcess:
                 '-B', str(self.build_path).replace("\\", "/"), 
                 '-G', 'Ninja',
 
-                '-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake',
                 #'-DVCPKG_MANIFEST_MODE=ON',
                 #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
                 #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
@@ -297,8 +296,9 @@ class CMakeProcess:
             if stdout: logging.error(f"Output (stdout):\n{stdout}")
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
             if not commands:
-                for flag in self.other_flags:
-                    cmd.append(flag)
+                cmd.append('-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake')
+                #for flag in self.other_flags:
+                #    cmd.append(flag)
                 if "--" in stdout and "--" in cmd:
                     cmd.remove("--")
                 return self._configure(cmd)

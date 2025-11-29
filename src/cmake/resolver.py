@@ -136,14 +136,10 @@ class DependencyResolver:
 
         logging.info(f"Installing {dep_name} via {method}...")
         try:
-            if self.container:
-                exit_code, output = self.container.exec_run(cmd)
-                logging.debug(output.decode(errors="ignore") if output else "")
-                return exit_code == 0
-            else:
-                subprocess.run(cmd, check=True)
-            logging.info(f"Installed {dep_name} via {method}")
-            return True
+            exit_code, output = self.container.exec_run(cmd)
+            if exit_code == 0: logging.info(f"Installed {dep_name} via {method}")
+            else: logging.info(output.decode(errors="ignore") if output else "")
+            return exit_code == 0
         except subprocess.CalledProcessError:
             logging.error(f"Failed to install {dep_name} via {method}")
         except FileNotFoundError:
