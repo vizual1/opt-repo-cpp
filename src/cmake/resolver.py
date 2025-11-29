@@ -221,7 +221,8 @@ class DependencyResolver:
                 r"Dependency '([^']+)' is required but was not found",
                 r"Failed to find ([A-Za-z0-9_\-\+\.]+)",
                 r"Looking for ([A-Za-z0-9_\-\+\.]+) - not found",
-                r"Dependency ([A-Za-z0-9_\-\+\.]+) not found"
+                r"Dependency ([A-Za-z0-9_\-\+\.]+) not found",
+                r"  ([A-Za-z0-9_\-\+\.]+) is required"
             ]
             missing = set()
             for pattern in patterns:

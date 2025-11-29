@@ -170,7 +170,7 @@ class CMakeProcess:
     
 ############### CONFIGURATION ###############
     
-    def _configure_with_retries(self, max_retries: int = 5) -> bool:
+    def _configure_with_retries(self, max_retries: int = 10) -> bool:
         save_dependencies = set()
         unresolved_dependencies: set[str] = set() 
 
@@ -241,7 +241,12 @@ class CMakeProcess:
                 '-DCMAKE_C_COMPILER=/usr/bin/clang',
                 '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-                '-DCMAKE_CXX_FLAGS=-Wno-error', # disable warnings as errors
+
+                # disable errors for warnings
+                '-DCMAKE_CXX_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
+                '-DCMAKE_C_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
+                '-DCMAKE_CXX_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
+                '-DCMAKE_C_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
 
                 #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
                 #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
@@ -367,11 +372,11 @@ class CMakeProcess:
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
-            if exit_code != 0:
-                logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
-                if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
-                if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
-                return False
+            #if exit_code != 0:
+            #    logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
+            #    if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+            #    if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+            #    return False
             logging.info(f"CTestTestfile.cmake output:\n{stdout}")
             test_exec |= set(self.analyzer.parse_ctest_file(stdout))
 
@@ -386,13 +391,15 @@ class CMakeProcess:
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
-            if exit_code != 0:
-                logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
-                if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
-                if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
-                return False
+            #if exit_code != 0:
+            #    logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
+            #    if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+            #    if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+            #    return False
             logging.info(f"{test_flag} output:\n{stdout}")
-            unit_tests[exe_path] = self.analyzer.find_unit_tests(stdout, framework)
+            tests = self.analyzer.find_unit_tests(stdout, framework)
+            if tests:
+                unit_tests[exe_path] = tests
 
         logging.debug(f"unit tests: {unit_tests}")
 

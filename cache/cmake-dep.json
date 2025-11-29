@@ -2875,12 +2875,10 @@
         }
     },
     "codecov": {
-        "apt": "codecov",
+        "apt": "",
         "vcpkg": "",
         "flags": {
-            "apt": [
-                "-DCODECOV_EXECUTABLE=/usr/bin/codecov"
-            ],
+            "apt": [],
             "vcpkg": []
         }
     },
@@ -7178,7 +7176,7 @@
     },
     "coreclrembed": {
         "apt": "",
-        "vcpkg": "coreclr",
+        "vcpkg": "coreclrembed",
         "flags": {
             "apt": [],
             "vcpkg": [
@@ -17438,6 +17436,14 @@
     "qt5quickwidgets": {
         "apt": "",
         "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
+    },
+    "vorbisfile": {
+        "apt": "libvorbis-dev",
+        "vcpkg": "libvorbis",
         "flags": {
             "apt": [],
             "vcpkg": []
