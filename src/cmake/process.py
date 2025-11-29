@@ -299,7 +299,7 @@ class CMakeProcess:
             if not commands:
                 for flag in self.other_flags:
                     cmd.append(flag)
-                if "--" in stdout:
+                if "--" in stdout and "--" in cmd:
                     cmd.remove("--")
                 return self._configure(cmd)
             return False
