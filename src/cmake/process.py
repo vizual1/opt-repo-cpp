@@ -241,7 +241,7 @@ class CMakeProcess:
                 '-DCMAKE_C_COMPILER=/usr/bin/clang',
                 '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-                '-DCMAKE_CXX_FLAGS=-Wno-error' # disable warnings as errors
+                '-DCMAKE_CXX_FLAGS=-Wno-error', # disable warnings as errors
 
                 #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
                 #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
