@@ -136,6 +136,8 @@ class DependencyResolver:
 
         logging.info(f"Installing {dep_name} via {method}...")
         try:
+            if method == "apt":
+                self.container.exec_run(["apt-get", "update"])
             exit_code, output = self.container.exec_run(cmd)
             if exit_code == 0: logging.info(f"Installed {dep_name} via {method}")
             else: logging.info(output.decode(errors="ignore") if output else "")
