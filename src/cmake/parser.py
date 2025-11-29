@@ -224,7 +224,7 @@ class CMakeParser:
     
     def parse_subdirs(self, text: str) -> list[str]:
         subdirs: list[str] = re.findall(r'subdirs\("([^"]+)"\)', text)
-        return [s.replace("\\", "/") for s in subdirs]
+        return [s.replace("\\", "/") for s in subdirs if "external" not in s and "third_party" not in s]
     
     def find_unit_tests(self, text: str, framework: str) -> list[str]:
         tests = []

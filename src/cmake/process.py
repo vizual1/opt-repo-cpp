@@ -241,6 +241,7 @@ class CMakeProcess:
                 '-DCMAKE_C_COMPILER=/usr/bin/clang',
                 '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+                '-DCMAKE_CXX_FLAGS=-Wno-error' # disable warnings as errors
 
                 #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
                 #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
@@ -340,8 +341,8 @@ class CMakeProcess:
             return False
         
         test_exec_flag = self.analyzer.get_list_test_arg()
-        if test_exec_flag and self._individual_tests_collection(test_exec_flag):
-            return True
+        if test_exec_flag and not self._individual_tests_collection(test_exec_flag):
+            return False
 
         self.commands.append(list(map(str, cmd)))
         return True
@@ -364,12 +365,12 @@ class CMakeProcess:
             path = str(self.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
             cmd = ["cat", f"{path}"]
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
             if exit_code != 0:
                 logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
-                if stderr: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
-                if stdout: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+                if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+                if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
                 return False
             logging.info(f"CTestTestfile.cmake output:\n{stdout}")
             test_exec |= set(self.analyzer.parse_ctest_file(stdout))
@@ -383,7 +384,7 @@ class CMakeProcess:
             cmd = [exe_path, test_flag]
             logging.info(' '.join(map(str, cmd)))
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=30
+                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
             if exit_code != 0:
                 logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
