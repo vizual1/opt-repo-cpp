@@ -125,8 +125,8 @@ class DockerTester:
                 if old_structure and old_structure.process:
                     new_test_cmd = new_structure.process.commands[2:]
                     old_test_cmd = old_structure.process.commands[2:]
-                    logging.debug(f"New test cmd: {new_test_cmd}")
-                    logging.debug(f"Old test cmd: {old_test_cmd}")
+                    logging.info(f"New cmd: {new_structure.process.commands}")
+                    logging.info(f"Old cmd: {old_structure.process.commands}")
                     assert len(new_test_cmd) == len(old_test_cmd)
 
                     warmup = self.config.testing.warmup
