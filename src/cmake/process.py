@@ -1,5 +1,5 @@
 
-import logging, subprocess, os, tempfile, json
+import logging, subprocess, tempfile, json
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.resolver import DependencyResolver
@@ -8,9 +8,6 @@ from typing import Optional, Union
 from src.core.docker.manager import DockerManager
 from src.config.config import Config
 from src.utils.permission import check_and_fix_path_permissions
-
-#vcpkg_pc = "/opt/vcpkg/installed/x64-linux/lib/pkgconfig"
-#os.environ["PKG_CONFIG_PATH"] = f"{vcpkg_pc}:{os.environ.get('PKG_CONFIG_PATH','')}"
 
 class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
@@ -156,9 +153,9 @@ class CMakeProcess:
 
     def build(self) -> bool:
         if self.package_manager:
-            return self._configure() and self._build()
+            return self._configure() #and self._build()
         else:
-            return self._configure_with_retries() and self._build()
+            return self._configure_with_retries() #and self._build()
     
     #def test(self, warmup: int = 0, test_repeat: int = 1, no_run: bool = False) -> bool:
     #    return self._ctest(warmup, test_repeat, no_run)
@@ -193,7 +190,8 @@ class CMakeProcess:
             missing_dependencies = self.resolver.package_handler.get_missing_dependencies(
                 self.config_stdout, 
                 self.config_stderr, 
-
+                self.build_stdout,
+                self.build_stderr,
                 Path(self.build_path) / "CMakeCache.txt"
             )
 
@@ -238,6 +236,7 @@ class CMakeProcess:
                 #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
                 
                 '-DCMAKE_BUILD_TYPE=Debug',
+                #'-DCMAKE_BUILD_TYPE=RelWithDebInfo',
                 #'-DCMAKE_C_COMPILER=/usr/bin/clang',
                 #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
@@ -293,8 +292,6 @@ class CMakeProcess:
         if exit_code == 0:
             logging.info(f"CMake Configuration successful for {self.build_path}")
             logging.debug(f"Output:\n{stdout}")
-            self.commands.append(list(map(str, cmd)))
-            return True
         else:
             logging.error(f"CMake configuration failed for {self.build_path} (return code {exit_code})", exc_info=True)
             self.config_stdout = stdout
@@ -307,8 +304,20 @@ class CMakeProcess:
                     cmd.append(flag)
                 if "--" in stdout and "--" in cmd:
                     cmd.remove("--")
+                # Try system packages first, fall back to fetch
+                cmd.append('-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=OPTIONAL')
+                cmd.append('-DFETCHCONTENT_UPDATES_DISCONNECTED=ON') # don't update
+                cmd.append('-DFETCHCONTENT_FULLY_DISCONNECTED=OFF') # allow downloads
                 return self._configure(cmd)
             return False
+        
+        if not self._build():
+            cmd.append('-DCMAKE_CXX_STANDARD=14')
+            cmd.append('-DCMAKE_CXX_STANDARD_REQUIRED=ON')
+            return self._configure(cmd)
+        
+        self.commands.append(list(map(str, cmd)))
+        return True
         
     def to_container_path(self, path: Path) -> str:
         rel = path.relative_to(self.root.parent)

@@ -1,9 +1,29 @@
-xtensor-stack/xsimd | 59c407d500534db7299c7b6e3ae9c92fe6cba561 | be9dcb5df413a893fb6646fa950eeb4aeac70ffc
-WerWolv/ImHex | 38ef00548ad1e4ad2215f4a09af1de3a5567e336 | c78c8072e92c787bfb28f1b019d19026f093dd3d | issue
-WerWolv/ImHex | e0b4931a54f5be79d7b688e180c5fa6f4f8f718e | a587c5ff743321ad99906c1aec030cad46e6c2df | issue
-tesseract-ocr/tesseract | 64bcdce60755dcc9c32865308a4c195e99ff3e0f | f36c0d019be59cae3b96da0d89d870dbe83e9714 | issue
-tesseract-ocr/tesseract | 158c84522878b6780167353b04bae77b07102422 | 4333b2cea31b1a214812b179b6e64f5df326cf4f | issue
-# SerenityOS/serenity | 787c439271240fe013739de142192d739226cc0d | c2a157118365f48c21c9cf71d8ae70bf4a87cc10 | issue
+gabime/spdlog | bd5a81df7092c899b63c3f1bc3792a5f97113cc4 | 4accce5d7b57c268ea37e566a268e51a485b8581
+skypjack/entt | e3c21e1f3dca73142336b4979d77a5b61d1dae7d | e012250e0a89ddbef1291cc9ab1d3954880603ee | issue
+nfrechette/acl | f73dbeb2dfb04ae2d2df06c4f3aa0636adaa8441 | 65604fafb94a53588ac79893dea4454f880fd4d5
+nfrechette/acl | 8fa3d5848238c30120e52c2814ce4b75315de6b9 | 9ed5fc4a3d023a7e9c73d5cee762cc079112852c
+google/highway | 1b71e47818292cdd9406dca1048a237f79ca9f45 | 01361d52cd637a3f3c1394c5090798e186900271
+google/highway | 4a2426f0143720ad7985bddd25635738631001b9 | bc2aa5ca851d1dbcdd3d3f36cebeedd2f16e6bfb
+SOCI/soci | 924d990f8f4b253e9f7897c92dccfd4c814f569e | 3a8b61a58e56e6848a276f1c85cbee4b2ceedab4
+taocpp/PEGTL | 2644f514ff0b4cf21168851dd1a39b780e794b68 | 268f23e93d297587c941aef63a1e1be052c26af0
+# works: xtensor-stack/xsimd | 59c407d500534db7299c7b6e3ae9c92fe6cba561 | be9dcb5df413a893fb6646fa950eeb4aeac70ffc
+xtensor-stack/xsimd | cc14c23d38f9276db340640786ed6e3359fbec19 | e036691f39802714c8b3a5cd7f6a849923e07c1e
+xtensor-stack/xsimd | 13b5243a173b8d55dea7285f49c5d3b02958e418 | 45c0640f30e81c80ae9ac072bcadf61105832dd0
+xtensor-stack/xsimd | 23a95d8c7b78cce0af82eaffe5e3ec58d82d0b13 | 1e5e9dc95a9a34c7f54fda61b05c9e925b37f183
+xtensor-stack/xsimd | 03715d95ba0f6f074cd4654437a0b4db866176e7 | 437082f56e66ebf32b701673176e7adc5bd6bc8f
+xtensor-stack/xsimd | 36aef0105ec605ae494de7e07a80bd29b696be39 | d7b0765afeb088d576b0ea9724139d30d633b1fe
+xtensor-stack/xsimd | 7d1778c3b38d63db7cec7145d939f40bc5d859d1 | 202064d8a4e7f41684bfd91a5bed88cb54aa0ed9
+xtensor-stack/xsimd | 729a97a86b13fd6d3a30aed1f91add1a1a16d20e | 42e5c4846d0585d9ff165a255ead1973bd16bbfc
+xtensor-stack/xsimd | 76e9d8be497a93b1e11cb8875caf03e820b5a3f7 | 249ecd861995588b95a1cb94ebf3297e7b7d79ee
+xtensor-stack/xsimd | 73989d9def28a29cb33da6702f6ece98bc87b0e4 | 7a38b27bda465458a7c484173a624c11be29919d
+xtensor-stack/xsimd | 90aafebbafb004d8d85ddce6284eee28cea7b805 | ed2277391b5d4741a137da5499ecf8be60c11eb9
+yhirose/cpp-peglib | 47616ca781a77556e9e36383e00b5eb961322674 | 5ff1caf38c2349b8d7bbaa794130e19430b01347
+yhirose/cpp-peglib | da8cae626985e19aef126fda33eb700fdab65f34 | 88c67cba4fbe9ba9aa0f9737b560da41c5e5f55c
+# no ctest: tesseract-ocr/tesseract | 64bcdce60755dcc9c32865308a4c195e99ff3e0f | f36c0d019be59cae3b96da0d89d870dbe83e9714 | issue
+# no ctest: tesseract-ocr/tesseract | 158c84522878b6780167353b04bae77b07102422 | 4333b2cea31b1a214812b179b6e64f5df326cf4f | issue
+# no tests: WerWolv/ImHex | 38ef00548ad1e4ad2215f4a09af1de3a5567e336 | c78c8072e92c787bfb28f1b019d19026f093dd3d | issue
+# ctest failed: WerWolv/ImHex | e0b4931a54f5be79d7b688e180c5fa6f4f8f718e | a587c5ff743321ad99906c1aec030cad46e6c2df | issue
+# CMAKE_BUILD_TYPE - don't use: SerenityOS/serenity | 787c439271240fe013739de142192d739226cc0d | c2a157118365f48c21c9cf71d8ae70bf4a87cc10 | issue
 # SerenityOS/serenity | ea35a77eb8a37ac4e623146d5091b9526dfd9549 | a1882c37a9ab8679c5a7e895cb81fd7b62f665ea | issue
 # SerenityOS/serenity | e8fe2f4ffeeb863bdb616a96ae36c0524a9a2f65 | 2a164dc923da2ebac45777c9b78986231524548d | issue
 # SerenityOS/serenity | b1ee5c8738d6aac06ab78c8b7362454ce1cbe14d | 005bdd210aaf132fa1cecb450a124978bb5aa2e3 | issue
@@ -16,8 +36,8 @@ tesseract-ocr/tesseract | 158c84522878b6780167353b04bae77b07102422 | 4333b2cea31
 # SerenityOS/serenity | a82c56f9f7eb19fa6ac8a09cb7845cf681006f47 | 0e900ca5df0aaf3350bf486ec8a4d86de9e2d21b | issue
 keepassxreboot/keepassxc | 44b152eb70b44fa98b687574af3a442cef18872e | 16b3d32ca57d08216735c13824d80dcd06131967 | issue
 keepassxreboot/keepassxc | 41061cfde8067317d7b13363a5bcadfc9630db71 | d8da81d87caf0b2d297b6cbab0b9571ebdc203a9 | issue
-catchorg/Catch2 | 0c9fe16537cdda0deecf9a6d788358c380b9e174 | d02ea5adeecb094966ca09f80e027c9c3c11f502 | issue
-catchorg/Catch2 | 912df7df354fd6c814b5d7c45ac44f494a5fb5fe | 931f41b4d62bb572216c958899258e6d0b592f25 | issue
+# no tests: catchorg/Catch2 | 0c9fe16537cdda0deecf9a6d788358c380b9e174 | d02ea5adeecb094966ca09f80e027c9c3c11f502 | issue
+# no tests: catchorg/Catch2 | 912df7df354fd6c814b5d7c45ac44f494a5fb5fe | 931f41b4d62bb572216c958899258e6d0b592f25 | issue
 Tencent/rapidjson | b16cec1a1aff158f5002250139528cf8a4b413d8 | 98f52b6bb001a546968fbded3cbd6f3390bcdb41 | issue
 OpenRCT2/OpenRCT2 | 1e6a84cbfe8185c1e38e89bc64b949315ce403a8 | bb41d0022f4f6d2a1a8e5415faf4a2f0dfaedf32 | issue
 OpenRCT2/OpenRCT2 | 8f1e4d15377b874bcf3dccf56c6d01a22081c749 | bb41d0022f4f6d2a1a8e5415faf4a2f0dfaedf32 | issue
@@ -30,4 +50,14 @@ hrydgard/ppsspp | 7a7117f2f70b715df6b3cc0e1829de3e9247b571 | c1df1868fb4220839f2
 hrydgard/ppsspp | adda49d05d1091decb8832259f0ca4e9e085f143 | 5a39ad31b98afa506080731c2b3eb55b04b5ef30 | issue
 hrydgard/ppsspp | 78f3d450fff71ee9e240173dc64e2e599d62f347 | 5ce43215b9884472f807f971d765c355e92b3520 | issue
 hrydgard/ppsspp | 51686f4936f7547cf6f1cfe686c2a5993587e8b2 | 0e780be5393b8b00af8595b25061deb7b7555015 | issue
-skypjack/entt | e3c21e1f3dca73142336b4979d77a5b61d1dae7d | e012250e0a89ddbef1291cc9ab1d3954880603ee | issue
+CleverRaven/Cataclysm-DDA | 0e7ff3dbb9a660793c861a7b3b93bd3f3b291a42 | 0e820db80fb418f384f8b59f65c4482f0be47afa | issue
+CleverRaven/Cataclysm-DDA | be4edcddb705306a8eb493de255a97926f43a0f4 | 719f8ea2fee916677f87245f16209067c276f4b5 | issue
+CleverRaven/Cataclysm-DDA | 1487a7bcf96a5b95ab6d80d82a47a9afd8095cd4 | 894002bd18a9be3d38442913f4db79391916a15e | issue
+manticoresoftware/manticoresearch | 8d7ead6ea01ca3a7c0be1b3292bde4f488a53e52 | 48091e4b2bfedc2f5b7239107c20f68de404a74c | issue
+manticoresoftware/manticoresearch | e722deb3d966e1303fe6cc954af621f5bf6b6cd8 | b57bf9d8fc7c0699acd8fcb14e23c1797abcfa15 | issue
+manticoresoftware/manticoresearch | 5f6b82ba66242351300b1b85763ac4b0931016a5 | 8d327b4103c785d1be8ded39907c866ee70ef32e | issue
+manticoresoftware/manticoresearch | d77b8323f85145c0b644278265c93a023ce96cb5 | 5eaf99a556f93b8afdf1b7de97b345984405d9f5 | issue
+manticoresoftware/manticoresearch | ff90ea21bc78b0951de4f17910f22851ec86f205 | c055dd8bb5150ad64e3547984d7c2090678b0d69 | issue
+manticoresoftware/manticoresearch | 696f8649535f2b5285b878c9581c0d2b1139ae09 | ffaabf79449fa4fb1a933df5708618cccbaaae30 | issue
+TrinityCore/TrinityCore | ee7b0e82fa076ad4338b1c362235cec6739f00e0 | 3dbd17139995902420aac9da09cbeae6b3de0bc0 | issue
+bpftrace/bpftrace | 1f263cd4dfb68da5febd32177737c4ae17075d00 | 23c45d5094393336505c360cfc0b864d5c503fe8 | issue

@@ -62,6 +62,6 @@ DOCKER_IMAGE_MAP = {
     "ubuntu:24.04": "cpp24",
     "ubuntu:22.04": "cpp22",
     "ubuntu:20.04": "cpp20",
-    "ubuntu:18.04": "cpp18",
-    "ubuntu:16.04": "cpp18"
+    "ubuntu:18.04": "cpp20",
+    "ubuntu:16.04": "cpp20"
 }

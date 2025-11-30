@@ -1158,7 +1158,7 @@
         }
     },
     "ffmpeg": {
-        "apt": "ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev",
+        "apt": ["ffmpeg", "libavcodec-dev", "libavformat-dev", "libavutil-dev" , "libswscale-dev"],
         "vcpkg": "ffmpeg",
         "flags": {
             "apt": [
@@ -17454,6 +17454,17 @@
         "vcpkg": "",
         "flags": {
             "apt": [],
+            "vcpkg": []
+        }
+    },
+    "argon2": {
+        "apt": "libargon2-0-dev",
+        "vcpkg": "",
+        "flags": {
+            "apt": [
+                "-DARGON2_INCLUDE_DIR=/usr/include",
+                "-DARGON2_LIBRARIES=/usr/lib/x86_64-linux-gnu/libargon2.so"
+            ],
             "vcpkg": []
         }
     }

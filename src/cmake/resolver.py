@@ -191,7 +191,7 @@ class DependencyResolver:
     
 
     class PackageHandler:
-        def get_missing_dependencies(self, stdout: str, stderr: str, cache_path: Path) -> set[str]:
+        def get_missing_dependencies(self, stdout: str, stderr: str, build_out: str, build_err: str, cache_path: Path) -> set[str]:
             if not cache_path.exists():
                 logging.warning("No CMakeCache.txt found, skipping")
             
@@ -199,6 +199,7 @@ class DependencyResolver:
             logging.info(f"Missing caches: {missing_cache}")
             missing_pkgconfig = self._find_pkgconfig_missing(stdout, stderr)
             logging.info(f"Missing packages: {missing_pkgconfig}")
+            missing_build = self._find_file_missing(build_out, build_err)
 
             return missing_cache | missing_pkgconfig
 
@@ -233,7 +234,8 @@ class DependencyResolver:
                 r"Failed to find ([A-Za-z0-9_\-\+\.]+)",
                 r"Looking for ([A-Za-z0-9_\-\+\.]+) - not found",
                 r"Dependency ([A-Za-z0-9_\-\+\.]+) not found",
-                r"  ([A-Za-z0-9_\-\+\.]+) is required"
+                r"  ([A-Za-z0-9_\-\+\.]+) is required",
+                r'([A-Z0-9_]+)_(?:INCLUDE_DIR|LIBRARIES)-NOTFOUND'
             ]
             missing = set()
             for pattern in patterns:
@@ -241,6 +243,17 @@ class DependencyResolver:
                 missing.update(re.findall(pattern, stderr))
             return missing
         
+        def _find_file_missing(self, stdout, stderr):
+            patterns = [
+                r"fatal error:\s+([\w_]+)\.h:\s+No such file or directory",
+                r"fatal error:\s+([\w_/]+)\.h:\s+No such file or directory",
+                r"cannot find -l([\w_]+)"
+            ]
+            missing = set()
+            for pattern in patterns:
+                missing.update(re.findall(pattern, stdout))
+                missing.update(re.findall(pattern, stderr))
+            return missing
     
     class LLMResolver:
         def __init__(self, config: Config):
