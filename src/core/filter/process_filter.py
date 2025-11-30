@@ -80,7 +80,7 @@ class ProcessFilter:
         if structure.process:
             process = structure.process
             try:
-                if not process.test(command, has_list_args):
+                if not process.test(command, has_list_args) and not process.test(["ninja", "test"], has_list_args):
                     logging.error(f"[{self.repo.full_name}] {msg} test failed ({self.sha})")
                     process.docker.stop_container()
                     return False

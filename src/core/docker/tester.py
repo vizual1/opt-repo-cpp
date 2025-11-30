@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, Optional, Any
 from github.Repository import Repository
+from src.utils.exceptions import TestFailed
 
 class DockerTester:
     def __init__(self, config: Config):
@@ -125,8 +126,8 @@ class DockerTester:
                 if old_structure and old_structure.process:
                     new_test_cmd = new_structure.process.commands[2:]
                     old_test_cmd = old_structure.process.commands[2:]
-                    logging.info(f"New cmd: {new_structure.process.commands}")
-                    logging.info(f"Old cmd: {old_structure.process.commands}")
+                    logging.debug(f"New cmd: {new_structure.process.commands}")
+                    logging.debug(f"Old cmd: {old_structure.process.commands}")
                     assert len(new_test_cmd) == len(old_test_cmd)
 
                     warmup = self.config.testing.warmup
@@ -143,7 +144,7 @@ class DockerTester:
 
                             for label, cmd, structure, pf in order:
                                 if not pf.test_run(label, cmd, structure, has_list_args):
-                                    yield [], [], None, None
+                                    raise TestFailed()
 
                     new_cmd_times = new_structure.process.test_time
                     old_cmd_times = old_structure.process.test_time
@@ -156,6 +157,10 @@ class DockerTester:
                     #old_times, old_structure = old_pf.valid_commit_run("Old", container_name=new_sha, docker_image=docker_image)
                     
             yield new_times, old_times, new_structure, old_structure
+
+        except TestFailed:
+            logging.error("Test failed early, stopping the test loops.")
+            yield [], [], None, None
 
         except Exception as e:
             logging.error(f"Commit pair test failed: {e}")
@@ -182,7 +187,6 @@ class DockerTester:
             except Exception as e:
                 logging.warning(f"[{repo.full_name}] Failed to stop container: {e}")
 
-                
     def _on_rm_error(self, func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)
         func(path)
@@ -252,4 +256,3 @@ class DockerTester:
         docker = DockerManager(self.config, mount_dir, docker_image, self.config.testing.docker_test_dir)
         docker.start_docker_container(docker_image)
 
-    

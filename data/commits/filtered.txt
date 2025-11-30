@@ -1,7 +1,7 @@
-WerWolv/ImHex | 38ef00548ad1e4ad2215f4a09af1de3a5567e336 | c78c8072e92c787bfb28f1b019d19026f093dd3d | issue
+# no tests: WerWolv/ImHex | 38ef00548ad1e4ad2215f4a09af1de3a5567e336 | c78c8072e92c787bfb28f1b019d19026f093dd3d | issue
 WerWolv/ImHex | e0b4931a54f5be79d7b688e180c5fa6f4f8f718e | a587c5ff743321ad99906c1aec030cad46e6c2df | issue
-# tesseract-ocr/tesseract | 64bcdce60755dcc9c32865308a4c195e99ff3e0f | f36c0d019be59cae3b96da0d89d870dbe83e9714 | issue
-# tesseract-ocr/tesseract | 158c84522878b6780167353b04bae77b07102422 | 4333b2cea31b1a214812b179b6e64f5df326cf4f | issue
+# no ctest: tesseract-ocr/tesseract | 64bcdce60755dcc9c32865308a4c195e99ff3e0f | f36c0d019be59cae3b96da0d89d870dbe83e9714 | issue
+# no ctest: tesseract-ocr/tesseract | 158c84522878b6780167353b04bae77b07102422 | 4333b2cea31b1a214812b179b6e64f5df326cf4f | issue
 # SerenityOS/serenity | 787c439271240fe013739de142192d739226cc0d | c2a157118365f48c21c9cf71d8ae70bf4a87cc10 | issue
 # SerenityOS/serenity | ea35a77eb8a37ac4e623146d5091b9526dfd9549 | a1882c37a9ab8679c5a7e895cb81fd7b62f665ea | issue
 # SerenityOS/serenity | e8fe2f4ffeeb863bdb616a96ae36c0524a9a2f65 | 2a164dc923da2ebac45777c9b78986231524548d | issue
