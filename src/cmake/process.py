@@ -243,10 +243,10 @@ class CMakeProcess:
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
 
                 # disable errors for warnings
-                '-DCMAKE_CXX_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
-                '-DCMAKE_C_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
-                '-DCMAKE_CXX_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
-                '-DCMAKE_C_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
+                #'-DCMAKE_CXX_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
+                #'-DCMAKE_C_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
+                #'-DCMAKE_CXX_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
+                #'-DCMAKE_C_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
 
                 #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
                 #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
@@ -302,9 +302,9 @@ class CMakeProcess:
             if stdout: logging.error(f"Output (stdout):\n{stdout}")
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
             if not commands:
-                cmd.append('-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake')
-                #for flag in self.other_flags:
-                #    cmd.append(flag)
+                #cmd.append('-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake')
+                for flag in self.other_flags:
+                    cmd.append(flag)
                 if "--" in stdout and "--" in cmd:
                     cmd.remove("--")
                 return self._configure(cmd)
@@ -321,7 +321,6 @@ class CMakeProcess:
         if self.jobs > 0:
             cmd += ['-j', str(self.jobs)]
 
-        self.commands.append(list(map(str, cmd)))
         logging.info(" ".join(map(str, cmd)))
 
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
@@ -329,6 +328,7 @@ class CMakeProcess:
         if exit_code == 0:
             logging.info(f"CMake build completed for {self.root}")
             logging.debug(f"Output:\n{stdout}")
+            self.commands.append(list(map(str, cmd)))
             return True
         else:
             logging.error(f"CMake build failed for {self.root} (return code {exit_code})", exc_info=True)
@@ -349,11 +349,12 @@ class CMakeProcess:
         if test_exec_flag and not self._individual_tests_collection(test_exec_flag):
             return False
 
-        self.commands.append(list(map(str, cmd)))
+        if len(self.commands) == 2: # only configuration and build commands
+            self.commands.append(list(map(str, cmd)))
         return True
 
 
-    def _individual_tests_collection(self, test_exec_flag: list[tuple[str, str]]):
+    def _individual_tests_collection(self, test_exec_flag: list[tuple[str, str]]) -> bool:
         framework, test_flag = test_exec_flag[0]
 
         path = str(self.docker_test_dir / self.test_path / 'CTestTestfile.cmake').replace("\\", "/")
@@ -362,7 +363,7 @@ class CMakeProcess:
             cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
         )
 
-        logging.info(f"CTestTestfile.cmake output:\n{stdout}")
+        logging.debug(f"CTestTestfile.cmake output:\n{stdout}")
         test_exec: set[str] = set(self.analyzer.parse_ctest_file(stdout))
 
         subdirs = self.analyzer.parse_subdirs(stdout)
@@ -382,7 +383,7 @@ class CMakeProcess:
 
         if not test_exec:
             logging.info("No test executables found.")
-            return False
+        #    return False
 
         unit_tests: dict[str, list[str]] = {}
         for exe_path in test_exec:
@@ -405,7 +406,7 @@ class CMakeProcess:
 
         if not unit_tests:
             logging.info("No unit tests found.")
-            return False
+            #return False
 
         for exe_path, test_names in unit_tests.items():
             for test_name in test_names:
@@ -421,13 +422,13 @@ class CMakeProcess:
 
     def _single_test_collection(self, exe_path: str, framework: str, test_name: str) -> list[str]:
         if framework == "gtest":
-            cmd = [f"{exe_path}", f"--gtest_filter={test_name}"]
+            cmd = [f"{exe_path}", f"--gtest_filter={test_name}", "--gtest_print_time"]
         elif framework == "catch":
             cmd = [f"{exe_path}", f"\"{test_name}\"", "--durations", "yes"]
         elif framework == "doctest":
             cmd = [f"{exe_path}", f"--test-case={test_name}"]
         elif framework == "boost":
-            cmd = [f"{exe_path}", f"--run_test={test_name}"]
+            cmd = [f"{exe_path}", f"--run_test={test_name}", "--log_level=test_suite", "--report_level=detailed"]
         elif framework == "qt":
             cmd = [f"{exe_path}", f"\"{test_name}\""]
         else:

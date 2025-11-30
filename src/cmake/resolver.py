@@ -1,6 +1,5 @@
 import json, logging, subprocess, re, threading, jsonschema
-import src.config as conf
-from typing import Any
+from typing import Any, Union, Optional
 from pathlib import Path
 from src.llm.prompt import Prompt
 from src.llm.openai import OpenRouterLLM
@@ -14,8 +13,18 @@ LLM_DEP_SCHEMA = {
         "^.+$": {
             "type": "object",
             "properties": {
-                "vcpkg": {"type": "string"},
-                "apt": {"type": "string"},
+                "vcpkg": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}}
+                    ]
+                },
+                "apt": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "array", "items": {"type": "string"}}
+                    ]
+                },
                 "flags": {
                     "type": "object",
                     "properties": {
@@ -105,7 +114,7 @@ class DependencyResolver:
 
         return unresolved, flags
         
-    def resolve(self, dep_name: str) -> dict[str, Any]:
+    def resolve(self, dep_name: str) -> dict[str, Union[str, list[str]]]:
         if dep_name in self.cache.mapping:
             return self.cache.mapping[dep_name]
         else:
@@ -124,14 +133,16 @@ class DependencyResolver:
         
     def install(self, dep_name: str, method: str) -> bool:
         info = self.resolve(dep_name)
-        pkg_name = info.get(method)
-        if not pkg_name:
+        pkg_names: Optional[Union[str, list[str]]] = info.get(method)
+        if not pkg_names:
             logging.warning(f"{method} mapping for {dep_name} is missing or empty.")
             return False
 
+        pkg_names = [pkg_names] if isinstance(pkg_names, str) else pkg_names
+        
         cmd = {
-            "vcpkg": ["/opt/vcpkg/vcpkg", "install", pkg_name],
-            "apt": ["apt-get", "install", "-y", pkg_name]
+            "vcpkg": ["/opt/vcpkg/vcpkg", "install"] + pkg_names,
+            "apt": ["apt-get", "install", "-y"] + pkg_names
         }[method]
 
         logging.info(f"Installing {dep_name} via {method}...")

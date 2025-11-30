@@ -1076,7 +1076,7 @@
         }
     },
     "x11": {
-        "apt": "libx11-dev",
+        "apt": ["libx11-dev", "libxi-dev", "libxtst-dev"],
         "vcpkg": "libx11",
         "flags": {
             "apt": [
