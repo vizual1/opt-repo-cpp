@@ -142,7 +142,8 @@ class DockerTester:
                             random.shuffle(order)
 
                             for label, cmd, structure, pf in order:
-                                pf.test_run(label, cmd, structure, has_list_args)
+                                if not pf.test_run(label, cmd, structure, has_list_args):
+                                    yield [], [], None, None
 
                     new_cmd_times = new_structure.process.test_time
                     old_cmd_times = old_structure.process.test_time

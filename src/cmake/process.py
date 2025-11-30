@@ -238,8 +238,8 @@ class CMakeProcess:
                 #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
                 
                 '-DCMAKE_BUILD_TYPE=Debug',
-                '-DCMAKE_C_COMPILER=/usr/bin/clang',
-                '-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
+                #'-DCMAKE_C_COMPILER=/usr/bin/clang',
+                #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
 
                 # disable errors for warnings
@@ -251,8 +251,8 @@ class CMakeProcess:
                 #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
                 #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
                 #'-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
-                '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
-                '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
+                #'-DCMAKE_C_COMPILER_LAUNCHER=ccache',
+                #'-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
 
                 #'-DCMAKE_VERBOSE_MAKEFILE=ON',
                 #'-DCMAKE_FIND_DEBUG_MODE=ON',
@@ -378,7 +378,7 @@ class CMakeProcess:
             #    if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
             #    if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
             #    return False
-            logging.info(f"CTestTestfile.cmake output:\n{stdout}")
+            logging.debug(f"CTestTestfile.cmake output:\n{stdout}")
             test_exec |= set(self.analyzer.parse_ctest_file(stdout))
 
         if not test_exec:

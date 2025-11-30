@@ -17448,5 +17448,13 @@
             "apt": [],
             "vcpkg": []
         }
+    },
+    "asciidoctor": {
+        "apt": "asciidoctor",
+        "vcpkg": "",
+        "flags": {
+            "apt": [],
+            "vcpkg": []
+        }
     }
 }
