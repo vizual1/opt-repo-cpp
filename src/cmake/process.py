@@ -222,16 +222,16 @@ class CMakeProcess:
     def _configure(self, commands: list[str] = []) -> bool:
         if not commands:
             cmd = [
-                'cmake', 
-                '-E', 'env', 
-                'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
-                'CMAKE_PREFIX_PATH=/opt/vcpkg/installed/x64-linux',
-                'LD_LIBRARY_PATH=/opt/vcpkg/installed/x64-linux/lib',
+                #'cmake', 
+                #'-E', 'env', 
+                #'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
+                #'CMAKE_PREFIX_PATH=/opt/vcpkg/installed/x64-linux',
+                #'LD_LIBRARY_PATH=/opt/vcpkg/installed/x64-linux/lib',
 
                 'cmake',
                 '-S', self.to_container_path(self.root), 
                 '-B', str(self.build_path).replace("\\", "/"), 
-                '-G', 'Ninja',
+                #'-G', 'Ninja',
 
                 #'-DVCPKG_MANIFEST_MODE=ON',
                 #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
@@ -267,7 +267,7 @@ class CMakeProcess:
             if self.package_manager.startswith("vcpkg"):
                 logging.info("Installing through package manager vcpkg...")
                 cmd.append('-DVCPKG_MANIFEST_MODE=ON')
-
+            """
             elif self.package_manager.startswith("conanfile"):
                 try:
                     logging.info("Installing through package manager conan...")
@@ -283,7 +283,7 @@ class CMakeProcess:
                 except Exception as e:
                     logging.error(f"Conan installation failed: {e}")
                     return False
-        
+            """
             logging.info(" ".join(map(str, cmd)))
         else:
             cmd = commands
@@ -366,6 +366,7 @@ class CMakeProcess:
         logging.debug(f"CTestTestfile.cmake output:\n{stdout}")
         test_exec: set[str] = set(self.analyzer.parse_ctest_file(stdout))
 
+        # collect path from subdirs(path) in CTestTestfile.cmake files
         subdirs = self.analyzer.parse_subdirs(stdout)
         for subdir in subdirs:
             path = str(self.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
@@ -373,18 +374,13 @@ class CMakeProcess:
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
-            #if exit_code != 0:
-            #    logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
-            #    if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
-            #    if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
-            #    return False
             logging.debug(f"CTestTestfile.cmake output:\n{stdout}")
             test_exec |= set(self.analyzer.parse_ctest_file(stdout))
 
         if not test_exec:
             logging.info("No test executables found.")
-        #    return False
 
+        # collect all the unit tests on the exe_path
         unit_tests: dict[str, list[str]] = {}
         for exe_path in test_exec:
             cmd = [exe_path, test_flag]
@@ -392,11 +388,6 @@ class CMakeProcess:
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
-            #if exit_code != 0:
-            #    logging.error(f"Isolated CTest timeout (return code {exit_code})", exc_info=True)
-            #    if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
-            #    if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
-            #    return False
             logging.info(f"{test_flag} output:\n{stdout}")
             tests = self.analyzer.find_unit_tests(stdout, framework)
             if tests:
@@ -406,8 +397,8 @@ class CMakeProcess:
 
         if not unit_tests:
             logging.info("No unit tests found.")
-            #return False
 
+        # single test run via specific framework and exe_path
         for exe_path, test_names in unit_tests.items():
             for test_name in test_names:
                 self.per_test_times[test_name] = {"parsed": [], "time": []}

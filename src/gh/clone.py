@@ -25,27 +25,30 @@ class GitHandler:
             logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
             try:
                 subprocess.run(
+                    ["git", "clone", url, repo_path],
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+
+                subprocess.run(
                     ["git", "config", "--local", "safe.directory", str(repo_path)],
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
+
                 subprocess.run(
-                    ["git", "clone", "--depth=1", url, repo_path],
-                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                )
-                subprocess.run(
-                    ["git", "fetch", "--depth=1", "origin", sha],
+                    ["git", "fetch", "origin", sha],
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
+
                 subprocess.run(
                     ["git", "checkout", sha],
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-                
+
                 subprocess.run(
-                    ["git", "submodule", "update", "--init", "--recursive", "--depth=1"],
+                    ["git", "submodule", "update", "--init", "--recursive"],
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
@@ -64,9 +67,14 @@ class GitHandler:
         
         logging.info(f"Cloning repository {url} (branch: {branch}) into {repo_path}")
         try:
-            result = subprocess.run(
-                ["git", "clone", "--recurse-submodules", "--shallow-submodules", 
-                 "--branch", branch, "--depth=1", url, repo_path], 
+            subprocess.run(
+                ["git", "clone", "--recurse-submodules", "--branch", branch, url, repo_path],
+                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
+
+            subprocess.run(
+                ["git", "submodule", "update", "--init", "--recursive"],
+                cwd=repo_path,
                 check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
             self.set_permission(str(repo_path))
