@@ -6,6 +6,7 @@ from src.llm.openai import OpenRouterLLM
 from src.llm.ollama import OllamaLLM
 from docker.models.containers import Container
 from src.config.config import Config
+from src.cmake.patterns import *
 
 LLM_DEP_SCHEMA = {
     "type": "object",
@@ -90,6 +91,7 @@ class DependencyResolver:
         self.cache = cache or self.DependencyCache(self.config)
         self.package_handler = handler or self.PackageHandler()
         self.llm = llm or self.LLMResolver(self.config)
+        self.flag = self.FlagResolver(self.config)
 
     def resolve_all(self, dep_names: set[str], container: Container) -> tuple[set[str], set[str]]:
         self.container = container
@@ -219,41 +221,36 @@ class DependencyResolver:
             return missing
         
         def _find_pkgconfig_missing(self, stdout: str, stderr: str) -> set[str]:
-            patterns = [
-                r"No package '([a-zA-Z0-9_\-\+\.]+)' found",
-                r"Could NOT find ([A-Za-z0-9_\-\+\.]+)",
-                r"Could not find ([A-Za-z0-9_\-\+\.]+), missing",
-                r"Could not find a package configuration file provided by \"([^\"]+)\"",
-                r"Could not find a configuration file for package \"([^\"]+)\"",
-                r"([A-Za-z0-9_\-\+\.]+)\s+package NOT found",
-                r"No module named ['\"]([^'\"]+)['\"]",
-                r"executable '([a-zA-Z0-9_\-\+\.]+)' not found",
-                r"Package '([a-zA-Z0-9_\-\+\.]+)'.*not found",
-                r"package '([^']+)' not found",
-                r"Dependency '([^']+)' is required but was not found",
-                r"Failed to find ([A-Za-z0-9_\-\+\.]+)",
-                r"Looking for ([A-Za-z0-9_\-\+\.]+) - not found",
-                r"Dependency ([A-Za-z0-9_\-\+\.]+) not found",
-                r"  ([A-Za-z0-9_\-\+\.]+) is required",
-                r'([A-Z0-9_]+)_(?:INCLUDE_DIR|LIBRARIES)-NOTFOUND'
-            ]
+            patterns = CONFIG_ERROR_PATTERNS
             missing = set()
             for pattern in patterns:
                 missing.update(re.findall(pattern, stdout))
                 missing.update(re.findall(pattern, stderr))
             return missing
         
-        def _find_file_missing(self, stdout, stderr):
-            patterns = [
-                r"fatal error:\s+([\w_]+)\.h:\s+No such file or directory",
-                r"fatal error:\s+([\w_/]+)\.h:\s+No such file or directory",
-                r"cannot find -l([\w_]+)"
-            ]
+        def _find_file_missing(self, stdout, stderr) -> set[str]:
+            patterns = BUILD_ERROR_PATTERNS
             missing = set()
             for pattern in patterns:
                 missing.update(re.findall(pattern, stdout))
                 missing.update(re.findall(pattern, stderr))
             return missing
+    
+    class FlagResolver:
+        def __init__(self, config: Config):
+            self.config = config
+
+        def find_flags(self, conf_out: str, conf_err: str, build_out: str, build_err: str, flags: dict[str, list[str]]) -> dict[str, list[str]]:
+            append = set(flags["append"])
+            remove = set(flags["remove"])
+            
+            combined = "\n".join([conf_out, conf_err, build_out, build_err])
+
+            for pattern in FLAGS_ERROR_PATTERNS:
+                if re.search(pattern["regex"], combined, re.I):
+                    pattern["action"](append, remove)
+
+            return {"append": list(append), "remove": list(remove)}
     
     class LLMResolver:
         def __init__(self, config: Config):

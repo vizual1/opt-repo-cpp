@@ -41,7 +41,8 @@ class CMakeProcess:
         self.config_stderr: str = ""
         self.build_stdout: str = ""
         self.build_stderr: str = ""
-        self.other_flags: set[str] = set()
+        self.test_flags: set[str] = set()
+        self.other_flags: dict[str, list[str]] = {"append": [], "remove": []}
         self.resolver = DependencyResolver(self.config)
         self.test_time: dict[str, list[float]] = {
             "parsed": [0.0 for _ in range(self.config.testing.warmup + self.config.testing.commit_test_times)], 
@@ -182,7 +183,7 @@ class CMakeProcess:
                 missing_dependencies = self.analyzer.get_dependencies()
                 unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
                 unresolved_dependencies |= unresolv
-                self.other_flags |= oflags
+                self.test_flags |= oflags
 
             if self._configure():
                 return True
@@ -193,6 +194,14 @@ class CMakeProcess:
                 self.build_stdout,
                 self.build_stderr,
                 Path(self.build_path) / "CMakeCache.txt"
+            )
+            
+            self.other_flags = self.resolver.flag.find_flags(
+                self.config_stdout, 
+                self.config_stderr, 
+                self.build_stdout,
+                self.build_stderr,
+                self.other_flags
             )
 
             if not missing_dependencies:
@@ -205,11 +214,11 @@ class CMakeProcess:
 
             unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
             unresolved_dependencies |= unresolv
-            self.other_flags |= oflags
+            self.test_flags |= oflags
             
             if unresolved_dependencies:
                 unresolved_dependencies, oflags = self.resolver.unresolved_dep(unresolved_dependencies)
-                self.other_flags |= oflags
+                self.test_flags |= oflags
 
             save_dependencies |= missing_dependencies
 
@@ -262,9 +271,17 @@ class CMakeProcess:
                     cmd.append(f'-D{flag}=OFF')
                 else:
                     cmd.append(f'-D{flag}=ON')
+
+            for flag in self.other_flags["append"]:
+                cmd.append(flag)
+            
+            for flag in self.other_flags["remove"]:
+                if flag in cmd:
+                    cmd.remove(flag)
         
             if self.package_manager.startswith("vcpkg"):
                 logging.info("Installing through package manager vcpkg...")
+                cmd.append('-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake')
                 cmd.append('-DVCPKG_MANIFEST_MODE=ON')
             """
             elif self.package_manager.startswith("conanfile"):
@@ -299,32 +316,13 @@ class CMakeProcess:
             if stdout: logging.error(f"Output (stdout):\n{stdout}")
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
             if not commands:
-                #cmd.append('-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake')
-                for flag in self.other_flags:
+                for flag in self.test_flags:
                     cmd.append(flag)
-                if "--" in stdout and "--" in cmd:
-                    cmd.remove("--")
-                # Try system packages first, fall back to fetch
-                is_checkout_tag_error = "Failed to checkout tag:" in stdout or "Failed to checkout tag:" in stderr
-                if is_checkout_tag_error:
-                    cmd.append('-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=ALWAYS')
-                    cmd.append('-DFETCHCONTENT_UPDATES_DISCONNECTED=ON') # don't update
-                    cmd.append('-DFETCHCONTENT_FULLY_DISCONNECTED=OFF') # allow downloads
                 return self._configure(cmd)
             return False
         
         if not self._build():
-            has_cmake_build_type = "CMAKE_BUILD_TYPE" in self.build_stderr or "CMAKE_BUILD_TYPE" in self.build_stdout
-            is_debug = '-DCMAKE_BUILD_TYPE=Debug' in cmd
-            if has_cmake_build_type and is_debug:
-                cmd.remove('-DCMAKE_BUILD_TYPE=Debug')
-                cmd.append('-DCMAKE_BUILD_TYPE=RelWithDebInfo')
-            
-            has_c14 = 'C++14' in self.build_stderr or 'C++14' in self.build_stdout
-            if has_c14:
-                cmd.append('-DCMAKE_CXX_STANDARD=14')
-                cmd.append('-DCMAKE_CXX_STANDARD_REQUIRED=ON')
-            return self._configure(cmd)
+            return False
         
         self.commands.append(list(map(str, cmd)))
         return True

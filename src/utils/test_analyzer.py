@@ -8,6 +8,11 @@ from github.Repository import Repository
 from src.core.filter.commit_filter import CommitFilter
 from src.config.config import Config
 
+def safe_float(x):
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return "NaN"
+    return float(x)
+
 class TestAnalyzer:
     def __init__(self, config: Config, new_single_tests: dict[str, list[float]], old_single_tests: dict[str, list[float]]):
         self.config = config
@@ -127,14 +132,14 @@ class TestAnalyzer:
         new = np.asarray(new_full_times[self.warmup:], float)
         performance_analysis = {
             "is_significant": pvalue < self.min_p_value,
-            "p_value": pvalue,
-            "relative_improvement": self.relative_improvement(old_full_times[self.warmup:], new_full_times[self.warmup:]),
-            "absolute_improvement_ms": float((np.mean(old) - np.mean(new)) * 1000),
-            "old_mean_ms": float(np.mean(old) * 1000),
-            "new_mean_ms": float(np.mean(new) * 1000),
-            "old_std_ms": float(np.std(old, ddof=1) * 1000),
-            "new_std_ms": float(np.std(new, ddof=1) * 1000),
-            "effect_size_cohens_d": self.cohens_d(old, new),
+            "p_value": safe_float(pvalue),
+            "relative_improvement": safe_float(self.relative_improvement(old_full_times[self.warmup:], new_full_times[self.warmup:])),
+            "absolute_improvement_ms": safe_float((np.mean(old) - np.mean(new)) * 1000),
+            "old_mean_ms": safe_float(np.mean(old) * 1000),
+            "new_mean_ms": safe_float(np.mean(new) * 1000),
+            "old_std_ms": safe_float(np.std(old, ddof=1) * 1000),
+            "new_std_ms": safe_float(np.std(new, ddof=1) * 1000),
+            "effect_size_cohens_d": safe_float(self.cohens_d(old, new)),
             "old_ci95_ms": self.ci95(old_full_times[self.warmup:]),
             "new_ci95_ms": self.ci95(new_full_times[self.warmup:]),
             "old_ci99_ms": self.ci99(old_full_times[self.warmup:]),
@@ -159,14 +164,14 @@ class TestAnalyzer:
             tests["tests"].append({
                 "test_name": test_name,
                 "is_significant": pvalue < self.min_p_value,
-                "p_value": pvalue,
-                "relative_improvement": self.relative_improvement(old_times, new_times),
-                "absolute_improvement_ms": float((np.mean(old_times) - np.mean(new_times)) * 1000),
-                "old_mean_ms": float(np.mean(old_times) * 1000),
-                "new_mean_ms": float(np.mean(new_times) * 1000),
-                "old_std_ms": float(np.std(old_times, ddof=1) * 1000),
-                "new_std_ms": float(np.std(new_times, ddof=1) * 1000),
-                "effect_size_cohens_d": self.cohens_d(old_times, new_times),
+                "p_value": safe_float(pvalue),
+                "relative_improvement": safe_float(self.relative_improvement(old_times, new_times)),
+                "absolute_improvement_ms": safe_float((np.mean(old_times) - np.mean(new_times)) * 1000),
+                "old_mean_ms": safe_float(np.mean(old_times) * 1000),
+                "new_mean_ms": safe_float(np.mean(new_times) * 1000),
+                "old_std_ms": safe_float(np.std(old_times, ddof=1) * 1000),
+                "new_std_ms": safe_float(np.std(new_times, ddof=1) * 1000),
+                "effect_size_cohens_d": safe_float(self.cohens_d(old_times, new_times)),
                 "old_ci95_ms": self.ci95(old_times),
                 "new_ci95_ms": self.ci95(new_times),
                 "old_ci99_ms": self.ci99(old_times),
@@ -234,7 +239,7 @@ class TestAnalyzer:
                 diff_lines.append(patch)
         return "\n".join(diff_lines)
     
-    def cohens_d(self, old, new):
+    def cohens_d(self, old, new) -> float:
         """
         Compute Cohen's d effect size between old and new execution times.
 
