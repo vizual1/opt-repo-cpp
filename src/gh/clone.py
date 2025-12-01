@@ -91,9 +91,12 @@ class GitHandler:
         func(path)
     
     def set_permission(self, path: str):
-        for root, dirs, files in os.walk(path):
-            os.chmod(root, 0o777)
-            for d in dirs:
-                os.chmod(os.path.join(root, d), 0o777)
-            for f in files:
-                os.chmod(os.path.join(root, f), 0o777)
+        try:
+            for root, dirs, files in os.walk(path):
+                os.chmod(root, 0o777)
+                for d in dirs:
+                    os.chmod(os.path.join(root, d), 0o777)
+                for f in files:
+                    os.chmod(os.path.join(root, f), 0o777)
+        except Exception as e:
+            logging.warning(f"Tried to set permission failed: {e}")

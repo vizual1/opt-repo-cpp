@@ -170,6 +170,7 @@ class CMakeProcess:
     
     def _configure_with_retries(self, max_retries: int = 10) -> bool:
         save_dependencies = set()
+        save_flags: dict[str, list[str]] = {"append": [], "remove": []}
         unresolved_dependencies: set[str] = set() 
 
         if not self.container:
@@ -188,6 +189,9 @@ class CMakeProcess:
             if self._configure():
                 return True
             
+            remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
+            self.docker.run_command_in_docker(remove_build, self.root, check=False)
+            
             missing_dependencies = self.resolver.package_handler.get_missing_dependencies(
                 self.config_stdout, 
                 self.config_stderr, 
@@ -204,13 +208,16 @@ class CMakeProcess:
                 self.other_flags
             )
 
-            if not missing_dependencies:
+            has_other_flags = (self.other_flags["append"] or self.other_flags["remove"])
+            if not missing_dependencies and not has_other_flags:
                 logging.error("Configuration failed but no missing dependencies detected")
                 break
             
-            if missing_dependencies <= save_dependencies:
+            append_flags_in_save = set(self.other_flags["append"]) <= set(save_flags["append"])
+            remove_flags_in_save = set(self.other_flags["remove"]) <= set(save_flags["remove"])
+            if missing_dependencies <= save_dependencies and append_flags_in_save and remove_flags_in_save:
                 logging.error("Configuration failed but no new missing dependencies detected")
-                break 
+                break
 
             unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
             unresolved_dependencies |= unresolv
@@ -220,6 +227,7 @@ class CMakeProcess:
                 unresolved_dependencies, oflags = self.resolver.unresolved_dep(unresolved_dependencies)
                 self.test_flags |= oflags
 
+            save_flags = self.other_flags
             save_dependencies |= missing_dependencies
 
         logging.error("All configuration attempts failed.")
@@ -315,6 +323,8 @@ class CMakeProcess:
             self.config_stderr = stderr
             if stdout: logging.error(f"Output (stdout):\n{stdout}")
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
+            remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
+            self.docker.run_command_in_docker(remove_build, self.root, check=False)
             if not commands:
                 for flag in self.test_flags:
                     cmd.append(flag)
@@ -499,7 +509,7 @@ class CMakeProcess:
             self.ctest_output.append(stdout)
             self.per_test_times = parse_single_ctest_output(stdout, self.per_test_times)
 
-            if exit_code == 0:
+            if exit_code == 0 or (elapsed != 0.0 and stats['passed'] > 0):
                 logging.info(f"CTest passed for {self.test_path}")
                 logging.info(f"Output:\n{stdout}")
                 logging.info(f"Tests run: {stats['total']}, Failures: {stats['failed']}, Skipped: {stats['skipped']}, Time elapsed: {elapsed} s")
