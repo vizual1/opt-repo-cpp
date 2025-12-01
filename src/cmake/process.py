@@ -235,8 +235,8 @@ class CMakeProcess:
                 #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
                 #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
                 
-                #'-DCMAKE_BUILD_TYPE=Debug',
-                '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+                '-DCMAKE_BUILD_TYPE=Debug',
+                #'-DCMAKE_BUILD_TYPE=RelWithDebInfo',
                 #'-DCMAKE_C_COMPILER=/usr/bin/clang',
                 #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
@@ -283,10 +283,10 @@ class CMakeProcess:
                     logging.error(f"Conan installation failed: {e}")
                     return False
             """
-            logging.info(" ".join(map(str, cmd)))
         else:
             cmd = commands
 
+        logging.info(" ".join(map(str, cmd)))
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
 
         if exit_code == 0:
@@ -305,15 +305,25 @@ class CMakeProcess:
                 if "--" in stdout and "--" in cmd:
                     cmd.remove("--")
                 # Try system packages first, fall back to fetch
-                cmd.append('-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=OPTIONAL')
-                cmd.append('-DFETCHCONTENT_UPDATES_DISCONNECTED=ON') # don't update
-                cmd.append('-DFETCHCONTENT_FULLY_DISCONNECTED=OFF') # allow downloads
+                is_checkout_tag_error = "Failed to checkout tag:" in stdout or "Failed to checkout tag:" in stderr
+                if is_checkout_tag_error:
+                    cmd.append('-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=ALWAYS')
+                    cmd.append('-DFETCHCONTENT_UPDATES_DISCONNECTED=ON') # don't update
+                    cmd.append('-DFETCHCONTENT_FULLY_DISCONNECTED=OFF') # allow downloads
                 return self._configure(cmd)
             return False
         
         if not self._build():
-            cmd.append('-DCMAKE_CXX_STANDARD=14')
-            cmd.append('-DCMAKE_CXX_STANDARD_REQUIRED=ON')
+            has_cmake_build_type = "CMAKE_BUILD_TYPE" in self.build_stderr or "CMAKE_BUILD_TYPE" in self.build_stdout
+            is_debug = '-DCMAKE_BUILD_TYPE=Debug' in cmd
+            if has_cmake_build_type and is_debug:
+                cmd.remove('-DCMAKE_BUILD_TYPE=Debug')
+                cmd.append('-DCMAKE_BUILD_TYPE=RelWithDebInfo')
+            
+            has_c14 = 'C++14' in self.build_stderr or 'C++14' in self.build_stdout
+            if has_c14:
+                cmd.append('-DCMAKE_CXX_STANDARD=14')
+                cmd.append('-DCMAKE_CXX_STANDARD_REQUIRED=ON')
             return self._configure(cmd)
         
         self.commands.append(list(map(str, cmd)))
