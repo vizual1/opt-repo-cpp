@@ -42,11 +42,10 @@ FLAGS_ERROR_PATTERNS = [
         ]),
     },
     {
-        "name": "CMAKE_BUILD_TYPE unknown or invalid",
-        "regex": r"CMAKE_BUILD_TYPE",
+        "name": "Don't use CMAKE_BUILD_TYPE",
+        "regex": r"Don't use CMAKE_BUILD_TYPE",
         "action": lambda append, remove: (
-            remove.add("-DCMAKE_BUILD_TYPE=Debug"),
-            append.add("-DCMAKE_BUILD_TYPE=Release")
+            remove.add("-DCMAKE_BUILD_TYPE=Debug")
         ),
     },
     {
