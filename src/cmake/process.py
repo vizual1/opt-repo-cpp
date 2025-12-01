@@ -235,8 +235,8 @@ class CMakeProcess:
                 #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
                 #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
                 
-                '-DCMAKE_BUILD_TYPE=Debug',
-                #'-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+                #'-DCMAKE_BUILD_TYPE=Debug',
+                '-DCMAKE_BUILD_TYPE=RelWithDebInfo',
                 #'-DCMAKE_C_COMPILER=/usr/bin/clang',
                 #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
