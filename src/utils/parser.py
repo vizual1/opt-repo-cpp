@@ -4,7 +4,7 @@ from collections import defaultdict
 
 def parse_framework_output(output: str, framework: str, test_name: str) -> float:
     if framework == "gtest":
-        pattern = rf"\[\s*OK\s*\].*{re.escape(test_name)}.*\((\d+)\s*ms\)"
+        pattern = r"ran\. \((\d+)\s*ms total\)"
         match = re.search(pattern, output)
         if match:
             ms = int(match.group(1))

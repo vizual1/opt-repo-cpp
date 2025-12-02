@@ -411,12 +411,12 @@ class CMakeProcess:
         unit_tests: dict[str, list[str]] = {}
         for exe_path in test_exec:
             cmd = [exe_path, test_flag]
-            logging.info(' '.join(map(str, cmd)))
+            logging.debug(' '.join(map(str, cmd)))
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
-            logging.info(f"{test_flag} output:\n{stdout}")
             tests = self.analyzer.find_unit_tests(stdout, framework)
+            logging.info(f"{test_flag} ({framework}) output:\n{stdout}")
             if tests:
                 unit_tests[exe_path] = tests
 
@@ -512,7 +512,7 @@ class CMakeProcess:
             if exit_code == 0 or (elapsed != 0.0 and stats['passed'] > 0):
                 logging.info(f"CTest passed for {self.test_path}")
                 logging.info(f"Output:\n{stdout}")
-                logging.info(f"Tests run: {stats['total']}, Failures: {stats['failed']}, Skipped: {stats['skipped']}, Time elapsed: {elapsed} s")
+                logging.info(f"Tests run: {stats['total']}, Failures: {stats['failed']}, Skipped: {stats['skipped']}, Time elapsed: {elapsed or time} s")
             else:
                 logging.error(f"CTest failed for {self.test_path} (return code {exit_code}) with command {' '.join(command)}", exc_info=True)
                 if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)

@@ -17467,5 +17467,16 @@
             ],
             "vcpkg": []
         }
+    },
+    "bcc": {
+        "apt": "libbcc-dev",
+        "vcpkg": "",
+        "flags": {
+            "apt": [
+                "-DLIBBCC_INCLUDE_DIR=/usr/include/bcc",
+                "-DLIBBCC_LIBRARIES=/usr/lib/x86_64-linux-gnu/libbcc.so"
+            ],
+            "vcpkg": []
+        }
     }
 }

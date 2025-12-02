@@ -14,7 +14,9 @@ CONFIG_ERROR_PATTERNS = [
     r"Looking for ([A-Za-z0-9_\-\+\.]+) - not found",
     r"Dependency ([A-Za-z0-9_\-\+\.]+) not found",
     r"  ([A-Za-z0-9_\-\+\.]+) is required",
-    r'([A-Z0-9_]+)_(?:INCLUDE_DIR|LIBRARIES)-NOTFOUND'
+    r'([A-Z0-9_]+)_(?:INCLUDE_DIR|LIBRARIES)-NOTFOUND',
+    r"Please install the ([a-zA-Z0-9_\-\+\.]+) library package",
+    r"Requires ([a-zA-Z0-9_\-\+\.]+) >= ([0-9\.]+)"
 ]
 
 BUILD_ERROR_PATTERNS = [
@@ -24,6 +26,28 @@ BUILD_ERROR_PATTERNS = [
 ]
 
 FLAGS_ERROR_PATTERNS = [
+    {
+        "name": "Generic GCC attribute warnings under -Werror",
+        "regex": r"[-]W(ignored|array-bounds|stringop|attributes)",
+        "action": lambda append, remove: append.update([
+            "-DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS} -Wno-error",
+        ]),
+    },
+    {
+        "name": "Dangling reference warning under -Werror",
+        "regex": r"dangling-reference",
+        "action": lambda append, remove: append.update([
+            "-DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS} -Wno-dangling-reference"
+        ]),
+    },
+    {
+        "name": "Older versions of Catch2 incorrectly used it inside a constexpr expression",
+        "regex": r"non-'constexpr' function 'sysconf'|altStackMem",
+        "action": lambda append, remove: append.update([
+            "-DUSE_SYSTEM_CATCH2=ON",
+            "-DCATCH_USE_SYSTEM=ON",
+        ])
+    },
     {
         "name": "FetchContent: Failed to checkout tag",
         "regex": r"failed to checkout tag",
