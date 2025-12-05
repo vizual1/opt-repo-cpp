@@ -74,7 +74,7 @@ class CMakeProcess:
         self.docker.start_docker_container(container_name)
         self.container = self.docker.container
 
-        copy_cmd = ["cp", "-r", "/workspace", self.docker_test_dir]
+        copy_cmd = ["cp", "-a", "/workspace", self.docker_test_dir]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(copy_cmd, self.root, check=False)
         if exit_code != 0:
             logging.error(f"Copy files failed with exit code {exit_code}: {' '.join(map(str, copy_cmd))}")
@@ -153,10 +153,10 @@ class CMakeProcess:
         return self._configure()
 
     def build(self) -> bool:
-        if self.package_manager:
-            return self._configure() #and self._build()
-        else:
-            return self._configure_with_retries() #and self._build()
+        #if self.package_manager:
+        #    return self._configure() #and self._build()
+        #else:
+        return self._configure_with_retries() #and self._build()
     
     #def test(self, warmup: int = 0, test_repeat: int = 1, no_run: bool = False) -> bool:
     #    return self._ctest(warmup, test_repeat, no_run)
@@ -179,12 +179,6 @@ class CMakeProcess:
 
         for attempt in range(max_retries):
             logging.info(f"[Attempt {attempt+1}/{max_retries}] Configuring project at {self.root}")
-
-            if attempt == 0:
-                missing_dependencies = self.analyzer.get_dependencies()
-                unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
-                unresolved_dependencies |= unresolv
-                self.test_flags |= oflags
 
             if self._configure():
                 return True
@@ -229,6 +223,19 @@ class CMakeProcess:
 
             save_flags = self.other_flags
             save_dependencies |= missing_dependencies
+
+        logging.info("Last Attempt: parsing CMakeLists.txt to install dependencies")
+        missing_dependencies = self.analyzer.get_dependencies()
+        unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
+        unresolved_dependencies |= unresolv
+        self.test_flags |= oflags
+
+        unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
+        unresolved_dependencies |= unresolv
+        self.test_flags |= oflags
+
+        if self._configure():
+            return True
 
         logging.error("All configuration attempts failed.")
         return False
@@ -325,10 +332,10 @@ class CMakeProcess:
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
             remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
             self.docker.run_command_in_docker(remove_build, self.root, check=False)
-            if not commands:
-                for flag in self.test_flags:
-                    cmd.append(flag)
-                return self._configure(cmd)
+            #if not commands:
+            #    for flag in self.test_flags:
+            #        cmd.append(flag)
+            #    return self._configure(cmd)
             return False
         
         if not self._build():
@@ -376,6 +383,8 @@ class CMakeProcess:
         if test_exec_flag and not self._individual_tests_collection(test_exec_flag):
             return False
 
+        # TODO
+        logging.info(f"Commands: {self.commands}")
         if len(self.commands) == 2: # only configuration and build commands
             self.commands.append(list(map(str, cmd)))
         return True
@@ -415,6 +424,9 @@ class CMakeProcess:
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
+            # TODO
+            for i, line in enumerate(stdout.splitlines()):
+                logging.info(f"Lines: {repr(line)}")
             tests = self.analyzer.find_unit_tests(stdout, framework)
             logging.info(f"{test_flag} ({framework}) output:\n{stdout}")
             if tests:
@@ -530,7 +542,7 @@ class CMakeProcess:
             return False
         
 
-    def _individual_ctest(self, command: list[str]) -> bool:
+    def _individual_ctest(self, command: list[str], extra: list[str] = []) -> bool:
         unit_map = self.unit_tests_map[" ".join(command)]
         test_name = unit_map['name']
         exe_path = unit_map['exe']
@@ -540,9 +552,9 @@ class CMakeProcess:
             # probably duplicate test_name
             return True
 
-        logging.debug(command)
+        logging.debug(command + extra)
         exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-            command, self.root, check=False
+            command + extra, self.root, check=False
         )
         logging.debug(f"Individual CTest stdout:\n{stdout}")
 
@@ -552,6 +564,10 @@ class CMakeProcess:
             return False
         
         if elapsed == 0.0:
+            test_exec_flag = self.analyzer.get_list_test_arg()
+            framework, _ = test_exec_flag[0]
+            if framework == "gtest" and not extra:
+                return self._individual_ctest(command, ["--gtest_repeat=100"])
             elapsed = parse_usr_bin_time(stdout)
 
         ntest = len(self.per_test_times[test_name]['parsed'])

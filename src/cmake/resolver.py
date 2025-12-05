@@ -98,6 +98,7 @@ class DependencyResolver:
         unresolved: set[str] = set() 
         flags: set[str] = set()
 
+        dep_names = set([d[0] if isinstance(d, tuple) else d for d in list(dep_names)])
         for dep in map(str.lower, dep_names):
             info = self.resolve(dep)
             if not info:
@@ -203,7 +204,7 @@ class DependencyResolver:
             logging.info(f"Missing packages: {missing_pkgconfig}")
             missing_build = self._find_file_missing(build_out, build_err)
 
-            return missing_cache | missing_pkgconfig
+            return missing_cache | missing_pkgconfig | missing_build
 
         def _find_cache_missing(self, cache_path: Path) -> set[str]:
             if not cache_path.exists():

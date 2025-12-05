@@ -24,8 +24,8 @@ class CommitTesterPipeline:
         for repo_id, new_sha, old_sha in tqdm(commits, total=len(commits), desc="Commits testing...", position=0):
             file = self.commit.get_file_prefix(repo_id)
             new_path, old_path = self.commit.get_paths(file, new_sha)
-            repo = self.config.git_client.get_repo(repo_id)
             try:
+                repo = self.config.git_client.get_repo(repo_id)
                 self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
             except Exception as e:
                 logging.exception(f"[{repo_id}] Error testing commits: {e}")

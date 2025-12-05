@@ -16,12 +16,18 @@ CONFIG_ERROR_PATTERNS = [
     r"  ([A-Za-z0-9_\-\+\.]+) is required",
     r'([A-Z0-9_]+)_(?:INCLUDE_DIR|LIBRARIES)-NOTFOUND',
     r"Please install the ([a-zA-Z0-9_\-\+\.]+) library package",
-    r"Requires ([a-zA-Z0-9_\-\+\.]+) >= ([0-9\.]+)"
+    r"Requires ([a-zA-Z0-9_\-\+\.]+) >=",
+    r"([A-Za-z0-9_+\-]+)\s+component not found",
+    r"Can't find .*?of\s+([^\s]+)",
+    r"Unable to find requested ([A-Za-z0-9_+-]+) installation",
+    r"Unable to locate ([A-Za-z0-9_+\-]+) include",
+    r"  ([A-Za-z0-9_+\-]+) not found",
+    r"  ([A-Za-z0-9_+\-]+) library not found",
 ]
 
 BUILD_ERROR_PATTERNS = [
-    r"fatal error:\s+([\w_]+)\.h:\s+No such file or directory",
-    r"fatal error:\s+([\w_/]+)\.h:\s+No such file or directory",
+    r"fatal error:\s+([\w_]+\.h):\s+No such file or directory",
+    r"fatal error:\s+([\w_/]+\.h):\s+No such file or directory",
     r"cannot find -l([\w_]+)"
 ]
 
@@ -30,14 +36,21 @@ FLAGS_ERROR_PATTERNS = [
         "name": "Generic GCC attribute warnings under -Werror",
         "regex": r"[-]W(ignored|array-bounds|stringop|attributes)",
         "action": lambda append, remove: append.update([
-            "-DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS} -Wno-error",
+            "-DCMAKE_CXX_FLAGS=-Wno-error",
         ]),
     },
     {
         "name": "Dangling reference warning under -Werror",
         "regex": r"dangling-reference",
         "action": lambda append, remove: append.update([
-            "-DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS} -Wno-dangling-reference"
+            "-DCMAKE_CXX_FLAGS=-Wno-error"
+        ]),
+    },
+    {
+        "name": "Catch2 SIGSTKSZ constexpr error",
+        "regex": r"storage size of 'altStackMem' isn't constant|sysconf",
+        "action": lambda append, remove: append.update([
+            "-DSIGSTKSZ=16384"
         ]),
     },
     {

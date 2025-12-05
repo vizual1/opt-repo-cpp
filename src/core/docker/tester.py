@@ -133,9 +133,9 @@ class DockerTester:
                     warmup = self.config.testing.warmup
                     test_repeat = self.config.testing.commit_test_times
                     has_list_args = len(new_test_cmd) > 1
-
-                    for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=1, leave=False):
-                        for new_cmd, old_cmd in zip(new_test_cmd, old_test_cmd):
+                    
+                    for new_cmd, old_cmd in tqdm(zip(new_test_cmd, old_test_cmd), total=len(new_test_cmd), position=1, leave=False):   
+                        for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=2, leave=False):
                             order = [
                                 ("New", new_cmd, new_structure, new_pf),
                                 ("Old", old_cmd, old_structure, old_pf),

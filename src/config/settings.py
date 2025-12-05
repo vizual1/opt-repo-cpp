@@ -42,9 +42,9 @@ class GitHubSettings:
 @dataclass
 class ResourceSettings:
     """Docker resource limits."""
-    cpuset_cpus: str = '4,5'
+    cpuset_cpus: str = '4'
     mem_limit: str = '8g'
     memswap_limit: str = '8g'
-    cpu_quota: int = 200000
+    cpu_quota: int = 100000
     cpu_period: int = 100000
     jobs: int = 2

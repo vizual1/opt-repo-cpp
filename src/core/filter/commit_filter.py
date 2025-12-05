@@ -85,7 +85,7 @@ class CommitFilter:
                 "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
                 "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
                 "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
-                "If you do not have enough information to decide, say {\"answer\": \"no\"}."
+                "If you do not have enough information to decide, say {\"answer\": \"maybe\"}."
                 "Do not add any explanation or commentary."),
             Prompt.Message("user",
                 (self.config.stage1_prompt
@@ -99,6 +99,9 @@ class CommitFilter:
         logging.info(f"[{self.repo.full_name}] First LLM prompt: {p.messages[1].content}")
         res = self.llm.generate(p)
         logging.info(f"[{self.repo.full_name}] First LLM returned: {res}")
+        
+        #if 'maybe' in res.lower():
+            #
 
         if 'yes' in res.lower():
             """

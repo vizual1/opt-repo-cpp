@@ -1,15 +1,15 @@
-"""LLM prompts and templates - keep these separate from core config."""
-
 STAGE1_PROMPT = """The following is an issue in the <name> repository:
 
 The following is the commit message that fixes this issue:
 
 ###Commit Message###<message>###Commit Message End###
 
-Answer strictly in this JSON format (do not add any explanation):
-{"answer": "yes"} or {"answer": "no"}.
+
 
 Question: Is this issue likely related to improving execution time?"""
+
+# Answer strictly in this JSON format (do not add any explanation):
+# {"answer": "yes"} or {"answer": "no"}.
 
 STAGE2_PROMPT = """The following is the commit message in the <name> repository:
 

@@ -226,6 +226,11 @@ class CMakeParser:
         subdirs: list[str] = re.findall(r'subdirs\("([^"]+)"\)', text)
         return [s.replace("\\", "/") for s in subdirs]
     
+    def clean(self, s: str) -> str:
+        s = re.sub(r'\x1B\[[0-?]*[ -/]*[@-~]', '', s)
+        s = ''.join(ch for ch in s if ch.isprintable() or ch in "\n\t ")
+        return s
+    
     def find_unit_tests(self, text: str, framework: str) -> list[str]:
         tests = []
 
@@ -236,6 +241,9 @@ class CMakeParser:
             #   TestB
             current_suite = ""
             for line in text.splitlines():
+                line = self.clean(line)
+                if "not found" in line:
+                    return []
                 if line.endswith("ms"):
                     continue
                 if line.endswith('.'):
@@ -266,10 +274,23 @@ class CMakeParser:
                 tests.append(line)
         elif framework == "boost":
             # Boost lists suites/tests as suite/test
-            tests = [line.strip() for line in text.splitlines() if "/" in line and not line.endswith("ms")]
+            for line in text.splitlines():
+                line = self.clean(line)
+                if "not found" in line:
+                    return []
+                if line.endswith("ms"):
+                    continue
+                if not "/" in line:
+                    continue
+                tests.append(line.strip())
         elif framework == "qt":
-            # QTest lists test functions prefixed with "PASS", "FAIL", etc. when run
-            tests = [line.strip() for line in text.splitlines() if line.strip() and not line.endswith("ms")]
+            for line in text.splitlines():
+                line = self.clean(line)
+                if "not found" in line:
+                    return []
+                if line.endswith("ms"):
+                    continue
+                tests.append(line.strip())
         return tests
 
     def find_dependencies(self) -> set[str]:
