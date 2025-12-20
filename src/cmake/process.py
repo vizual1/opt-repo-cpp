@@ -1,4 +1,3 @@
-
 import logging, subprocess, tempfile, json
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
@@ -13,6 +12,7 @@ class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
     def __init__(
         self, 
+        repo_id: str,
         config: Config,
         root: Path, 
         enable_testing_path: Optional[Path], 
@@ -43,6 +43,7 @@ class CMakeProcess:
         self.build_stderr: str = ""
         self.test_flags: set[str] = set()
         self.other_flags: dict[str, list[str]] = {"append": [], "remove": []}
+        self.other_cmds: list[list[str]] = []
         self.resolver = DependencyResolver(self.config)
         self.test_time: dict[str, list[float]] = {
             "parsed": [0.0 for _ in range(self.config.testing.warmup + self.config.testing.commit_test_times)], 
@@ -74,7 +75,7 @@ class CMakeProcess:
         self.docker.start_docker_container(container_name)
         self.container = self.docker.container
 
-        copy_cmd = ["cp", "-a", "/workspace", self.docker_test_dir]
+        copy_cmd = ["cp", "-r", "/workspace", self.docker_test_dir]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(copy_cmd, self.root, check=False)
         if exit_code != 0:
             logging.error(f"Copy files failed with exit code {exit_code}: {' '.join(map(str, copy_cmd))}")
@@ -84,6 +85,39 @@ class CMakeProcess:
             logging.info(f"Files copied into docker: {' '.join(map(str, copy_cmd))}")
             if stdout: logging.info(f"stdout: {stdout}")
 
+    """
+    def clone_repo(self, repo_id: str, sha: str) -> None:
+        repo_path = Path(self.to_container_path(self.root))
+        url = f"https://github.com/{repo_id}.git"
+        self.docker.clone_in_docker(
+            ["git", "clone", url, str(repo_path)], 
+            check=True
+        )
+
+        self.docker.clone_in_docker(
+            ["git", "config", "--local", "safe.directory", str(repo_path)], 
+            workdir=repo_path, 
+            check=True
+        )
+
+        self.docker.clone_in_docker(
+            ["git", "fetch", "origin", sha],
+            workdir=repo_path,
+            check=True
+        )
+
+        self.docker.clone_in_docker(
+            ["git", "checkout", sha],
+            workdir=repo_path,
+            check=True
+        )
+
+        self.docker.clone_in_docker(
+            ["git", "submodule", "update", "--init", "--recursive"],
+            workdir=repo_path,
+            check=True
+        )
+    """
     def save_docker_image(self, repo_id: str, sha: str, new_cmd: list[str], old_cmd: list[str], results_json: dict) -> None:
         """
         Saved docker image structure:
@@ -170,21 +204,23 @@ class CMakeProcess:
     
     def _configure_with_retries(self, max_retries: int = 10) -> bool:
         save_dependencies = set()
-        save_flags: dict[str, list[str]] = {"append": [], "remove": []}
+        save_resolutions: dict[str, list[str]] = {"append": [], "remove": [], "command": []}
+        save_commands: list[str] = []
         unresolved_dependencies: set[str] = set() 
 
         if not self.container:
             logging.error(f"No docker container started")
             return False
 
+        parsed = False
         for attempt in range(max_retries):
             logging.info(f"[Attempt {attempt+1}/{max_retries}] Configuring project at {self.root}")
 
+            #remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
+            #self.docker.run_command_in_docker(remove_build, self.root, check=False)
+            
             if self._configure():
                 return True
-            
-            remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
-            self.docker.run_command_in_docker(remove_build, self.root, check=False)
             
             missing_dependencies = self.resolver.package_handler.get_missing_dependencies(
                 self.config_stdout, 
@@ -193,25 +229,44 @@ class CMakeProcess:
                 self.build_stderr,
                 Path(self.build_path) / "CMakeCache.txt"
             )
+
+            missing_dependencies -= save_dependencies
             
-            self.other_flags = self.resolver.flag.find_flags(
+            self.other_flags, self.other_cmds = self.resolver.flag.find_resolve(
                 self.config_stdout, 
                 self.config_stderr, 
                 self.build_stdout,
                 self.build_stderr,
-                self.other_flags
+                self.other_flags,
+                self.other_cmds
             )
 
-            has_other_flags = (self.other_flags["append"] or self.other_flags["remove"])
-            if not missing_dependencies and not has_other_flags:
+            has_other_resolutions = (self.other_flags["append"] or self.other_flags["remove"] or self.other_cmds)
+            if not missing_dependencies and not has_other_resolutions and not parsed:
+                missing_dependencies = self.analyzer.get_dependencies()
+                unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
+                unresolved_dependencies |= unresolv
+                self.test_flags |= oflags
+                parsed = True
+            elif not missing_dependencies and not has_other_resolutions:
                 logging.error("Configuration failed but no missing dependencies detected")
                 break
             
-            append_flags_in_save = set(self.other_flags["append"]) <= set(save_flags["append"])
-            remove_flags_in_save = set(self.other_flags["remove"]) <= set(save_flags["remove"])
-            if missing_dependencies <= save_dependencies and append_flags_in_save and remove_flags_in_save:
+            append_flags_in_save = set(self.other_flags["append"]) <= set(save_resolutions["append"])
+            remove_flags_in_save = set(self.other_flags["remove"]) <= set(save_resolutions["remove"])
+            new_commands_in_save = set([" ".join(c) for c in self.other_cmds]) <= set(save_commands)
+            if not missing_dependencies and append_flags_in_save and remove_flags_in_save and new_commands_in_save and not parsed:
+                missing_dependencies = self.analyzer.get_dependencies()
+                unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
+                unresolved_dependencies |= unresolv
+                self.test_flags |= oflags
+                parsed = True
+            elif not missing_dependencies and append_flags_in_save and remove_flags_in_save and new_commands_in_save:
                 logging.error("Configuration failed but no new missing dependencies detected")
                 break
+            
+            for cmd in self.other_cmds:
+                self.docker.run_command_in_docker(cmd, self.root, check=False)
 
             unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
             unresolved_dependencies |= unresolv
@@ -221,102 +276,87 @@ class CMakeProcess:
                 unresolved_dependencies, oflags = self.resolver.unresolved_dep(unresolved_dependencies)
                 self.test_flags |= oflags
 
-            save_flags = self.other_flags
+            save_resolutions = self.other_flags
+            save_commands = [" ".join(c) for c in self.other_cmds]
             save_dependencies |= missing_dependencies
-
-        logging.info("Last Attempt: parsing CMakeLists.txt to install dependencies")
-        missing_dependencies = self.analyzer.get_dependencies()
-        unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
-        unresolved_dependencies |= unresolv
-        self.test_flags |= oflags
-
-        unresolv, oflags = self.resolver.resolve_all(missing_dependencies, self.container)
-        unresolved_dependencies |= unresolv
-        self.test_flags |= oflags
-
-        if self._configure():
-            return True
 
         logging.error("All configuration attempts failed.")
         return False
     
 
     def _configure(self, commands: list[str] = []) -> bool:
-        if not commands:
-            cmd = [
-                #'cmake', 
-                #'-E', 'env', 
-                #'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
-                #'CMAKE_PREFIX_PATH=/opt/vcpkg/installed/x64-linux',
-                #'LD_LIBRARY_PATH=/opt/vcpkg/installed/x64-linux/lib',
+        cmd = [
+            #'cmake', 
+            #'-E', 'env', 
+            #'PKG_CONFIG_PATH=/opt/vcpkg/installed/x64-linux/lib/pkgconfig',
+            #'CMAKE_PREFIX_PATH=/opt/vcpkg/installed/x64-linux',
+            #'LD_LIBRARY_PATH=/opt/vcpkg/installed/x64-linux/lib',
 
-                'cmake',
-                '-S', self.to_container_path(self.root), 
-                '-B', str(self.build_path).replace("\\", "/"), 
-                #'-G', 'Ninja',
+            'cmake',
+            '-S', self.to_container_path(self.root), 
+            '-B', str(self.build_path).replace("\\", "/"), 
+            #'-G', 'Ninja',
 
-                #'-DVCPKG_MANIFEST_MODE=ON',
-                #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
-                #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
-                
-                '-DCMAKE_BUILD_TYPE=Debug',
-                #'-DCMAKE_BUILD_TYPE=RelWithDebInfo',
-                #'-DCMAKE_C_COMPILER=/usr/bin/clang',
-                #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
-                '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-
-                # disable errors for warnings
-                #'-DCMAKE_CXX_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
-                #'-DCMAKE_C_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
-                #'-DCMAKE_CXX_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
-                #'-DCMAKE_C_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
-
-                #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
-                #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
-                #'-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
-                #'-DCMAKE_C_COMPILER_LAUNCHER=ccache',
-                #'-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
-
-                #'-DCMAKE_VERBOSE_MAKEFILE=ON',
-                #'-DCMAKE_FIND_DEBUG_MODE=ON',
-            ]
-
-            for flag in self.flags:
-                if 'disable' in flag.lower():
-                    cmd.append(f'-D{flag}=OFF')
-                else:
-                    cmd.append(f'-D{flag}=ON')
-
-            for flag in self.other_flags["append"]:
-                cmd.append(flag)
+            #'-DVCPKG_MANIFEST_MODE=ON',
+            #'-DVCPKG_MANIFEST_DIR=' + self.root,  # vcpkg.json location
+            #'-DVCPKG_INSTALLED_DIR=' + str(Path(self.build_path) / 'vcpkg_installed'),  # isolate deps per build
             
-            for flag in self.other_flags["remove"]:
-                if flag in cmd:
-                    cmd.remove(flag)
+            '-DCMAKE_BUILD_TYPE=Debug',
+            #'-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+            #'-DCMAKE_C_COMPILER=/usr/bin/clang',
+            #'-DCMAKE_CXX_COMPILER=/usr/bin/clang++',
+            '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+
+            # disable errors for warnings
+            #'-DCMAKE_CXX_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
+            #'-DCMAKE_C_FLAGS=-g -Wall -Wextra -Wpedantic -Wno-error',
+            #'-DCMAKE_CXX_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
+            #'-DCMAKE_C_FLAGS_DEBUG=-g -Wall -Wextra -Wpedantic -Wno-error',
+
+            #'-DCMAKE_C_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
+            #'-DCMAKE_CXX_FLAGS=-fprofile-instr-generate -fcoverage-mapping -O0 -g',
+            #'-DCMAKE_EXE_LINKER_FLAGS=-fprofile-instr-generate',
+            #'-DCMAKE_C_COMPILER_LAUNCHER=ccache',
+            #'-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
+
+            #'-DCMAKE_VERBOSE_MAKEFILE=ON',
+            #'-DCMAKE_FIND_DEBUG_MODE=ON',
+        ]
+
+        for flag in self.flags:
+            if 'disable' in flag.lower():
+                cmd.append(f'-D{flag}=OFF')
+            else:
+                cmd.append(f'-D{flag}=ON')
+
+        for flag in self.other_flags["append"]:
+            cmd.append(flag)
         
-            if self.package_manager.startswith("vcpkg"):
-                logging.info("Installing through package manager vcpkg...")
-                cmd.append('-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake')
-                cmd.append('-DVCPKG_MANIFEST_MODE=ON')
-            """
-            elif self.package_manager.startswith("conanfile"):
-                try:
-                    logging.info("Installing through package manager conan...")
-                    install = ['conan', 'install', '.', '-build=missing'] 
-                    exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
-                    self.cmake_config_output.append(stdout)
-                    if exit_code == 0:
-                        logging.info(f"Conan Output:\n{stdout}")
-                    else:
-                        if stdout: logging.error(f"Conan Output (stdout):\n{stdout}")
-                        if stderr: logging.error(f"Conan Error (stderr):\n{stderr}")
-                        return False
-                except Exception as e:
-                    logging.error(f"Conan installation failed: {e}")
+        for flag in self.other_flags["remove"]:
+            if flag in cmd:
+                cmd.remove(flag)
+    
+        if self.package_manager.startswith("vcpkg"):
+            logging.info("Installing through package manager vcpkg...")
+            cmd.append('-DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake')
+            cmd.append('-DVCPKG_MANIFEST_MODE=ON')
+        """
+        elif self.package_manager.startswith("conanfile"):
+            try:
+                logging.info("Installing through package manager conan...")
+                install = ['conan', 'install', '.', '-build=missing'] 
+                exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(install, self.root, workdir=self.root, check=False)
+                self.cmake_config_output.append(stdout)
+                if exit_code == 0:
+                    logging.info(f"Conan Output:\n{stdout}")
+                else:
+                    if stdout: logging.error(f"Conan Output (stdout):\n{stdout}")
+                    if stderr: logging.error(f"Conan Error (stderr):\n{stderr}")
                     return False
-            """
-        else:
-            cmd = commands
+            except Exception as e:
+                logging.error(f"Conan installation failed: {e}")
+                return False
+        """
 
         logging.info(" ".join(map(str, cmd)))
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
@@ -330,8 +370,8 @@ class CMakeProcess:
             self.config_stderr = stderr
             if stdout: logging.error(f"Output (stdout):\n{stdout}")
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
-            remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
-            self.docker.run_command_in_docker(remove_build, self.root, check=False)
+            #remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
+            #self.docker.run_command_in_docker(remove_build, self.root, check=False)
             #if not commands:
             #    for flag in self.test_flags:
             #        cmd.append(flag)
@@ -383,7 +423,6 @@ class CMakeProcess:
         if test_exec_flag and not self._individual_tests_collection(test_exec_flag):
             return False
 
-        # TODO
         logging.info(f"Commands: {self.commands}")
         if len(self.commands) == 2: # only configuration and build commands
             self.commands.append(list(map(str, cmd)))
@@ -424,9 +463,6 @@ class CMakeProcess:
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
-            # TODO
-            for i, line in enumerate(stdout.splitlines()):
-                logging.info(f"Lines: {repr(line)}")
             tests = self.analyzer.find_unit_tests(stdout, framework)
             logging.info(f"{test_flag} ({framework}) output:\n{stdout}")
             if tests:
@@ -506,7 +542,7 @@ class CMakeProcess:
         try:
             logging.info(f"{' '.join(command)} in {self.test_path}")
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                command, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+                command, self.root, workdir=self.docker_test_dir/self.test_path, check=False, log=False
             )
 
             # parse the times returned
@@ -554,7 +590,7 @@ class CMakeProcess:
 
         logging.debug(command + extra)
         exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-            command + extra, self.root, check=False
+            command + extra, self.root, check=False, log=False
         )
         logging.debug(f"Individual CTest stdout:\n{stdout}")
 

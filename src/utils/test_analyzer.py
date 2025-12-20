@@ -1,6 +1,5 @@
 import logging, math
 from datetime import datetime
-from src.utils.parser import parse_single_ctest_output
 import numpy as np
 from scipy import stats
 from github.Commit import Commit
@@ -63,17 +62,117 @@ class TestAnalyzer:
         logging.debug(f"T-test result: {res.pvalue} (pvalue)") # type: ignore
         return float(res.pvalue) # type: ignore
     
+    def get_pair_improvement_p_value(
+        self,
+        old_times: list[float],
+        new_times: list[float]
+    ) -> float:
+        old = np.asarray(old_times, dtype=float)
+        new = np.asarray(new_times, dtype=float)
+        if old.shape != new.shape:
+            raise ValueError("old_times and new_times must have same length")
+
+        # Differences: positive = old slower than new (i.e., improvement)
+        diff = old - new
+
+        # Convert relative threshold to absolute delta (use mean(old) as baseline)
+        delta = self.min_exec_time_improvement * old.mean()
+
+        # Adjust diffs by delta so test is H0: mean(diff) <= delta  => H1: mean(diff) > delta
+        adjusted = diff - delta
+
+        # One-sample t-test (one-sided greater)
+        res = stats.ttest_1samp(adjusted, popmean=0.0, alternative='greater')
+        return res.pvalue # type: ignore
     
-    def get_significant_test_time_changes(self) -> dict[str, list[str]]:
+    def get_wilcoxon_pvalue(
+        self,
+        old_times: list[float],
+        new_times: list[float]
+    ) -> float:
+        old = np.asarray(old_times, dtype=float)
+        new = np.asarray(new_times, dtype=float)
+        diff = old - new
+        delta = self.min_exec_time_improvement * old.mean()
+        adjusted = diff - delta
+        # SciPy supports alternative='greater'
+        res = stats.wilcoxon(adjusted, alternative='greater', zero_method='wilcox')
+        return float(res.pvalue) # type: ignore
+    
+    def get_mannwhitney_pvalue(
+        self,
+        old_times: list[float],
+        new_times: list[float]
+    ) -> float:
+        old = np.asarray(old_times, dtype=float)
+        new = np.asarray(new_times, dtype=float)
+        if len(old) != len(new):
+            raise ValueError("old_times and new_times must have same length")
+
+        # One-sided: H1: new < old (new is faster)
+        res = stats.mannwhitneyu(new, old, alternative='less')
+        return float(res.pvalue)
+    
+    def is_mannwhitney_significant(
+        self,
+        old_times: list[float],
+        new_times: list[float],
+    ) -> bool:
+        p_mwu = self.get_mannwhitney_pvalue(old_times, new_times)
+        delta  = self.relative_improvement(old_times, new_times)
+        return bool(p_mwu < self.min_p_value) and bool(delta > self.min_exec_time_improvement)
+    
+    def get_binom_improvement_p_value(
+        self,
+        old_times: list[float],
+        new_times: list[float]
+    ) -> float:
+        """
+        Test if the median of v2 is significantly less than min-exec-time-improvement * the median of v1.
+
+        Args:
+            v1: List of values
+            v2: List of values
+
+        Returns:
+            p-value
+        """
+        old = np.asarray(old_times, dtype=float)
+        new = np.asarray(new_times, dtype=float)
+        if old.shape != new.shape:
+            raise ValueError("old_times and new_times must have same length")
+
+        c = 1.0 - self.min_exec_time_improvement  # we test μ2 < c * μ1
+        old_scaled = c * old
+        diff = new - old_scaled
+
+        wins = np.sum(diff < 0)   # V2 achieves at least 'margin' speedup
+        losses = np.sum(diff > 0) # V2 fails to achieve the margin
+        n = wins + losses
+
+        if n == 0:
+            logging.error("All pairs are ties or NaN after applying the margin; cannot perform sign test.")
+            return 0.0
+        
+        # Exact one-sided binomial test: H1 is 'wins' > 0.5
+        res = stats.binomtest(k=wins, n=n, p=0.5, alternative="greater")
+
+        return float(res.pvalue)
+
+    def get_significant_test_time_changes(
+            self, f
+        ) -> dict[str, list[str]]:
         significant_test_time_changes = {'old_outperforms_new': [], 'new_outperforms_old': []}
 
         for test_name in self.new_single_tests.keys():
             new_times = self.new_single_tests[test_name][self.warmup:]
             old_times = self.old_single_tests[test_name][self.warmup:]
-            if self.get_improvement_p_value(old_times, new_times) < self.min_p_value:
+            if any(t <= 0.005 for t in new_times) or any(t <= 0.005 for t in old_times):
+                continue
+            if f(old_times, new_times) < self.min_p_value:
                 significant_test_time_changes['new_outperforms_old'].append(test_name)
                 logging.debug(f"new_outperforms_old improvement: {self.relative_improvement(old_times, old_times)*100}%")
-            if self.get_improvement_p_value(new_times, old_times) < self.min_p_value:
+            if f(new_times, old_times) < self.min_p_value:
                 significant_test_time_changes['old_outperforms_new'].append(test_name)
                 logging.debug(f"old_outperforms_new improvement: {self.relative_improvement(old_times, new_times)*100}%")
             
@@ -127,12 +226,24 @@ class TestAnalyzer:
             "build_system": "cmake"
         }
 
-        pvalue = self.get_improvement_p_value(old_full_times[self.warmup:], new_full_times[self.warmup:], ) 
+        pvalue = self.get_improvement_p_value(old_full_times[self.warmup:], new_full_times[self.warmup:]) 
+        pair_pvalue = self.get_pair_improvement_p_value(old_full_times[self.warmup:], new_full_times[self.warmup:])
+        binom_pvalue = self.get_binom_improvement_p_value(old_full_times[self.warmup:], new_full_times[self.warmup:])
+        wilcoxon_pvalue = self.get_wilcoxon_pvalue(old_full_times[self.warmup:], new_full_times[self.warmup:])
+        mannwhitney_pvalue = self.get_mannwhitney_pvalue(old_full_times[self.warmup:], new_full_times[self.warmup:])
         old = np.asarray(old_full_times[self.warmup:], float)
         new = np.asarray(new_full_times[self.warmup:], float)
         performance_analysis = {
-            "is_significant": pvalue < self.min_p_value,
+            "is_significant": bool(pvalue < self.min_p_value),
             "p_value": safe_float(pvalue),
+            "is_pair_significant": bool(pair_pvalue < self.min_p_value),
+            "pair_p_value": safe_float(pair_pvalue),
+            "is_binom_significant": bool(binom_pvalue < self.min_p_value),
+            "binom_p_value": safe_float(binom_pvalue),
+            "is_wilcoxon_significant": bool(wilcoxon_pvalue < self.min_p_value),
+            "wilcoxon_p_value": safe_float(wilcoxon_pvalue), 
+            "is_mannwhitney_significant": bool(self.is_mannwhitney_significant(old_full_times[self.warmup:], new_full_times[self.warmup:])),
+            "mannwhitney_p_value": safe_float(mannwhitney_pvalue),
             "relative_improvement": safe_float(self.relative_improvement(old_full_times[self.warmup:], new_full_times[self.warmup:])),
             "absolute_improvement_ms": safe_float((np.mean(old) - np.mean(new)) * 1000),
             "old_mean_ms": safe_float(np.mean(old) * 1000),
@@ -144,27 +255,61 @@ class TestAnalyzer:
             "new_ci95_ms": self.ci95(new_full_times[self.warmup:]),
             "old_ci99_ms": self.ci99(old_full_times[self.warmup:]),
             "new_ci99_ms": self.ci99(new_full_times[self.warmup:]),
-            "old_times_s": old_full_times,
-            "new_times_s": new_full_times
+            "new_times_s": new_full_times,
+            "old_times_s": old_full_times
         }
 
-        significant_test_time_changes = self.get_significant_test_time_changes()
+        significant_test_time_changes = self.get_significant_test_time_changes(self.get_improvement_p_value)
+        significant_pair_test_time_changes = self.get_significant_test_time_changes(self.get_pair_improvement_p_value)
+        significant_binom_test_time_changes = self.get_significant_test_time_changes(self.get_binom_improvement_p_value)
+        significant_wilcoxon_test_time_changes = self.get_significant_test_time_changes(self.get_wilcoxon_pvalue)
+        significant_mannwhitney_test_time_changes = self.get_significant_test_time_changes(self.get_mannwhitney_pvalue)
         tests = {
             "total_tests": len(self.new_single_tests.keys()),
             "significant_improvements": len(significant_test_time_changes['new_outperforms_old']),
             "significant_improvements_tests": significant_test_time_changes['new_outperforms_old'],
             "significant_regressions": len(significant_test_time_changes['old_outperforms_new']),
             "significant_regressions_tests": significant_test_time_changes['old_outperforms_new'],
+            "significant_pair_improvements": len(significant_pair_test_time_changes['new_outperforms_old']),
+            "significant_pair_improvements_tests": significant_pair_test_time_changes['new_outperforms_old'],
+            "significant_pair_regressions": len(significant_pair_test_time_changes['old_outperforms_new']),
+            "significant_pair_regressions_tests": significant_pair_test_time_changes['old_outperforms_new'],
+            "significant_binom_improvements": len(significant_binom_test_time_changes['new_outperforms_old']),
+            "significant_binom_improvements_tests": significant_binom_test_time_changes['new_outperforms_old'],
+            "significant_binom_regressions": len(significant_binom_test_time_changes['old_outperforms_new']),
+            "significant_binom_regressions_tests": significant_binom_test_time_changes['old_outperforms_new'],
+            "significant_wilcoxon_improvements": len(significant_wilcoxon_test_time_changes['new_outperforms_old']),
+            "significant_wilcoxon_improvements_tests": significant_wilcoxon_test_time_changes['new_outperforms_old'],
+            "significant_wilcoxon_regressions": len(significant_wilcoxon_test_time_changes['old_outperforms_new']),
+            "significant_wilcoxon_regressions_tests": significant_wilcoxon_test_time_changes['old_outperforms_new'],
+            "significant_mannwhitney_improvements": len(significant_mannwhitney_test_time_changes['new_outperforms_old']),
+            "significant_mannwhitney_improvements_tests": significant_mannwhitney_test_time_changes['new_outperforms_old'],
+            "significant_mannwhitney_regressions": len(significant_mannwhitney_test_time_changes['old_outperforms_new']),
+            "significant_mannwhitney_regressions_tests": significant_mannwhitney_test_time_changes['old_outperforms_new'],
             "tests": []
         }
         for test_name in self.new_single_tests.keys():
             new_times = self.new_single_tests[test_name][self.warmup:]
             old_times = self.old_single_tests[test_name][self.warmup:]
+            if any(t <= 0.005 for t in new_times) or any(t <= 0.005 for t in old_times): #0.0 in new_times or 0.0 in old_times:
+                continue
             pvalue = self.get_improvement_p_value(old_times, new_times) 
+            pair_pvalue = self.get_pair_improvement_p_value(old_times, new_times)
+            binom_pvalue = self.get_binom_improvement_p_value(old_times, new_times)
+            wilcoxon_pvalue = self.get_wilcoxon_pvalue(old_times, new_times)
+            mannwhitney_pvalue = self.get_mannwhitney_pvalue(old_times, new_times)
             tests["tests"].append({
                 "test_name": test_name,
-                "is_significant": pvalue < self.min_p_value,
+                "is_significant": bool(pvalue < self.min_p_value),
                 "p_value": safe_float(pvalue),
+                "is_pair_significant": bool(pair_pvalue < self.min_p_value),
+                "pair_p_value": safe_float(pair_pvalue),
+                "is_binom_significant": bool(binom_pvalue < self.min_p_value),
+                "binom_p_value": safe_float(binom_pvalue),
+                "is_wilcoxon_significant": bool(wilcoxon_pvalue < self.min_p_value),
+                "wilcoxon_p_value": safe_float(wilcoxon_pvalue), 
+                "is_mannwhitney_significant": bool(self.is_mannwhitney_significant(old_times, new_times)),
+                "mannwhitney_p_value": safe_float(mannwhitney_pvalue),
                 "relative_improvement": safe_float(self.relative_improvement(old_times, new_times)),
                 "absolute_improvement_ms": safe_float((np.mean(old_times) - np.mean(new_times)) * 1000),
                 "old_mean_ms": safe_float(np.mean(old_times) * 1000),

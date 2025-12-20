@@ -20,8 +20,9 @@ STORAGE_PATHS = {
 COMMIT_TIME = {
     'since': datetime(2020, 1, 1, tzinfo=timezone.utc),
     'until': datetime.now(timezone.utc),
-    'min-exec-time-improvement': 0.05,
-    'min-p-value': 0.05
+    'min-exec-time-improvement': 0.03,
+    'min-p-value': 0.05,
+    'min-stars': 20
 }
 
 TEST_KEYWORDS = [
@@ -50,10 +51,10 @@ VALID_TEST_FLAGS: dict[str, list[str]] = {
     "suffix": [
         "_BUILD_TEST", "_BUILD_TESTS", "_BUILD_TESTING",
         "_ENABLE_TEST", "_ENABLE_TESTS", "_ENABLE_TESTING",
-        "_UNIT_TESTS", "_UNITTEST"
+        "_UNIT_TESTS", "_UNITTEST", "DOC_TEST"
     ],
     "in": [
-        "_UNIT_TEST_"
+        "_UNIT_TEST_", "BENCH"
     ]
 }
 

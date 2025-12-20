@@ -67,7 +67,7 @@ class DockerTester:
                 )
                 logging.info(f"pvalue: {total_improvement}")
 
-                isolated_improvements = test.get_significant_test_time_changes()
+                isolated_improvements = test.get_significant_test_time_changes(test.get_pair_improvement_p_value)
                 logging.info(f"new outperforms old: {isolated_improvements['new_outperforms_old']}")
                 overall_change = test.get_overall_change()
                 logging.info(f"overall change: {overall_change}")
@@ -134,8 +134,8 @@ class DockerTester:
                     test_repeat = self.config.testing.commit_test_times
                     has_list_args = len(new_test_cmd) > 1
                     
-                    for new_cmd, old_cmd in tqdm(zip(new_test_cmd, old_test_cmd), total=len(new_test_cmd), position=1, leave=False):   
-                        for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=2, leave=False):
+                    for new_cmd, old_cmd in tqdm(zip(new_test_cmd, old_test_cmd), total=len(new_test_cmd), position=1, leave=False, mininterval=5): 
+                        for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=2, leave=False, mininterval=5):
                             order = [
                                 ("New", new_cmd, new_structure, new_pf),
                                 ("Old", old_cmd, old_structure, old_pf),

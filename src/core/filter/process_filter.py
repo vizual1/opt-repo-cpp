@@ -16,6 +16,72 @@ class ProcessFilter:
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
+    def valid_run(self, container_name: str) -> bool:
+        tmp_root = Path.cwd()/"tmp"
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=tmp_root) as tmpdir:
+            tmp_path = Path(tmpdir)
+            process = CMakeProcess(self.repo.full_name, self.config, tmp_path, None, [], CMakeAnalyzer(tmp_path), "", jobs=self.config.resources.jobs, docker_test_dir=self.config.testing.docker_test_dir)
+        
+            if not GitHandler().clone_repo(self.repo.full_name, tmp_path):
+                logging.error(f"[{self.repo.full_name}] git cloning failed")
+                return False
+            
+            analyzer = process.analyzer
+            analyzer.reset()
+            if not analyzer.has_testing(nolist=self.config.testing.no_list_testing):
+                logging.error(f"[{self.repo.full_name}] invalid ctest")
+                return False
+            
+            self.list_test_arg = analyzer.get_list_test_arg()
+
+            flags = FlagFilter(self.config.valid_test_flags, analyzer.has_build_testing_flag()).get_valid_flags()
+            sorted_testing_path = self.sort_testing_path(analyzer.get_enable_testing_path())
+            if len(sorted_testing_path) == 0:
+                logging.error(f"[{self.repo.full_name}] path to enable_testing() was not found in {tmpdir}: {sorted_testing_path}")
+                return False
+            
+            test_path = sorted_testing_path[0]
+            if test_path.name == "CMakeLists.txt":
+                test_path = test_path.parent
+            enable_testing_path = test_path.relative_to(tmp_path)
+            logging.info(f"[{self.repo.full_name}] path to enable_testing(): '{enable_testing_path}'")
+            try:
+                process.set_enable_testing(enable_testing_path)
+                process.set_flags(flags)
+                process.docker_image = self.config.docker_image
+                process.start_docker_image(self.config, container_name)
+            
+                if not process.build():
+                    logging.error(f"[{self.repo.full_name}] build failed")
+                    process.docker.stop_container()
+                    return False
+                    
+                if not process.collect_tests():
+                    logging.error(f"[{self.repo.full_name}] test failed")
+                    process.docker.stop_container()
+                    return False
+                
+                test_cmd = process.commands[2:]
+                has_list_args = len(test_cmd) > 1
+                for cmd in test_cmd:
+                    if not process.test(cmd, has_list_args):
+                        logging.error(f"[{self.repo.full_name}] test failed ({self.sha})")
+                        process.docker.stop_container()
+                        return False
+                
+            except Exception as e:
+                logging.exception(f"[{self.repo.full_name}] Unexpected error during process run: {e}")
+                return False
+
+            finally:
+                try:
+                    process.docker.stop_container()
+                except Exception as e:
+                    logging.warning(f"[{self.repo.full_name}] Failed to stop container: {e}")
+            
+            return True
+
     def commit_setup_and_build(
         self, 
         msg: str, 
@@ -58,6 +124,7 @@ class ProcessFilter:
             else:
                 new = True
             process.start_docker_image(self.config, container_name, new)
+            #process.clone_repo(self.repo.full_name, self.sha)
             
             if not process.build():
                 logging.error(f"[{self.repo.full_name}] {msg} build failed ({self.sha})")

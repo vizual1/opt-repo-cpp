@@ -54,7 +54,7 @@ class RepositoryCollector:
         window_end = datetime.now(timezone.utc)
         window_size = timedelta(days=1)
             
-        with tqdm(desc="Discovering repos", unit="repo") as pbar:
+        with tqdm(desc="Discovering repos", unit="repo", mininterval=5) as pbar:
             while window_end > start_boundary and count < limit:
             #while lower > 0 and count < limit:
             #    upper = lower
@@ -62,10 +62,11 @@ class RepositoryCollector:
                 window_start = max(start_boundary, window_end - window_size)
                 pushed_range = f"pushed:{window_start.date()}..{window_end.date()}"
                 #query = f"language:{self.language} stars:{lower}..{upper}"
-                query = f"{pushed_range} language:{self.language} archived:false"
+                query = f"{pushed_range}, language:{self.language}, archived:false,"
 
                 if getattr(self.config, "stars", None):
-                    query += f" stars:<= {self.config.stars}"
+                    query += f" stars:<={self.config.stars}"
+                    query += f" stars:>={self.config.commits_time['min-stars']}"
 
                 logging.info(f"Query: {query}")
 

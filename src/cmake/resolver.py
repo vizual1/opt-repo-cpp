@@ -32,11 +32,10 @@ LLM_DEP_SCHEMA = {
                         "vcpkg": {"type": "array", "items": {"type": "string"}},
                         "apt": {"type": "array", "items": {"type": "string"}},
                     },
-                    "required": ["vcpkg", "apt"],
-                    "additionalProperties": False,
+                    "additionalProperties": False
                 },
             },
-            "required": ["vcpkg", "apt", "flags"],
+            "required": ["apt"],
             "additionalProperties": False,
         }
     },
@@ -106,7 +105,7 @@ class DependencyResolver:
                 unresolved.add(dep)
                 continue
 
-            for method in ("apt", "vcpkg"):
+            for method in ["apt"]: #, "vcpkg"):
                 if self.install(dep, method):
                     flags |= self.flags(dep, method)
                     break
@@ -154,7 +153,7 @@ class DependencyResolver:
                 self.container.exec_run(["apt-get", "update"])
             exit_code, output = self.container.exec_run(cmd)
             if exit_code == 0: logging.info(f"Installed {dep_name} via {method}")
-            else: logging.info(output.decode(errors="ignore") if output else "")
+            else: logging.warning(output.decode(errors="ignore") + "\n" + str(cmd) if output else str(cmd))
             return exit_code == 0
         except subprocess.CalledProcessError:
             logging.error(f"Failed to install {dep_name} via {method}")
@@ -223,6 +222,10 @@ class DependencyResolver:
         
         def _find_pkgconfig_missing(self, stdout: str, stderr: str) -> set[str]:
             patterns = CONFIG_ERROR_PATTERNS
+            if "CMake Error" in stdout:
+                stdout = "CMake Error" + stdout.split("CMake Error", 1)[1]
+            if "CMake Error" in stderr:
+                stderr = "CMake Error" + stderr.split("CMake Error", 1)[1]
             missing = set()
             for pattern in patterns:
                 missing.update(re.findall(pattern, stdout))
@@ -241,17 +244,25 @@ class DependencyResolver:
         def __init__(self, config: Config):
             self.config = config
 
-        def find_flags(self, conf_out: str, conf_err: str, build_out: str, build_err: str, flags: dict[str, list[str]]) -> dict[str, list[str]]:
+        def find_resolve(
+            self, 
+            conf_out: str, conf_err: str, 
+            build_out: str, build_err: str, 
+            flags: dict[str, list[str]], 
+            cmds: list[list[str]]
+        ) -> tuple[dict[str, list[str]], list[list[str]]]:
             append = set(flags["append"])
             remove = set(flags["remove"])
+            command: list[list[str]] = cmds
             
             combined = "\n".join([conf_out, conf_err, build_out, build_err])
 
             for pattern in FLAGS_ERROR_PATTERNS:
-                if re.search(pattern["regex"], combined, re.I):
-                    pattern["action"](append, remove)
+                match = re.search(pattern["regex"], combined, re.I)
+                if match:
+                    pattern["action"](append, remove, command, match)
 
-            return {"append": list(append), "remove": list(remove)}
+            return {"append": list(append), "remove": list(remove)}, command
     
     class LLMResolver:
         def __init__(self, config: Config):

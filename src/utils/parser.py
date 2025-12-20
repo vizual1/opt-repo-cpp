@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 from typing import Union
 from collections import defaultdict
 
@@ -142,3 +143,20 @@ def parse_usr_bin_time(output: str) -> float:
         real_seconds = real_ms / 1000.0
         return real_seconds
     return 0.0
+
+
+def remove_exclude_from_all(repo_root: Path) -> None:
+    cmake_files = list(repo_root.rglob("CMakeLists.txt"))
+
+    pattern = re.compile(r'\bEXCLUDE_FROM_ALL\b')
+
+    for cmake_file in cmake_files:
+        original = cmake_file.read_text(encoding="utf-8")
+
+        if "EXCLUDE_FROM_ALL" not in original:
+            continue
+
+        modified = pattern.sub("", original)
+
+        if modified != original:
+            cmake_file.write_text(modified, encoding="utf-8")

@@ -21,14 +21,16 @@ class CommitTesterPipeline:
 
     def _input_tester(self) -> None:
         commits = self.commit.get_commits()
-        for repo_id, new_sha, old_sha in tqdm(commits, total=len(commits), desc="Commits testing...", position=0):
-            file = self.commit.get_file_prefix(repo_id)
-            new_path, old_path = self.commit.get_paths(file, new_sha)
-            try:
-                repo = self.config.git_client.get_repo(repo_id)
-                self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
-            except Exception as e:
-                logging.exception(f"[{repo_id}] Error testing commits: {e}")
+        with tqdm(commits, total=len(commits), position=0, mininterval=5) as pbar:
+            for repo_id, new_sha, old_sha in pbar:
+                pbar.set_description(f"Commits testing {repo_id}")
+                file = self.commit.get_file_prefix(repo_id)
+                new_path, old_path = self.commit.get_paths(file, new_sha)
+                try:
+                    repo = self.config.git_client.get_repo(repo_id)
+                    self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
+                except Exception as e:
+                    logging.exception(f"[{repo_id}] Error testing commits: {e}")
 
     def _sha_tester(self):
         if self.config.sha and self.config.repo_id:

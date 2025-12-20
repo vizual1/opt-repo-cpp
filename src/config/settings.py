@@ -16,8 +16,9 @@ class LLMSettings:
     ollama_enabled: bool = True
     ollama_url: str = "http://127.0.0.1:11434/api/generate"
     ollama_stage1_model: str = "qwen2.5:7b" #"llama3.1:8b"
+    ollama_diff_model: str = "qwen2.5-coder:7b"
     ollama_stage2_model: str = "qwen3:8b" #"deepseek-coder:6.7b"
-    ollama_resolver_model: str = "qwen2.5:7b"
+    ollama_resolver_model: str = "qwen3:8b"
     
     # Behavior flags
     commit_message_only: bool = False
@@ -41,10 +42,20 @@ class GitHubSettings:
     
 @dataclass
 class ResourceSettings:
-    """Docker resource limits."""
-    cpuset_cpus: str = '4'
-    mem_limit: str = '8g'
-    memswap_limit: str = '8g'
+    """Docker resource limits for --testcommits"""
+    cpuset_cpus: str = '5'
+    mem_limit: str = '16g'
+    memswap_limit: str = '16g'
     cpu_quota: int = 100000
     cpu_period: int = 100000
-    jobs: int = 2
+    jobs: int = 1
+    
+@dataclass
+class ResourceSettingsCrawl(ResourceSettings):
+    """Docker resource limits for --testcrawl"""
+    cpuset_cpus: str = '1-4'
+    mem_limit: str = '32g'
+    memswap_limit: str = '32g'
+    cpu_quota: int = 400000
+    cpu_period: int = 100000
+    jobs: int = 4

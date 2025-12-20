@@ -242,7 +242,7 @@ class CMakeParser:
             current_suite = ""
             for line in text.splitlines():
                 line = self.clean(line)
-                if "not found" in line:
+                if "not found" in line or "Errors occurred during startup!" in line:
                     return []
                 if line.endswith("ms"):
                     continue

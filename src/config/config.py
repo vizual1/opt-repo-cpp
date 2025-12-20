@@ -5,8 +5,8 @@ from typing import Optional
 from github import Auth, Github
 
 from src.config.constants import *
-from src.config.settings import LLMSettings, TestingSettings, GitHubSettings, ResourceSettings
-from src.config.prompts import STAGE1_PROMPT, STAGE2_PROMPT, RESOLVER_PROMPT
+from src.config.settings import LLMSettings, TestingSettings, GitHubSettings, ResourceSettings, ResourceSettingsCrawl
+from src.config.prompts import STAGE1_PROMPT, DIFF_PROMPT, STAGE2_PROMPT, RESOLVER_PROMPT
 
 @dataclass
 class Config:
@@ -67,6 +67,7 @@ class Config:
     
     # Prompts
     stage1_prompt: str = STAGE1_PROMPT
+    diff_prompt: str = DIFF_PROMPT
     stage2_prompt: str = STAGE2_PROMPT
     resolver_prompt: str = RESOLVER_PROMPT
     
@@ -81,6 +82,8 @@ class Config:
         self.output_file = self.output
         self.docker_image = self.docker
         self.mount_path = self.mount
+        if self.testcrawl:
+            self.resources = ResourceSettingsCrawl()
         self._validate()
         self._setup_github()
 

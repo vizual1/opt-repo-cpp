@@ -59,7 +59,28 @@ class DockerManager:
         except Exception as e:
             logging.error(f"Docker execution failed: {e}")
 
-    def run_command_in_docker(self, cmd: list[str], root: Path, workdir: Optional[Path] = None, check: bool = True, timeout: int = -1) -> tuple[int, str, str, float]:
+    def clone_in_docker(self, cmd: list[str], workdir: Optional[Path] = None, check: bool = True):
+        if not self.container:
+            logging.error(f"No docker container started")
+            return 1, "", "", -1.0
+        
+        if workdir:
+            container_workdir = posixpath.abspath(workdir)
+            exit_code, output = self.container.exec_run(cmd, workdir=str(container_workdir))
+        else:
+            exit_code, output = self.container.exec_run(cmd)
+
+        if exit_code == 0:
+            logging.info(f"Command run in docker: {cmd}")
+        else:
+            logging.warning(f"Command failed in docker: {cmd}")
+        output = output.decode(errors="ignore") if output else ""
+        logs = self.container.logs().decode()
+        if output: logging.info(f"Output: {output}")
+        if logs: logging.info(f"Logs: {logs}")
+
+
+    def run_command_in_docker(self, cmd: list[str], root: Path, workdir: Optional[Path] = None, check: bool = True, timeout: int = -1, log: bool = True) -> tuple[int, str, str, float]:
         rel_root = os.path.relpath(root, self.mount)
         container_root = posixpath.join(f"/workspace", rel_root.replace("\\", "/"))
 
@@ -84,6 +105,10 @@ class DockerManager:
         ]
         start = time.perf_counter()
         exit_code, output = self.container.exec_run(timed_cmd, workdir=str(container_workdir))
+        if exit_code == 0 and log:
+            logging.info(f"Command run in docker: {cmd}")
+        elif log:
+            logging.warning(f"Command failed in docker: {cmd}")
         end = time.perf_counter()
         output = output.decode(errors="ignore") if output else ""
         logs = self.container.logs().decode()
@@ -98,7 +123,7 @@ class DockerManager:
             else:
                 save = "test"
             cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/new_{save}.sh"]
-            exit_code, _, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
+            exit_code, _, _, _ = self.run_command_in_docker(cmd, project_root, check=False, log=False)
             if exit_code != 0:
                 logging.error(f"Copying the build and test commands failed with: {exit_code}")
         for i, c in enumerate(old_cmd):

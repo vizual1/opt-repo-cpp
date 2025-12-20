@@ -23,7 +23,7 @@ class CommitPipeline:
         if self.config.sha and self.config.repo_id:
             repo = self.config.git_client.get_repo(self.config.repo_id)
             try:
-                self.commits = repo.get_commits(sha=self.config.sha) 
+                self.commits = [repo.get_commit(sha=self.config.sha)]
             except Exception as e:
                 logging.exception(f"[{repo.full_name}] Error fetching commits: {e}")
                 self.commits = []
@@ -49,7 +49,7 @@ class CommitPipeline:
         
         stats = CommitStats()
         filtered_commits: list[str] = []
-        for commit in tqdm(self.commits, desc=f"{repo.full_name} commits", position=1, leave=False):
+        for commit in tqdm(self.commits, desc=f"{repo.full_name} commits", position=1, leave=False, mininterval=5):
             stats.num_commits += 1
             try:
                 if not CommitFilter(commit, self.config, repo).accept():
