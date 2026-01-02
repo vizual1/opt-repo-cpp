@@ -3,9 +3,9 @@ from src.config.constants import DOCKER_IMAGE_MAP
 from pathlib import Path
 
 class CMakeAnalyzer:
-    """High-level interface for analyzing CMake repositories."""
-    def __init__(self, root: Path):
-        self.root = root
+    """High-level interface for analyzing and parsing CMakeLists.txt files."""
+    def __init__(self, repo_path: Path):
+        self.root = repo_path
         self.parser = CMakeParser(self.root)
 
     def reset(self) -> None:
@@ -23,8 +23,8 @@ class CMakeAnalyzer:
     def get_list_test_arg(self) -> list[tuple[str, str]]:
         return list(self.parser.list_test_arg)
 
-    def has_build_testing_flag(self) -> dict[str, dict[str, str]]:
-        return self.parser.find_test_flags()
+    def extract_build_testing_flag(self) -> dict[str, dict[str, str]]:
+        return self.parser.find_cmake_test_flags()
     
     def get_enable_testing_path(self) -> list[Path]:
         return self.parser.enable_testing_path
@@ -33,10 +33,10 @@ class CMakeAnalyzer:
         return self.parser.parse_ctest_file(text)
     
     def parse_subdirs(self, text: str) -> list[str]:
-        return self.parser.parse_subdirs(text)
+        return self.parser.parse_cmake_subdirs(text)
     
-    def find_unit_tests(self, text: str, framework: str) -> list[str]:
-        return self.parser.find_unit_tests(text, framework)
+    def extract_unit_tests(self, text: str, framework: str) -> list[str]:
+        return self.parser.extract_unit_tests(text, framework)
 
     def get_dependencies(self) -> set[str]:
         deps = self.parser.find_dependencies()

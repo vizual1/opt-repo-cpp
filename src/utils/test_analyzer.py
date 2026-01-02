@@ -152,7 +152,7 @@ class TestAnalyzer:
 
         if n == 0:
             logging.error("All pairs are ties or NaN after applying the margin; cannot perform sign test.")
-            return 0.0
+            return np.nan
         
         # Exact one-sided binomial test: H1 is 'wins' > 0.5
         res = stats.binomtest(k=wins, n=n, p=0.5, alternative="greater")

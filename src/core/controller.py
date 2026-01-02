@@ -20,7 +20,6 @@ class Controller:
     - **Gather and filter commits** from repositories.
     - **Build and test new commits and old commits** to compare performance.
     - **Run docker images to build and test new commits and old commits** to compare performance.
-    - **Run docker images to build and test old commits and the mounted modified commit** to compare performance.
     """
     def __init__(self, config: Config):
         self.config = config

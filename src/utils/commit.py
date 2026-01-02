@@ -5,20 +5,10 @@ class Commit:
     def __init__(self, input_file: str, output_path: str):
         self.input_file = input_file
         self.output_path = output_path
-        #Path(self.input_file).mkdir(parents=True, exist_ok=True)
-        #Path(self.output_path).mkdir(parents=True, exist_ok=True)
     
-    # repo_id: str
     def get_commits(self) -> list[tuple[str, str, str]]:
         """Return list of (repo_id, new_sha, old_sha) pairs."""
-        #try:
-        #    owner, name = repo_id.strip().split("/", 1)
-        #except ValueError:
-        #    raise ValueError(f"Invalid repo ID format: '{repo_id}'. Expected '<owner>/<repo>'.")
-        
-        #file_prefix = f"{owner}_{name}"
-        #filename = f"{file_prefix}_filtered.txt"
-        file_path = Path(self.input_file) #/ filename
+        file_path = Path(self.input_file)
 
         commits = self._get_filtered_commits(file_path)
         if not commits:
@@ -42,7 +32,7 @@ class Commit:
         """
         Extract commit pairs from a text file.
         Expected line format:
-            <new_sha> | <old_sha> | ...
+            <repo_id> | <new_sha> | <old_sha> | ...
         """
         commits_info: list[tuple[str, str, str]] = []
 

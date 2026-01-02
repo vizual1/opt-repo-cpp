@@ -52,7 +52,7 @@ def setup_parser() -> argparse.ArgumentParser:
     filter_group.add_argument("--stars", type=int, default=1000,
                               help="Minimum star count for popular repos (default: 1000).")
     filter_group.add_argument("--filter", type=str, choices=["simple", "llm", "issue"],
-                              default="simple", help="Filter strategy to use (default: simple).")
+                              default="llm", help="Filter strategy to use (default: llm).")
     filter_group.add_argument("--analyze", action="store_true",
                               help="Analyze the given repositories.")
 
@@ -75,7 +75,6 @@ def create_config(args: argparse.Namespace) -> Config:
 def start() -> None:
     parser = setup_parser()
     args = parser.parse_args()
-
     config = create_config(args)
     pipeline = Controller(config=config)
     pipeline.run()

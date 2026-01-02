@@ -20,7 +20,7 @@ class Config:
     # Limits and filters
     limit: int = 10
     stars: int = 1000
-    filter: str = "simple"
+    filter: str = "llm"
     filter_type: str = field(init=False)
     
     input: str = ""
@@ -96,7 +96,7 @@ class Config:
             raise ValueError("Stars and limit must be positive.")
 
         if str(self.testing.docker_test_dir) == "/workspace":
-            raise ValueError("Docker test directory cannot be '/workspace' to avoid data loss")
+            raise ValueError("Docker test directory cannot be '/workspace'")
             
         if not self.github.access_token:
             raise ValueError("GitHub access token is required")

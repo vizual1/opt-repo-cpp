@@ -35,33 +35,26 @@ class RepositoryCollector:
         Returns:
             List of Repository objects that match language and composition criteria
         """
-        # TODO: test
         seen_repo_ids = set()
         if self.config.input_file:
             seen_repo_ids = set(self._get_repo_ids(self.config.input_file))
             logging.info(f"Loaded {len(seen_repo_ids)} existing repositories to skip")
 
         results: list[Repository] = []
-        #upper = self.config.stars 
-        #lower = upper
         limit = self.config.limit
         count = 0
 
         logging.info(f"Starting GitHub query for popular {self.language} repos...")
-        logging.info(f"Target: {limit} repos") #with stars <= {upper}")
+        logging.info(f"Target: {limit} repos")
 
-        start_boundary = self.config.commits_time['since'] #datetime.strptime(, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        start_boundary = self.config.commits_time['since']
         window_end = datetime.now(timezone.utc)
         window_size = timedelta(days=1)
             
         with tqdm(desc="Discovering repos", unit="repo", mininterval=5) as pbar:
             while window_end > start_boundary and count < limit:
-            #while lower > 0 and count < limit:
-            #    upper = lower
-            #    lower = int(self.STAR_REDUCTION_FACTOR * upper)
                 window_start = max(start_boundary, window_end - window_size)
                 pushed_range = f"pushed:{window_start.date()}..{window_end.date()}"
-                #query = f"language:{self.language} stars:{lower}..{upper}"
                 query = f"{pushed_range}, language:{self.language}, archived:false,"
 
                 if getattr(self.config, "stars", None):
@@ -204,9 +197,7 @@ class RepositoryCollector:
         Returns:
             Repository ID in 'owner/repo' format, or None if invalid
         """
-        # Pipe-delimited table format (extract from filename)
         if '|' in line:
-            # Extract owner/repo from filename pattern
             filename = Path(filepath).stem
             parts = filename.split('_')
             if len(parts) >= 2:
@@ -217,6 +208,5 @@ class RepositoryCollector:
         if ',' in line:
             repo_url = line.split(',')[0].strip()
             return repo_url.removeprefix("https://github.com/").strip()
-        
-        # Direct format or URL
+
         return line.removeprefix("https://github.com/").strip()

@@ -13,11 +13,15 @@ class DockerManager:
         self.new = new
         self.docker_test_dir = docker_test_dir
 
-    def stop_container(self) -> None:
+    def stop_container(self, repo_id: str) -> None:
         if self.container:
-            self.container.stop()
-            self.container.remove()
-            self.container = None
+            try:
+                self.container.stop()
+                self.container.remove()
+                self.container = None
+                logging.info(f"[{repo_id}] Stopped the container")
+            except Exception as e:
+                logging.warning(f"[{repo_id}] Failed to stop container: {e}")
 
     def start_docker_container(self, container_name: str) -> None:
         self.client = docker.from_env()
@@ -135,3 +139,8 @@ class DockerManager:
             exit_code, _, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
             if exit_code != 0:
                 logging.error(f"Copying the build and test commands failed with: {exit_code}")
+
+    def load_docker_image(self, tar_path: Path):
+        self.client = docker.from_env()
+        with open(tar_path, "rb") as f:
+            self.client.images.load(f.read())

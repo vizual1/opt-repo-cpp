@@ -36,7 +36,8 @@ CONFIG_ERROR_PATTERNS = [
 BUILD_ERROR_PATTERNS = [
     r"fatal error:\s+([\w_]+\.h):\s+No such file or directory",
     r"fatal error:\s+([\w_/]+\.h):\s+No such file or directory",
-    r"cannot find -l([\w_]+)"
+    r"cannot find -l([\w_]+)",
+    r"(?:^|[\s:])([\w.+-]+):\s+(?:not found|command not found|No such file or directory)"
 ]
 
 FLAGS_ERROR_PATTERNS = [

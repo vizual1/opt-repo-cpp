@@ -25,14 +25,17 @@ class CommitFilter:
             logging.info(f"Cache hit for {self.commit.sha} ({self.config.filter_type}) -> {cached}")
             return cached
 
+        # TODO: better PR handling + using only_cpp_source_modified outside
+        # see src.utils.pull_request_handler
+
         if self.config.filter_type == "simple":
-            result = self._simple_filter() and self._only_cpp_source_modified()
+            result = self._simple_filter() and self.only_cpp_source_modified()
             self._save_cache(self.commit, result)
         elif self.config.filter_type == "llm":
-            result = self._only_cpp_source_modified() and self._llm_filter() 
+            result = self.only_cpp_source_modified() and self._llm_filter() 
             self._save_cache(self.commit, result, extra=f"_{name}")
         elif self.config.filter_type == "issue":
-            result = self._only_cpp_source_modified() and self.fixed_performance_issue() is not None
+            result = self.only_cpp_source_modified() and self.fixed_performance_issue() is not None
             self._save_cache(self.commit, result, extra=f"_{name}")
         else:
             result = False
@@ -112,7 +115,6 @@ class CommitFilter:
                     
                 files_checked += 1
                 
-                # Truncate large diffs
                 patch = f.patch
                 if len(patch) > 8000:
                     patch = patch[:8000] + "\n... [diff truncated] ..."
@@ -229,7 +231,7 @@ class CommitFilter:
                 return True
         return False
     
-    def _only_cpp_source_modified(self) -> bool:
+    def only_cpp_source_modified(self) -> bool:
         """Return True if commit modifies only C++ source/header files (no tests, no non-source)."""
         cpp_extensions = (".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp")
         ignore_dirs = ("third_party", "vendor", "external")

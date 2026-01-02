@@ -59,7 +59,7 @@ class StructureFilter:
 
                 if conv_test_dir:
                     logging.debug(f"[{self.repo.full_name}] conventional test directories {conv_test_dir}")
-                    self.testing_flags = analyzer.has_build_testing_flag()
+                    self.testing_flags = analyzer.extract_build_testing_flag()
                     self.test_flags = Counter(self.testing_flags.keys())
             
             logging.info(f"[{self.repo.full_name}] ctest is defined")

@@ -18,7 +18,6 @@ class CommitPipeline:
         self.stats = CommitStats()
         self.filtered_commits: list[str] = []
 
-    # TODO: test
     def filter_all_commits(self):
         if self.config.sha and self.config.repo_id:
             repo = self.config.git_client.get_repo(self.config.repo_id)
@@ -56,10 +55,35 @@ class CommitPipeline:
                     continue
             except Exception as e:
                 logging.exception(f"[{repo.full_name}] Error processing commit: {e}")
+                continue
             
             writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths['clones'])
             filtered_commits.append(writer.file or "")
             stats.perf_commits += 1
             stats += writer.write_commit(commit, self.config.separate, self.config.filter_type)
 
+        # TODO: test
+        self._rewrite_commits()
         stats.write_final_log()
+
+    def _read_commits(self) -> list[str]:
+        commits: list[str] = []
+        with open(self.config.output_file or self.config.storage_paths['clones'], "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                commits.append(line)
+        return commits
+    
+    def _organize_commits(self) -> list[str]:
+        commits = self._read_commits()
+        commits = list(set(commits))
+        commits.sort(key=str.casefold)
+        return commits
+    
+    def _rewrite_commits(self) -> None:
+        commits = self._organize_commits()
+        with open(self.config.output_file or self.config.storage_paths['clones'], "w") as f:
+            for line in commits:
+                f.write(line + "\n")

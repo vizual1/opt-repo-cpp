@@ -10,8 +10,7 @@ class CommitTesterPipeline:
     """
     def __init__(self, config: Config):
         self.config = config
-        self.commit = Commit(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])   
-        self.docker = DockerTester(self.config) 
+        self.commit = Commit(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
 
     def test_commit(self) -> None:
         if self.config.input_file or self.config.repo_id:
@@ -28,7 +27,8 @@ class CommitTesterPipeline:
                 new_path, old_path = self.commit.get_paths(file, new_sha)
                 try:
                     repo = self.config.git_client.get_repo(repo_id)
-                    self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
+                    docker = DockerTester(repo, self.config)
+                    docker.run_commit_pair(new_sha, old_sha, new_path, old_path)
                 except Exception as e:
                     logging.exception(f"[{repo_id}] Error testing commits: {e}")
 
@@ -43,6 +43,7 @@ class CommitTesterPipeline:
                 return
             old_sha = commit.parents[0].sha
             new_path, old_path = self.commit.get_paths(file_prefix, new_sha)
-            self.docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path)
+            docker = DockerTester(repo, self.config)
+            docker.run_commit_pair(new_sha, old_sha, new_path, old_path)
         else:
             logging.error("Wrong sha input")

@@ -49,7 +49,8 @@ class CMakeProcess:
             "parsed": [0.0 for _ in range(self.config.testing.warmup + self.config.testing.commit_test_times)], 
             "time": [0.0 for _ in range(self.config.testing.warmup + self.config.testing.commit_test_times)]
         }
-        self.commands: list[list[str]] = []
+        self.test_commands: list[list[str]] = []
+        self.build_commands: list[list[str]] = []
         self.cmake_config_output: list[str] = []
         self.cmake_build_output: list[str] = []
         self.ctest_output: list[str] = []
@@ -134,7 +135,6 @@ class CMakeProcess:
                 | results.json -- tested results, statistics, metadata and other informations
             | old_build.sh -- old configure and build code used => OK
             | new_build.sh -- new configure and build code used => OK
-            TODO: test restructuring?
             | old_test.sh -- old ctest used => OK
             | new_test.sh -- new ctest used => OK
         """
@@ -381,7 +381,8 @@ class CMakeProcess:
         if not self._build():
             return False
         
-        self.commands.append(list(map(str, cmd)))
+        self.build_commands.append(list(map(str, cmd)))
+        self.build_commands.reverse()
         return True
         
     def to_container_path(self, path: Path) -> str:
@@ -402,7 +403,7 @@ class CMakeProcess:
         if exit_code == 0:
             logging.info(f"CMake build completed for {self.root}")
             logging.debug(f"Output:\n{stdout}")
-            self.commands.append(list(map(str, cmd)))
+            self.build_commands.append(list(map(str, cmd)))
             return True
         else:
             logging.error(f"CMake build failed for {self.root} (return code {exit_code})", exc_info=True)
@@ -423,9 +424,9 @@ class CMakeProcess:
         if test_exec_flag and not self._individual_tests_collection(test_exec_flag):
             return False
 
-        logging.info(f"Commands: {self.commands}")
-        if len(self.commands) == 2: # only configuration and build commands
-            self.commands.append(list(map(str, cmd)))
+        logging.info(f"Commands: {self.test_commands}")
+        if len(self.test_commands) == 0: # no test commands
+            self.test_commands.append(list(map(str, cmd)))
         return True
 
 
@@ -463,7 +464,7 @@ class CMakeProcess:
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
                 cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
             )
-            tests = self.analyzer.find_unit_tests(stdout, framework)
+            tests = self.analyzer.extract_unit_tests(stdout, framework)
             logging.info(f"{test_flag} ({framework}) output:\n{stdout}")
             if tests:
                 unit_tests[exe_path] = tests
@@ -478,7 +479,7 @@ class CMakeProcess:
             for test_name in test_names:
                 self.per_test_times[test_name] = {"parsed": [], "time": []}
                 command = self._single_test_collection(exe_path, framework, test_name)
-                self.commands.append(command)
+                self.test_commands.append(command)
                 self.unit_tests_map[" ".join(command)] = {"name": test_name, "exe": exe_path}
 
         logging.debug(f"Unit test map: {self.unit_tests_map}")
@@ -618,8 +619,8 @@ class CMakeProcess:
             logging.debug(f"[{test_name}] Time elapsed: {elapsed or time} s")
         else:
             logging.error(f"CTest failed for {self.test_path} (return code {exit_code}) with command {' '.join(command)}", exc_info=True)
-            logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
-            logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+            logging.error(f"Output (stdout):\n{stdout[:10000]}", exc_info=True)
+            logging.error(f"Error (stderr):\n{stderr[:10000]}", exc_info=True)
             return False
 
         self.ctest_output.append(stdout)

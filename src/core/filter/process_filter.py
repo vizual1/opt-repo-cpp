@@ -35,7 +35,7 @@ class ProcessFilter:
             
             self.list_test_arg = analyzer.get_list_test_arg()
 
-            flags = FlagFilter(self.config.valid_test_flags, analyzer.has_build_testing_flag()).get_valid_flags()
+            flags = FlagFilter(self.config.valid_test_flags, analyzer.extract_build_testing_flag()).get_valid_flags()
             sorted_testing_path = self.sort_testing_path(analyzer.get_enable_testing_path())
             if len(sorted_testing_path) == 0:
                 logging.error(f"[{self.repo.full_name}] path to enable_testing() was not found in {tmpdir}: {sorted_testing_path}")
@@ -54,20 +54,20 @@ class ProcessFilter:
             
                 if not process.build():
                     logging.error(f"[{self.repo.full_name}] build failed")
-                    process.docker.stop_container()
+                    process.docker.stop_container(self.repo.full_name)
                     return False
                     
                 if not process.collect_tests():
                     logging.error(f"[{self.repo.full_name}] test failed")
-                    process.docker.stop_container()
+                    process.docker.stop_container(self.repo.full_name)
                     return False
                 
-                test_cmd = process.commands[2:]
+                test_cmd = process.test_commands
                 has_list_args = len(test_cmd) > 1
                 for cmd in test_cmd:
                     if not process.test(cmd, has_list_args):
                         logging.error(f"[{self.repo.full_name}] test failed ({self.sha})")
-                        process.docker.stop_container()
+                        process.docker.stop_container(self.repo.full_name)
                         return False
                 
             except Exception as e:
@@ -75,10 +75,7 @@ class ProcessFilter:
                 return False
 
             finally:
-                try:
-                    process.docker.stop_container()
-                except Exception as e:
-                    logging.warning(f"[{self.repo.full_name}] Failed to stop container: {e}")
+                process.docker.stop_container(self.repo.full_name)
             
             return True
 
@@ -101,7 +98,7 @@ class ProcessFilter:
             return None
         
         analyzer = process.analyzer
-        flags = FlagFilter(self.config.valid_test_flags, analyzer.has_build_testing_flag()).get_valid_flags()
+        flags = FlagFilter(self.config.valid_test_flags, analyzer.extract_build_testing_flag()).get_valid_flags()
         sorted_testing_path = self.sort_testing_path(analyzer.get_enable_testing_path())
         if len(sorted_testing_path) == 0:
             logging.error(f"[{self.repo.full_name}] path to enable_testing() was not found in {self.root}: {sorted_testing_path}")
@@ -124,16 +121,15 @@ class ProcessFilter:
             else:
                 new = True
             process.start_docker_image(self.config, container_name, new)
-            #process.clone_repo(self.repo.full_name, self.sha)
             
             if not process.build():
                 logging.error(f"[{self.repo.full_name}] {msg} build failed ({self.sha})")
-                process.docker.stop_container()
+                process.docker.stop_container(self.repo.full_name)
                 return None
             
             if not process.collect_tests():
                 logging.error(f"[{self.repo.full_name}] {msg} generating test commands failed ({self.sha})")
-                process.docker.stop_container()
+                process.docker.stop_container(self.repo.full_name)
                 return None
             
             logging.info(f"[{self.repo.full_name}] {msg} build successful ({self.sha})")
@@ -149,7 +145,7 @@ class ProcessFilter:
             try:
                 if not process.test(command, has_list_args):
                     logging.error(f"[{self.repo.full_name}] {msg} test failed ({self.sha})")
-                    process.docker.stop_container()
+                    process.docker.stop_container(self.repo.full_name)
                     return False
                 
                 logging.debug(f"[{self.repo.full_name}] {msg} build and test successful ({self.sha})")

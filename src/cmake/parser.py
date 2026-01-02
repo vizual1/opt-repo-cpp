@@ -119,6 +119,9 @@ class CMakeParser:
         return False
     
     def can_list_tests(self) -> bool:
+        """
+        Checks if CTest is using some test framework that can list individual tests that can be run separately
+        """
         libraries: list[str] = [
             "GTest::gtest", "GTest::gtest_main", "GTest::gmock", "GTest::gmock_main", 
             "gtest", "gtest_main", "gmock", "gmock_main",
@@ -158,7 +161,7 @@ class CMakeParser:
 
         return False
     
-    def find_test_flags(self) -> dict[str, dict[str, str]]:
+    def find_cmake_test_flags(self) -> dict[str, dict[str, str]]:
         test_flags = {}
 
         logging.debug("Searching for possible test flags...")
@@ -222,16 +225,20 @@ class CMakeParser:
 
         return sorted(executables)
     
-    def parse_subdirs(self, text: str) -> list[str]:
+    def parse_cmake_subdirs(self, text: str) -> list[str]:
         subdirs: list[str] = re.findall(r'subdirs\("([^"]+)"\)', text)
         return [s.replace("\\", "/") for s in subdirs]
     
-    def clean(self, s: str) -> str:
+    def _clean(self, s: str) -> str:
         s = re.sub(r'\x1B\[[0-?]*[ -/]*[@-~]', '', s)
         s = ''.join(ch for ch in s if ch.isprintable() or ch in "\n\t ")
         return s
     
-    def find_unit_tests(self, text: str, framework: str) -> list[str]:
+    # TODO
+    def extract_unit_tests(self, text: str, framework: str) -> list[str]:
+        """
+        Extracts the unit tests in <text> according to the test <framework>
+        """
         tests = []
 
         if framework == "gtest":
@@ -239,10 +246,14 @@ class CMakeParser:
             # MySuite.
             #   TestA
             #   TestB
+            return self.extract_gtest(text)
+            """
             current_suite = ""
             for line in text.splitlines():
-                line = self.clean(line)
-                if "not found" in line or "Errors occurred during startup!" in line:
+                line = self._clean(line)
+                if "CMake Error" in line:
+                    return []
+                if "not found" in line:
                     return []
                 if line.endswith("ms"):
                     continue
@@ -250,19 +261,29 @@ class CMakeParser:
                     current_suite = line.strip().strip('.')
                 elif line.strip():
                     tests.append(f"{current_suite}.{line.strip()}")
-                
+            """
         elif framework == "catch":
-            tests = [line.strip() for line in text.splitlines() 
-                     if line.strip() and 
-                     not "All available test cases:" in line.strip() and 
-                     not "test cases" in line.strip() and
-                     not line.strip().startswith("[") and 
-                     not line.strip().endswith("]") and 
-                     not line.strip().endswith("ms")]
+            return self.extract_catch(text)
+            tests = []
+            for line in text.splitlines():
+                line = self._clean(line)
+                if "CMake Error" in line:
+                    return []
+                if "Errors occurred during startup!" in line:
+                    return []
+                are_tests = not "All available test cases:" in line
+                are_tests = not "test cases" in line and are_tests
+                are_tests = not line.startswith("[") and not line.endswith("]") and are_tests
+                are_tests = not line.endswith("ms") and are_tests
+                if are_tests:
+                    tests.append(line)
         elif framework == "doctest":
+            return self.extract_doctest(text)
             tests = []
             for line in text.splitlines():
                 line = line.strip()
+                if "CMake Error" in line:
+                    return []
                 if not line:
                     continue
                 if line.endswith("ms"):
@@ -273,9 +294,12 @@ class CMakeParser:
                     continue
                 tests.append(line)
         elif framework == "boost":
+            return self.extract_boost(text)
             # Boost lists suites/tests as suite/test
             for line in text.splitlines():
-                line = self.clean(line)
+                line = self._clean(line)
+                if "CMake Error" in line:
+                    return []
                 if "not found" in line:
                     return []
                 if line.endswith("ms"):
@@ -284,14 +308,103 @@ class CMakeParser:
                     continue
                 tests.append(line.strip())
         elif framework == "qt":
+            return self.extract_qt(text)
             for line in text.splitlines():
-                line = self.clean(line)
+                line = self._clean(line)
+                if "CMake Error" in line:
+                    return []
                 if "not found" in line:
                     return []
                 if line.endswith("ms"):
                     continue
                 tests.append(line.strip())
         return tests
+    
+    def extract_gtest(self, text: str) -> list[str]:
+        suites = 0
+        tests = []
+        current_suite = None
+
+        for raw in text.splitlines():
+            line = raw.rstrip()
+            line = self._clean(line)
+
+            if any(x in line for x in (
+                "[ RUN", "[ PASSED", "[ FAILED", "Running main()"
+            )):
+                return []
+
+            if line.endswith("ms") and not line.startswith(' '):
+                continue
+            elif line.endswith('.') and not line.startswith(' '):
+                current_suite = line[:-1]
+                suites += 1
+            elif current_suite and line.startswith('  '):
+                tests.append(f"{current_suite}.{line.strip()}")
+
+        if suites == 0 or not tests:
+            return []
+
+        return tests
+
+    def extract_catch(self, text: str) -> list[str]:
+        if "All available test cases:" not in text:
+            return []
+
+        tests = []
+        for line in text.splitlines():
+            line = line.strip()
+            line = self._clean(line)
+
+            if line.endswith("ms"):
+                continue
+            if not line or line.startswith("["):
+                continue
+            if line.endswith("tests"):
+                continue
+
+            tests.append(line)
+
+        return tests if tests else []
+
+    def extract_doctest(self, text: str) -> list[str]:
+        if "====" not in text and "[doctest]" not in text:
+            return []
+
+        tests = []
+        for line in text.splitlines():
+            line = line.strip()
+            line = self._clean(line)
+            if not line or line.startswith("[doctest]"):
+                continue
+            if set(line) == {"="}:
+                continue
+            if line.endswith("ms"):
+                continue
+            tests.append(line)
+
+        return tests if tests else []
+
+    def extract_boost(self, text: str) -> list[str]:
+        tests = []
+        for line in text.splitlines():
+            line = line.strip()
+            line = self._clean(line)
+            if "/" in line and not line.startswith("Running"):
+                tests.append(line)
+
+        return tests if tests else []
+
+    def extract_qt(self, text: str) -> list[str]:
+        tests = []
+        for line in text.splitlines():
+            line = line.strip()
+            line = self._clean(line)
+            if "::" in line and not any(x in line for x in ("PASS", "FAIL")):
+                tests.append(line)
+
+        return tests if tests else []
+
 
     def find_dependencies(self) -> set[str]:
         """Find CMake dependency names from CMakeLists.txt."""
@@ -323,6 +436,9 @@ class CMakeParser:
         return hasattr(node, "__class__") and node.__class__.__module__.startswith("cmakeast")
 
     def _walk_ast(self, node) -> Generator[ast.FunctionCall, None, None]:
+        """
+        Walks the CMake AST generated by the CMakeAst library
+        """
         if isinstance(node, list):
             for item in node:
                 yield from self._walk_ast(item)
@@ -339,6 +455,9 @@ class CMakeParser:
                     continue
 
     def _find_function_calls(self, name: str = "", _args: list[str] = [], starts: str = "", ends: str = "", fcalls: list[tuple[ast.FunctionCall, Path]] = []) -> list[tuple[ast.FunctionCall, Path]]:
+        """
+        Find a specific function call <name> with specific <_args> arguments or arguments that <starts> or <ends> with a specific string according to CMakeAst library
+        """
         calls: list[tuple[ast.FunctionCall, Path]] = []
         if not fcalls:
             fcalls = self.cmake_function_calls
@@ -356,6 +475,9 @@ class CMakeParser:
         return calls
     
     def _find_all_function_calls(self, files: list[Path]) -> list[tuple[ast.FunctionCall, Path]]:
+        """
+        Finds all function calls in CMake according to CMakeAst library
+        """
         calls: list[tuple[ast.FunctionCall, Path]] = []
         for cf in files:
             with open(cf, 'r', errors='ignore') as file:
@@ -372,6 +494,9 @@ class CMakeParser:
         return calls
     
     def _valid_name(self, name: str) -> bool:
+        """
+        Checks if the package/library/dependency name is valid
+        """
         keywords = {
             "REQUIRED", "OPTIONAL", "QUIET", "EXACT", "CONFIG", "NO_MODULE", "PRIVATE", 
             "PUBLIC", "INTERFACE", "BEFORE", "IMPORTED_TARGET", "REGEX", "INCLUDE", "PATH",
@@ -398,6 +523,9 @@ class CMakeParser:
         return True
     
     def get_ubuntu_for_cmake(self, cmake_version: str) -> str:
+        """
+        Maps the cmake_minimum_version number to an ubuntu version 
+        """
         version_num = self._version_to_number(cmake_version)
 
         if version_num <= 305:
