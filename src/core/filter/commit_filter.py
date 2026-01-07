@@ -8,6 +8,7 @@ from typing import Optional
 from src.config.config import Config
 from github.GithubException import UnknownObjectException
 
+
 class CommitFilter:
     def __init__(self, commit: Commit, config: Config, repo: Repository):
         self.commit = commit
@@ -25,9 +26,6 @@ class CommitFilter:
             logging.info(f"Cache hit for {self.commit.sha} ({self.config.filter_type}) -> {cached}")
             return cached
 
-        # TODO: better PR handling + using only_cpp_source_modified outside
-        # see src.utils.pull_request_handler
-
         if self.config.filter_type == "simple":
             result = self._simple_filter() and self.only_cpp_source_modified()
             self._save_cache(self.commit, result)
@@ -35,16 +33,18 @@ class CommitFilter:
             result = self.only_cpp_source_modified() and self._llm_filter() 
             self._save_cache(self.commit, result, extra=f"_{name}")
         elif self.config.filter_type == "issue":
-            result = self.only_cpp_source_modified() and self.fixed_performance_issue() is not None
+            result = self.only_cpp_source_modified() and self._fixed_performance_issue() is not None
             self._save_cache(self.commit, result, extra=f"_{name}")
         else:
             result = False
 
         return result
     
+############ LLM ############
+    
     def _llm_filter(self) -> bool:
-        
-        performance_issue = self.fixed_performance_issue()
+        """Uses the issue/PR filter + commit message filter + diff filter"""
+        performance_issue = self._fixed_performance_issue()
         if performance_issue:
             return True
 
@@ -63,21 +63,7 @@ class CommitFilter:
             f"Commit Message:\n{msg}\n\n"
             f"Question: Does this commit message indicate a runtime performance improvement?"
         )
-        """
-        p = Prompt([
-            Prompt.Message("system", 
-                "You are a strict binary classifier. "
-                "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
-                "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
-                "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
-                "If you do not have enough information to decide, say {\"answer\": \" maybe\"}."
-                "Do not add any explanation or commentary."),
-            Prompt.Message("user",
-                (self.config.stage1_prompt
-                    .replace("<name>", self.repo.full_name)
-                    .replace("<message>", self.commit.commit.message))
-        )])
-        """
+
         p = Prompt([
             Prompt.Message("system", system_prompt),
             Prompt.Message("user", user_prompt)
@@ -182,24 +168,6 @@ class CommitFilter:
             Prompt.Message("user", stage2_prompt)
         ])
         
-        """
-        if 'yes' in res.lower():
-            diff = self.get_diff()
-            p = Prompt([
-                Prompt.Message("system", 
-                    "You are a strict binary classifier. "
-                    "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
-                    "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
-                    "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
-                    "If you do not have enough information to decide, say {\"answer\": \"no\"}."
-                    "Do not add any explanation or commentary."),
-                Prompt.Message("user",
-                    (self.config.stage2_prompt
-                        .replace("<name>", self.repo.full_name)
-                        .replace("<message>", self.commit.commit.message)
-                        .replace("<diff>", diff))
-            )])
-        """
         if self.config.llm.ollama_enabled:
             self.llm = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
         logging.info(f"[{self.repo.full_name}] Second LLM prompt: {p.messages[1].content}")
@@ -245,7 +213,7 @@ class CommitFilter:
                 logging.info(f"[{self.repo.full_name}] Commit {self.commit.sha} changes a non-source file: {filename}.")
                 return False
             
-            if any(filename.startswith(tdir) for tdir in self.config.valid_test_dirs):
+            if any(tdir in filename for tdir in self.config.valid_test_dirs):
                 logging.info(f"[{self.repo.full_name}] Commit {self.commit.sha} changes a test file: {filename}")
                 return False
             
@@ -284,7 +252,86 @@ class CommitFilter:
             except json.JSONDecodeError:
                 return {}
         return {}
-    
+
+############ ISSUE ############
+
+    def _fixed_performance_issue(self) -> Optional[int]:
+        """Returns the first performance issue found. Prompts LLM to check."""
+        performance_issues = self.get_all_performance_issues()
+        return min(performance_issues) if performance_issues else None
+
+    def _is_performance_issue(self, number: int, ref_type: str) -> bool:
+        """
+        Check if an issue/PR is related to performance using LLM.
+        
+        Args:
+            number: Issue or PR number
+            ref_type: "issue" or "pull_request"
+            
+        Returns:
+            True if it's a performance-related issue
+        """
+        try:
+            gh_issue = self.repo.get_issue(number)
+            title = gh_issue.title or ""
+            body = gh_issue.body or ""
+            msg = self.commit.commit.message or ""
+            ref_type_display = ref_type.replace('_', ' ')
+
+            system = (
+                "You are a strict binary classifier. "
+                "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
+                "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
+                "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
+                "If you do not have enough information to decide, say {\"answer\": \"no\"}."
+                "Do not add any explanation or commentary."
+            )
+                
+            user = (
+                f"The following is a {ref_type_display} in the {self.repo.full_name} repository:\n\n"
+                f"###{ref_type_display} Title###{title}\n###{ref_type_display} Title End###\n\n"
+                f"###{ref_type_display} Body###{body}\n###{ref_type_display} Body End###\n\n"
+                f"The following is the commit message that fixes this {ref_type_display}:\n\n"
+                f"###Commit Message###{msg}\n###Commit Message End###\n\n"
+                f"Answer strictly in this JSON format (do not add any explanation):\n"
+                f"{{\"answer\": \"yes\"}} or {{\"answer\": \"no\"}}.\n\n"
+                f"Question: Is this issue likely related to improving execution time?"
+            )
+
+            p = Prompt([
+                Prompt.Message("system", system),
+                Prompt.Message("user", user)
+            ])
+        
+            
+            # First LLM check
+            if self.config.llm.ollama_enabled:
+                self.llm1 = OllamaLLM(self.config, self.config.llm.ollama_stage1_model)
+            
+            logging.info(f"First LLM check for #{number}")
+            res = self.llm1.generate(p)
+            logging.info(f"First LLM response: {res}")
+            
+            if "yes" not in res.lower().strip():
+                return False
+            
+            # Second LLM check for confirmation
+            if self.config.llm.ollama_enabled:
+                self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
+            
+            logging.info(f"Second LLM check for #{number}")
+            res = self.llm2.generate(p)
+            logging.info(f"Second LLM response: {res}")
+            
+            return "yes" in res.lower().strip()
+            
+        except UnknownObjectException:
+            logging.warning(f"Issue/PR #{number} not found")
+            return False
+        except Exception as e:
+            logging.error(f"Error checking if #{number} is performance issue: {e}")
+            return False
+
     def extract_fixed_issues(self) -> dict[int, str]:
         """Extract issue/PR numbers from commit message that are explicitly closed/fixed."""
         commit_message = self.commit.commit.message
@@ -295,22 +342,9 @@ class CommitFilter:
         results: dict[int, str] = {}
 
         closing_prefix = r'(?:(?<![A-Za-z])(?:fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved|address|addresses|addressed))(?:\s*[:\-])?\s+'
-        
-        issue_patterns = [
-            r'#(\d+)',
-            r'GH-(\d+)',
-            r'issue\s*#(\d+)',
-            r'bug\s*#(\d+)',
-        ]
-        
-        full_repo_patterns = [
-            r'([\w.-]+/[\w.-]+)#(\d+)',
-            r'https?://github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)',
-        ]
-        
-        pr_patterns = [
-            r'https?://github\.com/([\w.-]+/[\w.-]+)/pull/(\d+)',
-        ]
+        issue_patterns = [r'#(\d+)', r'GH-(\d+)', r'issue\s*#(\d+)', r'bug\s*#(\d+)']
+        full_repo_patterns = [r'([\w.-]+/[\w.-]+)#(\d+)', r'https?://github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)']
+        pr_patterns = [r'https?://github\.com/([\w.-]+/[\w.-]+)/pull/(\d+)']
         
         all_issue_patterns = issue_patterns + full_repo_patterns
         compiled_issue_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in all_issue_patterns]
@@ -388,11 +422,7 @@ class CommitFilter:
         """
         try:
             pr = self.repo.get_pull(pr_number)
-            
-            # Get issues from PR body using the same pattern matching
             closed_issues = set()
-            
-            # Check PR body for closing keywords
             if pr.body:
                 closing_pattern = re.compile(
                     r'(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)s?\s+#(\d+)',
@@ -421,71 +451,6 @@ class CommitFilter:
             logging.error(f"Error fetching issues from PR #{pr_number}: {e}")
             return set()
 
-    def is_performance_issue(self, number: int, ref_type: str) -> bool:
-        """
-        Check if an issue/PR is related to performance using LLM.
-        
-        Args:
-            number: Issue or PR number
-            ref_type: "issue" or "pull_request"
-            
-        Returns:
-            True if it's a performance-related issue
-        """
-        try:
-            gh_issue = self.repo.get_issue(number)
-            title = gh_issue.title or ""
-            body = gh_issue.body or ""
-            msg = self.commit.commit.message or ""
-            
-            ref_type_display = ref_type.replace('_', ' ')
-            
-            # First LLM check
-            p = Prompt(messages=[
-                Prompt.Message("system", 
-                    "You are a strict binary classifier. "
-                    "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
-                    "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
-                    "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
-                    "If you do not have enough information to decide, say {\"answer\": \"no\"}."
-                    "Do not add any explanation or commentary."),
-                Prompt.Message("user",
-                    f"The following is a {ref_type_display} in the {self.repo.full_name} repository:\n\n"
-                    f"###{ref_type_display} Title###{title}\n###{ref_type_display} Title End###\n\n"
-                    f"###{ref_type_display} Body###{body}\n###{ref_type_display} Body End###\n\n"
-                    f"The following is the commit message that fixes this {ref_type_display}:\n\n"
-                    f"###Commit Message###{msg}\n###Commit Message End###\n\n"
-                    f"Answer strictly in this JSON format (do not add any explanation):\n"
-                    f"{{\"answer\": \"yes\"}} or {{\"answer\": \"no\"}}.\n\n"
-                    f"Question: Is this issue likely related to improving execution time?"
-            )])
-            
-            if self.config.llm.ollama_enabled:
-                self.llm1 = OllamaLLM(self.config, self.config.llm.ollama_stage1_model)
-            
-            logging.info(f"First LLM check for #{number}")
-            res = self.llm1.generate(p)
-            logging.info(f"First LLM response: {res}")
-            
-            if "yes" not in res.lower().strip():
-                return False
-            
-            # Second LLM check for confirmation
-            if self.config.llm.ollama_enabled:
-                self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
-            
-            logging.info(f"Second LLM check for #{number}")
-            res = self.llm2.generate(p)
-            logging.info(f"Second LLM response: {res}")
-            
-            return "yes" in res.lower().strip()
-            
-        except UnknownObjectException:
-            logging.warning(f"Issue/PR #{number} not found")
-            return False
-        except Exception as e:
-            logging.error(f"Error checking if #{number} is performance issue: {e}")
-            return False
 
     def get_all_performance_issues(self) -> set[int]:
         """
@@ -500,30 +465,24 @@ class CommitFilter:
             return set()
         
         performance_issues = set()
-        issues_to_check = []  # List of (number, ref_type) tuples
+        issues_to_check: list[tuple[int, str]] = []
         
-        # First, expand PRs to their linked issues
         for number, ref_type in refs.items():
             if ref_type == "pull_request":
-                # Get issues that this PR closes
                 pr_issues = self.get_issues_from_pr(number)
                 for issue_num in pr_issues:
                     issues_to_check.append((issue_num, "issue"))
-                    
-                # Also check if the PR itself is performance-related
                 issues_to_check.append((number, ref_type))
             else:
-                # Direct issue reference
                 issues_to_check.append((number, ref_type))
         
-        # Now check each unique issue/PR for performance relevance
         checked = set()
         for number, ref_type in issues_to_check:
             if number in checked:
                 continue
             checked.add(number)
             
-            if self.is_performance_issue(number, ref_type):
+            if self._is_performance_issue(number, ref_type):
                 performance_issues.add(number)
                 logging.info(f"Identified performance issue: #{number}")
         
@@ -533,21 +492,14 @@ class CommitFilter:
                 f"unique performance issue(s): {sorted(performance_issues)}"
             )
         else:
-            logging.info(
-                f"Commit {self.commit.sha} does not fix any performance issues"
-            )
+            logging.info(f"Commit {self.commit.sha} does not fix any performance issues")
         
         return performance_issues
-
-    def fixed_performance_issue(self) -> Optional[int]:
-        """
-        Legacy method - returns the first performance issue found.
-        Consider using get_all_performance_issues() instead.
-        """
-        performance_issues = self.get_all_performance_issues()
-        return min(performance_issues) if performance_issues else None
     
+############ SIMPLE ############
+
     def _simple_filter(self) -> bool:
+        """Simple filter only checks if there are keywords used in the commit message"""
         msg = self.commit.commit.message.lower()
         perf_label_keywords = {
             'performance', 'perf', 'optimization', 'optimisation', 'optimize', 'optimize',
@@ -566,198 +518,3 @@ class CommitFilter:
             'jmh', 'benchmark', 'regression'
         }
         return any(k in msg for k in perf_label_keywords | perf_text_keywords | runtime_hint_keywords)
-
-    
-    '''
-    def extract_fixed_issues(self) -> dict[int, str]:
-        """
-        Extract issue numbers from commit message that are explicitly closed/fixed.
-        
-        Args:
-            commit_message: The commit message to parse
-            repo: The GitHub repository object
-            
-        Returns:
-            Set of issue numbers that are explicitly closed by this commit
-            
-        Examples:
-            - "Fixes #123" -> {123}
-            - "Closes #456 and resolves #789" -> {456, 789}
-            - "Fix GH-123" -> {123}
-            - "Resolves owner/repo#456" -> {456} (if matches current repo)
-        """
-        commit_message = self.commit.commit.message
-        if not commit_message:
-            return {}
-            
-        msg = commit_message.strip()
-        results: dict[int, str] = {}
-
-        # Enhanced regex patterns to catch more formats
-        closing_prefix = r'(?:(?<![A-Za-z])(?:fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved|address|addresses|addressed))(?:\s*[:\-])?\s+'
-        
-        # Individual issue reference patterns (without named groups to avoid conflicts)
-        issue_patterns = [
-            r'#(\d+)',  # #123
-            r'GH-(\d+)',  # GH-123
-            r'issue\s*#(\d+)',  # issue #123
-            r'bug\s*#(\d+)',  # bug #123
-        ]
-        
-        # Full repository reference patterns
-        full_repo_patterns = [
-            r'([\w.-]+/[\w.-]+)#(\d+)',  # owner/repo#123
-            r'https?://github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)',  # Full URL
-        ]
-        
-        # PR patterns (to be filtered out)
-        pr_patterns = [
-            r'https?://github\.com/([\w.-]+/[\w.-]+)/pull/(\d+)',  # PR URL
-        ]
-        
-        # Compile all patterns
-        all_issue_patterns = issue_patterns + full_repo_patterns
-        compiled_issue_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in all_issue_patterns]
-        compiled_pr_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in pr_patterns]
-        
-        # Main fix block pattern (simplified to avoid group conflicts)
-        fix_block = re.compile(
-            closing_prefix + r'(?:' + '|'.join(all_issue_patterns) + r')(?:\s*(?:,|\band\b|&|\bor\b|\|)\s*(?:' + '|'.join(all_issue_patterns) + r'))*', 
-            re.IGNORECASE | re.MULTILINE
-        )
-
-        issue_cache = {}
-        
-        def get_ref_type(n: int) -> str:
-            """Return 'issue', 'pull_request', or 'unknown'."""
-            if n in issue_cache:
-                return issue_cache[n]
-            try:
-                issue = self.repo.get_issue(n)
-                ref_type = "issue" if getattr(issue, "pull_request", None) is None else "pull_request"
-                issue_cache[n] = ref_type
-                return ref_type
-            except UnknownObjectException:
-                issue_cache[n] = "unknown"
-                return "unknown"
-            except Exception as e:
-                logging.warning(f"Error checking issue #{n} in {self.repo.full_name}: {e}")
-                issue_cache[n] = "unknown"
-                return "unknown"
-
-        try:
-            for block in fix_block.finditer(msg):
-                block_text = block.group(0)
-                logging.info(f"Found fix block: '{block_text}'")
-
-                # Extract PR references first
-                for pr_pattern in compiled_pr_patterns:
-                    for match in pr_pattern.finditer(block_text):
-                        repo_name = match.group(1)
-                        number = int(match.group(2))
-                        if repo_name.lower() == self.repo.full_name.lower():
-                            results[number] = "pull_request"
-                            logging.info(f"Found PR reference: {repo_name}#{number}")
-
-                # Extract issue references
-                for pattern in compiled_issue_patterns:
-                    for match in pattern.finditer(block_text):
-                        issue_number = None
-
-                        if len(match.groups()) == 1:
-                            issue_number = int(match.group(1))
-                        elif len(match.groups()) == 2:
-                            repo_name = match.group(1)
-                            if repo_name.lower() == self.repo.full_name.lower():
-                                issue_number = int(match.group(2))
-
-                        if issue_number:
-                            ref_type = get_ref_type(issue_number)
-                            if ref_type in ("issue", "pull_request"):
-                                results[issue_number] = ref_type
-                                logging.info(f"Found {ref_type} reference: #{issue_number}")
-
-        except Exception as e:
-            logging.error(f"Error parsing commit message for issues: {e}")
-            return results
-
-        return results
-
-
-    def fixed_performance_issue(self) -> Optional[int]:
-        msg = self.commit.commit.message or ""
-        refs = self.extract_fixed_issues()
-        if not refs:
-            return None
-
-        issue_title_body_tuples = []
-        for number, ref_type in refs.items():
-            try:
-                gh_issue = self.repo.get_issue(number)
-
-                title = gh_issue.title or ""
-                body = gh_issue.body or ""
-                issue_title_body_tuples.append((number, title, body))
-
-                ref_type = ref_type.replace('_', ' ')
-                p = Prompt(messages=[
-                    Prompt.Message("system", 
-                        "You are a strict binary classifier. "
-                        "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
-                        "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
-                        "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
-                        "If you do not have enough information to decide, say {\"answer\": \"no\"}."
-                        "Do not add any explanation or commentary."),
-                    Prompt.Message("user",
-                        f"The following is a {ref_type} in the {self.repo.full_name} repository:\n\n"
-                        f"###{ref_type} Title###{title}\n###{ref_type} Title End###\n\n"
-                        f"###{ref_type} Body###{body}\n###{ref_type} Body End###\n\n"
-                        f"The following is the commit message that fixes this {ref_type}:\n\n"
-                        f"###Commit Message###{msg}\n###Commit Message End###\n\n"
-                        f"Answer strictly in this JSON format (do not add any explanation):\n"
-                        f"{{\"answer\": \"yes\"}} or {{\"answer\": \"no\"}}.\n\n"
-                        f"Question: Is this issue likely related to improving execution time?"
-                )])
-                if self.config.llm.ollama_enabled:
-                    self.llm1 = OllamaLLM(self.config, self.config.llm.ollama_stage1_model)
-                logging.info(f"First LLM issue prompt: {p.messages[1].content}")
-                res = self.llm1.generate(p)
-                logging.info(f"First LLM issue response: {res}")
-
-                if "yes" in res.lower().strip():
-                    logging.info(f"Commit {self.commit.sha} in {self.repo.full_name} is related to a likely performance issue (#{number}).")
-
-                    p = Prompt(messages=[
-                        Prompt.Message("system", 
-                            "You are a strict binary classifier. "
-                            "Determine if the commit improves runtime performance (e.g., reduces CPU usage, improves memory efficiency, speeds up execution). "
-                            "Do not count bug fixes, correctness changes, refactoring, or style cleanups as performance improvements. "
-                            "Respond ONLY in this JSON format: {\"answer\": \"yes\"} or {\"answer\": \"no\"}. "
-                            "If you do not have enough information to decide, say {\"answer\": \"no\"}."
-                            "Do not add any explanation or commentary."),
-                        Prompt.Message("user",
-                            f"The following is a {ref_type} in the {self.repo.full_name} repository:\n\n"
-                            f"###{ref_type} Title###{title}\n###{ref_type} Title End###\n\n"
-                            f"###{ref_type} Body###{body}\n###{ref_type} Body End###\n\n"
-                            f"The following is the commit message that fixes this {ref_type}:\n\n"
-                            f"###Commit Message###{msg}\n###Commit Message End###\n\n"
-                            f"Answer strictly in this JSON format (do not add any explanation):\n"
-                            f"{{\"answer\": \"yes\"}} or {{\"answer\": \"no\"}}.\n\n"
-                            f"Question: Is this issue likely related to improving execution time?"
-                    )])
-                    if self.config.llm.ollama_enabled:
-                        self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
-                    logging.info(f"Second LLM issue prompt: {p.messages[1].content}")
-                    res = self.llm2.generate(p)
-                    logging.info(f"Second LLM issue response: {res}")
-
-                    if "yes" in res.lower().strip():
-                        logging.info(f"Commit {self.commit.sha} in {self.repo.full_name} is related to a likely performance issue (#{number}).")
-                        return number
-
-            except UnknownObjectException:
-                continue
-            
-        logging.info(f"Commit {self.commit.sha} in {self.repo.full_name} is not fixing performance issues.")
-        return None
-'''

@@ -1,7 +1,6 @@
 import logging, subprocess, os, stat, shutil, random
 from tqdm import tqdm
 from src.core.docker.manager import DockerManager
-from src.cmake.analyzer import CMakeAnalyzer
 from src.core.filter.structure_filter import StructureFilter
 from src.core.filter.process_filter import ProcessFilter
 from src.config.config import Config
@@ -25,12 +24,14 @@ class DockerTester:
         self,
         new_sha: str,
         old_sha: str,
+        pr_shas: list[str],
         new_path: Path,
         old_path: Path,
+        cpuset_cpus: str = ""
     ) -> None:
         
         with self._commit_pair_test(
-            self.config, new_path, old_path, new_sha, old_sha
+            self.config, new_path, old_path, new_sha, old_sha, cpuset_cpus
         ) as (new_times, old_times, new_struct, old_struct):
             logging.info(f"Times Old: {old_times}, New: {new_times}")
             
@@ -69,7 +70,7 @@ class DockerTester:
                 self.config, new_single_tests, old_single_tests
             )
 
-            total_improvement = test.get_improvement_p_value(
+            total_improvement = test.get_pair_improvement_p_value(
                 old_times[warmup:], new_times[warmup:] 
             )
             logging.info(f"pvalue: {total_improvement}")
@@ -80,7 +81,8 @@ class DockerTester:
             logging.info(f"overall change: {overall_change}")
             overall_change_with_new_outperforms_old = (
                 len(isolated_improvements['new_outperforms_old']) > 0 and 
-                overall_change > self.config.overall_decline_limit
+                overall_change > self.config.overall_decline_limit and
+                len(isolated_improvements['old_outperforms_new']) == 0
             )
 
             new_cmd = [" ".join(s) for s in new_struct.process.build_commands + new_struct.process.test_commands]
@@ -88,7 +90,7 @@ class DockerTester:
             
             commit = self.repo.get_commit(new_sha)
             results = test.create_test_log(
-                commit, self.repo, old_sha, new_sha, 
+                commit, self.repo, old_sha, new_sha, pr_shas,
                 old_times, new_times, old_cmd, new_cmd
             )
             logging.info(f"Results: {results['performance_analysis']}")
@@ -108,7 +110,8 @@ class DockerTester:
         new_path: Path, 
         old_path: Path, 
         new_sha: str, 
-        old_sha: str
+        old_sha: str,
+        cpuset_cpus: str = ""
     ) -> Generator[tuple[list[float], list[float], Optional[StructureFilter], Optional[StructureFilter]], Any, Any]:
         """
         Start a container for new/old commits and stop container automatically after both runs.
@@ -123,7 +126,7 @@ class DockerTester:
         old_times = []
         
         try:
-            new_structure = new_pf.commit_setup_and_build("New", container_name=new_sha)
+            new_structure = new_pf.commit_setup_and_build("New", container_name=new_sha, cpuset_cpus=cpuset_cpus)
             docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
             
             if not new_structure or not new_structure.process:
@@ -225,7 +228,7 @@ class DockerTester:
         func(path)
         
     # TODO
-    def _test_docker_image(self, image_name: str, tar_file: Path) -> bool:
+    def test_docker_image(self, image_name: str, tar_file: Path) -> bool:
         #cmd = ["docker", "load", "-i", str(tar_file)]
         #subprocess.run(cmd)
         

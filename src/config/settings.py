@@ -43,16 +43,17 @@ class GitHubSettings:
 @dataclass
 class ResourceSettings:
     """Docker resource limits for --testcommits"""
-    cpuset_cpus: str = '5'
-    mem_limit: str = '16g'
-    memswap_limit: str = '16g'
-    cpu_quota: int = 100000
+    cpuset_cpus: str = ''
+    mem_limit: str = '8g'
+    memswap_limit: str = '8g'
+    cpu_quota: int = 200000
     cpu_period: int = 100000
     jobs: int = 1
+    max_parallel_jobs: int = 4 # > 1 means cpuset_cpus will be randomized 
     
 @dataclass
 class ResourceSettingsCrawl(ResourceSettings):
-    """Docker resource limits for --testcrawl"""
+    """Docker resource limits for --testcollect"""
     cpuset_cpus: str = '1-4'
     mem_limit: str = '32g'
     memswap_limit: str = '32g'

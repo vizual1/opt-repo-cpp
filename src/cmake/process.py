@@ -23,7 +23,7 @@ class CMakeProcess:
         docker_test_dir: str = ""
     ):
         self.config = config
-
+        self.repo_id = repo_id
         self.project_root = Path(__file__).resolve().parents[2]
         self.root = (self.project_root / root).resolve() if not root.is_absolute() else root.resolve()
         self.docker_test_dir = docker_test_dir.replace("\\", "/")
@@ -68,12 +68,12 @@ class CMakeProcess:
     def set_docker(self, config: Config, docker_image: str, new: bool):
         self.docker = DockerManager(config, self.root.parent, docker_image, self.docker_test_dir, new)
 
-    def start_docker_image(self, config: Config, container_name: str, new: bool = True) -> None:
+    def start_docker_image(self, config: Config, container_name: str, new: bool = True, cpuset_cpus: str = "") -> None:
         if not self.docker_image:
             self.docker_image = self.analyzer.get_docker()
         logging.info(f"Started Docker Image: {self.docker_image}")
         self.set_docker(config, self.docker_image, new)
-        self.docker.start_docker_container(container_name)
+        self.docker.start_docker_container(container_name, cpuset_cpus)
         self.container = self.docker.container
 
         copy_cmd = ["cp", "-r", "/workspace", self.docker_test_dir]
@@ -86,39 +86,7 @@ class CMakeProcess:
             logging.info(f"Files copied into docker: {' '.join(map(str, copy_cmd))}")
             if stdout: logging.info(f"stdout: {stdout}")
 
-    """
-    def clone_repo(self, repo_id: str, sha: str) -> None:
-        repo_path = Path(self.to_container_path(self.root))
-        url = f"https://github.com/{repo_id}.git"
-        self.docker.clone_in_docker(
-            ["git", "clone", url, str(repo_path)], 
-            check=True
-        )
 
-        self.docker.clone_in_docker(
-            ["git", "config", "--local", "safe.directory", str(repo_path)], 
-            workdir=repo_path, 
-            check=True
-        )
-
-        self.docker.clone_in_docker(
-            ["git", "fetch", "origin", sha],
-            workdir=repo_path,
-            check=True
-        )
-
-        self.docker.clone_in_docker(
-            ["git", "checkout", sha],
-            workdir=repo_path,
-            check=True
-        )
-
-        self.docker.clone_in_docker(
-            ["git", "submodule", "update", "--init", "--recursive"],
-            workdir=repo_path,
-            check=True
-        )
-    """
     def save_docker_image(self, repo_id: str, sha: str, new_cmd: list[str], old_cmd: list[str], results_json: dict) -> None:
         """
         Saved docker image structure:
@@ -187,13 +155,8 @@ class CMakeProcess:
         return self._configure()
 
     def build(self) -> bool:
-        #if self.package_manager:
-        #    return self._configure() #and self._build()
-        #else:
         return self._configure_with_retries() #and self._build()
     
-    #def test(self, warmup: int = 0, test_repeat: int = 1, no_run: bool = False) -> bool:
-    #    return self._ctest(warmup, test_repeat, no_run)
     def test(self, cmd: list[str], has_list_args: bool) -> bool:
         return self._ctest(cmd, has_list_args)
 
@@ -543,7 +506,7 @@ class CMakeProcess:
         try:
             logging.info(f"{' '.join(command)} in {self.test_path}")
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                command, self.root, workdir=self.docker_test_dir/self.test_path, check=False, log=False
+                command, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=self.config.commits_time['max-test-time'], log=False,
             )
 
             # parse the times returned
@@ -560,7 +523,7 @@ class CMakeProcess:
 
             if exit_code == 0 or (elapsed != 0.0 and stats['passed'] > 0):
                 logging.info(f"CTest passed for {self.test_path}")
-                logging.info(f"Output:\n{stdout}")
+                logging.debug(f"Output:\n{stdout}")
                 logging.info(f"Tests run: {stats['total']}, Failures: {stats['failed']}, Skipped: {stats['skipped']}, Time elapsed: {elapsed or time} s")
             else:
                 logging.error(f"CTest failed for {self.test_path} (return code {exit_code}) with command {' '.join(command)}", exc_info=True)
@@ -591,7 +554,7 @@ class CMakeProcess:
 
         logging.debug(command + extra)
         exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-            command + extra, self.root, check=False, log=False
+            command + extra, self.root, check=False, timeout=self.config.commits_time['max-test-time'], log=False
         )
         logging.debug(f"Individual CTest stdout:\n{stdout}")
 

@@ -8,26 +8,36 @@ def setup_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Examples:
-        python main.py --popular --stars=1000 --limit=10 --output=data/crawl.txt
-        python main.py --testcrawl --input=data/crawl.txt --output=data/test.txt
+        python main.py --collect --stars=1000 --limit=10 --output=data/crawl.txt
+        python main.py --testcollect --input=data/crawl.txt --output=data/test.txt
         python main.py --commits --repo=gabime/spdlog
-        python main.py --testcommits --input data/test.txt
+        python main.py --testcommits --input=data/test.txt
         python main.py --test --mount data/repo --docker cpp-base
         """
     )
 
     # === Mode selection ===
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--popular", action="store_true",
-                      help="Crawl GitHub for popular repositories.")
-    mode.add_argument("--testcrawl", action="store_true",
-                      help="Test and validate crawled GitHub repositories.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--collect", action="store_true",
+                      help="Collect C++ Repositories from GitHub. Set with --limit and --stars flags.")
+    mode.add_argument("--testcollect", action="store_true",
+                      help="Test and validate collected C++ Repositories from GitHub.")
     mode.add_argument("--commits", action="store_true",
-                      help="Gather and filter commits from a repository.")
+                      help="Gather and filter commits from C++ Repositories.")
     mode.add_argument("--testcommits", action="store_true",
                       help="Test commits between two versions or commit file.")
     mode.add_argument("--testdocker", action="store_true",
-                      help="Test Docker images or compare mounted and old commit.")
+                      help="Test Docker images. The commits should be in " \
+                      "'/test_workspace/workspace/new' and '/test_workspace/workspace/old'")
+    mode.add_argument("--dockerimages", action="store_true",
+                      help="Given a folder of json files generated via the --testcommits flag, " \
+                      "generate and save docker images (no test is run here) of each json file.")
+    mode.add_argument("--testdockerpatch", action="store_true",
+                      help="Given a docker image (or a docker image tar file) with a " \
+                      "commit at '/test_workspace/workspace/old' and its " \
+                      "patch in '/test_workspace/workspace/patch', build and test the commit and patch.")
+    
+    
 
     # === Input / Output ===
     io_group = parser.add_argument_group("Input / Output Options")
@@ -36,14 +46,12 @@ def setup_parser() -> argparse.ArgumentParser:
     io_group.add_argument("--output", type=str, default="data/results.txt",
                           help="Output file path (default: data/results.txt).")
     io_group.add_argument("--repo", type=str,
-                          help="Repository URL or slug (e.g., owner/repo).")
+                          help="Repository URL or repo full name (e.g., owner/repo).")
 
     # === Commit options ===
     commit_group = parser.add_argument_group("Commit Options")
     commit_group.add_argument("--sha", type=str,
                               help="SHA for testing.")
-    commit_group.add_argument("--separate", action="store_true",
-                              help="Save each filtered commit separately with commit message and diff.")
 
     # === Filtering / Analysis ===
     filter_group = parser.add_argument_group("Filtering and Analysis Options")

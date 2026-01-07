@@ -11,11 +11,13 @@ from src.config.prompts import STAGE1_PROMPT, DIFF_PROMPT, STAGE2_PROMPT, RESOLV
 @dataclass
 class Config:
     # Core operation modes
-    popular: bool = False
-    testcrawl: bool = False 
+    collect: bool = False
+    testcollect: bool = False 
     commits: bool = False 
     testcommits: bool = False
+    dockerimages: bool = False
     testdocker: bool = False
+    testdockerpatch: bool = False
     
     # Limits and filters
     limit: int = 10
@@ -41,7 +43,6 @@ class Config:
     docker_image: str = field(init=False)
     mount: str = ""
     mount_path: str = field(init=False)
-    separate: bool = False
     analyze: bool = False
     
     # Configuration sections
@@ -82,7 +83,7 @@ class Config:
         self.output_file = self.output
         self.docker_image = self.docker
         self.mount_path = self.mount
-        if self.testcrawl:
+        if self.testcollect:
             self.resources = ResourceSettingsCrawl()
         self._validate()
         self._setup_github()

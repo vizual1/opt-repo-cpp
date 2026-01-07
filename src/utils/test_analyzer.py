@@ -4,6 +4,7 @@ import numpy as np
 from scipy import stats
 from github.Commit import Commit
 from github.Repository import Repository
+from github.Issue import Issue
 from src.core.filter.commit_filter import CommitFilter
 from src.config.config import Config
 
@@ -179,29 +180,47 @@ class TestAnalyzer:
         logging.debug(significant_test_time_changes)
         return significant_test_time_changes
         
-    def create_test_log(self, commit: Commit, repo: Repository, old_sha: str, new_sha: str, 
+    def create_test_log(self, commit: Commit, repo: Repository, old_sha: str, new_sha: str, pr_shas: list[str],
                         old_full_times: list[float], new_full_times: list[float],
                         old_commands: list[str], new_commands: list[str]) -> dict:
-        message = commit.commit.message
-        patches = self.get_diff(commit)
+        
+        gh_refs: list[tuple[str, int, str, str, Issue]] = []
+        messages: list[str] = []
+        patches: list[str] = []
+        for sha in pr_shas:
+            commit = repo.get_commit(sha)
+            messages.append(commit.commit.message)
+            patches.append(self.get_diff(commit))
+            commit_filter = CommitFilter(commit, self.config, repo)
+            extracted_refs = commit_filter.extract_fixed_issues()
+            gh_refs += [
+                (ref_type, number, issue.title, issue.body, issue) 
+                for number, ref_type in extracted_refs.items()
+                if (issue := repo.get_issue(number))
+            ]
 
-        commit_filter = CommitFilter(commit, self.config, repo)
-        extracted_refs = commit_filter.extract_fixed_issues()
-        gh_refs = [
-            (ref_type, number, issue.title, issue.body, issue) 
-            for number, ref_type in extracted_refs.items()
-            if (issue := repo.get_issue(number))
-        ]
+        if not pr_shas:
+            messages = [commit.commit.message]
+            patches = [self.get_diff(commit)]
+            
+            commit_filter = CommitFilter(commit, self.config, repo)
+            extracted_refs = commit_filter.extract_fixed_issues()
+            gh_refs = [
+                (ref_type, number, issue.title, issue.body, issue) 
+                for number, ref_type in extracted_refs.items()
+                if (issue := repo.get_issue(number))
+            ]
 
         metadata = {
             "collection_date": datetime.now().isoformat(),
             "repository": f"https://github.com/{repo.full_name}",
             "repository_name": repo.full_name
         }
+
         commit_info = {
             "old_sha": old_sha,
             "new_sha": new_sha,
-            "commit_message": message,
+            "commit_message": messages,
             "commit_date": commit.commit.author.date.isoformat(),
             "patch": patches,
             "files_changed": [
@@ -220,9 +239,9 @@ class TestAnalyzer:
         }
         build_info = {
             "old_build_script": "#!/bin/bash\n" + "\n".join(old_commands[0:2]),
-            "new_build_script": "#!/bin/bash\n" + "\n".join(old_commands[0:2]),
+            "new_build_script": "#!/bin/bash\n" + "\n".join(new_commands[0:2]),
             "old_test_script": "#!/bin/bash\n" + "\n".join(old_commands[2:]),
-            "new_test_script": "#!/bin/bash\n" + "\n".join(old_commands[2:]),
+            "new_test_script": "#!/bin/bash\n" + "\n".join(new_commands[2:]),
             "build_system": "cmake"
         }
 

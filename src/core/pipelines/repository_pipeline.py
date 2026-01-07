@@ -37,8 +37,8 @@ class RepositoryPipeline:
             try:
                 if structure.is_valid() and process.valid_run("_".join(repo.full_name.split("/"))):
                     self.valid_repos.append(repo)
-                    if self.config.popular or self.config.output_file:
-                        Writer(repo_id, self.config.output_file or self.config.storage_paths['testcrawl']).write_repo()
+                    if self.config.collect or self.config.output_file:
+                        Writer(repo_id, self.config.output_file or self.config.storage_paths['testcollect']).write_repo()
             
                 elif self.config.output_file:
                     Writer(repo_id, self.config.storage_paths['fail']).write_repo()
@@ -58,7 +58,7 @@ class RepositoryPipeline:
             repo = self.config.git_client.get_repo(repo_id)
             structure = StructureFilter(repo, self.config)
             try:
-                if structure.is_valid() and (self.config.popular or self.config.output_file):
+                if structure.is_valid() and (self.config.collect or self.config.output_file):
                     Writer(repo_id, self.config.output_file).write_repo()
                 self.stats += structure.stats
 

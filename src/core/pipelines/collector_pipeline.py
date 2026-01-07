@@ -6,7 +6,7 @@ from github.Repository import Repository
 
 class CollectionPipeline:
     """
-    This class crawls popular GitHub repositories.
+    This class collects popular GitHub repositories.
     """
     def __init__(self, config: Config):
         self.config = config
@@ -16,5 +16,5 @@ class CollectionPipeline:
         repos = collector.query_popular_repos()
         logging.info(f"Found {len(repos)} repositories from collector.")
         for repo in repos:
-            Writer(repo.full_name, self.config.output_file or self.config.storage_paths['popular']).write_repo()
+            Writer(repo.full_name, self.config.output_file or self.config.storage_paths['collect']).write_repo()
         return repos

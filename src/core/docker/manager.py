@@ -23,13 +23,24 @@ class DockerManager:
             except Exception as e:
                 logging.warning(f"[{repo_id}] Failed to stop container: {e}")
 
-    def start_docker_container(self, container_name: str) -> None:
+    def start_docker_container(self, container_name: str, cpuset_cpus: str = "") -> None:
         self.client = docker.from_env()
         try:
             try:
-                self.container = self.client.containers.get(container_name)
-                logging.info(f"Reusing existing container {container_name}")
+                c = self.client.containers.get(container_name)
+                c.reload()
+
+                if c.status != "running":
+                    logging.info(
+                        f"Container {container_name} exists but is {c.status}, recreating"
+                    )
+                    c.remove(force=True)
+                    raise docker.errors.NotFound(container_name) # type: ignore
+
+                logging.info(f"Reusing running container {container_name}")
+                self.container = c
                 return
+
             except docker.errors.NotFound: # type: ignore
                 pass
             
@@ -50,7 +61,7 @@ class DockerManager:
                 tty=True,
                 remove=False,
 
-                cpuset_cpus=self.config.resources.cpuset_cpus,
+                cpuset_cpus=cpuset_cpus or self.config.resources.cpuset_cpus,
                 mem_limit=self.config.resources.mem_limit,
                 memswap_limit=self.config.resources.memswap_limit,
                 cpu_quota=self.config.resources.cpu_quota,

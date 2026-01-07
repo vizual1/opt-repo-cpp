@@ -234,90 +234,20 @@ class CMakeParser:
         s = ''.join(ch for ch in s if ch.isprintable() or ch in "\n\t ")
         return s
     
-    # TODO
     def extract_unit_tests(self, text: str, framework: str) -> list[str]:
-        """
-        Extracts the unit tests in <text> according to the test <framework>
-        """
+        """Extracts the unit tests in <text> according to the test <framework>"""
         tests = []
 
         if framework == "gtest":
-            # Example:
-            # MySuite.
-            #   TestA
-            #   TestB
             return self.extract_gtest(text)
-            """
-            current_suite = ""
-            for line in text.splitlines():
-                line = self._clean(line)
-                if "CMake Error" in line:
-                    return []
-                if "not found" in line:
-                    return []
-                if line.endswith("ms"):
-                    continue
-                if line.endswith('.'):
-                    current_suite = line.strip().strip('.')
-                elif line.strip():
-                    tests.append(f"{current_suite}.{line.strip()}")
-            """
         elif framework == "catch":
             return self.extract_catch(text)
-            tests = []
-            for line in text.splitlines():
-                line = self._clean(line)
-                if "CMake Error" in line:
-                    return []
-                if "Errors occurred during startup!" in line:
-                    return []
-                are_tests = not "All available test cases:" in line
-                are_tests = not "test cases" in line and are_tests
-                are_tests = not line.startswith("[") and not line.endswith("]") and are_tests
-                are_tests = not line.endswith("ms") and are_tests
-                if are_tests:
-                    tests.append(line)
         elif framework == "doctest":
             return self.extract_doctest(text)
-            tests = []
-            for line in text.splitlines():
-                line = line.strip()
-                if "CMake Error" in line:
-                    return []
-                if not line:
-                    continue
-                if line.endswith("ms"):
-                    continue
-                if line.startswith("[doctest]"):
-                    continue
-                if set(line) == {"="}:
-                    continue
-                tests.append(line)
         elif framework == "boost":
             return self.extract_boost(text)
-            # Boost lists suites/tests as suite/test
-            for line in text.splitlines():
-                line = self._clean(line)
-                if "CMake Error" in line:
-                    return []
-                if "not found" in line:
-                    return []
-                if line.endswith("ms"):
-                    continue
-                if not "/" in line:
-                    continue
-                tests.append(line.strip())
         elif framework == "qt":
             return self.extract_qt(text)
-            for line in text.splitlines():
-                line = self._clean(line)
-                if "CMake Error" in line:
-                    return []
-                if "not found" in line:
-                    return []
-                if line.endswith("ms"):
-                    continue
-                tests.append(line.strip())
         return tests
     
     def extract_gtest(self, text: str) -> list[str]:

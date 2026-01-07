@@ -8,10 +8,10 @@ STORAGE_PATHS = {
     "performance": DATA_DIR / "performance",
     "clones": DATA_DIR / "commits",
 
-    "popular": DATA_DIR / "popular.txt",
+    "collect": DATA_DIR / "collect.txt",
+    "testcollect": DATA_DIR / "testcollect.txt",
     "commits": DATA_DIR / "commits.txt",
     "repos": DATA_DIR / "repos.txt",
-    "testcrawl": DATA_DIR / "testcrawl.txt",
     "fail": DATA_DIR / "fail.txt",
 
     "cmake-dep": CACHE_DIR / "cmake-dep.json"
@@ -22,17 +22,18 @@ COMMIT_TIME = {
     'until': datetime.now(timezone.utc),
     'min-exec-time-improvement': 0.05,
     'min-p-value': 0.05,
-    'min-stars': 20
+    'min-stars': 20,
+    'max-test-time': 600 # max testing time in seconds
 }
 
 TEST_KEYWORDS = [
     "test", "tests", "unittest", "unittests", "testing",
     "gtest", "googletest", "integration_tests",
-    "benchmark", "perf", "gperf"
+    "benchmark", "perf", "gperf", "example"
 ]
 
 VALID_TEST_DIRS = {
-    'test', 'tests', 'unittest', 'unittests', 'bench',
+    'test', 'tests', 'unittest', 'unittests', 'bench', 'example',
     'src/test', 'src/tests', 'src/unittest', 'src/unittests'
 }
 

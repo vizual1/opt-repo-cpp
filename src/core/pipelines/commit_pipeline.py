@@ -6,6 +6,7 @@ from src.core.filter.commit_filter import CommitFilter
 from src.utils.stats import CommitStats
 from github.Repository import Repository
 
+
 class CommitPipeline:
     """
     This class filters and saves the commit history of a repository.
@@ -13,8 +14,6 @@ class CommitPipeline:
     def __init__(self, repo_ids: list[str], config: Config):
         self.config = config
         self.repo_ids = repo_ids
-        #self.repo = repo
-        #self.repo_id = self.repo.full_name
         self.stats = CommitStats()
         self.filtered_commits: list[str] = []
 
@@ -56,25 +55,43 @@ class CommitPipeline:
             except Exception as e:
                 logging.exception(f"[{repo.full_name}] Error processing commit: {e}")
                 continue
-            
+
             writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths['clones'])
             filtered_commits.append(writer.file or "")
             stats.perf_commits += 1
-            stats += writer.write_commit(commit, self.config.separate, self.config.filter_type)
+            stats += writer.write_pr_commit(repo, commit)
 
-        # TODO: test
         self._rewrite_commits()
         stats.write_final_log()
 
     def _read_commits(self) -> list[str]:
-        commits: list[str] = []
-        with open(self.config.output_file or self.config.storage_paths['clones'], "r") as f:
-            for line in f:
+        """
+        Merges multiple 'owner/repo | patched_sha | original_sha | new_shaN' into 
+        'owner/repo | patched_sha | original_sha | [new_sha1, ..., new_shaN]'
+        """
+        commits: dict[str, list[str]] = {}
+        path = self.config.output_file or self.config.storage_paths['clones']
+        with open(path, "r") as f:
+            for line_no, line in enumerate(f, start=1):
                 line = line.strip()
                 if not line:
                     continue
-                commits.append(line)
-        return commits
+
+                parts = [p.strip() for p in line.split("|") if p.strip()]
+                if len(parts) <= 2:
+                    logging.warning(f"Malformed commit line at {path}:{line_no} -> {line}")
+                    continue
+                msg = f"{parts[0]} | {parts[1]} | {parts[2]}"
+                
+                if len(parts) > 3:
+                    # repo_id | new_sha | old_sha | new_sha_not_pr
+                    commits.setdefault(msg, []).append(parts[3])
+                    continue
+                
+                commits.setdefault(msg, [])
+                    
+        output = [f"{k} | {v}" for k, v in commits.items()]
+        return output
     
     def _organize_commits(self) -> list[str]:
         commits = self._read_commits()

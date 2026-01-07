@@ -1,4 +1,4 @@
-import logging
+import logging, ast
 from pathlib import Path
 
 class Commit:
@@ -6,8 +6,8 @@ class Commit:
         self.input_file = input_file
         self.output_path = output_path
     
-    def get_commits(self) -> list[tuple[str, str, str]]:
-        """Return list of (repo_id, new_sha, old_sha) pairs."""
+    def get_commits(self) -> list[tuple[str, str, str, list[str]]]:
+        """Return list of (repo_id, new_sha, old_sha, pr_shas) pairs."""
         file_path = Path(self.input_file)
 
         commits = self._get_filtered_commits(file_path)
@@ -28,13 +28,13 @@ class Commit:
         new_path = commit_root / "new"
         return new_path, old_path
 
-    def _get_filtered_commits(self, path: Path) -> list[tuple[str, str, str]]:
+    def _get_filtered_commits(self, path: Path) -> list[tuple[str, str, str, list[str]]]:
         """
         Extract commit pairs from a text file.
         Expected line format:
-            <repo_id> | <new_sha> | <old_sha> | ...
+            <repo_id> | <new_sha> | <old_sha> | [<new_sha_not_pr>, ...] | ...
         """
-        commits_info: list[tuple[str, str, str]] = []
+        commits_info: list[tuple[str, str, str, list[str]]] = []
 
         if not path.exists():
             logging.warning(f"Commit file not found: {path}")
@@ -48,13 +48,27 @@ class Commit:
                         continue
 
                     parts = [p.strip() for p in stripped.split("|") if p.strip()]
-                    if len(parts) <= 2:
+                    if len(parts) < 3:
                         logging.warning(f"Malformed commit line at {path}:{line_no} -> {stripped}")
                         continue
 
-                    if len(parts) > 2:
-                        # repo_id | new_sha | old_sha
-                        commits_info.append((parts[0].strip(), parts[1].strip(), parts[2].strip()))
+                    repo_id = parts[0]
+                    new_sha = parts[1]
+                    old_sha = parts[2]
+
+                    if len(parts) > 3:
+                        try:
+                            extra_commits = ast.literal_eval(parts[3])
+                            if not isinstance(extra_commits, list):
+                                raise ValueError("Expected list")
+                        except Exception as e:
+                            logging.warning(f"Invalid commit list at {path}:{line_no} -> {parts[3]} ({e})")
+                            extra_commits = []
+                    else:
+                        extra_commits = []
+                    
+                    commits_info.append((repo_id, new_sha, old_sha, extra_commits))
+
 
         except (OSError, IOError) as e:
             logging.error(f"Failed to read commits from {path}: {e}", exc_info=True)

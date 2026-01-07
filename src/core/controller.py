@@ -28,11 +28,11 @@ class Controller:
         logging.info("Starting controller...")
 
         try:
-            if self.config.popular:
-                self._popular()
+            if self.config.collect:
+                self._collect()
             
-            if self.config.testcrawl:
-                self._testcrawl()
+            if self.config.testcollect:
+                self._testcollect()
 
             if self.config.commits:
                 self._commits()
@@ -40,25 +40,31 @@ class Controller:
             if self.config.testcommits:
                 self._testcommits()
 
+            if self.config.dockerimages:
+                pass # TODO
+
             if self.config.testdocker:
                 self._testdocker()
 
-            if not any([self.config.popular, self.config.testcrawl, self.config.commits, self.config.testcommits, self.config.testdocker]):
-                logging.warning("No operation selected. Use --popular, --testcrawl, --commits, --testcommits, or --testdocker")
+            if self.config.testdockerpatch:
+                pass # TODO
 
+            if not any([self.config.collect, self.config.testcollect, self.config.commits, self.config.testcommits, self.config.testdocker]):
+                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --dockerimages, --testdocker or --testdockerpatch")
+                
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
 
         finally:
             logging.info("Controller execution completed.")
 
-    def _popular(self) -> None:
+    def _collect(self) -> None:
         logging.info("Collecting popular GitHub repositories...")
         pipeline = CollectionPipeline(self.config)
         pipeline.query_popular_repos()
         logging.info("Popular repository colelction completed.")
         
-    def _testcrawl(self) -> None:
+    def _testcollect(self) -> None:
         logging.info("Testing and validating GitHub repositories...")
         repo_pipeline = RepositoryPipeline(self.config)
 
