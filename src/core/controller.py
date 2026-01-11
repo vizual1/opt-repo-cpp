@@ -4,8 +4,8 @@ from src.core.pipelines.pipeline import (
     CollectionPipeline, 
     RepositoryPipeline, 
     CommitPipeline, 
-    CommitTesterPipeline, 
-    TesterPipeline
+    CommitTesterPipeline,
+    PatchingPipeline
 )
 from src.config.config import Config
 
@@ -40,17 +40,27 @@ class Controller:
             if self.config.testcommits:
                 self._testcommits()
 
-            if self.config.dockerimages:
-                pass # TODO
+            if self.config.genimages:
+                self._genimages()
 
             if self.config.testdocker:
+                self.config.genimages = False
                 self._testdocker()
+            
+            if self.config.patch:
+                self._patch()
 
             if self.config.testdockerpatch:
-                pass # TODO
+                self.config.genimages = False
+                self._testdockerpatch()
 
-            if not any([self.config.collect, self.config.testcollect, self.config.commits, self.config.testcommits, self.config.testdocker]):
-                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --dockerimages, --testdocker or --testdockerpatch")
+            if not any([
+                self.config.collect, self.config.testcollect, 
+                self.config.commits, self.config.testcommits, 
+                self.config.genimages, self.config.testdocker, 
+                self.config.patch, self.config.testdockerpatch
+            ]):
+                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --genimages, --patch, --testdocker or --testdockerpatch")
                 
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
@@ -93,8 +103,26 @@ class Controller:
         tester_pipeline.test_commit()
         logging.info("Commit testing completed.")
 
+    def _genimages(self) -> None:
+        logging.info("Generating Docker Images...")
+        image_pipeline = CommitTesterPipeline(self.config)
+        image_pipeline.test_commit()
+        logging.info("Docker images generated.")
+
     def _testdocker(self) -> None:
-        logging.info("Testing...")
-        tester_pipeline = TesterPipeline(self.config)
-        tester_pipeline.test()
-        logging.info("Testing completed.")
+        logging.info("Testing docker images...")
+        tester_pipeline = CommitTesterPipeline(self.config)
+        tester_pipeline.test_commit()
+        logging.info("Testing docker images completed.")
+
+    def _patch(self) -> None:
+        logging.info("Patching docker images...")
+        #patching_pipeline = PatchingPipeline(self.config)
+        #patching_pipeline.patch_all()
+        logging.info("Patching docker images completed.")
+
+    def _testdockerpatch(self) -> None:
+        logging.info("Testing patched docker images...")
+        image_pipeline = CommitTesterPipeline(self.config)
+        image_pipeline.test_commit()
+        logging.info("Testing patched docker images completed.")

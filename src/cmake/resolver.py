@@ -91,6 +91,7 @@ class DependencyResolver:
         self.package_handler = handler or self.PackageHandler()
         self.llm = llm or self.LLMResolver(self.config)
         self.flag = self.FlagResolver(self.config)
+        self.install_cmds: list[list[str]] = [["apt-get", "update"]]
 
     def resolve_all(self, dep_names: set[str], container: Container) -> tuple[set[str], set[str]]:
         self.container = container
@@ -152,8 +153,11 @@ class DependencyResolver:
             if method == "apt":
                 self.container.exec_run(["apt-get", "update"])
             exit_code, output = self.container.exec_run(cmd)
-            if exit_code == 0: logging.info(f"Installed {dep_name} via {method}")
-            else: logging.warning(output.decode(errors="ignore") + "\n" + str(cmd) if output else str(cmd))
+            if exit_code == 0: 
+                self.install_cmds.append(cmd)
+                logging.info(f"Installed {dep_name} via {method}")
+            else: 
+                logging.warning(output.decode(errors="ignore") + "\n" + str(cmd) if output else str(cmd))
             return exit_code == 0
         except subprocess.CalledProcessError:
             logging.error(f"Failed to install {dep_name} via {method}")
@@ -275,10 +279,29 @@ class DependencyResolver:
         def llm_prompt(self, deps: list[str], timeout: int = 60) -> str:
             result: dict[str, str] = {"out": ""}
 
+            res_user = (
+                """You are an expert in CMake, Ubuntu, and vcpkg. 
+
+                Given one or more missing dependency names, return a single JSON object where each key is a <dependency>:
+                {{
+                "<dependency>": {{
+                    "apt": "<Ubuntu 24.04 packages or libraries>",
+                    "vcpkg": "<vcpkg port>"
+                }}
+                }}
+                Rules:
+                1. Use correct libraries and package names for Ubuntu 24.04 if possible otherwise for Ubuntu 22.02.
+                2. If there are multiple possible libraries and packages, then put them into an array ["library1", "library2", ...].
+                3. Output only valid JSON (no text)
+                4. For unknown deps, set "<Ubuntu 24.04 packages or libraries>" and "<vcpkg port>" to "".
+                5. Generate it for all <dependency> in <deps>.
+                """
+            )
+
             def run_llm():
                 p = Prompt([Prompt.Message(
                     "user",
-                    self.config.resolver_prompt.replace("<deps>", f"{deps}")
+                    res_user.replace("<deps>", f"{deps}")
                 )])
                 try:
                     llm_output = self.llm.generate(p)

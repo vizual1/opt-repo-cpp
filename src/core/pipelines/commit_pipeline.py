@@ -1,11 +1,11 @@
-import logging
+import logging, ast, json
 from tqdm import tqdm
 from src.config.config import Config
 from src.utils.writer import Writer
 from src.core.filter.commit_filter import CommitFilter
 from src.utils.stats import CommitStats
 from github.Repository import Repository
-
+from pathlib import Path
 
 class CommitPipeline:
     """
@@ -49,8 +49,9 @@ class CommitPipeline:
         filtered_commits: list[str] = []
         for commit in tqdm(self.commits, desc=f"{repo.full_name} commits", position=1, leave=False, mininterval=5):
             stats.num_commits += 1
+            perf_improv_filter = CommitFilter(commit, self.config, repo)
             try:
-                if not CommitFilter(commit, self.config, repo).accept():
+                if not perf_improv_filter.accept():
                     continue
             except Exception as e:
                 logging.exception(f"[{repo.full_name}] Error processing commit: {e}")
@@ -59,7 +60,7 @@ class CommitPipeline:
             writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths['clones'])
             filtered_commits.append(writer.file or "")
             stats.perf_commits += 1
-            stats += writer.write_pr_commit(repo, commit)
+            stats += writer.write_pr_commit(repo, commit, perf_improv_filter.is_issue)
 
         self._rewrite_commits()
         stats.write_final_log()
@@ -71,6 +72,8 @@ class CommitPipeline:
         """
         commits: dict[str, list[str]] = {}
         path = self.config.output_file or self.config.storage_paths['clones']
+        file = "filtered.txt"
+        path = Path(path) / file
         with open(path, "r") as f:
             for line_no, line in enumerate(f, start=1):
                 line = line.strip()
@@ -85,7 +88,8 @@ class CommitPipeline:
                 
                 if len(parts) > 3:
                     # repo_id | new_sha | old_sha | new_sha_not_pr
-                    commits.setdefault(msg, []).append(parts[3])
+                    extra_commits = ast.literal_eval(parts[3])
+                    commits.setdefault(msg, []).extend(extra_commits)
                     continue
                 
                 commits.setdefault(msg, [])
@@ -101,6 +105,9 @@ class CommitPipeline:
     
     def _rewrite_commits(self) -> None:
         commits = self._organize_commits()
-        with open(self.config.output_file or self.config.storage_paths['clones'], "w") as f:
+        path = self.config.output_file or self.config.storage_paths['clones']
+        file = "filtered.txt"
+        path = Path(path) / file
+        with open(path, "w") as f:
             for line in commits:
                 f.write(line + "\n")

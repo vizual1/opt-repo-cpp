@@ -17,7 +17,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
 
     # === Mode selection ===
-    mode = parser.add_mutually_exclusive_group()
+    mode = parser.add_argument_group()
     mode.add_argument("--collect", action="store_true",
                       help="Collect C++ Repositories from GitHub. Set with --limit and --stars flags.")
     mode.add_argument("--testcollect", action="store_true",
@@ -26,16 +26,24 @@ def setup_parser() -> argparse.ArgumentParser:
                       help="Gather and filter commits from C++ Repositories.")
     mode.add_argument("--testcommits", action="store_true",
                       help="Test commits between two versions or commit file.")
-    mode.add_argument("--testdocker", action="store_true",
-                      help="Test Docker images. The commits should be in " \
-                      "'/test_workspace/workspace/new' and '/test_workspace/workspace/old'")
-    mode.add_argument("--dockerimages", action="store_true",
+    mode.add_argument("--genimages", action="store_true",
                       help="Given a folder of json files generated via the --testcommits flag, " \
                       "generate and save docker images (no test is run here) of each json file.")
+    mode.add_argument("--testdocker", action="store_true",
+                      help="Build and test docker images. " \
+                      "Given a file of docker images 'owner_repo_newsha' with commits in " \
+                      "'/test_workspace/workspace/new' and '/test_workspace/workspace/old' " \
+                      "Docker images should be named 'owner_repo_newsha'")
+    mode.add_argument("--patch", action="store_true",
+                      help="Given a file of docker images 'owner_repo_newsha' with commits in " \
+                      "'/test_workspace/workspace/new' and '/test_workspace/workspace/old', " \
+                      "generate a patch in '/test_workspace/workspace/patch' from the '/test_workspace/workspace/old'" \
+                      "and information from '/test_workspace/logs/results.json'")
     mode.add_argument("--testdockerpatch", action="store_true",
-                      help="Given a docker image (or a docker image tar file) with a " \
-                      "commit at '/test_workspace/workspace/old' and its " \
-                      "patch in '/test_workspace/workspace/patch', build and test the commit and patch.")
+                      help="Build and test docker images." \
+                      "Given a file of docker images (or a docker image tar files) with a " \
+                      "commit at '/test_workspace/workspace/old' and its patch in '/test_workspace/workspace/patch'. " \
+                      "Docker images should be named 'owner_repo_newsha'")
     
     
 
@@ -66,10 +74,10 @@ def setup_parser() -> argparse.ArgumentParser:
 
     # === Docker / Testing ===
     docker_group = parser.add_argument_group("Docker and Testing Options")
+    docker_group.add_argument("--tar", type=str,
+                              help="Saves the docker image as a tar file.")
     docker_group.add_argument("--docker", type=str,
                               help="Docker image to build and test repositories or commits.")
-    docker_group.add_argument("--mount", type=str,
-                              help="Mount directory to Docker, build, test, and evaluate against old commit.")
 
     return parser
 

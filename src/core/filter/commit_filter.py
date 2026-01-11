@@ -17,6 +17,7 @@ class CommitFilter:
         self.llm2 = OpenRouterLLM(self.config, self.config.llm.model2)
         self.repo = repo
         self.cache: dict[str, dict[str, dict[str, bool]]] = self._load_cache()
+        self.is_issue: bool = False
 
     def accept(self) -> bool: 
         logging.info(f"[{self.repo.full_name}] ({self.commit.sha}) Filtering...")
@@ -60,7 +61,7 @@ class CommitFilter:
 
         user_prompt = (
             f"Repository: {self.repo.full_name}\n"
-            f"Commit Message:\n{msg}\n\n"
+            f"Commit Message:\n###MESSAGE START###{msg}\n###MESSAGE END###\n"
             f"Question: Does this commit message indicate a runtime performance improvement?"
         )
 
@@ -117,8 +118,8 @@ class CommitFilter:
                 
                 file_prompt = (
                     f"Repository: {self.repo.full_name}\n"
-                    f"Commit Message:\n{msg}\n\n"
-                    f"One of the patched files (diff):\n{diff_text}\n\n"
+                    f"Commit Message:\n###MESSAGE START###{msg}\n###MESSAGE END###\n"
+                    f"One of the patched files (diff):###DIFF START###\n{diff_text}\n###DIFF END###\n"
                     f"Question: Does this diff show a test measureable runtime performance improvement?"
                 )
                 
@@ -158,8 +159,8 @@ class CommitFilter:
             
         stage2_prompt = (
             f"Repository: {self.repo.full_name}\n"
-            f"Commit Message:\n{msg}\n\n"
-            f"Code Changes:\n{diff_text}\n\n"
+            f"Commit Message:\n###MESSAGE START###{msg}\n###MESSAGE END###\n"
+            f"Code Changes:###DIFF START###\n{diff_text}\n###DIFF END###\n"
             f"Question: Does this commit improve test measurable runtime performance?"
         )
         
@@ -483,6 +484,7 @@ class CommitFilter:
             checked.add(number)
             
             if self._is_performance_issue(number, ref_type):
+                self.is_issue = True
                 performance_issues.add(number)
                 logging.info(f"Identified performance issue: #{number}")
         

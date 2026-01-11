@@ -1,12 +1,10 @@
 """Runtime configuration management."""
-import logging
 from dataclasses import dataclass, field
 from typing import Optional
 from github import Auth, Github
 
 from src.config.constants import *
 from src.config.settings import LLMSettings, TestingSettings, GitHubSettings, ResourceSettings, ResourceSettingsCrawl
-from src.config.prompts import STAGE1_PROMPT, DIFF_PROMPT, STAGE2_PROMPT, RESOLVER_PROMPT
 
 @dataclass
 class Config:
@@ -15,8 +13,9 @@ class Config:
     testcollect: bool = False 
     commits: bool = False 
     testcommits: bool = False
-    dockerimages: bool = False
+    genimages: bool = False
     testdocker: bool = False
+    patch: bool = False
     testdockerpatch: bool = False
     
     # Limits and filters
@@ -41,9 +40,8 @@ class Config:
     # Docker settings
     docker: str = ""
     docker_image: str = field(init=False)
-    mount: str = ""
-    mount_path: str = field(init=False)
     analyze: bool = False
+    tar: bool = False
     
     # Configuration sections
     llm: LLMSettings = field(default_factory=LLMSettings)
@@ -63,14 +61,8 @@ class Config:
     min_exec_time_improvement: float = 0.05
     min_p_value: float = 0.05
     overall_decline_limit: float = -0.01
-    min_likelihood: int = 50
-    max_likelihood: int = 90
-    
-    # Prompts
-    stage1_prompt: str = STAGE1_PROMPT
-    diff_prompt: str = DIFF_PROMPT
-    stage2_prompt: str = STAGE2_PROMPT
-    resolver_prompt: str = RESOLVER_PROMPT
+    max_test_time: int = 600 # in seconds
+    min_stars: int = 20
     
     # Runtime objects
     _auth: Optional[Auth.Token] = field(init=False, default=None)
@@ -82,7 +74,6 @@ class Config:
         self.input_file = self.input
         self.output_file = self.output
         self.docker_image = self.docker
-        self.mount_path = self.mount
         if self.testcollect:
             self.resources = ResourceSettingsCrawl()
         self._validate()

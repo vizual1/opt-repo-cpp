@@ -1,6 +1,5 @@
-import logging, subprocess, os, stat, shutil, random
+import logging, os, stat, shutil, random, json
 from tqdm import tqdm
-from src.core.docker.manager import DockerManager
 from src.core.filter.structure_filter import StructureFilter
 from src.core.filter.process_filter import ProcessFilter
 from src.config.config import Config
@@ -35,14 +34,24 @@ class DockerTester:
         ) as (new_times, old_times, new_struct, old_struct):
             logging.info(f"Times Old: {old_times}, New: {new_times}")
             
-            if (
-                not new_struct
-                or not old_struct
-                or not new_struct.process
-                or not old_struct.process
-            ):
+            if (not new_struct or not old_struct or 
+                not new_struct.process or not old_struct.process):
                 return
             
+            new_cmd = [" ".join(s) for s in new_struct.process.build_commands + new_struct.process.test_commands]
+            old_cmd = [" ".join(s) for s in old_struct.process.build_commands + old_struct.process.test_commands]
+            
+            if self.config.genimages:
+                file_name = "_".join(self.repo_id.split("/") + [new_sha]) + ".json"
+                json_file = Path(self.config.input, file_name) 
+                
+                with open(json_file, 'r', errors='ignore') as f:
+                    results = json.load(f)
+
+                old_struct.process.save_docker_image(self.repo_id, new_sha, new_cmd, old_cmd, results)
+                logging.info(f"[{self.repo_id}:{new_sha}] Docker image saved.")
+                return
+
             warmup = self.config.testing.warmup
 
             new_single_tests_d = new_struct.process.per_test_times 
@@ -85,9 +94,6 @@ class DockerTester:
                 len(isolated_improvements['old_outperforms_new']) == 0
             )
 
-            new_cmd = [" ".join(s) for s in new_struct.process.build_commands + new_struct.process.test_commands]
-            old_cmd = [" ".join(s) for s in old_struct.process.build_commands + old_struct.process.test_commands]
-            
             commit = self.repo.get_commit(new_sha)
             results = test.create_test_log(
                 commit, self.repo, old_sha, new_sha, pr_shas,
@@ -97,9 +103,11 @@ class DockerTester:
             writer = Writer(self.repo_id, self.config.storage_paths["performance"])
             writer.write_results(results)
 
+            #if not self.config.testdocker and not self.config.testdockerpatch:
+            old_struct.process.save_docker_image(self.repo_id, new_sha, new_cmd, old_cmd, results)
+                
             if total_improvement < self.config.commits_time['min-p-value'] or overall_change_with_new_outperforms_old:
-                old_struct.process.save_docker_image(self.repo_id, new_sha, new_cmd, old_cmd, results)
-                logging.info(f"[{self.repo_id}] ({new_sha}) significantly improves execution time.")
+                logging.info(f"[{self.repo_id}:{new_sha}] significantly improves execution time.")
                 writer.write_improve(results)
                         
 
@@ -124,20 +132,23 @@ class DockerTester:
         old_structure = None
         new_times = []
         old_times = []
-        
+
         try:
-            new_structure = new_pf.commit_setup_and_build("New", container_name=new_sha, cpuset_cpus=cpuset_cpus)
+            owner, repo = self.repo_id.split("/")
+            container_name = f"{owner}_{repo}_{new_sha}" if self.config.testdocker or self.config.testdockerpatch else new_sha 
+            new_structure = new_pf.commit_setup_and_build("New", container_name=container_name, cpuset_cpus=cpuset_cpus)
             docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
             
             if not new_structure or not new_structure.process:
                 raise UndefinedStructureFilter("New commit StructureFilter or its CMakeProcess is None")
 
-            old_structure = old_pf.commit_setup_and_build("Old", container_name=new_sha, docker_image=docker_image)
+            old_structure = old_pf.commit_setup_and_build("Old", container_name=container_name, docker_image=docker_image)
             
             if not old_structure or not old_structure.process:
                 raise UndefinedStructureFilter("Old commit StructureFilter or its CMakeProcess is None")
             
-            self._run_tests(new_structure, old_structure, new_pf, old_pf)
+            if not self.config.genimages:
+                self._run_tests(new_structure, old_structure, new_pf, old_pf)
 
             new_cmd_times = new_structure.process.test_time
             old_cmd_times = old_structure.process.test_time
@@ -154,10 +165,6 @@ class DockerTester:
 
         except UndefinedStructureFilter as e:
             logging.error(str(e))
-            yield [], [], None, None
-
-        except Exception as e:
-            logging.error(f"Commit pair test failed: {e}")
             yield [], [], None, None
 
         finally:
@@ -195,7 +202,7 @@ class DockerTester:
 
                     for label, cmd, structure, pf in order:
                         if not pf.test_run(label, cmd, structure, has_list_args):
-                            raise TestFailed(f"Test run '{cmd}' with test framework '{label}' failed")
+                            raise TestFailed(f"Test run '{cmd}' failed")
         except TestFailed:
             has_list_args = False
             new_test_cmd = old_test_cmd = [["ctest", "--output-on-failure"]]
@@ -226,56 +233,3 @@ class DockerTester:
     def _on_rm_error(self, func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)
         func(path)
-        
-    # TODO
-    def test_docker_image(self, image_name: str, tar_file: Path) -> bool:
-        #cmd = ["docker", "load", "-i", str(tar_file)]
-        #subprocess.run(cmd)
-        
-        try:
-            docker = DockerManager(self.config, Path(), image_name, self.config.testing.docker_test_dir)
-            docker.load_docker_image(tar_file)
-            #docker.start_docker_container(image_name)
-
-            new_times: list[float] = []
-            old_times: list[float] = []
-            warmup: int = self.config.testing.warmup
-            for _ in range(warmup + self.config.testing.commit_test_times):
-                cmd = ["bash", f"{self.config.testing.docker_test_dir}/new_test.sh"]
-                exit_code, stdout, stderr, time = docker.run_command_in_docker(cmd, Path())
-                stats = parse_ctest_output(stdout)
-                elapsed: float = stats['total_time_sec']
-                new_times.append(elapsed)
-
-                cmd = ["bash", f"{self.config.testing.docker_test_dir}/old_test.sh"]
-                exit_code, stdout, stderr, time = docker.run_command_in_docker(cmd, Path())
-                stats = parse_ctest_output(stdout)
-                elapsed: float = stats['total_time_sec']
-                old_times.append(elapsed)
-                
-            #test = TestAnalyzer(self.config, [], [], warmup, self.config.testing.commit_test_times)
-            return True #test.get_improvement_p_value(new_times[warmup:], old_times[warmup:]) < self.config.commits_time['min-p-value']
-        
-        except:
-            logging.error("")
-            return False
-
-        finally:
-            docker.stop_container("")
-
-
-    def test_mounted_against_docker(self, docker_image: str, mount: str):
-        """Test mounted directory against saved Docker image"""
-        mount_dir = Path(mount)
-        
-        if not mount_dir.exists():
-            raise ValueError(f"Mount directory {mount_dir} does not exist")
-        
-        # TODO: .tar file or docker image, check if docker_image already exist
-        if docker_image.endswith(".tar"):
-            cmd = ["docker", "load", "-i", str(docker_image)]
-            subprocess.run(cmd)
-            docker_image = docker_image.removesuffix(".tar")
-        docker = DockerManager(self.config, mount_dir, docker_image, self.config.testing.docker_test_dir)
-        docker.start_docker_container(docker_image)
-

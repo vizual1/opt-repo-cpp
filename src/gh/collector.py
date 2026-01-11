@@ -59,7 +59,7 @@ class RepositoryCollector:
 
                 if getattr(self.config, "stars", None):
                     query += f" stars:<={self.config.stars}"
-                    query += f" stars:>={self.config.commits_time['min-stars']}"
+                    query += f" stars:>={self.config.min_stars}"
 
                 logging.info(f"Query: {query}")
 

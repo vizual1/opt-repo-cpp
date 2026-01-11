@@ -13,7 +13,8 @@ def logging_setup() -> None:
         filemode='a',
         format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
         datefmt='%H:%M:%S',
-        level=logging.INFO
+        level=logging.INFO,
+        force=True
     )
 
     logging.info(f"Command run: {' '.join(sys.argv)}")

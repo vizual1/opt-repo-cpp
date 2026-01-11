@@ -50,7 +50,7 @@ class ProcessFilter:
                 process.set_enable_testing(enable_testing_path)
                 process.set_flags(flags)
                 process.docker_image = self.config.docker_image
-                process.start_docker_image(self.config, container_name)
+                process.start_docker_image(container_name)
             
                 if not process.build():
                     logging.error(f"[{self.repo.full_name}:{self.sha}] build failed")
@@ -90,9 +90,9 @@ class ProcessFilter:
         
         logging.info(f"[{self.repo.full_name}:{self.sha}] Testing...")
         if self.root and not structure.is_valid_commit(self.root, self.sha, docker_test_dir=self.config.testing.docker_test_dir):
-            logging.error(f"[{self.repo.full_name}:{self.sha}] commit cmake and ctest failed ({self.sha})")
+            logging.error(f"[{self.repo.full_name}:{self.sha}] commit cmake and ctest failed")
             return None
-        
+
         process = structure.process
         if not process:
             logging.error(f"[{self.repo.full_name}:{self.sha}] CMakeProcess couldn't be found")
@@ -116,14 +116,16 @@ class ProcessFilter:
         try:
             process.set_enable_testing(enable_testing_path)
             process.set_flags(flags)
-            process.docker_image = self.config.docker_image
-            if docker_image:
-                new = False
+            new = not docker_image
+            if self.config.testdocker or self.config.testdockerpatch:
+                process.set_docker(container_name, new)
+                process.docker.start_docker_container(container_name, cpuset_cpus)
+                process.container = process.docker.container
             else:
-                new = True
-            process.start_docker_image(self.config, container_name, new, cpuset_cpus)
+                process.docker_image = self.config.docker_image
+                process.start_docker_image(container_name, new, cpuset_cpus)
             
-            if not process.build():
+            if not process.check_build() and not process.build():
                 logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} build failed")
                 process.docker.stop_container(self.repo.full_name)
                 return None

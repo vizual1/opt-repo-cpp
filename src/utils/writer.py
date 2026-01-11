@@ -43,7 +43,7 @@ class Writer:
 
         return stats
     
-    def write_pr_commit(self, repo: Repository, commit: Commit):
+    def write_pr_commit(self, repo: Repository, commit: Commit, is_issue: bool):
         stats = CommitStats()
 
         stats.perf_commits += 1
@@ -54,7 +54,7 @@ class Writer:
         stats.lines_deleted += total_del
 
         self.file = "filtered.txt"
-        msg = get_pr_chain_msg(repo, commit)
+        msg = get_pr_chain_msg(repo, commit, is_issue)
         path = Path(self.output_path) / self.file
         self._write(path, msg)
 

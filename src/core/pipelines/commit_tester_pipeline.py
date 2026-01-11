@@ -1,4 +1,4 @@
-import logging, os
+import logging, os, docker
 from tqdm import tqdm
 from src.config.config import Config
 from src.utils.commit import Commit
@@ -36,13 +36,17 @@ def generate_cpu_sets(cpus: list[int], cpus_per_job: int, max_jobs: int) -> list
 
 def run_one_commit(repo_id: str, new_sha: str, old_sha: str, pr_shas: list[str], config: Config, cpuset_cpus: str = ""):
     try:
+        if config.genimages and image_exists("_".join(repo_id.split("/")) + f"_{new_sha}"):
+            logging.info("Image already exists, no need to generate the docker image")
+            return
+
         commit = Commit(
             config.input_file or config.storage_paths["commits"],
             config.storage_paths["clones"],
         )
 
         file = commit.get_file_prefix(repo_id)
-        new_path, old_path = commit.get_paths(file, new_sha)
+        new_path, old_path = commit.get_paths(file, new_sha, config.testdockerpatch)
 
         repo = config.git_client.get_repo(repo_id)
         docker = DockerTester(repo, config)
@@ -51,6 +55,15 @@ def run_one_commit(repo_id: str, new_sha: str, old_sha: str, pr_shas: list[str],
     except Exception:
         logging.exception(f"[{repo_id}] Error testing commits")
 
+def image_exists(image_name: str) -> bool:
+    client = docker.from_env()
+    try:
+        client.images.get(image_name)
+        return True
+    except docker.errors.ImageNotFound: #type:ignore
+        return False
+    except docker.errors.APIError as e: #type:ignore
+        raise RuntimeError(f"Docker error: {e}")
 
 class CommitTesterPipeline:
     """
@@ -61,13 +74,18 @@ class CommitTesterPipeline:
         self.commit = Commit(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
 
     def test_commit(self) -> None:
-        if self.config.input_file or self.config.repo_id:
+        if self.config.input or self.config.repo_id:
             self._input_tester()
         else:
             self._sha_tester()
 
     def _input_tester(self) -> None:
-        commits = list(self.commit.get_commits())
+        if self.config.genimages:
+            commits = self.commit.get_commits_from_json_files()
+        elif self.config.testdocker or self.config.testdockerpatch:
+            commits = self.commit.get_commit_from_input(self.config)
+        else:
+            commits = self.commit.get_commits()
         tasks: list[tuple[str, str, str, list[str], str]] = []
         available_cpus = get_available_cpus()
 

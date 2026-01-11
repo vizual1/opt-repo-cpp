@@ -6,13 +6,11 @@ from typing import Optional
 from pathlib import Path
 from github.ContentFile import ContentFile
 from github.GithubException import GithubException, RateLimitExceededException
-
 from src.config.config import Config
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.process import CMakeProcess
 from src.gh.clone import GitHandler
 from src.utils.stats import RepoStats
-from src.utils.parser import remove_exclude_from_all
 
 class StructureFilter:
     """
@@ -24,13 +22,14 @@ class StructureFilter:
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
-        self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
-        self.root_files = {item.path for item in self.tree if item.type == "blob"}
         self.stats = RepoStats()
         self.testing_flags: dict = {}
         self.process: Optional[CMakeProcess] = None
 
     def is_valid(self, without_pkg_manager: bool = True) -> bool:
+        self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
+        self.root_files = {item.path for item in self.tree if item.type == "blob"}
+
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 
@@ -66,6 +65,9 @@ class StructureFilter:
             return True
                 
     def is_valid_commit(self, root: Path, sha: str, docker_test_dir: str) -> bool:
+        self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
+        self.root_files = {item.path for item in self.tree if item.type == "blob"}
+
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 

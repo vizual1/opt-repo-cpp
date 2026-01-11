@@ -21,8 +21,8 @@ class TestAnalyzer:
 
         self.warmup = self.config.testing.warmup
         self.commit_test_times = self.config.testing.commit_test_times
-        self.min_exec_time_improvement: float = self.config.commits_time['min-exec-time-improvement']
-        self.min_p_value: float = self.config.commits_time['min-p-value']
+        self.min_exec_time_improvement = self.config.min_exec_time_improvement
+        self.min_p_value = self.config.min_p_value
 
     def relative_improvement(self, old_times: list[float], new_times: list[float]):
         """relative improvement of new_times to old_times"""

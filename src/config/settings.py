@@ -15,9 +15,9 @@ class LLMSettings:
     # Ollama settings
     ollama_enabled: bool = True
     ollama_url: str = "http://127.0.0.1:11434/api/generate"
-    ollama_stage1_model: str = "qwen2.5:7b" #"llama3.1:8b"
+    ollama_stage1_model: str = "qwen2.5:7b"
     ollama_diff_model: str = "qwen2.5-coder:7b"
-    ollama_stage2_model: str = "qwen3:8b" #"deepseek-coder:6.7b"
+    ollama_stage2_model: str = "qwen3:8b"
     ollama_resolver_model: str = "qwen3:8b"
     
     # Behavior flags
@@ -49,7 +49,7 @@ class ResourceSettings:
     cpu_quota: int = 200000
     cpu_period: int = 100000
     jobs: int = 1
-    max_parallel_jobs: int = 4 # > 1 means cpuset_cpus will be randomized 
+    max_parallel_jobs: int = 8 
     
 @dataclass
 class ResourceSettingsCrawl(ResourceSettings):

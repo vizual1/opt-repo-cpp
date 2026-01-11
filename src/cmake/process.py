@@ -65,14 +65,14 @@ class CMakeProcess:
     def set_flags(self, flags: list[str]) -> None:
         self.flags = flags
 
-    def set_docker(self, config: Config, docker_image: str, new: bool):
-        self.docker = DockerManager(config, self.root.parent, docker_image, self.docker_test_dir, new)
+    def set_docker(self, docker_image: str, new: bool):
+        self.docker = DockerManager(self.config, self.root.parent, docker_image, self.docker_test_dir, new)
 
-    def start_docker_image(self, config: Config, container_name: str, new: bool = True, cpuset_cpus: str = "") -> None:
+    def start_docker_image(self, container_name: str, new: bool = True, cpuset_cpus: str = "") -> None:
         if not self.docker_image:
             self.docker_image = self.analyzer.get_docker()
         logging.info(f"Started Docker Image: {self.docker_image}")
-        self.set_docker(config, self.docker_image, new)
+        self.set_docker(self.docker_image, new)
         self.docker.start_docker_container(container_name, cpuset_cpus)
         self.container = self.docker.container
 
@@ -109,16 +109,49 @@ class CMakeProcess:
         image_name = ("_".join(repo_id.split("/")) + f"_{sha}").lower()
         container_id = self.container.id if self.container and self.container.id else "test"
         
+        inspect = subprocess.run(
+            ["docker", "image", "inspect", image_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        if inspect.returncode == 0:
+            logging.info(f"Removing existing image: {image_name}")
+            rm = subprocess.run(
+                ["docker", "rmi", "-f", image_name],
+                capture_output=True,
+                text=True
+            )
+            if rm.returncode != 0:
+                logging.error(f"Failed to remove old image {image_name}: {rm.stderr}")
+
         self.copy_log_to_container(container_id, results_json)
         self.docker.copy_commands_to_container(self.root, new_cmd, old_cmd)
 
+        clean_cmd = [
+            ["apt-get", "autoremove", "-y"], 
+            ["apt-get", "autoclean", "-y"], 
+            ["apt-get", "clean"], 
+            ["rm", "-rf", "/var/lib/apt/lists/*"], 
+            ["rm", "-rf", "/tmp/*"], 
+            ["rm", "-rf", "/root/.cache"], 
+            ["rm", "-rf", "/home/*/.cache"]
+        ]
+        for cmd in clean_cmd:
+            exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
+            if exit_code != 0:
+                logging.error(f"Failed command exit code {exit_code}: {' '.join(map(str, cmd))}")
+                if stdout: logging.info(f"stdout: {stdout}")
+                if stderr: logging.warning(f"stderr: {stderr}")
+            
         result = subprocess.run(["docker", "commit", container_id, image_name], capture_output=True, text=True)
         if result.returncode != 0:
             logging.error(f"docker commit failed: {result.stderr}")
         
-        result = subprocess.run(["docker", "save", image_name, "-o", f"{image_name}.tar"], capture_output=True, text=True)
-        if result.returncode != 0:
-            logging.error(f"docker save failed: {result.stderr}")
+        if self.config.tar:
+            result = subprocess.run(["docker", "save", image_name, "-o", f"{image_name}.tar"], capture_output=True, text=True)
+            if result.returncode != 0:
+                logging.error(f"docker save failed: {result.stderr}")
 
     def copy_log_to_container(self, container_id: str, results_json: dict) -> None:
         log_config: str = f"Configuration output:\n" + '\n'.join(self.cmake_config_output) + "\n"
@@ -183,6 +216,8 @@ class CMakeProcess:
             #self.docker.run_command_in_docker(remove_build, self.root, check=False)
             
             if self._configure():
+                self.build_commands.reverse() # 1. build, 2. configure -> reversed
+                self.build_commands = self.resolver.install_cmds + self.build_commands
                 return True
             
             missing_dependencies = self.resolver.package_handler.get_missing_dependencies(
@@ -345,7 +380,6 @@ class CMakeProcess:
             return False
         
         self.build_commands.append(list(map(str, cmd)))
-        self.build_commands.reverse()
         return True
         
     def to_container_path(self, path: Path) -> str:
@@ -375,6 +409,19 @@ class CMakeProcess:
             if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
             if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
             return False
+        
+    def check_build(self) -> bool:
+        cmd = ["test", "-d", str(self.build_path).replace("\\", "/")]
+        exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
+        if exit_code == 0:
+            logging.info(f"Build is already completed {self.root}")
+            logging.debug(f"Output:\n{stdout}")
+            return True
+        else:
+            logging.warning(f"No build found in {self.root} (return code {exit_code})", exc_info=True)
+            if stdout: logging.warning(f"Output (stdout):\n{stdout}", exc_info=True)
+            if stderr: logging.warning(f"Error (stderr):\n{stderr}", exc_info=True)
+            return False
 
 ############### TEST COLLECTION ###############
 
@@ -391,7 +438,6 @@ class CMakeProcess:
         if len(self.test_commands) == 0: # no test commands
             self.test_commands.append(list(map(str, cmd)))
         return True
-
 
     def _individual_tests_collection(self, test_exec_flag: list[tuple[str, str]]) -> bool:
         framework, test_flag = test_exec_flag[0]
@@ -506,7 +552,7 @@ class CMakeProcess:
         try:
             logging.info(f"{' '.join(command)} in {self.test_path}")
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                command, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=self.config.commits_time['max-test-time'], log=False,
+                command, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=self.config.max_test_time, log=False,
             )
 
             # parse the times returned
@@ -554,7 +600,7 @@ class CMakeProcess:
 
         logging.debug(command + extra)
         exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-            command + extra, self.root, check=False, timeout=self.config.commits_time['max-test-time'], log=False
+            command + extra, self.root, check=False, timeout=self.config.max_test_time, log=False
         )
         logging.debug(f"Individual CTest stdout:\n{stdout}")
 
