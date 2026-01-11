@@ -1,0 +1,295 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:46:13.277082",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "d30477e33360f2a7c1402356b06d306be465efe5",
+    "new_sha": "7f0cd9161665f8a644b5f4ead8bb0409749569d8",
+    "commit_message": [
+      "faster all-equal check without sorting, refactor for less branching\n\nPiperOrigin-RevId: 475494950"
+    ],
+    "commit_date": "2022-09-20T08:48:16+00:00",
+    "patch": [
+      "--- hwy/base.h\n@@ -653,6 +653,20 @@ constexpr double HighestValue<double>() {\n   return 1.7976931348623158e+308;\n }\n \n+// Difference between 1.0 and the next representable value.\n+template <typename T>\n+HWY_API constexpr T Epsilon() {\n+  return 1;\n+}\n+template <>\n+constexpr float Epsilon<float>() {\n+  return 1.192092896e-7f;\n+}\n+template <>\n+constexpr double Epsilon<double>() {\n+  return 2.2204460492503131e-16;\n+}\n+\n // Returns width in bits of the mantissa field in IEEE binary32/64.\n template <typename T>\n constexpr int MantissaBits() {\n--- hwy/contrib/sort/traits-inl.h\n@@ -223,7 +223,7 @@ struct OrderAscending : public KeyLane<T> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    return Sub(v, Set(d, 1));\n+    return Sub(v, Set(d, hwy::Epsilon<T>()));\n   }\n };\n \n@@ -272,7 +272,7 @@ struct OrderDescending : public KeyLane<T> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    return Add(v, Set(d, 1));\n+    return Add(v, Set(d, hwy::Epsilon<T>()));\n   }\n };\n \n@@ -325,8 +325,7 @@ struct OrderAscendingKV64 : public KeyLane<uint64_t> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    const Vec<D> k1 = Set(d, 1);\n-    return Sub(v, k1);\n+    return Sub(v, Set(d, 1));\n   }\n };\n \n@@ -378,8 +377,7 @@ struct OrderDescendingKV64 : public KeyLane<uint64_t> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    const Vec<D> k1 = Set(d, 1);\n-    return Add(v, k1);\n+    return Add(v, Set(d, 1));\n   }\n };\n \n--- hwy/contrib/sort/vqsort-inl.h\n@@ -564,10 +564,6 @@ HWY_INLINE void DrawSamples(D d, Traits st, T* HWY_RESTRICT keys, size_t num,\n   using V = decltype(Zero(d));\n   const size_t N = Lanes(d);\n \n-  if (VQSORT_PRINT >= 2) {\n-    fprintf(stderr, \"DrawSamples num %zu:\\n\", num);\n-  }\n-\n   // Power of two\n   const size_t lanes_per_chunk = Constants::LanesPerChunk(sizeof(T), N);\n \n@@ -648,6 +644,7 @@ HWY_INLINE void SortSamples(D d, Traits st, T* HWY_RESTRICT buf) {\n \n #if VQSORT_PRINT >= 2  // Print is only defined #if\n   const size_t N = Lanes(d);\n+  fprintf(stderr, \"Samples:\\n\");\n   for (size_t i = 0; i < kSampleLanes; i += N) {\n     Print(d, \"\", Load(d, buf + i), 0, N);\n   }\n@@ -679,7 +676,7 @@ HWY_INLINE const char* PivotResultString(PivotResult result) {\n }\n \n template <class Traits, typename T>\n-HWY_INLINE size_t PivotRank(Traits st, T* HWY_RESTRICT buf) {\n+HWY_INLINE size_t PivotRank(Traits st, const T* HWY_RESTRICT samples) {\n   constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);\n   constexpr size_t N1 = st.LanesPerKey();\n \n@@ -688,13 +685,13 @@ HWY_INLINE size_t PivotRank(Traits st, T* HWY_RESTRICT buf) {\n \n   // Find the previous value not equal to the median.\n   size_t rank_prev = kRankMid - N1;\n-  for (; st.Equal1(buf + rank_prev, buf + kRankMid); rank_prev -= N1) {\n+  for (; st.Equal1(samples + rank_prev, samples + kRankMid); rank_prev -= N1) {\n     // All previous samples are equal to the median.\n     if (rank_prev == 0) return 0;\n   }\n \n   size_t rank_next = rank_prev + N1;\n-  for (; st.Equal1(buf + rank_next, buf + kRankMid); rank_next += N1) {\n+  for (; st.Equal1(samples + rank_next, samples + kRankMid); rank_next += N1) {\n     // The median is also the largest sample. If it is also the largest key,\n     // we'd end up with an empty right partition, so choose the previous key.\n     if (rank_next == kSampleLanes - N1) return rank_prev;\n@@ -710,10 +707,13 @@ HWY_INLINE size_t PivotRank(Traits st, T* HWY_RESTRICT buf) {\n   return excess_if_median < excess_if_prev ? kRankMid : rank_prev;\n }\n \n+// Returns pivot chosen from `samples`. It will never be the largest key\n+// (thus the right partition will never be empty).\n template <class D, class Traits, typename T>\n-HWY_INLINE Vec<D> ChoosePivotByRank(D d, Traits st, T* HWY_RESTRICT buf) {\n-  const size_t pivot_rank = PivotRank(st, buf);\n-  const Vec<D> pivot = st.SetKey(d, buf + pivot_rank);\n+HWY_INLINE Vec<D> ChoosePivotByRank(D d, Traits st,\n+                                    const T* HWY_RESTRICT samples) {\n+  const size_t pivot_rank = PivotRank(st, samples);\n+  const Vec<D> pivot = st.SetKey(d, samples + pivot_rank);\n   if (VQSORT_PRINT >= 2) {\n     fprintf(stderr, \"  Pivot rank %zu = %.0f\\n\", pivot_rank,\n             static_cast<double>(GetLane(pivot)));\n@@ -780,7 +780,10 @@ HWY_NOINLINE size_t LowerBoundOfMismatch(D d, Traits st,\n       diff1 = OrXor(diff1, v1, reference);\n     }\n     diff0 = Or(diff0, diff1);\n-    if (!AllTrue(d, Eq(diff0, zero))) {\n+\n+    // Must avoid floating-point comparisons (for -0)\n+    const RebindToUnsigned<D> du;\n+    if (!AllTrue(du, Eq(BitCast(du, diff0), Zero(du)))) {\n       return i;  // not equal\n     }\n   }\n@@ -851,48 +854,36 @@ HWY_NOINLINE void ScanFirstLast(D d, Traits st, const T* HWY_RESTRICT keys,\n   *out_last = st.LastOfLanes(d, last, buf);\n }\n \n-template <class Traits, typename T>\n-HWY_INLINE bool SortedSampleEqual(Traits st, T* HWY_RESTRICT sorted_samples) {\n-  constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);\n-  constexpr size_t N1 = st.LanesPerKey();\n-  return st.Equal1(sorted_samples, sorted_samples + kSampleLanes - N1);\n-}\n-\n+// Returns pivot chosen from `keys[0, num)`. It will never be the largest key\n+// (thus the right partition will never be empty).\n template <class D, class Traits, typename T>\n HWY_INLINE Vec<D> ChoosePivotForEqualSamples(D d, Traits st,\n                                              T* HWY_RESTRICT keys, size_t num,\n-                                             T* HWY_RESTRICT sorted_samples,\n+                                             size_t idx_diff,\n+                                             T* HWY_RESTRICT samples,\n                                              PivotResult& result) {\n   using V = decltype(Zero(d));\n \n-  V pivot = st.SetKey(d, sorted_samples);  // the single unique sample\n-\n-  const size_t idx_diff = LowerBoundOfMismatch(d, st, keys, num);\n-  const bool all_eq = idx_diff == num;\n-  if (VQSORT_PRINT >= 1) {\n-    fprintf(stderr, \"Samples all equal, idxDiff %zu keysEq: %d\\n\", idx_diff,\n-            all_eq);\n-  }\n-  if (HWY_UNLIKELY(all_eq)) {\n-    result = PivotResult::kDone;\n-    return pivot;\n-  }\n+  V pivot = st.SetKey(d, samples);  // the single unique sample\n \n   // Early out for mostly-0 arrays, where pivot is often FirstValue.\n   if (HWY_UNLIKELY(AllTrue(d, st.EqualKeys(d, pivot, st.FirstValue(d))))) {\n     result = PivotResult::kIsFirst;\n     return pivot;\n   }\n+  if (HWY_UNLIKELY(AllTrue(d, st.EqualKeys(d, pivot, st.LastValue(d))))) {\n+    result = PivotResult::kWasLast;\n+    return st.PrevValue(d, pivot);\n+  }\n \n   V first, last;\n-  ScanFirstLast(d, st, keys, num, idx_diff, /*buf=*/sorted_samples, &first,\n-                &last);\n+  ScanFirstLast(d, st, keys, num, idx_diff, /*buf=*/samples, &first, &last);\n \n   const Vec<D> prev_last = st.PrevValue(d, last);\n   // All keys are in [x, x+1], or [x+1, x] if descending order.\n   if (HWY_UNLIKELY(AllTrue(d, st.EqualKeys(d, first, prev_last)))) {\n     (void)PartitionTwoValue(d, st, keys, 0, num, first, last,\n-                            /*buf=*/sorted_samples);\n+                            /*buf=*/samples);\n     result = PivotResult::kDone;\n     if (VQSORT_PRINT >= 2) {\n       fprintf(stderr, \"  2val\\n\");\n@@ -921,28 +912,12 @@ HWY_INLINE Vec<D> ChoosePivotForEqualSamples(D d, Traits st,\n   // is a net loss due to the extra comparisons.\n   result = PivotResult::kNormal;\n   if (VQSORT_PRINT >= 2) {\n-    fprintf(stderr, \"  sample eq but not minmax; normal\\n\");\n+    fprintf(stderr, \"  Pivot %.0f not minmax; normal\\n\",\n+            static_cast<double>(GetLane(pivot)));\n   }\n   return pivot;\n }\n \n-// Returns pivot chosen from `keys[0, num)`. It will never be the largest key\n-// (thus the right partition will never be empty).\n-template <class D, class Traits, typename T>\n-HWY_NOINLINE Vec<D> ChoosePivot(D d, Traits st, T* HWY_RESTRICT keys,\n-                                const size_t num, T* HWY_RESTRICT buf,\n-                                Generator& rng, PivotResult& result) {\n-  DrawSamples(d, st, keys, num, buf, rng);\n-  SortSamples(d, st, buf);\n-\n-  if (HWY_UNLIKELY(SortedSampleEqual(st, buf))) {\n-    return ChoosePivotForEqualSamples(d, st, keys, num, buf, result);\n-  }\n-\n-  result = PivotResult::kNormal;\n-  return ChoosePivotByRank(d, st, buf);\n-}\n-\n // ------------------------------ Quicksort recursion\n \n #if VQSORT_PRINT >= 2 || HWY_IDE\n@@ -977,6 +952,32 @@ HWY_NOINLINE void PrintMinMax(D d, Traits st, const T* HWY_RESTRICT keys,\n \n #endif  // VQSORT_PRINT >= 2\n \n+// For detecting inputs where (almost) all keys are equal.\n+template <class D, class Traits>\n+HWY_INLINE bool UnsortedSampleEqual(D d, Traits st,\n+                                    const TFromD<D>* HWY_RESTRICT samples) {\n+  constexpr size_t kSampleLanes = 3 * 64 / sizeof(TFromD<D>);\n+  const size_t N = Lanes(d);\n+  using V = Vec<D>;\n+\n+  const V first = st.SetKey(d, samples);\n+  // OR of XOR-difference may be faster than comparison.\n+  V diff = Zero(d);\n+  size_t i = 0;\n+  for (; i + N <= kSampleLanes; i += N) {\n+    const V v = Load(d, samples + i);\n+    diff = OrXor(diff, first, Load(d, samples + i));\n+  }\n+  // Remainder, if any.\n+  const V v = Load(d, samples + i);\n+  const auto valid = FirstN(d, kSampleLanes - i);\n+  diff = IfThenElse(valid, OrXor(diff, first, v), diff);\n+\n+  // Must avoid floating-point comparisons (for -0)\n+  const RebindToUnsigned<D> du;\n+  return AllTrue(du, Eq(BitCast(du, diff), Zero(du)));\n+}\n+\n template <class D, class Traits, typename T>\n HWY_NOINLINE void Recurse(D d, Traits st, T* HWY_RESTRICT keys,\n                           T* HWY_RESTRICT keys_end, const size_t begin,\n@@ -999,10 +1000,32 @@ HWY_NOINLINE void Recurse(D d, Traits st, T* HWY_RESTRICT keys,\n   PrintMinMax(d, st, keys + begin, num, buf);\n #endif\n \n-  PivotResult result;\n-  Vec<D> pivot = ChoosePivot(d, st, keys + begin, num, buf, rng, result);\n-  if (HWY_UNLIKELY(result == PivotResult::kDone)) {\n-    return;\n+  DrawSamples(d, st, keys + begin, num, buf, rng);\n+\n+  Vec<D> pivot;\n+  PivotResult result = PivotResult::kNormal;\n+  size_t idx_diff = 0;\n+  if (HWY_UNLIKELY(UnsortedSampleEqual(d, st, buf))) {\n+    idx_diff = LowerBoundOfMismatch(d, st, keys + begin, num);\n+    // All keys are equal; done.\n+    if (HWY_UNLIKELY(idx_diff == num)) {\n+      if (VQSORT_PRINT >= 1) {\n+        fprintf(stderr, \"All keys equal\\n\");\n+      }\n+      return;\n+    }\n+\n+    if (VQSORT_PRINT >= 1) {\n+      fprintf(stderr, \"Samples all equal %.0f, diff at %zu\\n\",\n+              static_cast<double>(GetLane(st.SetKey(d, buf))), idx_diff);\n+    }\n+    pivot = ChoosePivotForEqualSamples(d, st, keys + begin, num, idx_diff, buf,\n+                                       result);\n+    // TODO(janwas): inline this, move the 2-valued partition here.\n+    if (result == PivotResult::kDone) return;\n+  } else {\n+    SortSamples(d, st, buf);\n+    pivot = ChoosePivotByRank(d, st, buf);\n   }\n \n   // Too many recursions. This is unlikely to happen because we select pivots"
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/base.h",
+        "status": "modified",
+        "additions": 14,
+        "deletions": 0,
+        "changes": 14,
+        "patch": "@@ -653,6 +653,20 @@ constexpr double HighestValue<double>() {\n   return 1.7976931348623158e+308;\n }\n \n+// Difference between 1.0 and the next representable value.\n+template <typename T>\n+HWY_API constexpr T Epsilon() {\n+  return 1;\n+}\n+template <>\n+constexpr float Epsilon<float>() {\n+  return 1.192092896e-7f;\n+}\n+template <>\n+constexpr double Epsilon<double>() {\n+  return 2.2204460492503131e-16;\n+}\n+\n // Returns width in bits of the mantissa field in IEEE binary32/64.\n template <typename T>\n constexpr int MantissaBits() {"
+      },
+      {
+        "filename": "hwy/contrib/sort/traits-inl.h",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 6,
+        "changes": 10,
+        "patch": "@@ -223,7 +223,7 @@ struct OrderAscending : public KeyLane<T> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    return Sub(v, Set(d, 1));\n+    return Sub(v, Set(d, hwy::Epsilon<T>()));\n   }\n };\n \n@@ -272,7 +272,7 @@ struct OrderDescending : public KeyLane<T> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    return Add(v, Set(d, 1));\n+    return Add(v, Set(d, hwy::Epsilon<T>()));\n   }\n };\n \n@@ -325,8 +325,7 @@ struct OrderAscendingKV64 : public KeyLane<uint64_t> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    const Vec<D> k1 = Set(d, 1);\n-    return Sub(v, k1);\n+    return Sub(v, Set(d, 1));\n   }\n };\n \n@@ -378,8 +377,7 @@ struct OrderDescendingKV64 : public KeyLane<uint64_t> {\n \n   template <class D>\n   HWY_INLINE Vec<D> PrevValue(D d, Vec<D> v) const {\n-    const Vec<D> k1 = Set(d, 1);\n-    return Add(v, k1);\n+    return Add(v, Set(d, 1));\n   }\n };\n "
+      },
+      {
+        "filename": "hwy/contrib/sort/vqsort-inl.h",
+        "status": "modified",
+        "additions": 79,
+        "deletions": 56,
+        "changes": 135,
+        "patch": "@@ -564,10 +564,6 @@ HWY_INLINE void DrawSamples(D d, Traits st, T* HWY_RESTRICT keys, size_t num,\n   using V = decltype(Zero(d));\n   const size_t N = Lanes(d);\n \n-  if (VQSORT_PRINT >= 2) {\n-    fprintf(stderr, \"DrawSamples num %zu:\\n\", num);\n-  }\n-\n   // Power of two\n   const size_t lanes_per_chunk = Constants::LanesPerChunk(sizeof(T), N);\n \n@@ -648,6 +644,7 @@ HWY_INLINE void SortSamples(D d, Traits st, T* HWY_RESTRICT buf) {\n \n #if VQSORT_PRINT >= 2  // Print is only defined #if\n   const size_t N = Lanes(d);\n+  fprintf(stderr, \"Samples:\\n\");\n   for (size_t i = 0; i < kSampleLanes; i += N) {\n     Print(d, \"\", Load(d, buf + i), 0, N);\n   }\n@@ -679,7 +676,7 @@ HWY_INLINE const char* PivotResultString(PivotResult result) {\n }\n \n template <class Traits, typename T>\n-HWY_INLINE size_t PivotRank(Traits st, T* HWY_RESTRICT buf) {\n+HWY_INLINE size_t PivotRank(Traits st, const T* HWY_RESTRICT samples) {\n   constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);\n   constexpr size_t N1 = st.LanesPerKey();\n \n@@ -688,13 +685,13 @@ HWY_INLINE size_t PivotRank(Traits st, T* HWY_RESTRICT buf) {\n \n   // Find the previous value not equal to the median.\n   size_t rank_prev = kRankMid - N1;\n-  for (; st.Equal1(buf + rank_prev, buf + kRankMid); rank_prev -= N1) {\n+  for (; st.Equal1(samples + rank_prev, samples + kRankMid); rank_prev -= N1) {\n     // All previous samples are equal to the median.\n     if (rank_prev == 0) return 0;\n   }\n \n   size_t rank_next = rank_prev + N1;\n-  for (; st.Equal1(buf + rank_next, buf + kRankMid); rank_next += N1) {\n+  for (; st.Equal1(samples + rank_next, samples + kRankMid); rank_next += N1) {\n     // The median is also the largest sample. If it is also the largest key,\n     // we'd end up with an empty right partition, so choose the previous key.\n     if (rank_next == kSampleLanes - N1) return rank_prev;\n@@ -710,10 +707,13 @@ HWY_INLINE size_t PivotRank(Traits st, T* HWY_RESTRICT buf) {\n   return excess_if_median < excess_if_prev ? kRankMid : rank_prev;\n }\n \n+// Returns pivot chosen from `samples`. It will never be the largest key\n+// (thus the right partition will never be empty).\n template <class D, class Traits, typename T>\n-HWY_INLINE Vec<D> ChoosePivotByRank(D d, Traits st, T* HWY_RESTRICT buf) {\n-  const size_t pivot_rank = PivotRank(st, buf);\n-  const Vec<D> pivot = st.SetKey(d, buf + pivot_rank);\n+HWY_INLINE Vec<D> ChoosePivotByRank(D d, Traits st,\n+                                    const T* HWY_RESTRICT samples) {\n+  const size_t pivot_rank = PivotRank(st, samples);\n+  const Vec<D> pivot = st.SetKey(d, samples + pivot_rank);\n   if (VQSORT_PRINT >= 2) {\n     fprintf(stderr, \"  Pivot rank %zu = %.0f\\n\", pivot_rank,\n             static_cast<double>(GetLane(pivot)));\n@@ -780,7 +780,10 @@ HWY_NOINLINE size_t LowerBoundOfMismatch(D d, Traits st,\n       diff1 = OrXor(diff1, v1, reference);\n     }\n     diff0 = Or(diff0, diff1);\n-    if (!AllTrue(d, Eq(diff0, zero))) {\n+\n+    // Must avoid floating-point comparisons (for -0)\n+    const RebindToUnsigned<D> du;\n+    if (!AllTrue(du, Eq(BitCast(du, diff0), Zero(du)))) {\n       return i;  // not equal\n     }\n   }\n@@ -851,48 +854,36 @@ HWY_NOINLINE void ScanFirstLast(D d, Traits st, const T* HWY_RESTRICT keys,\n   *out_last = st.LastOfLanes(d, last, buf);\n }\n \n-template <class Traits, typename T>\n-HWY_INLINE bool SortedSampleEqual(Traits st, T* HWY_RESTRICT sorted_samples) {\n-  constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);\n-  constexpr size_t N1 = st.LanesPerKey();\n-  return st.Equal1(sorted_samples, sorted_samples + kSampleLanes - N1);\n-}\n-\n+// Returns pivot chosen from `keys[0, num)`. It will never be the largest key\n+// (thus the right partition will never be empty).\n template <class D, class Traits, typename T>\n HWY_INLINE Vec<D> ChoosePivotForEqualSamples(D d, Traits st,\n                                              T* HWY_RESTRICT keys, size_t num,\n-                                             T* HWY_RESTRICT sorted_samples,\n+                                             size_t idx_diff,\n+                                             T* HWY_RESTRICT samples,\n                                              PivotResult& result) {\n   using V = decltype(Zero(d));\n \n-  V pivot = st.SetKey(d, sorted_samples);  // the single unique sample\n-\n-  const size_t idx_diff = LowerBoundOfMismatch(d, st, keys, num);\n-  const bool all_eq = idx_diff == num;\n-  if (VQSORT_PRINT >= 1) {\n-    fprintf(stderr, \"Samples all equal, idxDiff %zu keysEq: %d\\n\", idx_diff,\n-            all_eq);\n-  }\n-  if (HWY_UNLIKELY(all_eq)) {\n-    result = PivotResult::kDone;\n-    return pivot;\n-  }\n+  V pivot = st.SetKey(d, samples);  // the single unique sample\n \n   // Early out for mostly-0 arrays, where pivot is often FirstValue.\n   if (HWY_UNLIKELY(AllTrue(d, st.EqualKeys(d, pivot, st.FirstValue(d))))) {\n     result = PivotResult::kIsFirst;\n     return pivot;\n   }\n+  if (HWY_UNLIKELY(AllTrue(d, st.EqualKeys(d, pivot, st.LastValue(d))))) {\n+    result = PivotResult::kWasLast;\n+    return st.PrevValue(d, pivot);\n+  }\n \n   V first, last;\n-  ScanFirstLast(d, st, keys, num, idx_diff, /*buf=*/sorted_samples, &first,\n-                &last);\n+  ScanFirstLast(d, st, keys, num, idx_diff, /*buf=*/samples, &first, &last);\n \n   const Vec<D> prev_last = st.PrevValue(d, last);\n   // All keys are in [x, x+1], or [x+1, x] if descending order.\n   if (HWY_UNLIKELY(AllTrue(d, st.EqualKeys(d, first, prev_last)))) {\n     (void)PartitionTwoValue(d, st, keys, 0, num, first, last,\n-                            /*buf=*/sorted_samples);\n+                            /*buf=*/samples);\n     result = PivotResult::kDone;\n     if (VQSORT_PRINT >= 2) {\n       fprintf(stderr, \"  2val\\n\");\n@@ -921,28 +912,12 @@ HWY_INLINE Vec<D> ChoosePivotForEqualSamples(D d, Traits st,\n   // is a net loss due to the extra comparisons.\n   result = PivotResult::kNormal;\n   if (VQSORT_PRINT >= 2) {\n-    fprintf(stderr, \"  sample eq but not minmax; normal\\n\");\n+    fprintf(stderr, \"  Pivot %.0f not minmax; normal\\n\",\n+            static_cast<double>(GetLane(pivot)));\n   }\n   return pivot;\n }\n \n-// Returns pivot chosen from `keys[0, num)`. It will never be the largest key\n-// (thus the right partition will never be empty).\n-template <class D, class Traits, typename T>\n-HWY_NOINLINE Vec<D> ChoosePivot(D d, Traits st, T* HWY_RESTRICT keys,\n-                                const size_t num, T* HWY_RESTRICT buf,\n-                                Generator& rng, PivotResult& result) {\n-  DrawSamples(d, st, keys, num, buf, rng);\n-  SortSamples(d, st, buf);\n-\n-  if (HWY_UNLIKELY(SortedSampleEqual(st, buf))) {\n-    return ChoosePivotForEqualSamples(d, st, keys, num, buf, result);\n-  }\n-\n-  result = PivotResult::kNormal;\n-  return ChoosePivotByRank(d, st, buf);\n-}\n-\n // ------------------------------ Quicksort recursion\n \n #if VQSORT_PRINT >= 2 || HWY_IDE\n@@ -977,6 +952,32 @@ HWY_NOINLINE void PrintMinMax(D d, Traits st, const T* HWY_RESTRICT keys,\n \n #endif  // VQSORT_PRINT >= 2\n \n+// For detecting inputs where (almost) all keys are equal.\n+template <class D, class Traits>\n+HWY_INLINE bool UnsortedSampleEqual(D d, Traits st,\n+                                    const TFromD<D>* HWY_RESTRICT samples) {\n+  constexpr size_t kSampleLanes = 3 * 64 / sizeof(TFromD<D>);\n+  const size_t N = Lanes(d);\n+  using V = Vec<D>;\n+\n+  const V first = st.SetKey(d, samples);\n+  // OR of XOR-difference may be faster than comparison.\n+  V diff = Zero(d);\n+  size_t i = 0;\n+  for (; i + N <= kSampleLanes; i += N) {\n+    const V v = Load(d, samples + i);\n+    diff = OrXor(diff, first, Load(d, samples + i));\n+  }\n+  // Remainder, if any.\n+  const V v = Load(d, samples + i);\n+  const auto valid = FirstN(d, kSampleLanes - i);\n+  diff = IfThenElse(valid, OrXor(diff, first, v), diff);\n+\n+  // Must avoid floating-point comparisons (for -0)\n+  const RebindToUnsigned<D> du;\n+  return AllTrue(du, Eq(BitCast(du, diff), Zero(du)));\n+}\n+\n template <class D, class Traits, typename T>\n HWY_NOINLINE void Recurse(D d, Traits st, T* HWY_RESTRICT keys,\n                           T* HWY_RESTRICT keys_end, const size_t begin,\n@@ -999,10 +1000,32 @@ HWY_NOINLINE void Recurse(D d, Traits st, T* HWY_RESTRICT keys,\n   PrintMinMax(d, st, keys + begin, num, buf);\n #endif\n \n-  PivotResult result;\n-  Vec<D> pivot = ChoosePivot(d, st, keys + begin, num, buf, rng, result);\n-  if (HWY_UNLIKELY(result == PivotResult::kDone)) {\n-    return;\n+  DrawSamples(d, st, keys + begin, num, buf, rng);\n+\n+  Vec<D> pivot;\n+  PivotResult result = PivotResult::kNormal;\n+  size_t idx_diff = 0;\n+  if (HWY_UNLIKELY(UnsortedSampleEqual(d, st, buf))) {\n+    idx_diff = LowerBoundOfMismatch(d, st, keys + begin, num);\n+    // All keys are equal; done.\n+    if (HWY_UNLIKELY(idx_diff == num)) {\n+      if (VQSORT_PRINT >= 1) {\n+        fprintf(stderr, \"All keys equal\\n\");\n+      }\n+      return;\n+    }\n+\n+    if (VQSORT_PRINT >= 1) {\n+      fprintf(stderr, \"Samples all equal %.0f, diff at %zu\\n\",\n+              static_cast<double>(GetLane(st.SetKey(d, buf))), idx_diff);\n+    }\n+    pivot = ChoosePivotForEqualSamples(d, st, keys + begin, num, idx_diff, buf,\n+                                       result);\n+    // TODO(janwas): inline this, move the 2-valued partition here.\n+    if (result == PivotResult::kDone) return;\n+  } else {\n+    SortSamples(d, st, buf);\n+    pivot = ChoosePivotByRank(d, st, buf);\n   }\n \n   // Too many recursions. This is unlikely to happen because we select pivots"
+      }
+    ],
+    "lines_added": 97,
+    "lines_removed": 62
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9777078593064266,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9894388013630272,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9786130273714662,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9889505729079247,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.47347760318459214,
+    "relative_improvement": -0.00010378153985850327,
+    "absolute_improvement_ms": -2.6666666666734784,
+    "old_mean_ms": 25694.999999999996,
+    "new_mean_ms": 25697.66666666667,
+    "old_std_ms": 2673.862955248133,
+    "new_std_ms": 2310.673410327691,
+    "effect_size_cohens_d": -0.00106714678956809,
+    "old_ci95_ms": [
+      24696.563163660194,
+      26693.4368363398
+    ],
+    "new_ci95_ms": [
+      24834.847035206545,
+      26560.486298126798
+    ],
+    "old_ci99_ms": [
+      24349.392071825023,
+      27040.60792817497
+    ],
+    "new_ci99_ms": [
+      24534.832029140714,
+      26860.50130419263
+    ],
+    "new_times_s": [
+      27.41,
+      26.15,
+      25.25,
+      25.83,
+      24.17,
+      23.84,
+      24.2,
+      27.78,
+      29.22,
+      27.43,
+      25.58,
+      27.31,
+      22.41,
+      26.27,
+      24.6,
+      30.58,
+      27.22,
+      24.41,
+      25.52,
+      24.77,
+      24.44,
+      26.91,
+      26.28,
+      23.43,
+      24.53,
+      32.45,
+      26.97,
+      22.1,
+      24.79,
+      23.05,
+      23.44
+    ],
+    "old_times_s": [
+      24.3,
+      24.22,
+      24.05,
+      22.9,
+      25.4,
+      25.24,
+      26.37,
+      26.66,
+      24.31,
+      26.68,
+      28.6,
+      30.76,
+      27.16,
+      26.08,
+      30.33,
+      29.14,
+      21.05,
+      25.66,
+      23.71,
+      23.31,
+      26.78,
+      29.82,
+      23.51,
+      26.68,
+      27.5,
+      28.85,
+      26.0,
+      22.81,
+      22.71,
+      19.9,
+      24.66
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "NanobenchmarkTest.RunAll"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "NanobenchmarkTest.RunAll",
+        "is_significant": false,
+        "p_value": 0.051632011688026815,
+        "is_pair_significant": false,
+        "pair_p_value": 0.060196163152767976,
+        "is_binom_significant": false,
+        "binom_p_value": 0.132465448230505,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.06642671082309812,
+        "is_mannwhitney_significant": true,
+        "mannwhitney_p_value": 0.020012162851010627,
+        "relative_improvement": 0.16443850267379684,
+        "absolute_improvement_ms": 127.24137931034495,
+        "old_mean_ms": 773.793103448276,
+        "new_mean_ms": 646.551724137931,
+        "old_std_ms": 247.27679391297877,
+        "new_std_ms": 165.53540540727158,
+        "effect_size_cohens_d": 0.6047202605195416,
+        "old_ci95_ms": [
+          679.7340414153905,
+          867.8521654811615
+        ],
+        "new_ci95_ms": [
+          583.5854234210072,
+          709.5180248548548
+        ],
+        "old_ci99_ms": [
+          646.9092094175372,
+          900.6769974790147
+        ],
+        "new_ci99_ms": [
+          561.6113764989075,
+          731.4920717769546
+        ],
+        "new_times": [
+          0.67,
+          1.0,
+          0.83,
+          0.72,
+          0.54,
+          0.92,
+          0.89,
+          0.36,
+          0.67,
+          0.59,
+          0.52,
+          0.66,
+          0.58,
+          0.87,
+          0.51,
+          0.49,
+          0.49,
+          0.59,
+          0.61,
+          0.54,
+          0.57,
+          0.41,
+          0.74,
+          0.65,
+          0.82,
+          0.63,
+          0.89,
+          0.57,
+          0.42
+        ],
+        "old_times": [
+          0.76,
+          0.73,
+          1.02,
+          0.96,
+          1.14,
+          0.95,
+          0.43,
+          0.43,
+          1.06,
+          1.19,
+          0.66,
+          0.87,
+          1.18,
+          0.41,
+          0.5,
+          0.93,
+          0.93,
+          0.44,
+          1.13,
+          0.87,
+          0.69,
+          0.7,
+          0.59,
+          0.82,
+          0.6,
+          0.51,
+          0.76,
+          0.75,
+          0.43
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

@@ -1,0 +1,178 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:47:41.131049",
+    "repository": "https://github.com/zeux/pugixml",
+    "repository_name": "zeux/pugixml"
+  },
+  "commit_info": {
+    "old_sha": "e9d17a045e5123a91a35b43e005d37cb696b6120",
+    "new_sha": "dfb2b7f7b46d95d0ae8c17badbf14445db486431",
+    "commit_message": [
+      "Cache ~last position of merged PCDATA\n\nThis allows us to fix the quadratic complexity of parse_merge_pcdata.\nAfter parsing the first PCDATA we need to advance by its length; we\nstill compute the length of each fragment twice with this approach, but\nit's constant time."
+    ],
+    "commit_date": "2023-09-06T04:06:55+00:00",
+    "patch": [
+      "--- src/pugixml.cpp\n@@ -3291,6 +3291,7 @@ PUGI_IMPL_NS_BEGIN\n \t\t\tchar_t ch = 0;\n \t\t\txml_node_struct* cursor = root;\n \t\t\tchar_t* mark = s;\n+\t\t\tchar_t* merged = s;\n \n \t\t\twhile (*s != 0)\n \t\t\t{\n@@ -3495,13 +3496,17 @@ PUGI_IMPL_NS_BEGIN\n \t\t\t\t\t\t}\n \t\t\t\t\t\telse if (PUGI_IMPL_OPTSET(parse_merge_pcdata) && cursor->first_child && PUGI_IMPL_NODETYPE(cursor->first_child->prev_sibling_c) == node_pcdata)\n \t\t\t\t\t\t{\n-\t\t\t\t\t\t\tstrconcat(cursor->first_child->prev_sibling_c->value, parsed_pcdata); // Append PCDATA to the previous one.\n+\t\t\t\t\t\t\tassert(merged >= cursor->first_child->prev_sibling_c->value);\n+\n+\t\t\t\t\t\t\tmerged += strlength(merged);\n+\t\t\t\t\t\t\tstrconcat(merged, parsed_pcdata); // Append PCDATA to the previous one.\n \t\t\t\t\t\t}\n \t\t\t\t\t\telse\n \t\t\t\t\t\t{\n \t\t\t\t\t\t\tPUGI_IMPL_PUSHNODE(node_pcdata); // Append a new node on the tree.\n \n \t\t\t\t\t\t\tcursor->value = parsed_pcdata; // Save the offset.\n+\t\t\t\t\t\t\tmerged = parsed_pcdata; // Used for parse_merge_pcdata above, cheaper to save unconditionally\n \n \t\t\t\t\t\t\tPUGI_IMPL_POPNODE(); // Pop since this is a standalone.\n \t\t\t\t\t\t}\n@@ -3584,7 +3589,7 @@ PUGI_IMPL_NS_BEGIN\n \t\t\t\t\treturn make_parse_result(status_unrecognized_tag, length - 1);\n \n \t\t\t\t// check if there are any element nodes parsed\n-\t\t\t\txml_node_struct* first_root_child_parsed = last_root_child ? last_root_child->next_sibling + 0 : root->first_child+ 0;\n+\t\t\t\txml_node_struct* first_root_child_parsed = last_root_child ? last_root_child->next_sibling + 0 : root->first_child + 0;\n \n \t\t\t\tif (!PUGI_IMPL_OPTSET(parse_fragment) && !has_element_node_siblings(first_root_child_parsed))\n \t\t\t\t\treturn make_parse_result(status_no_document_element, length - 1);"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/pugixml.cpp",
+        "status": "modified",
+        "additions": 7,
+        "deletions": 2,
+        "changes": 9,
+        "patch": "@@ -3291,6 +3291,7 @@ PUGI_IMPL_NS_BEGIN\n \t\t\tchar_t ch = 0;\n \t\t\txml_node_struct* cursor = root;\n \t\t\tchar_t* mark = s;\n+\t\t\tchar_t* merged = s;\n \n \t\t\twhile (*s != 0)\n \t\t\t{\n@@ -3495,13 +3496,17 @@ PUGI_IMPL_NS_BEGIN\n \t\t\t\t\t\t}\n \t\t\t\t\t\telse if (PUGI_IMPL_OPTSET(parse_merge_pcdata) && cursor->first_child && PUGI_IMPL_NODETYPE(cursor->first_child->prev_sibling_c) == node_pcdata)\n \t\t\t\t\t\t{\n-\t\t\t\t\t\t\tstrconcat(cursor->first_child->prev_sibling_c->value, parsed_pcdata); // Append PCDATA to the previous one.\n+\t\t\t\t\t\t\tassert(merged >= cursor->first_child->prev_sibling_c->value);\n+\n+\t\t\t\t\t\t\tmerged += strlength(merged);\n+\t\t\t\t\t\t\tstrconcat(merged, parsed_pcdata); // Append PCDATA to the previous one.\n \t\t\t\t\t\t}\n \t\t\t\t\t\telse\n \t\t\t\t\t\t{\n \t\t\t\t\t\t\tPUGI_IMPL_PUSHNODE(node_pcdata); // Append a new node on the tree.\n \n \t\t\t\t\t\t\tcursor->value = parsed_pcdata; // Save the offset.\n+\t\t\t\t\t\t\tmerged = parsed_pcdata; // Used for parse_merge_pcdata above, cheaper to save unconditionally\n \n \t\t\t\t\t\t\tPUGI_IMPL_POPNODE(); // Pop since this is a standalone.\n \t\t\t\t\t\t}\n@@ -3584,7 +3589,7 @@ PUGI_IMPL_NS_BEGIN\n \t\t\t\t\treturn make_parse_result(status_unrecognized_tag, length - 1);\n \n \t\t\t\t// check if there are any element nodes parsed\n-\t\t\t\txml_node_struct* first_root_child_parsed = last_root_child ? last_root_child->next_sibling + 0 : root->first_child+ 0;\n+\t\t\t\txml_node_struct* first_root_child_parsed = last_root_child ? last_root_child->next_sibling + 0 : root->first_child + 0;\n \n \t\t\t\tif (!PUGI_IMPL_OPTSET(parse_fragment) && !has_element_node_siblings(first_root_child_parsed))\n \t\t\t\t\treturn make_parse_result(status_no_document_element, length - 1);"
+      }
+    ],
+    "lines_added": 7,
+    "lines_removed": 2
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPUGIXML_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPUGIXML_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9352692012445457,
+    "is_pair_significant": false,
+    "pair_p_value": 0.997189392505796,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9992845468223095,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9993597347992089,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.7947714709935664,
+    "relative_improvement": -0.05084745762711868,
+    "absolute_improvement_ms": -34.99999999999992,
+    "old_mean_ms": 688.3333333333334,
+    "new_mean_ms": 723.3333333333333,
+    "old_std_ms": 136.78786327825242,
+    "new_std_ms": 209.45468332748277,
+    "effect_size_cohens_d": -0.19785985429985312,
+    "old_ci95_ms": [
+      637.2559057512059,
+      739.4107609154607
+    ],
+    "new_ci95_ms": [
+      645.1216692061267,
+      801.5449974605398
+    ],
+    "old_ci99_ms": [
+      619.4955370864983,
+      757.1711295801684
+    ],
+    "new_ci99_ms": [
+      617.9263296102555,
+      828.740337056411
+    ],
+    "new_times_s": [
+      0.67,
+      0.74,
+      0.77,
+      1.63,
+      1.29,
+      0.69,
+      0.58,
+      0.7,
+      0.7,
+      0.72,
+      0.69,
+      0.62,
+      0.71,
+      0.66,
+      0.68,
+      0.59,
+      0.63,
+      0.68,
+      0.7,
+      0.64,
+      0.61,
+      0.67,
+      0.69,
+      0.62,
+      0.64,
+      0.67,
+      0.7,
+      0.68,
+      0.66,
+      0.65,
+      0.69
+    ],
+    "old_times_s": [
+      0.69,
+      0.61,
+      0.62,
+      1.38,
+      0.72,
+      0.69,
+      0.67,
+      0.63,
+      0.7,
+      0.7,
+      0.7,
+      0.69,
+      0.63,
+      0.77,
+      0.68,
+      0.65,
+      0.65,
+      0.63,
+      0.56,
+      0.67,
+      0.63,
+      0.67,
+      0.65,
+      0.68,
+      0.62,
+      0.71,
+      0.65,
+      0.66,
+      0.65,
+      0.71,
+      0.67
+    ]
+  },
+  "tests": {
+    "total_tests": 0,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": []
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

@@ -1,0 +1,309 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:52:52.063901",
+    "repository": "https://github.com/projectM-visualizer/projectm",
+    "repository_name": "projectM-visualizer/projectm"
+  },
+  "commit_info": {
+    "old_sha": "aaf2f7485c7984988d9c488854848de7513de111",
+    "new_sha": "5e54983e6d6491c810bdf59f0ac012022781851e",
+    "commit_message": [
+      "Replace temp framebuffer blit with a final draw call in ProjectM class\n\nThis avoids two fullscreen draw calls during transitions, and should also be slightly faster than using glBlitFramebuffer().\n\nAs with all drawing operations, we currently don't really care about the target framebuffer size or aspect ratio and just draw a quad over the whole viewport."
+    ],
+    "commit_date": "2023-11-07T22:45:59+00:00",
+    "patch": [
+      "--- src/libprojectM/MilkdropPreset/MilkdropPreset.cpp\n@@ -156,23 +156,7 @@ void MilkdropPreset::RenderFrame(const libprojectM::Audio::FrameAudioData& audio\n         m_flipTexture.Draw(m_framebuffer.GetColorAttachmentTexture(m_previousFrameBuffer, 0), m_framebuffer, m_previousFrameBuffer, true, false);\n     }\n \n-    // TEST: Copy result to default framebuffer\n-    m_framebuffer.BindRead(m_previousFrameBuffer);\n-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);\n-    glReadBuffer(GL_COLOR_ATTACHMENT0);\n-#if USE_GLES\n-    {\n-        GLenum drawBuffers[] = {GL_BACK};\n-        glDrawBuffers(1, drawBuffers);\n-    }\n-#else\n-    glDrawBuffer(GL_COLOR_ATTACHMENT0);\n-#endif\n-    glBlitFramebuffer(0, 0, renderContext.viewportSizeX, renderContext.viewportSizeY,\n-                      0, 0, renderContext.viewportSizeX, renderContext.viewportSizeY,\n-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);\n-\n-    // Swap framebuffers for the next frame.\n+    // Swap framebuffer IDs for the next frame.\n     std::swap(m_currentFrameBuffer, m_previousFrameBuffer);\n \n     m_isFirstFrame = false;\n--- src/libprojectM/ProjectM.cpp\n@@ -28,6 +28,7 @@\n #include \"Audio/BeatDetect.hpp\"\n #include \"Audio/PCM.hpp\" //Sound data handler (buffering, FFT, etc.)\n \n+#include \"Renderer/CopyTexture.hpp\"\n #include \"Renderer/PresetTransition.hpp\"\n #include \"Renderer/TextureManager.hpp\"\n #include \"Renderer/TransitionShaderManager.hpp\"\n@@ -217,11 +218,17 @@ void ProjectM::RenderFrame()\n     // ToDo: Call the to-be-implemented render method in Renderer\n     m_activePreset->RenderFrame(audioData, renderContext);\n \n+    // ToDo: Allow external apps to provide a custom target framebuffer.\n+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);\n+\n     if (m_transition != nullptr && m_transitioningPreset != nullptr)\n     {\n-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);\n         m_transition->Draw(*m_activePreset, *m_transitioningPreset, renderContext, audioData);\n     }\n+    else\n+    {\n+        m_textureCopier->Draw(m_activePreset->OutputTexture(), false, false);\n+    }\n \n     m_frameCount++;\n }\n@@ -246,6 +253,8 @@ void ProjectM::Initialize()\n \n     m_transitionShaderManager = std::make_unique<TransitionShaderManager>();\n \n+    m_textureCopier = std::make_unique<CopyTexture>();\n+\n     m_presetFactoryManager->initialize();\n \n     /* Set the seed to the current time in seconds */\n--- src/libprojectM/ProjectM.hpp\n@@ -61,6 +61,8 @@ class TextureManager;\n \n class TransitionShaderManager;\n \n+class CopyTexture;\n+\n class Preset;\n \n class PresetTransition;\n@@ -252,6 +254,7 @@ class PROJECTM_EXPORT ProjectM\n \n     std::unique_ptr<TextureManager> m_textureManager;                   //!< The texture manager.\n     std::unique_ptr<TransitionShaderManager> m_transitionShaderManager; //!< The transition shader manager.\n+    std::unique_ptr<CopyTexture> m_textureCopier;                       //!< Class that copies textures 1:1 to another texture or framebuffer.\n     std::unique_ptr<libprojectM::Audio::BeatDetect> m_beatDetect;       //!< The beat detection class.\n     std::unique_ptr<Preset> m_activePreset;                             //!< Currently loaded preset.\n     std::unique_ptr<Preset> m_transitioningPreset;                      //!< Destination preset when smooth preset switching.\n--- src/libprojectM/Renderer/CopyTexture.cpp\n@@ -93,6 +93,18 @@ void CopyTexture::InitVertexAttrib()\n     glBufferData(GL_ARRAY_BUFFER, sizeof(points), points.data(), GL_STATIC_DRAW);\n }\n \n+void CopyTexture::Draw(const std::shared_ptr<struct Texture>& originalTexture, bool flipVertical, bool flipHorizontal)\n+{\n+    if (originalTexture == nullptr)\n+    {\n+        return;\n+    }\n+\n+    // Just bind the texture and draw it to the currently bound buffer.\n+    originalTexture->Bind(0);\n+    Copy(flipVertical, flipHorizontal);\n+}\n+\n void CopyTexture::Draw(const std::shared_ptr<class Texture>& originalTexture, const std::shared_ptr<class Texture>& targetTexture,\n                        bool flipVertical, bool flipHorizontal)\n {\n@@ -205,4 +217,4 @@ void CopyTexture::Copy(bool flipVertical, bool flipHorizontal) const\n     glBindTexture(GL_TEXTURE_2D, 0);\n     Sampler::Unbind(0);\n     Shader::Unbind();\n-}\n\\ No newline at end of file\n+}\n--- src/libprojectM/Renderer/CopyTexture.hpp\n@@ -17,6 +17,15 @@ class CopyTexture : public RenderItem\n \n     void InitVertexAttrib() override;\n \n+    /**\n+     * @brief Copies the original texture into the currently bound framebuffer.\n+     * @param originalTexture The texture to be copied.\n+     * @param flipVertical Flip image on the y axis when copying.\n+     * @param flipHorizontal Flip image on the x axis when copying.\n+     */\n+    void Draw(const std::shared_ptr<class Texture>& originalTexture,\n+              bool flipVertical = false, bool flipHorizontal = false);\n+\n     /**\n      * @brief Copies the original texture either into the object's internal framebuffer or a given target texture.\n      * The original and target textures must not be the same.\n@@ -26,7 +35,7 @@ class CopyTexture : public RenderItem\n      * @param flipHorizontal Flip image on the x axis when copying.\n      */\n     void Draw(const std::shared_ptr<class Texture>& originalTexture, const std::shared_ptr<class Texture>& targetTexture = {},\n-              bool flipVertical  = false, bool flipHorizontal = false);\n+              bool flipVertical = false, bool flipHorizontal = false);\n \n     /**\n      * @brief Copies the texture bound the given framebuffer's first color attachment.\n@@ -39,7 +48,7 @@ class CopyTexture : public RenderItem\n      * @param flipHorizontal Flip image on the x axis when copying.\n      */\n     void Draw(const std::shared_ptr<class Texture>& originalTexture, Framebuffer& framebuffer, int framebufferIndex,\n-              bool flipVertical  = false, bool flipHorizontal = false);\n+              bool flipVertical = false, bool flipHorizontal = false);\n \n     /**\n      * @brief Returns the flipped texture."
+    ],
+    "files_changed": [
+      {
+        "filename": "src/libprojectM/MilkdropPreset/MilkdropPreset.cpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 17,
+        "changes": 18,
+        "patch": "@@ -156,23 +156,7 @@ void MilkdropPreset::RenderFrame(const libprojectM::Audio::FrameAudioData& audio\n         m_flipTexture.Draw(m_framebuffer.GetColorAttachmentTexture(m_previousFrameBuffer, 0), m_framebuffer, m_previousFrameBuffer, true, false);\n     }\n \n-    // TEST: Copy result to default framebuffer\n-    m_framebuffer.BindRead(m_previousFrameBuffer);\n-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);\n-    glReadBuffer(GL_COLOR_ATTACHMENT0);\n-#if USE_GLES\n-    {\n-        GLenum drawBuffers[] = {GL_BACK};\n-        glDrawBuffers(1, drawBuffers);\n-    }\n-#else\n-    glDrawBuffer(GL_COLOR_ATTACHMENT0);\n-#endif\n-    glBlitFramebuffer(0, 0, renderContext.viewportSizeX, renderContext.viewportSizeY,\n-                      0, 0, renderContext.viewportSizeX, renderContext.viewportSizeY,\n-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);\n-\n-    // Swap framebuffers for the next frame.\n+    // Swap framebuffer IDs for the next frame.\n     std::swap(m_currentFrameBuffer, m_previousFrameBuffer);\n \n     m_isFirstFrame = false;"
+      },
+      {
+        "filename": "src/libprojectM/ProjectM.cpp",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 1,
+        "changes": 11,
+        "patch": "@@ -28,6 +28,7 @@\n #include \"Audio/BeatDetect.hpp\"\n #include \"Audio/PCM.hpp\" //Sound data handler (buffering, FFT, etc.)\n \n+#include \"Renderer/CopyTexture.hpp\"\n #include \"Renderer/PresetTransition.hpp\"\n #include \"Renderer/TextureManager.hpp\"\n #include \"Renderer/TransitionShaderManager.hpp\"\n@@ -217,11 +218,17 @@ void ProjectM::RenderFrame()\n     // ToDo: Call the to-be-implemented render method in Renderer\n     m_activePreset->RenderFrame(audioData, renderContext);\n \n+    // ToDo: Allow external apps to provide a custom target framebuffer.\n+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);\n+\n     if (m_transition != nullptr && m_transitioningPreset != nullptr)\n     {\n-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);\n         m_transition->Draw(*m_activePreset, *m_transitioningPreset, renderContext, audioData);\n     }\n+    else\n+    {\n+        m_textureCopier->Draw(m_activePreset->OutputTexture(), false, false);\n+    }\n \n     m_frameCount++;\n }\n@@ -246,6 +253,8 @@ void ProjectM::Initialize()\n \n     m_transitionShaderManager = std::make_unique<TransitionShaderManager>();\n \n+    m_textureCopier = std::make_unique<CopyTexture>();\n+\n     m_presetFactoryManager->initialize();\n \n     /* Set the seed to the current time in seconds */"
+      },
+      {
+        "filename": "src/libprojectM/ProjectM.hpp",
+        "status": "modified",
+        "additions": 3,
+        "deletions": 0,
+        "changes": 3,
+        "patch": "@@ -61,6 +61,8 @@ class TextureManager;\n \n class TransitionShaderManager;\n \n+class CopyTexture;\n+\n class Preset;\n \n class PresetTransition;\n@@ -252,6 +254,7 @@ class PROJECTM_EXPORT ProjectM\n \n     std::unique_ptr<TextureManager> m_textureManager;                   //!< The texture manager.\n     std::unique_ptr<TransitionShaderManager> m_transitionShaderManager; //!< The transition shader manager.\n+    std::unique_ptr<CopyTexture> m_textureCopier;                       //!< Class that copies textures 1:1 to another texture or framebuffer.\n     std::unique_ptr<libprojectM::Audio::BeatDetect> m_beatDetect;       //!< The beat detection class.\n     std::unique_ptr<Preset> m_activePreset;                             //!< Currently loaded preset.\n     std::unique_ptr<Preset> m_transitioningPreset;                      //!< Destination preset when smooth preset switching."
+      },
+      {
+        "filename": "src/libprojectM/Renderer/CopyTexture.cpp",
+        "status": "modified",
+        "additions": 13,
+        "deletions": 1,
+        "changes": 14,
+        "patch": "@@ -93,6 +93,18 @@ void CopyTexture::InitVertexAttrib()\n     glBufferData(GL_ARRAY_BUFFER, sizeof(points), points.data(), GL_STATIC_DRAW);\n }\n \n+void CopyTexture::Draw(const std::shared_ptr<struct Texture>& originalTexture, bool flipVertical, bool flipHorizontal)\n+{\n+    if (originalTexture == nullptr)\n+    {\n+        return;\n+    }\n+\n+    // Just bind the texture and draw it to the currently bound buffer.\n+    originalTexture->Bind(0);\n+    Copy(flipVertical, flipHorizontal);\n+}\n+\n void CopyTexture::Draw(const std::shared_ptr<class Texture>& originalTexture, const std::shared_ptr<class Texture>& targetTexture,\n                        bool flipVertical, bool flipHorizontal)\n {\n@@ -205,4 +217,4 @@ void CopyTexture::Copy(bool flipVertical, bool flipHorizontal) const\n     glBindTexture(GL_TEXTURE_2D, 0);\n     Sampler::Unbind(0);\n     Shader::Unbind();\n-}\n\\ No newline at end of file\n+}"
+      },
+      {
+        "filename": "src/libprojectM/Renderer/CopyTexture.hpp",
+        "status": "modified",
+        "additions": 11,
+        "deletions": 2,
+        "changes": 13,
+        "patch": "@@ -17,6 +17,15 @@ class CopyTexture : public RenderItem\n \n     void InitVertexAttrib() override;\n \n+    /**\n+     * @brief Copies the original texture into the currently bound framebuffer.\n+     * @param originalTexture The texture to be copied.\n+     * @param flipVertical Flip image on the y axis when copying.\n+     * @param flipHorizontal Flip image on the x axis when copying.\n+     */\n+    void Draw(const std::shared_ptr<class Texture>& originalTexture,\n+              bool flipVertical = false, bool flipHorizontal = false);\n+\n     /**\n      * @brief Copies the original texture either into the object's internal framebuffer or a given target texture.\n      * The original and target textures must not be the same.\n@@ -26,7 +35,7 @@ class CopyTexture : public RenderItem\n      * @param flipHorizontal Flip image on the x axis when copying.\n      */\n     void Draw(const std::shared_ptr<class Texture>& originalTexture, const std::shared_ptr<class Texture>& targetTexture = {},\n-              bool flipVertical  = false, bool flipHorizontal = false);\n+              bool flipVertical = false, bool flipHorizontal = false);\n \n     /**\n      * @brief Copies the texture bound the given framebuffer's first color attachment.\n@@ -39,7 +48,7 @@ class CopyTexture : public RenderItem\n      * @param flipHorizontal Flip image on the x axis when copying.\n      */\n     void Draw(const std::shared_ptr<class Texture>& originalTexture, Framebuffer& framebuffer, int framebufferIndex,\n-              bool flipVertical  = false, bool flipHorizontal = false);\n+              bool flipVertical = false, bool flipHorizontal = false);\n \n     /**\n      * @brief Returns the flipped texture."
+      }
+    ],
+    "lines_added": 38,
+    "lines_removed": 21
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DENABLE_TESTING=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DENABLE_TESTING=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9908373278307869,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9908373278307869,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999999660057501,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.8492760334309752,
+    "relative_improvement": -0.03333333333333337,
+    "absolute_improvement_ms": -0.33333333333333304,
+    "old_mean_ms": 10.000000000000002,
+    "new_mean_ms": 10.333333333333336,
+    "old_std_ms": 1.7643790169011568e-15,
+    "new_std_ms": 1.8257418583505538,
+    "effect_size_cohens_d": -0.2581988897471609,
+    "old_ci95_ms": [
+      10.000000000000002,
+      10.000000000000002
+    ],
+    "new_ci95_ms": [
+      9.651590119289102,
+      11.01507654737757
+    ],
+    "old_ci99_ms": [
+      10.0,
+      10.000000000000004
+    ],
+    "new_ci99_ms": [
+      9.41453803210989,
+      11.252128634556781
+    ],
+    "new_times_s": [
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.02,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01
+    ],
+    "old_times_s": [
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "projectM-unittest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999638108507,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.000000000000002,
+        "new_mean_ms": 10.000000000000002,
+        "old_std_ms": 1.7654289301252243e-15,
+        "new_std_ms": 1.7654289301252243e-15,
+        "effect_size_cohens_d": 0.0,
+        "old_ci95_ms": [
+          10.000000000000002,
+          10.000000000000002
+        ],
+        "new_ci95_ms": [
+          10.000000000000002,
+          10.000000000000002
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.000000000000004
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.000000000000004
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

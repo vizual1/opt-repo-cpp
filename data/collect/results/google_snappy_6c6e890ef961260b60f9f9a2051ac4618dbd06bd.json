@@ -1,0 +1,279 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:52:30.241531",
+    "repository": "https://github.com/google/snappy",
+    "repository_name": "google/snappy"
+  },
+  "commit_info": {
+    "old_sha": "8b07ff196aa007e9b073aa4f062dbb23443594ec",
+    "new_sha": "6c6e890ef961260b60f9f9a2051ac4618dbd06bd",
+    "commit_message": [
+      "Change LittleEndian loads/stores to use memcpy\n\nThe existing code uses a series of 8bit loads with shifts and ors to\nemulate an (unaligned) load of a larger type. These are then expected to\nbecome single loads in the compiler, producing optimal assembly. Whilst\nthis is true it happens very late in the compiler, meaning that\nthroughout most of the pipeline it is treated (and cost-modelled) as\nmultiple loads, shifts and ors. This can make the compiler make poor\ndecisions (such as not unrolling loops that should be), or to break up\nthe pattern before it is turned into a single load.\n\nFor example the loops in CompressFragment do not get unrolled as\nexpected due to a higher cost than the unroll threshold in clang.\n\nInstead this patch uses a more conventional methods of loading unaligned\ndata, using a memcpy directly which the compiler will be able to deal\nwith much more straight forwardly, modelling it as a single unaligned\nload. The old code is left as-is for big-endian systems.\n\nThis helps improve the performance of the BM_ZFlat benchmarks by up to\n10-15% on an Arm Neoverse N1.\n\nChange-Id: I986f845ebd0a0806d052d2be3e4dbcbee91713d7"
+    ],
+    "commit_date": "2022-01-17T11:41:53+00:00",
+    "patch": [
+      "--- snappy-stubs-internal.h\n@@ -171,27 +171,37 @@ class LittleEndian {\n  public:\n   // Functions to do unaligned loads and stores in little-endian order.\n   static inline uint16_t Load16(const void *ptr) {\n-    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n     return (static_cast<uint16_t>(buffer[0])) |\n             (static_cast<uint16_t>(buffer[1]) << 8);\n+#else\n+    uint16_t x;\n+    memcpy(&x, ptr, 2);\n+    return x;\n+#endif\n   }\n \n   static inline uint32_t Load32(const void *ptr) {\n-    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n     return (static_cast<uint32_t>(buffer[0])) |\n             (static_cast<uint32_t>(buffer[1]) << 8) |\n             (static_cast<uint32_t>(buffer[2]) << 16) |\n             (static_cast<uint32_t>(buffer[3]) << 24);\n+#else\n+    uint32_t x;\n+    memcpy(&x, ptr, 4);\n+    return x;\n+#endif\n   }\n \n   static inline uint64_t Load64(const void *ptr) {\n-    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n     return (static_cast<uint64_t>(buffer[0])) |\n             (static_cast<uint64_t>(buffer[1]) << 8) |\n             (static_cast<uint64_t>(buffer[2]) << 16) |\n@@ -200,30 +210,41 @@ class LittleEndian {\n             (static_cast<uint64_t>(buffer[5]) << 40) |\n             (static_cast<uint64_t>(buffer[6]) << 48) |\n             (static_cast<uint64_t>(buffer[7]) << 56);\n+#else\n+    uint64_t x;\n+    memcpy(&x, ptr, 8);\n+    return x;\n+#endif\n   }\n \n   static inline void Store16(void *dst, uint16_t value) {\n-    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n     buffer[0] = static_cast<uint8_t>(value);\n     buffer[1] = static_cast<uint8_t>(value >> 8);\n+#else\n+    memcpy(dst, &value, 2);\n+#endif\n   }\n \n   static void Store32(void *dst, uint32_t value) {\n-    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n     buffer[0] = static_cast<uint8_t>(value);\n     buffer[1] = static_cast<uint8_t>(value >> 8);\n     buffer[2] = static_cast<uint8_t>(value >> 16);\n     buffer[3] = static_cast<uint8_t>(value >> 24);\n+#else\n+    memcpy(dst, &value, 4);\n+#endif\n   }\n \n   static void Store64(void* dst, uint64_t value) {\n-    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n     buffer[0] = static_cast<uint8_t>(value);\n     buffer[1] = static_cast<uint8_t>(value >> 8);\n     buffer[2] = static_cast<uint8_t>(value >> 16);\n@@ -232,6 +253,9 @@ class LittleEndian {\n     buffer[5] = static_cast<uint8_t>(value >> 40);\n     buffer[6] = static_cast<uint8_t>(value >> 48);\n     buffer[7] = static_cast<uint8_t>(value >> 56);\n+#else\n+    memcpy(dst, &value, 8);\n+#endif\n   }\n \n   static inline constexpr bool IsLittleEndian() {"
+    ],
+    "files_changed": [
+      {
+        "filename": "snappy-stubs-internal.h",
+        "status": "modified",
+        "additions": 36,
+        "deletions": 12,
+        "changes": 48,
+        "patch": "@@ -171,27 +171,37 @@ class LittleEndian {\n  public:\n   // Functions to do unaligned loads and stores in little-endian order.\n   static inline uint16_t Load16(const void *ptr) {\n-    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n     return (static_cast<uint16_t>(buffer[0])) |\n             (static_cast<uint16_t>(buffer[1]) << 8);\n+#else\n+    uint16_t x;\n+    memcpy(&x, ptr, 2);\n+    return x;\n+#endif\n   }\n \n   static inline uint32_t Load32(const void *ptr) {\n-    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n     return (static_cast<uint32_t>(buffer[0])) |\n             (static_cast<uint32_t>(buffer[1]) << 8) |\n             (static_cast<uint32_t>(buffer[2]) << 16) |\n             (static_cast<uint32_t>(buffer[3]) << 24);\n+#else\n+    uint32_t x;\n+    memcpy(&x, ptr, 4);\n+    return x;\n+#endif\n   }\n \n   static inline uint64_t Load64(const void *ptr) {\n-    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);\n     return (static_cast<uint64_t>(buffer[0])) |\n             (static_cast<uint64_t>(buffer[1]) << 8) |\n             (static_cast<uint64_t>(buffer[2]) << 16) |\n@@ -200,30 +210,41 @@ class LittleEndian {\n             (static_cast<uint64_t>(buffer[5]) << 40) |\n             (static_cast<uint64_t>(buffer[6]) << 48) |\n             (static_cast<uint64_t>(buffer[7]) << 56);\n+#else\n+    uint64_t x;\n+    memcpy(&x, ptr, 8);\n+    return x;\n+#endif\n   }\n \n   static inline void Store16(void *dst, uint16_t value) {\n-    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n     buffer[0] = static_cast<uint8_t>(value);\n     buffer[1] = static_cast<uint8_t>(value >> 8);\n+#else\n+    memcpy(dst, &value, 2);\n+#endif\n   }\n \n   static void Store32(void *dst, uint32_t value) {\n-    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n     buffer[0] = static_cast<uint8_t>(value);\n     buffer[1] = static_cast<uint8_t>(value >> 8);\n     buffer[2] = static_cast<uint8_t>(value >> 16);\n     buffer[3] = static_cast<uint8_t>(value >> 24);\n+#else\n+    memcpy(dst, &value, 4);\n+#endif\n   }\n \n   static void Store64(void* dst, uint64_t value) {\n-    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n-\n     // Compiles to a single mov/str on recent clang and gcc.\n+#if SNAPPY_IS_BIG_ENDIAN\n+    uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);\n     buffer[0] = static_cast<uint8_t>(value);\n     buffer[1] = static_cast<uint8_t>(value >> 8);\n     buffer[2] = static_cast<uint8_t>(value >> 16);\n@@ -232,6 +253,9 @@ class LittleEndian {\n     buffer[5] = static_cast<uint8_t>(value >> 40);\n     buffer[6] = static_cast<uint8_t>(value >> 48);\n     buffer[7] = static_cast<uint8_t>(value >> 56);\n+#else\n+    memcpy(dst, &value, 8);\n+#endif\n   }\n \n   static inline constexpr bool IsLittleEndian() {"
+      }
+    ],
+    "lines_added": 36,
+    "lines_removed": 12
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991650275654,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 2.721944428912336e-06,
+    "relative_improvement": 0.007920368190088933,
+    "absolute_improvement_ms": 73.99999999999807,
+    "old_mean_ms": 9342.999999999998,
+    "new_mean_ms": 9269.0,
+    "old_std_ms": 53.8292318995594,
+    "new_std_ms": 58.27106693187708,
+    "effect_size_cohens_d": 1.3192110552216778,
+    "old_ci95_ms": [
+      9322.89983447173,
+      9363.100165528267
+    ],
+    "new_ci95_ms": [
+      9247.241226012195,
+      9290.758773987805
+    ],
+    "old_ci99_ms": [
+      9315.910712918381,
+      9370.089287081615
+    ],
+    "new_ci99_ms": [
+      9239.675382037494,
+      9298.324617962506
+    ],
+    "new_times_s": [
+      9.27,
+      9.13,
+      9.18,
+      9.25,
+      9.23,
+      9.23,
+      9.23,
+      9.25,
+      9.09,
+      9.25,
+      9.27,
+      9.25,
+      9.27,
+      9.28,
+      9.28,
+      9.31,
+      9.26,
+      9.29,
+      9.3,
+      9.27,
+      9.29,
+      9.28,
+      9.33,
+      9.31,
+      9.34,
+      9.37,
+      9.32,
+      9.29,
+      9.33,
+      9.28,
+      9.31
+    ],
+    "old_times_s": [
+      9.34,
+      9.21,
+      9.31,
+      9.32,
+      9.35,
+      9.42,
+      9.32,
+      9.31,
+      9.26,
+      9.32,
+      9.33,
+      9.41,
+      9.24,
+      9.35,
+      9.36,
+      9.32,
+      9.32,
+      9.36,
+      9.39,
+      9.35,
+      9.34,
+      9.39,
+      9.36,
+      9.39,
+      9.43,
+      9.41,
+      9.38,
+      9.36,
+      9.4,
+      9.33,
+      9.25
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "snappy_unittest"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "snappy_unittest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999987626869604,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.082168461005099e-06,
+        "relative_improvement": 0.007858328721638058,
+        "absolute_improvement_ms": 73.44827586206826,
+        "old_mean_ms": 9346.551724137931,
+        "new_mean_ms": 9273.103448275864,
+        "old_std_ms": 47.60521145458204,
+        "new_std_ms": 52.71916487225101,
+        "effect_size_cohens_d": 1.462317360788357,
+        "old_ci95_ms": [
+          9328.443670137236,
+          9364.659778138626
+        ],
+        "new_ci95_ms": [
+          9253.05015042865,
+          9293.156746123077
+        ],
+        "old_ci99_ms": [
+          9322.124302098322,
+          9370.979146177542
+        ],
+        "new_ci99_ms": [
+          9246.051929113117,
+          9300.15496743861
+        ],
+        "new_times": [
+          9.18,
+          9.25,
+          9.23,
+          9.23,
+          9.23,
+          9.25,
+          9.09,
+          9.25,
+          9.27,
+          9.25,
+          9.27,
+          9.27,
+          9.28,
+          9.31,
+          9.26,
+          9.29,
+          9.3,
+          9.27,
+          9.29,
+          9.28,
+          9.33,
+          9.31,
+          9.34,
+          9.37,
+          9.32,
+          9.29,
+          9.33,
+          9.28,
+          9.3
+        ],
+        "old_times": [
+          9.31,
+          9.32,
+          9.35,
+          9.42,
+          9.32,
+          9.31,
+          9.26,
+          9.32,
+          9.33,
+          9.4,
+          9.24,
+          9.35,
+          9.36,
+          9.32,
+          9.32,
+          9.36,
+          9.39,
+          9.35,
+          9.34,
+          9.39,
+          9.36,
+          9.39,
+          9.42,
+          9.41,
+          9.38,
+          9.36,
+          9.4,
+          9.32,
+          9.25
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

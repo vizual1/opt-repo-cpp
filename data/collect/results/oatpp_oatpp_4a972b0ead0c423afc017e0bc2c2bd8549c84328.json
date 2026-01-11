@@ -1,0 +1,287 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:52:47.138070",
+    "repository": "https://github.com/oatpp/oatpp",
+    "repository_name": "oatpp/oatpp"
+  },
+  "commit_info": {
+    "old_sha": "7dbae02b89c6723d3f38cf1cb1101c5ba73f1c29",
+    "new_sha": "4a972b0ead0c423afc017e0bc2c2bd8549c84328",
+    "commit_message": [
+      "network::server::SimpleTCPConnectionProvider atomic m_closed flag"
+    ],
+    "commit_date": "2020-01-09T00:28:48+00:00",
+    "patch": [
+      "--- src/oatpp/network/server/SimpleTCPConnectionProvider.cpp\n@@ -299,9 +299,9 @@ std::shared_ptr<oatpp::data::stream::IOStream> SimpleTCPConnectionProvider::getC\n   timeout.tv_usec = 0;\n \n   while(!m_closed) {\n-    OATPP_LOGD(\"AAA\", \"select begin\");\n+    OATPP_LOGD(\"AAA\", \"select %d, %d begin\", this, m_serverHandle);\n     auto res = select(m_serverHandle + 1, &set, nullptr, nullptr, &timeout);\n-    OATPP_LOGD(\"AAA\", \"select end res=%d\", res);\n+    OATPP_LOGD(\"AAA\", \"select %d, %d end res=%d\", this, m_serverHandle, res);\n     if (res >= 0) {\n       break;\n     }\n--- src/oatpp/network/server/SimpleTCPConnectionProvider.hpp\n@@ -75,7 +75,7 @@ class SimpleTCPConnectionProvider : public base::Countable, public ServerConnect\n \n private:\n   v_word16 m_port;\n-  bool m_closed;\n+  std::atomic<bool> m_closed;\n   oatpp::data::v_io_handle m_serverHandle;\n   bool m_useExtendedConnections;\n private:"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/oatpp/network/server/SimpleTCPConnectionProvider.cpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "changes": 4,
+        "patch": "@@ -299,9 +299,9 @@ std::shared_ptr<oatpp::data::stream::IOStream> SimpleTCPConnectionProvider::getC\n   timeout.tv_usec = 0;\n \n   while(!m_closed) {\n-    OATPP_LOGD(\"AAA\", \"select begin\");\n+    OATPP_LOGD(\"AAA\", \"select %d, %d begin\", this, m_serverHandle);\n     auto res = select(m_serverHandle + 1, &set, nullptr, nullptr, &timeout);\n-    OATPP_LOGD(\"AAA\", \"select end res=%d\", res);\n+    OATPP_LOGD(\"AAA\", \"select %d, %d end res=%d\", this, m_serverHandle, res);\n     if (res >= 0) {\n       break;\n     }"
+      },
+      {
+        "filename": "src/oatpp/network/server/SimpleTCPConnectionProvider.hpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -75,7 +75,7 @@ class SimpleTCPConnectionProvider : public base::Countable, public ServerConnect\n \n private:\n   v_word16 m_port;\n-  bool m_closed;\n+  std::atomic<bool> m_closed;\n   oatpp::data::v_io_handle m_serverHandle;\n   bool m_useExtendedConnections;\n private:"
+      }
+    ],
+    "lines_added": 3,
+    "lines_removed": 3
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 1.0,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.9983339817568431,
+    "relative_improvement": -0.0019442660089343782,
+    "absolute_improvement_ms": -264.333333333326,
+    "old_mean_ms": 135955.33333333334,
+    "new_mean_ms": 136219.6666666667,
+    "old_std_ms": 352.4371632262822,
+    "new_std_ms": 294.6942697842599,
+    "effect_size_cohens_d": -0.8137057651863812,
+    "old_ci95_ms": [
+      135823.73113376304,
+      136086.93553290368
+    ],
+    "new_ci95_ms": [
+      136109.6260178618,
+      136329.70731547158
+    ],
+    "old_ci99_ms": [
+      135777.97112406607,
+      136132.69554260065
+    ],
+    "new_ci99_ms": [
+      136071.36327474035,
+      136367.97005859303
+    ],
+    "new_times_s": [
+      136.3,
+      136.55,
+      136.19,
+      136.87,
+      135.87,
+      135.9,
+      136.13,
+      135.93,
+      136.66,
+      135.75,
+      136.27,
+      135.98,
+      135.94,
+      136.5,
+      136.31,
+      136.38,
+      136.4,
+      136.33,
+      136.44,
+      135.98,
+      136.22,
+      135.62,
+      136.67,
+      136.22,
+      135.81,
+      136.33,
+      136.26,
+      136.27,
+      136.31,
+      136.03,
+      136.47
+    ],
+    "old_times_s": [
+      136.12,
+      136.77,
+      135.62,
+      136.04,
+      136.07,
+      135.4,
+      136.07,
+      135.56,
+      136.15,
+      135.83,
+      135.78,
+      136.26,
+      136.3,
+      135.35,
+      136.43,
+      135.76,
+      136.15,
+      135.67,
+      136.05,
+      136.57,
+      135.44,
+      135.49,
+      136.13,
+      135.89,
+      136.28,
+      135.97,
+      135.62,
+      136.3,
+      136.05,
+      135.8,
+      135.86
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 1,
+    "significant_mannwhitney_regressions_tests": [
+      "oatppAllTests"
+    ],
+    "tests": [
+      {
+        "test_name": "oatppAllTests",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999987201833946,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.9989647010774207,
+        "relative_improvement": -0.002059946471834379,
+        "absolute_improvement_ms": -280.00000000000114,
+        "old_mean_ms": 135925.8620689655,
+        "new_mean_ms": 136205.8620689655,
+        "old_std_ms": 322.2190608153236,
+        "new_std_ms": 293.4464813870207,
+        "effect_size_cohens_d": -0.9085930916696139,
+        "old_ci95_ms": [
+          135803.29649315952,
+          136048.4276447715
+        ],
+        "new_ci95_ms": [
+          136094.24099705115,
+          136317.48314087986
+        ],
+        "old_ci99_ms": [
+          135760.52342751753,
+          136091.20071041345
+        ],
+        "new_ci99_ms": [
+          136055.2873560747,
+          136356.4367818563
+        ],
+        "new_times": [
+          136.19,
+          136.87,
+          135.86,
+          135.9,
+          136.13,
+          135.93,
+          136.65,
+          135.75,
+          136.27,
+          135.98,
+          135.94,
+          136.5,
+          136.3,
+          136.38,
+          136.4,
+          136.33,
+          136.44,
+          135.98,
+          136.22,
+          135.62,
+          136.67,
+          136.22,
+          135.8,
+          136.33,
+          136.25,
+          136.26,
+          136.31,
+          136.02,
+          136.47
+        ],
+        "old_times": [
+          135.62,
+          136.04,
+          136.07,
+          135.4,
+          136.07,
+          135.56,
+          136.15,
+          135.82,
+          135.78,
+          136.25,
+          136.3,
+          135.35,
+          136.43,
+          135.75,
+          136.15,
+          135.67,
+          136.05,
+          136.57,
+          135.44,
+          135.49,
+          136.13,
+          135.89,
+          136.28,
+          135.97,
+          135.62,
+          136.29,
+          136.05,
+          135.8,
+          135.86
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

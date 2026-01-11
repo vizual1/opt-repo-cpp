@@ -1,0 +1,317 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:52:46.671321",
+    "repository": "https://github.com/oatpp/oatpp",
+    "repository_name": "oatpp/oatpp"
+  },
+  "commit_info": {
+    "old_sha": "019ca7f579c3f9f847217d8d9053a368195e4538",
+    "new_sha": "2b6a90f601f1e92baa459f897a2714ee122780f1",
+    "commit_message": [
+      "Merge pull request #422 from MHaselmaier/master\n\nMinor performance relevant changes"
+    ],
+    "commit_date": "2021-05-03T11:26:10+00:00",
+    "patch": [
+      "--- src/oatpp/core/async/Coroutine.hpp\n@@ -597,8 +597,8 @@ class Coroutine : public AbstractCoroutine {\n    * @return - &id:oatpp::async::CoroutineStarter;.\n    */\n   template<typename ...ConstructorArgs>\n-  static CoroutineStarter start(ConstructorArgs... args) {\n-    return new T(args...);\n+  static CoroutineStarter start(ConstructorArgs&&... args) {\n+    return new T(std::forward<ConstructorArgs>(args)...);\n   }\n \n   /**\n--- src/oatpp/core/async/Executor.cpp\n@@ -94,7 +94,7 @@ Executor::Executor(v_int32 processorWorkersCount, v_int32 ioWorkersCount, v_int3\n   m_allWorkers.insert(m_allWorkers.end(), m_processorWorkers.begin(), m_processorWorkers.end());\n \n   std::vector<std::shared_ptr<worker::Worker>> ioWorkers;\n-\n+  ioWorkers.reserve(ioWorkersCount);\n   switch(ioWorkerType) {\n \n     case IO_WORKER_TYPE_NAIVE: {\n@@ -119,6 +119,7 @@ Executor::Executor(v_int32 processorWorkersCount, v_int32 ioWorkersCount, v_int3\n   linkWorkers(ioWorkers);\n \n   std::vector<std::shared_ptr<worker::Worker>> timerWorkers;\n+  timerWorkers.reserve(timerWorkersCount);\n   for(v_int32 i = 0; i < timerWorkersCount; i++) {\n     timerWorkers.push_back(std::make_shared<worker::TimerWorker>());\n   }\n@@ -233,10 +234,10 @@ void Executor::stop() {\n }\n \n v_int32 Executor::getTasksCount() {\n-\n+  \n   v_int32 result = 0;\n \n-  for(auto procWorker : m_processorWorkers) {\n+  for(const auto& procWorker : m_processorWorkers) {\n     result += procWorker->getProcessor().getTasksCount();\n   }\n \n--- src/oatpp/core/data/buffer/Processor.cpp\n@@ -86,11 +86,8 @@ void InlineWriteData::setEof() {\n // ProcessingPipeline\n \n ProcessingPipeline::ProcessingPipeline(const std::vector<base::ObjectHandle<Processor>>& processors)\n-  : m_processors(processors)\n+  : m_processors(processors), m_intermediateData(processors.size() - 1)\n {\n-  for(v_int32 i = 0; i < (v_int32) m_processors.size() - 1; i ++) {\n-    m_intermediateData.push_back(data::buffer::InlineReadData());\n-  }\n }\n \n v_io_size ProcessingPipeline::suggestInputStreamReadSize() {\n--- src/oatpp/web/mime/multipart/Part.cpp\n@@ -33,7 +33,7 @@ namespace oatpp { namespace web { namespace mime { namespace multipart {\n \n Part::Part(const Headers &headers,\n            const std::shared_ptr<data::stream::InputStream> &inputStream,\n-           const oatpp::String inMemoryData,\n+           const oatpp::String& inMemoryData,\n            v_int64 knownSize)\n   : m_headers(headers)\n   , m_inputStream(inputStream)\n@@ -60,7 +60,7 @@ Part::Part(const Headers& headers) : Part(headers, nullptr, nullptr, -1) {}\n Part::Part() : Part(Headers(), nullptr, nullptr, -1) {}\n \n void Part::setDataInfo(const std::shared_ptr<data::stream::InputStream>& inputStream,\n-                       const oatpp::String inMemoryData,\n+                       const oatpp::String& inMemoryData,\n                        v_int64 knownSize)\n {\n   m_inputStream = inputStream;\n--- src/oatpp/web/mime/multipart/Part.hpp\n@@ -61,7 +61,7 @@ class Part {\n    */\n   Part(const Headers& headers,\n        const std::shared_ptr<data::stream::InputStream>& inputStream,\n-       const oatpp::String inMemoryData,\n+       const oatpp::String& inMemoryData,\n        v_int64 knownSize);\n \n   /**\n@@ -82,7 +82,7 @@ class Part {\n    * @param knownSize - known size of the data in the input stream. Pass `-1` value if size is unknown.\n    */\n   void setDataInfo(const std::shared_ptr<data::stream::InputStream>& inputStream,\n-                   const oatpp::String inMemoryData,\n+                   const oatpp::String& inMemoryData,\n                    v_int64 knownSize);\n \n   /**\n--- src/oatpp/web/protocol/http/outgoing/Request.cpp\n@@ -158,9 +158,9 @@ oatpp::async::CoroutineStarter Request::sendAsync(std::shared_ptr<Request> _this\n     std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_headersWriteBuffer;\n   public:\n     \n-    SendAsyncCoroutine(const std::shared_ptr<Request>& request,\n+    SendAsyncCoroutine(std::shared_ptr<Request> request,\n                        const std::shared_ptr<data::stream::OutputStream>& stream)\n-      : m_this(request)\n+      : m_this(std::move(request))\n       , m_stream(stream)\n       , m_headersWriteBuffer(std::make_shared<oatpp::data::stream::BufferOutputStream>())\n     {}\n@@ -231,7 +231,7 @@ oatpp::async::CoroutineStarter Request::sendAsync(std::shared_ptr<Request> _this\n     \n   };\n   \n-  return SendAsyncCoroutine::start(_this, stream);\n+  return SendAsyncCoroutine::start(std::move(_this), stream);\n   \n }\n   "
+    ],
+    "files_changed": [
+      {
+        "filename": "src/oatpp/core/async/Coroutine.hpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "changes": 4,
+        "patch": "@@ -597,8 +597,8 @@ class Coroutine : public AbstractCoroutine {\n    * @return - &id:oatpp::async::CoroutineStarter;.\n    */\n   template<typename ...ConstructorArgs>\n-  static CoroutineStarter start(ConstructorArgs... args) {\n-    return new T(args...);\n+  static CoroutineStarter start(ConstructorArgs&&... args) {\n+    return new T(std::forward<ConstructorArgs>(args)...);\n   }\n \n   /**"
+      },
+      {
+        "filename": "src/oatpp/core/async/Executor.cpp",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 3,
+        "changes": 7,
+        "patch": "@@ -94,7 +94,7 @@ Executor::Executor(v_int32 processorWorkersCount, v_int32 ioWorkersCount, v_int3\n   m_allWorkers.insert(m_allWorkers.end(), m_processorWorkers.begin(), m_processorWorkers.end());\n \n   std::vector<std::shared_ptr<worker::Worker>> ioWorkers;\n-\n+  ioWorkers.reserve(ioWorkersCount);\n   switch(ioWorkerType) {\n \n     case IO_WORKER_TYPE_NAIVE: {\n@@ -119,6 +119,7 @@ Executor::Executor(v_int32 processorWorkersCount, v_int32 ioWorkersCount, v_int3\n   linkWorkers(ioWorkers);\n \n   std::vector<std::shared_ptr<worker::Worker>> timerWorkers;\n+  timerWorkers.reserve(timerWorkersCount);\n   for(v_int32 i = 0; i < timerWorkersCount; i++) {\n     timerWorkers.push_back(std::make_shared<worker::TimerWorker>());\n   }\n@@ -233,10 +234,10 @@ void Executor::stop() {\n }\n \n v_int32 Executor::getTasksCount() {\n-\n+  \n   v_int32 result = 0;\n \n-  for(auto procWorker : m_processorWorkers) {\n+  for(const auto& procWorker : m_processorWorkers) {\n     result += procWorker->getProcessor().getTasksCount();\n   }\n "
+      },
+      {
+        "filename": "src/oatpp/core/data/buffer/Processor.cpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 4,
+        "changes": 5,
+        "patch": "@@ -86,11 +86,8 @@ void InlineWriteData::setEof() {\n // ProcessingPipeline\n \n ProcessingPipeline::ProcessingPipeline(const std::vector<base::ObjectHandle<Processor>>& processors)\n-  : m_processors(processors)\n+  : m_processors(processors), m_intermediateData(processors.size() - 1)\n {\n-  for(v_int32 i = 0; i < (v_int32) m_processors.size() - 1; i ++) {\n-    m_intermediateData.push_back(data::buffer::InlineReadData());\n-  }\n }\n \n v_io_size ProcessingPipeline::suggestInputStreamReadSize() {"
+      },
+      {
+        "filename": "src/oatpp/web/mime/multipart/Part.cpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "changes": 4,
+        "patch": "@@ -33,7 +33,7 @@ namespace oatpp { namespace web { namespace mime { namespace multipart {\n \n Part::Part(const Headers &headers,\n            const std::shared_ptr<data::stream::InputStream> &inputStream,\n-           const oatpp::String inMemoryData,\n+           const oatpp::String& inMemoryData,\n            v_int64 knownSize)\n   : m_headers(headers)\n   , m_inputStream(inputStream)\n@@ -60,7 +60,7 @@ Part::Part(const Headers& headers) : Part(headers, nullptr, nullptr, -1) {}\n Part::Part() : Part(Headers(), nullptr, nullptr, -1) {}\n \n void Part::setDataInfo(const std::shared_ptr<data::stream::InputStream>& inputStream,\n-                       const oatpp::String inMemoryData,\n+                       const oatpp::String& inMemoryData,\n                        v_int64 knownSize)\n {\n   m_inputStream = inputStream;"
+      },
+      {
+        "filename": "src/oatpp/web/mime/multipart/Part.hpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "changes": 4,
+        "patch": "@@ -61,7 +61,7 @@ class Part {\n    */\n   Part(const Headers& headers,\n        const std::shared_ptr<data::stream::InputStream>& inputStream,\n-       const oatpp::String inMemoryData,\n+       const oatpp::String& inMemoryData,\n        v_int64 knownSize);\n \n   /**\n@@ -82,7 +82,7 @@ class Part {\n    * @param knownSize - known size of the data in the input stream. Pass `-1` value if size is unknown.\n    */\n   void setDataInfo(const std::shared_ptr<data::stream::InputStream>& inputStream,\n-                   const oatpp::String inMemoryData,\n+                   const oatpp::String& inMemoryData,\n                    v_int64 knownSize);\n \n   /**"
+      },
+      {
+        "filename": "src/oatpp/web/protocol/http/outgoing/Request.cpp",
+        "status": "modified",
+        "additions": 3,
+        "deletions": 3,
+        "changes": 6,
+        "patch": "@@ -158,9 +158,9 @@ oatpp::async::CoroutineStarter Request::sendAsync(std::shared_ptr<Request> _this\n     std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_headersWriteBuffer;\n   public:\n     \n-    SendAsyncCoroutine(const std::shared_ptr<Request>& request,\n+    SendAsyncCoroutine(std::shared_ptr<Request> request,\n                        const std::shared_ptr<data::stream::OutputStream>& stream)\n-      : m_this(request)\n+      : m_this(std::move(request))\n       , m_stream(stream)\n       , m_headersWriteBuffer(std::make_shared<oatpp::data::stream::BufferOutputStream>())\n     {}\n@@ -231,7 +231,7 @@ oatpp::async::CoroutineStarter Request::sendAsync(std::shared_ptr<Request> _this\n     \n   };\n   \n-  return SendAsyncCoroutine::start(_this, stream);\n+  return SendAsyncCoroutine::start(std::move(_this), stream);\n   \n }\n   "
+      }
+    ],
+    "lines_added": 14,
+    "lines_removed": 16
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 1.0,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.09786121648112789,
+    "relative_improvement": 0.00122696390528566,
+    "absolute_improvement_ms": 200.9999999999934,
+    "old_mean_ms": 163819.00000000003,
+    "new_mean_ms": 163618.00000000003,
+    "old_std_ms": 516.3823095877456,
+    "new_std_ms": 399.00220377923745,
+    "effect_size_cohens_d": 0.43559307937128355,
+    "old_ci95_ms": [
+      163626.17967668665,
+      164011.8203233134
+    ],
+    "new_ci95_ms": [
+      163469.01012852884,
+      163766.9898714712
+    ],
+    "old_ci99_ms": [
+      163559.13322994483,
+      164078.8667700552
+    ],
+    "new_ci99_ms": [
+      163417.20417098762,
+      163818.79582901244
+    ],
+    "new_times_s": [
+      163.76,
+      163.4,
+      163.98,
+      163.34,
+      164.62,
+      163.68,
+      163.98,
+      163.69,
+      163.92,
+      163.07,
+      163.5,
+      164.02,
+      163.63,
+      163.94,
+      163.87,
+      163.36,
+      163.72,
+      163.75,
+      163.01,
+      163.05,
+      163.11,
+      163.75,
+      163.41,
+      163.18,
+      164.06,
+      163.82,
+      164.1,
+      163.22,
+      164.0,
+      163.06,
+      163.3
+    ],
+    "old_times_s": [
+      163.73,
+      163.23,
+      163.76,
+      163.97,
+      164.54,
+      163.21,
+      163.14,
+      164.18,
+      164.2,
+      163.31,
+      163.72,
+      164.18,
+      163.64,
+      163.88,
+      163.38,
+      164.86,
+      164.19,
+      163.96,
+      163.57,
+      163.57,
+      163.64,
+      163.38,
+      163.73,
+      163.57,
+      163.6,
+      164.12,
+      165.14,
+      164.75,
+      163.39,
+      163.13,
+      163.63
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "oatppAllTests",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 1.0,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.08797390614199363,
+        "relative_improvement": 0.0013070107128575414,
+        "absolute_improvement_ms": 214.1379310345144,
+        "old_mean_ms": 163837.9310344828,
+        "new_mean_ms": 163623.7931034483,
+        "old_std_ms": 513.9300905094357,
+        "new_std_ms": 404.2489843887174,
+        "effect_size_cohens_d": 0.4631477121890114,
+        "old_ci95_ms": [
+          163642.442482974,
+          164033.41958599162
+        ],
+        "new_ci95_ms": [
+          163470.02501345627,
+          163777.5611934403
+        ],
+        "old_ci99_ms": [
+          163574.22067933175,
+          164101.64138963388
+        ],
+        "new_ci99_ms": [
+          163416.36286106467,
+          163831.2233458319
+        ],
+        "new_times": [
+          163.98,
+          163.34,
+          164.62,
+          163.68,
+          163.98,
+          163.69,
+          163.92,
+          163.07,
+          163.49,
+          164.01,
+          163.63,
+          163.94,
+          163.87,
+          163.35,
+          163.72,
+          163.75,
+          163.01,
+          163.04,
+          163.11,
+          163.75,
+          163.41,
+          163.18,
+          164.06,
+          163.81,
+          164.1,
+          163.22,
+          164.0,
+          163.06,
+          163.3
+        ],
+        "old_times": [
+          163.75,
+          163.97,
+          164.54,
+          163.2,
+          163.13,
+          164.18,
+          164.2,
+          163.31,
+          163.72,
+          164.18,
+          163.64,
+          163.88,
+          163.38,
+          164.86,
+          164.18,
+          163.96,
+          163.57,
+          163.57,
+          163.64,
+          163.38,
+          163.73,
+          163.57,
+          163.6,
+          164.12,
+          165.14,
+          164.75,
+          163.39,
+          163.13,
+          163.63
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

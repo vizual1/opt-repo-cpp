@@ -1,0 +1,279 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:52:30.856598",
+    "repository": "https://github.com/google/snappy",
+    "repository_name": "google/snappy"
+  },
+  "commit_info": {
+    "old_sha": "30326e5b8cae9b5f2ea640d74beb2562ced44219",
+    "new_sha": "7b82423c597bfed223dff27f880fe91e169375b4",
+    "commit_message": [
+      "The output buffer in DecompressBranchless is never read from and the source buffers are never written.  This allows us to defer any writes to the output buffer for an arbitrary amount of time as long as the writes all occur in the proper order.  When a MemCopy64 would have normally occurred we save away the source address and length.  Once we reach the location of the next write to the output buffer first perform the deferred copy.  This gives time for the source address calculation and length to finish before the deferred copy.\n\nThis change gives 1.84% on CLX and 0.97% Milan.\n\nPiperOrigin-RevId: 504012310"
+    ],
+    "commit_date": "2023-01-23T17:50:52+00:00",
+    "patch": [
+      "--- snappy.cc\n@@ -29,7 +29,6 @@\n #include \"snappy-internal.h\"\n #include \"snappy-sinksource.h\"\n #include \"snappy.h\"\n-\n #if !defined(SNAPPY_HAVE_BMI2)\n // __BMI2__ is defined by GCC and Clang. Visual Studio doesn't target BMI2\n // specifically, but it does define __AVX2__ when AVX2 support is available.\n@@ -1085,6 +1084,18 @@ void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {\n   (void)size;\n }\n \n+void ClearDeferred(const void** deferred_src, size_t* deferred_length,\n+                   uint8_t* safe_source) {\n+  *deferred_src = safe_source;\n+  *deferred_length = 0;\n+}\n+\n+void DeferMemCopy(const void** deferred_src, size_t* deferred_length,\n+                  const void* src, size_t length) {\n+  *deferred_src = src;\n+  *deferred_length = length;\n+}\n+\n SNAPPY_ATTRIBUTE_ALWAYS_INLINE\n inline size_t AdvanceToNextTagARMOptimized(const uint8_t** ip_p, size_t* tag) {\n   const uint8_t*& ip = *ip_p;\n@@ -1189,6 +1200,12 @@ template <typename T>\n std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n     const uint8_t* ip, const uint8_t* ip_limit, ptrdiff_t op, T op_base,\n     ptrdiff_t op_limit_min_slop) {\n+  // If deferred_src is invalid point it here.\n+  uint8_t safe_source[64];\n+  const void* deferred_src;\n+  size_t deferred_length;\n+  ClearDeferred(&deferred_src, &deferred_length, safe_source);\n+\n   // We unroll the inner loop twice so we need twice the spare room.\n   op_limit_min_slop -= kSlopBytes;\n   if (2 * (kSlopBytes + 1) < ip_limit - ip && op < op_limit_min_slop) {\n@@ -1211,7 +1228,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n       // twice reduces the amount of instructions checking limits and also\n       // leads to reduced mov's.\n \n-      SNAPPY_PREFETCH(ip+128);\n+      SNAPPY_PREFETCH(ip + 128);\n       for (int i = 0; i < 2; i++) {\n         const uint8_t* old_ip = ip;\n         assert(tag == ip[-1]);\n@@ -1238,38 +1255,53 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n           }\n           // Only copy-1 or copy-2 tags can get here.\n           assert(tag_type == 1 || tag_type == 2);\n-          std::ptrdiff_t delta = op + len_min_offset - len;\n+          std::ptrdiff_t delta = (op + deferred_length) + len_min_offset - len;\n           // Guard against copies before the buffer start.\n+          // Execute any deferred MemCopy since we write to dst here.\n+          MemCopy64(op_base + op, deferred_src, deferred_length);\n+          op += deferred_length;\n+          ClearDeferred(&deferred_src, &deferred_length, safe_source);\n           if (SNAPPY_PREDICT_FALSE(delta < 0 ||\n                                   !Copy64BytesWithPatternExtension(\n                                       op_base + op, len - len_min_offset))) {\n             goto break_loop;\n           }\n+          // We aren't deferring this copy so add length right away.\n           op += len;\n           continue;\n         }\n-        std::ptrdiff_t delta = op + len_min_offset - len;\n+        std::ptrdiff_t delta = (op + deferred_length) + len_min_offset - len;\n         if (SNAPPY_PREDICT_FALSE(delta < 0)) {\n           // Due to the spurious offset in literals have this will trigger\n           // at the start of a block when op is still smaller than 256.\n           if (tag_type != 0) goto break_loop;\n-          MemCopy64(op_base + op, old_ip, len);\n-          op += len;\n+          MemCopy64(op_base + op, deferred_src, deferred_length);\n+          op += deferred_length;\n+          DeferMemCopy(&deferred_src, &deferred_length, old_ip, len);\n           continue;\n         }\n \n         // For copies we need to copy from op_base + delta, for literals\n         // we need to copy from ip instead of from the stream.\n         const void* from =\n             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;\n-        MemCopy64(op_base + op, from, len);\n-        op += len;\n+        MemCopy64(op_base + op, deferred_src, deferred_length);\n+        op += deferred_length;\n+        DeferMemCopy(&deferred_src, &deferred_length, from, len);\n       }\n-    } while (ip < ip_limit_min_slop && op < op_limit_min_slop);\n+    } while (ip < ip_limit_min_slop &&\n+             (op + deferred_length) < op_limit_min_slop);\n   exit:\n     ip--;\n     assert(ip <= ip_limit);\n   }\n+  // If we deferred a copy then we can perform.  If we are up to date then we\n+  // might not have enough slop bytes and could run past the end.\n+  if (deferred_length) {\n+    MemCopy64(op_base + op, deferred_src, deferred_length);\n+    op += deferred_length;\n+    ClearDeferred(&deferred_src, &deferred_length, safe_source);\n+  }\n   return {ip, op};\n }\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "snappy.cc",
+        "status": "modified",
+        "additions": 41,
+        "deletions": 9,
+        "changes": 50,
+        "patch": "@@ -29,7 +29,6 @@\n #include \"snappy-internal.h\"\n #include \"snappy-sinksource.h\"\n #include \"snappy.h\"\n-\n #if !defined(SNAPPY_HAVE_BMI2)\n // __BMI2__ is defined by GCC and Clang. Visual Studio doesn't target BMI2\n // specifically, but it does define __AVX2__ when AVX2 support is available.\n@@ -1085,6 +1084,18 @@ void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {\n   (void)size;\n }\n \n+void ClearDeferred(const void** deferred_src, size_t* deferred_length,\n+                   uint8_t* safe_source) {\n+  *deferred_src = safe_source;\n+  *deferred_length = 0;\n+}\n+\n+void DeferMemCopy(const void** deferred_src, size_t* deferred_length,\n+                  const void* src, size_t length) {\n+  *deferred_src = src;\n+  *deferred_length = length;\n+}\n+\n SNAPPY_ATTRIBUTE_ALWAYS_INLINE\n inline size_t AdvanceToNextTagARMOptimized(const uint8_t** ip_p, size_t* tag) {\n   const uint8_t*& ip = *ip_p;\n@@ -1189,6 +1200,12 @@ template <typename T>\n std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n     const uint8_t* ip, const uint8_t* ip_limit, ptrdiff_t op, T op_base,\n     ptrdiff_t op_limit_min_slop) {\n+  // If deferred_src is invalid point it here.\n+  uint8_t safe_source[64];\n+  const void* deferred_src;\n+  size_t deferred_length;\n+  ClearDeferred(&deferred_src, &deferred_length, safe_source);\n+\n   // We unroll the inner loop twice so we need twice the spare room.\n   op_limit_min_slop -= kSlopBytes;\n   if (2 * (kSlopBytes + 1) < ip_limit - ip && op < op_limit_min_slop) {\n@@ -1211,7 +1228,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n       // twice reduces the amount of instructions checking limits and also\n       // leads to reduced mov's.\n \n-      SNAPPY_PREFETCH(ip+128);\n+      SNAPPY_PREFETCH(ip + 128);\n       for (int i = 0; i < 2; i++) {\n         const uint8_t* old_ip = ip;\n         assert(tag == ip[-1]);\n@@ -1238,38 +1255,53 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n           }\n           // Only copy-1 or copy-2 tags can get here.\n           assert(tag_type == 1 || tag_type == 2);\n-          std::ptrdiff_t delta = op + len_min_offset - len;\n+          std::ptrdiff_t delta = (op + deferred_length) + len_min_offset - len;\n           // Guard against copies before the buffer start.\n+          // Execute any deferred MemCopy since we write to dst here.\n+          MemCopy64(op_base + op, deferred_src, deferred_length);\n+          op += deferred_length;\n+          ClearDeferred(&deferred_src, &deferred_length, safe_source);\n           if (SNAPPY_PREDICT_FALSE(delta < 0 ||\n                                   !Copy64BytesWithPatternExtension(\n                                       op_base + op, len - len_min_offset))) {\n             goto break_loop;\n           }\n+          // We aren't deferring this copy so add length right away.\n           op += len;\n           continue;\n         }\n-        std::ptrdiff_t delta = op + len_min_offset - len;\n+        std::ptrdiff_t delta = (op + deferred_length) + len_min_offset - len;\n         if (SNAPPY_PREDICT_FALSE(delta < 0)) {\n           // Due to the spurious offset in literals have this will trigger\n           // at the start of a block when op is still smaller than 256.\n           if (tag_type != 0) goto break_loop;\n-          MemCopy64(op_base + op, old_ip, len);\n-          op += len;\n+          MemCopy64(op_base + op, deferred_src, deferred_length);\n+          op += deferred_length;\n+          DeferMemCopy(&deferred_src, &deferred_length, old_ip, len);\n           continue;\n         }\n \n         // For copies we need to copy from op_base + delta, for literals\n         // we need to copy from ip instead of from the stream.\n         const void* from =\n             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;\n-        MemCopy64(op_base + op, from, len);\n-        op += len;\n+        MemCopy64(op_base + op, deferred_src, deferred_length);\n+        op += deferred_length;\n+        DeferMemCopy(&deferred_src, &deferred_length, from, len);\n       }\n-    } while (ip < ip_limit_min_slop && op < op_limit_min_slop);\n+    } while (ip < ip_limit_min_slop &&\n+             (op + deferred_length) < op_limit_min_slop);\n   exit:\n     ip--;\n     assert(ip <= ip_limit);\n   }\n+  // If we deferred a copy then we can perform.  If we are up to date then we\n+  // might not have enough slop bytes and could run past the end.\n+  if (deferred_length) {\n+    MemCopy64(op_base + op, deferred_src, deferred_length);\n+    op += deferred_length;\n+    ClearDeferred(&deferred_src, &deferred_length, safe_source);\n+  }\n   return {ip, op};\n }\n "
+      }
+    ],
+    "lines_added": 41,
+    "lines_removed": 9
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991490417837,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.9999999999233276,
+    "relative_improvement": -0.014911884319927715,
+    "absolute_improvement_ms": -154.0000000000017,
+    "old_mean_ms": 10327.333333333332,
+    "new_mean_ms": 10481.333333333334,
+    "old_std_ms": 39.64787539059957,
+    "new_std_ms": 45.617097016687616,
+    "effect_size_cohens_d": -3.60344915532025,
+    "old_ci95_ms": [
+      10312.528573353062,
+      10342.138093313602
+    ],
+    "new_ci95_ms": [
+      10464.299629366213,
+      10498.367037300453
+    ],
+    "old_ci99_ms": [
+      10307.380741763083,
+      10347.285924903581
+    ],
+    "new_ci99_ms": [
+      10458.376761349904,
+      10504.289905316764
+    ],
+    "new_times_s": [
+      10.47,
+      10.5,
+      10.45,
+      10.47,
+      10.45,
+      10.47,
+      10.47,
+      10.5,
+      10.51,
+      10.49,
+      10.63,
+      10.51,
+      10.49,
+      10.51,
+      10.46,
+      10.45,
+      10.62,
+      10.44,
+      10.46,
+      10.47,
+      10.44,
+      10.43,
+      10.48,
+      10.44,
+      10.47,
+      10.51,
+      10.49,
+      10.47,
+      10.46,
+      10.45,
+      10.45
+    ],
+    "old_times_s": [
+      10.34,
+      10.3,
+      10.32,
+      10.48,
+      10.37,
+      10.32,
+      10.33,
+      10.4,
+      10.34,
+      10.33,
+      10.36,
+      10.32,
+      10.29,
+      10.31,
+      10.33,
+      10.32,
+      10.38,
+      10.33,
+      10.31,
+      10.3,
+      10.29,
+      10.31,
+      10.29,
+      10.3,
+      10.34,
+      10.31,
+      10.32,
+      10.32,
+      10.3,
+      10.32,
+      10.28
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 1,
+    "significant_mannwhitney_regressions_tests": [
+      "snappy_unittest"
+    ],
+    "tests": [
+      {
+        "test_name": "snappy_unittest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999987424339092,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.999999999827838,
+        "relative_improvement": -0.014858592941333562,
+        "absolute_improvement_ms": -153.4482758620701,
+        "old_mean_ms": 10327.241379310344,
+        "new_mean_ms": 10480.689655172415,
+        "old_std_ms": 38.996021017180915,
+        "new_std_ms": 46.285683877627974,
+        "effect_size_cohens_d": -3.5855463365028504,
+        "old_ci95_ms": [
+          10312.408086214586,
+          10342.074672406103
+        ],
+        "new_ci95_ms": [
+          10463.083522618737,
+          10498.29578772609
+        ],
+        "old_ci99_ms": [
+          10307.231547736315,
+          10347.251210884373
+        ],
+        "new_ci99_ms": [
+          10456.939315662852,
+          10504.439994681976
+        ],
+        "new_times": [
+          10.45,
+          10.47,
+          10.45,
+          10.47,
+          10.47,
+          10.5,
+          10.51,
+          10.49,
+          10.63,
+          10.51,
+          10.49,
+          10.51,
+          10.46,
+          10.45,
+          10.62,
+          10.44,
+          10.46,
+          10.47,
+          10.44,
+          10.43,
+          10.48,
+          10.44,
+          10.47,
+          10.51,
+          10.49,
+          10.47,
+          10.46,
+          10.45,
+          10.45
+        ],
+        "old_times": [
+          10.32,
+          10.48,
+          10.37,
+          10.32,
+          10.33,
+          10.39,
+          10.34,
+          10.33,
+          10.36,
+          10.32,
+          10.29,
+          10.31,
+          10.32,
+          10.32,
+          10.37,
+          10.33,
+          10.31,
+          10.3,
+          10.29,
+          10.31,
+          10.29,
+          10.3,
+          10.34,
+          10.31,
+          10.32,
+          10.32,
+          10.3,
+          10.32,
+          10.28
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

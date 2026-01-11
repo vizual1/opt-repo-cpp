@@ -1,0 +1,279 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:52:33.101524",
+    "repository": "https://github.com/google/snappy",
+    "repository_name": "google/snappy"
+  },
+  "commit_info": {
+    "old_sha": "7062d7f1d8a5ca7ade075579f36681ff48616dc3",
+    "new_sha": "aeb5de55a9c646ca334e4f6252af28536ca22349",
+    "commit_message": [
+      "decompress: refine data depdency\n\nThe final ip advance value doesn't have to wait for\nthe result of offset to load *tag. It can be computed\nalong with the offset, so the codegen will use one\ncsinc in parallel with ldrb. This will improve the\nthroughput.\nWith this change it is observed ~4.2% uplift in UFlat/10\nand ~3.7% in UFlatMedley\n\nSigned-off-by: Jun He <jun.he@arm.com>\nChange-Id: I20ab211235bbf578c6c978f2bbd9160a49e920da"
+    ],
+    "commit_date": "2021-08-17T08:36:43+00:00",
+    "patch": [
+      "--- snappy.cc\n@@ -1015,12 +1015,16 @@ size_t AdvanceToNextTagARMOptimized(const uint8_t** ip_p, size_t* tag) {\n   //                       delta2 = ((c >> 2) + 1)    ip++\n   // This is different from X86 optimizations because ARM has conditional add\n   // instruction (csinc) and it removes several register moves.\n-  const size_t literal_tag_offset = (*tag >> 2) + 1;\n   const size_t tag_type = *tag & 3;\n   const bool is_literal = (tag_type == 0);\n-  *tag = is_literal ? ip[literal_tag_offset] : ip[tag_type];\n-  ip += is_literal ? literal_tag_offset : tag_type;\n-  ip++;\n+  if (is_literal) {\n+    size_t next_literal_tag = (*tag >> 2) + 1;\n+    *tag = ip[next_literal_tag];\n+    ip += next_literal_tag + 1;\n+  } else {\n+    *tag = ip[tag_type];\n+    ip += tag_type + 1;\n+  }\n   return tag_type;\n }\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "snappy.cc",
+        "status": "modified",
+        "additions": 8,
+        "deletions": 4,
+        "changes": 12,
+        "patch": "@@ -1015,12 +1015,16 @@ size_t AdvanceToNextTagARMOptimized(const uint8_t** ip_p, size_t* tag) {\n   //                       delta2 = ((c >> 2) + 1)    ip++\n   // This is different from X86 optimizations because ARM has conditional add\n   // instruction (csinc) and it removes several register moves.\n-  const size_t literal_tag_offset = (*tag >> 2) + 1;\n   const size_t tag_type = *tag & 3;\n   const bool is_literal = (tag_type == 0);\n-  *tag = is_literal ? ip[literal_tag_offset] : ip[tag_type];\n-  ip += is_literal ? literal_tag_offset : tag_type;\n-  ip++;\n+  if (is_literal) {\n+    size_t next_literal_tag = (*tag >> 2) + 1;\n+    *tag = ip[next_literal_tag];\n+    ip += next_literal_tag + 1;\n+  } else {\n+    *tag = ip[tag_type];\n+    ip += tag_type + 1;\n+  }\n   return tag_type;\n }\n "
+      }
+    ],
+    "lines_added": 8,
+    "lines_removed": 4
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991676673098,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.00035087065885299086,
+    "relative_improvement": 0.002123218655534673,
+    "absolute_improvement_ms": 19.666666666665833,
+    "old_mean_ms": 9262.666666666666,
+    "new_mean_ms": 9243.0,
+    "old_std_ms": 28.99861272940256,
+    "new_std_ms": 41.28538189990106,
+    "effect_size_cohens_d": 0.5512740363416406,
+    "old_ci95_ms": [
+      9251.838406716037,
+      9273.494926617295
+    ],
+    "new_ci95_ms": [
+      9227.583785040177,
+      9258.416214959825
+    ],
+    "old_ci99_ms": [
+      9248.07326234945,
+      9277.260070983883
+    ],
+    "new_ci99_ms": [
+      9222.223341610235,
+      9263.776658389766
+    ],
+    "new_times_s": [
+      9.24,
+      9.23,
+      9.23,
+      9.22,
+      9.22,
+      9.22,
+      9.23,
+      9.27,
+      9.23,
+      9.43,
+      9.24,
+      9.24,
+      9.25,
+      9.23,
+      9.26,
+      9.27,
+      9.26,
+      9.24,
+      9.25,
+      9.23,
+      9.25,
+      9.22,
+      9.19,
+      9.17,
+      9.25,
+      9.23,
+      9.24,
+      9.27,
+      9.24,
+      9.24,
+      9.24
+    ],
+    "old_times_s": [
+      9.22,
+      9.22,
+      9.25,
+      9.24,
+      9.37,
+      9.23,
+      9.29,
+      9.24,
+      9.27,
+      9.29,
+      9.23,
+      9.25,
+      9.25,
+      9.26,
+      9.28,
+      9.26,
+      9.26,
+      9.28,
+      9.25,
+      9.31,
+      9.26,
+      9.26,
+      9.24,
+      9.25,
+      9.24,
+      9.28,
+      9.26,
+      9.29,
+      9.26,
+      9.27,
+      9.24
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "snappy_unittest"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "snappy_unittest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999987810136657,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.00019632831674616636,
+        "relative_improvement": 0.002345320527138692,
+        "absolute_improvement_ms": 21.72413793103445,
+        "old_mean_ms": 9262.758620689656,
+        "new_mean_ms": 9241.034482758621,
+        "old_std_ms": 29.386166780128697,
+        "new_std_ms": 42.37121897047952,
+        "effect_size_cohens_d": 0.5958119957878006,
+        "old_ci95_ms": [
+          9251.580720651638,
+          9273.936520727673
+        ],
+        "new_ci95_ms": [
+          9224.917333023352,
+          9257.151632493893
+        ],
+        "old_ci99_ms": [
+          9247.679845149514,
+          9277.837396229797
+        ],
+        "new_ci99_ms": [
+          9219.292752882848,
+          9262.776212634397
+        ],
+        "new_times": [
+          9.23,
+          9.22,
+          9.22,
+          9.22,
+          9.23,
+          9.26,
+          9.23,
+          9.43,
+          9.24,
+          9.24,
+          9.25,
+          9.23,
+          9.26,
+          9.27,
+          9.25,
+          9.24,
+          9.24,
+          9.23,
+          9.24,
+          9.21,
+          9.18,
+          9.17,
+          9.25,
+          9.23,
+          9.23,
+          9.27,
+          9.24,
+          9.24,
+          9.24
+        ],
+        "old_times": [
+          9.25,
+          9.24,
+          9.37,
+          9.23,
+          9.29,
+          9.24,
+          9.27,
+          9.29,
+          9.23,
+          9.25,
+          9.24,
+          9.26,
+          9.28,
+          9.26,
+          9.26,
+          9.28,
+          9.25,
+          9.31,
+          9.26,
+          9.25,
+          9.23,
+          9.25,
+          9.24,
+          9.28,
+          9.26,
+          9.29,
+          9.26,
+          9.27,
+          9.23
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

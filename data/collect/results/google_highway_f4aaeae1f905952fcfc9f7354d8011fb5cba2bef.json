@@ -1,0 +1,186 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:46:39.756610",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "d2c0534e7da4c438780aeeb89d7c7081ff2649ab",
+    "new_sha": "f4aaeae1f905952fcfc9f7354d8011fb5cba2bef",
+    "commit_message": [
+      "improved SVE codegen (.q form, hardcoded MaskLowerHalf); 1.04x sort speedup.\n\nPiperOrigin-RevId: 455081821"
+    ],
+    "commit_date": "2022-06-15T10:14:26+00:00",
+    "patch": [
+      "--- hwy/contrib/sort/traits128-inl.h\n@@ -311,7 +311,7 @@ class Traits128 : public Base {\n     return V{_mm256_permute4x64_epi64(v.raw, _MM_SHUFFLE(3, 3, 3, 3))};\n #endif\n   }\n-#endif\n+#endif  // HWY_TARGET <= HWY_AVX2\n \n  public:\n   constexpr bool Is128() const { return true; }\n--- hwy/ops/arm_sve-inl.h\n@@ -1347,6 +1347,10 @@ namespace detail {\n   }\n HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatEven, uzp1)\n HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatOdd, uzp2)\n+#if defined(__ARM_FEATURE_SVE_MATMUL_FP64)\n+HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatEvenBlocks, uzp1q)\n+HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatOddBlocks, uzp2q)\n+#endif\n #undef HWY_SVE_CONCAT_EVERY_SECOND\n \n // Used to slide up / shift whole register left; mask indicates which range\n@@ -1459,12 +1463,69 @@ HWY_API VFromD<D> Iota(const D d, TFromD<D> first) {\n \n namespace detail {\n \n+#if HWY_TARGET == HWY_SVE_256 || HWY_IDE\n+template <class D, HWY_IF_LANE_SIZE_D(D, 1)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 32:\n+      return svptrue_pat_b8(SV_VL16);\n+    case 16:\n+      return svptrue_pat_b8(SV_VL8);\n+    case 8:\n+      return svptrue_pat_b8(SV_VL4);\n+    case 4:\n+      return svptrue_pat_b8(SV_VL2);\n+    default:\n+      return svptrue_pat_b8(SV_VL1);\n+  }\n+}\n+template <class D, HWY_IF_LANE_SIZE_D(D, 2)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 16:\n+      return svptrue_pat_b16(SV_VL8);\n+    case 8:\n+      return svptrue_pat_b16(SV_VL4);\n+    case 4:\n+      return svptrue_pat_b16(SV_VL2);\n+    default:\n+      return svptrue_pat_b16(SV_VL1);\n+  }\n+}\n+template <class D, HWY_IF_LANE_SIZE_D(D, 4)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 8:\n+      return svptrue_pat_b32(SV_VL4);\n+    case 4:\n+      return svptrue_pat_b32(SV_VL2);\n+    default:\n+      return svptrue_pat_b32(SV_VL1);\n+  }\n+}\n+template <class D, HWY_IF_LANE_SIZE_D(D, 8)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 4:\n+      return svptrue_pat_b64(SV_VL2);\n+    default:\n+      return svptrue_pat_b64(SV_VL1);\n+  }\n+}\n+#else\n template <class D>\n svbool_t MaskLowerHalf(D d) {\n   return FirstN(d, Lanes(d) / 2);\n }\n+#endif  // HWY_TARGET == HWY_SVE_256\n+\n template <class D>\n svbool_t MaskUpperHalf(D d) {\n+  // TODO(janwas): WHILEGE on pow2 SVE2\n+ if( HWY_SVE_IS_POW2 && IsFull(d)){\n+  return Not(MaskLowerHalf(d));\n+ }\n+\n   // For Splice to work as intended, make sure bits above Lanes(d) are zero.\n   return AndNot(MaskLowerHalf(d), detail::MakeMask(d));\n }\n@@ -1491,13 +1552,18 @@ HWY_API V ConcatUpperLower(const D d, const V hi, const V lo) {\n // ------------------------------ ConcatLowerLower\n template <class D, class V>\n HWY_API V ConcatLowerLower(const D d, const V hi, const V lo) {\n+#if defined(__ARM_FEATURE_SVE_MATMUL_FP64) && HWY_TARGET == HWY_SVE_256\n+  if (detail::IsFull(d)) {\n+    return detail::ConcatEvenBlocks(hi, lo);\n+  }\n+#endif\n   return detail::Splice(hi, lo, detail::MaskLowerHalf(d));\n }\n \n // ------------------------------ ConcatLowerUpper\n template <class D, class V>\n HWY_API V ConcatLowerUpper(const D d, const V hi, const V lo) {\n-#if HWY_TARGET == HWY_SVE_256\n+#if HWY_TARGET == HWY_SVE_256  // constexpr Lanes\n   if (detail::IsFull(d)) {\n     return detail::Ext<Lanes(d) / 2>(hi, lo);\n   }\n@@ -1508,6 +1574,11 @@ HWY_API V ConcatLowerUpper(const D d, const V hi, const V lo) {\n // ------------------------------ ConcatUpperUpper\n template <class D, class V>\n HWY_API V ConcatUpperUpper(const D d, const V hi, const V lo) {\n+#if defined(__ARM_FEATURE_SVE_MATMUL_FP64) && HWY_TARGET == HWY_SVE_256\n+  if (detail::IsFull(d)) {\n+    return detail::ConcatOddBlocks(hi, lo);\n+  }\n+#endif\n   const svbool_t mask_upper = detail::MaskUpperHalf(d);\n   const V lo_upper = detail::Splice(lo, lo, mask_upper);\n   return IfThenElse(mask_upper, hi, lo_upper);\n@@ -1744,7 +1815,7 @@ HWY_API V Reverse(D d, V v) {\n   const auto reversed = detail::ReverseFull(v);\n   if (HWY_SVE_IS_POW2 && detail::IsFull(d)) return reversed;\n   // Shift right to remove extra (non-pow2 and remainder) lanes.\n-  // TODO(janwas): on SVE2, use whilege.\n+  // TODO(janwas): on SVE2, use WHILEGE.\n   // Avoids FirstN truncating to the return vector size. Must also avoid Not\n   // because that is limited to SV_POW2.\n   const ScalableTag<T> dfull;"
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/contrib/sort/traits128-inl.h",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -311,7 +311,7 @@ class Traits128 : public Base {\n     return V{_mm256_permute4x64_epi64(v.raw, _MM_SHUFFLE(3, 3, 3, 3))};\n #endif\n   }\n-#endif\n+#endif  // HWY_TARGET <= HWY_AVX2\n \n  public:\n   constexpr bool Is128() const { return true; }"
+      },
+      {
+        "filename": "hwy/ops/arm_sve-inl.h",
+        "status": "modified",
+        "additions": 73,
+        "deletions": 2,
+        "changes": 75,
+        "patch": "@@ -1347,6 +1347,10 @@ namespace detail {\n   }\n HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatEven, uzp1)\n HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatOdd, uzp2)\n+#if defined(__ARM_FEATURE_SVE_MATMUL_FP64)\n+HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatEvenBlocks, uzp1q)\n+HWY_SVE_FOREACH(HWY_SVE_CONCAT_EVERY_SECOND, ConcatOddBlocks, uzp2q)\n+#endif\n #undef HWY_SVE_CONCAT_EVERY_SECOND\n \n // Used to slide up / shift whole register left; mask indicates which range\n@@ -1459,12 +1463,69 @@ HWY_API VFromD<D> Iota(const D d, TFromD<D> first) {\n \n namespace detail {\n \n+#if HWY_TARGET == HWY_SVE_256 || HWY_IDE\n+template <class D, HWY_IF_LANE_SIZE_D(D, 1)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 32:\n+      return svptrue_pat_b8(SV_VL16);\n+    case 16:\n+      return svptrue_pat_b8(SV_VL8);\n+    case 8:\n+      return svptrue_pat_b8(SV_VL4);\n+    case 4:\n+      return svptrue_pat_b8(SV_VL2);\n+    default:\n+      return svptrue_pat_b8(SV_VL1);\n+  }\n+}\n+template <class D, HWY_IF_LANE_SIZE_D(D, 2)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 16:\n+      return svptrue_pat_b16(SV_VL8);\n+    case 8:\n+      return svptrue_pat_b16(SV_VL4);\n+    case 4:\n+      return svptrue_pat_b16(SV_VL2);\n+    default:\n+      return svptrue_pat_b16(SV_VL1);\n+  }\n+}\n+template <class D, HWY_IF_LANE_SIZE_D(D, 4)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 8:\n+      return svptrue_pat_b32(SV_VL4);\n+    case 4:\n+      return svptrue_pat_b32(SV_VL2);\n+    default:\n+      return svptrue_pat_b32(SV_VL1);\n+  }\n+}\n+template <class D, HWY_IF_LANE_SIZE_D(D, 8)>\n+svbool_t MaskLowerHalf(D d) {\n+  switch (Lanes(d)) {\n+    case 4:\n+      return svptrue_pat_b64(SV_VL2);\n+    default:\n+      return svptrue_pat_b64(SV_VL1);\n+  }\n+}\n+#else\n template <class D>\n svbool_t MaskLowerHalf(D d) {\n   return FirstN(d, Lanes(d) / 2);\n }\n+#endif  // HWY_TARGET == HWY_SVE_256\n+\n template <class D>\n svbool_t MaskUpperHalf(D d) {\n+  // TODO(janwas): WHILEGE on pow2 SVE2\n+ if( HWY_SVE_IS_POW2 && IsFull(d)){\n+  return Not(MaskLowerHalf(d));\n+ }\n+\n   // For Splice to work as intended, make sure bits above Lanes(d) are zero.\n   return AndNot(MaskLowerHalf(d), detail::MakeMask(d));\n }\n@@ -1491,13 +1552,18 @@ HWY_API V ConcatUpperLower(const D d, const V hi, const V lo) {\n // ------------------------------ ConcatLowerLower\n template <class D, class V>\n HWY_API V ConcatLowerLower(const D d, const V hi, const V lo) {\n+#if defined(__ARM_FEATURE_SVE_MATMUL_FP64) && HWY_TARGET == HWY_SVE_256\n+  if (detail::IsFull(d)) {\n+    return detail::ConcatEvenBlocks(hi, lo);\n+  }\n+#endif\n   return detail::Splice(hi, lo, detail::MaskLowerHalf(d));\n }\n \n // ------------------------------ ConcatLowerUpper\n template <class D, class V>\n HWY_API V ConcatLowerUpper(const D d, const V hi, const V lo) {\n-#if HWY_TARGET == HWY_SVE_256\n+#if HWY_TARGET == HWY_SVE_256  // constexpr Lanes\n   if (detail::IsFull(d)) {\n     return detail::Ext<Lanes(d) / 2>(hi, lo);\n   }\n@@ -1508,6 +1574,11 @@ HWY_API V ConcatLowerUpper(const D d, const V hi, const V lo) {\n // ------------------------------ ConcatUpperUpper\n template <class D, class V>\n HWY_API V ConcatUpperUpper(const D d, const V hi, const V lo) {\n+#if defined(__ARM_FEATURE_SVE_MATMUL_FP64) && HWY_TARGET == HWY_SVE_256\n+  if (detail::IsFull(d)) {\n+    return detail::ConcatOddBlocks(hi, lo);\n+  }\n+#endif\n   const svbool_t mask_upper = detail::MaskUpperHalf(d);\n   const V lo_upper = detail::Splice(lo, lo, mask_upper);\n   return IfThenElse(mask_upper, hi, lo_upper);\n@@ -1744,7 +1815,7 @@ HWY_API V Reverse(D d, V v) {\n   const auto reversed = detail::ReverseFull(v);\n   if (HWY_SVE_IS_POW2 && detail::IsFull(d)) return reversed;\n   // Shift right to remove extra (non-pow2 and remainder) lanes.\n-  // TODO(janwas): on SVE2, use whilege.\n+  // TODO(janwas): on SVE2, use WHILEGE.\n   // Avoids FirstN truncating to the return vector size. Must also avoid Not\n   // because that is limited to SV_POW2.\n   const ScalableTag<T> dfull;"
+      }
+    ],
+    "lines_added": 74,
+    "lines_removed": 3
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991409535344,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.04996289842718917,
+    "relative_improvement": 0.0024086825923091216,
+    "absolute_improvement_ms": 28.33333333333421,
+    "old_mean_ms": 11763.0,
+    "new_mean_ms": 11734.666666666666,
+    "old_std_ms": 66.02768489363991,
+    "new_std_ms": 34.11272725713284,
+    "effect_size_cohens_d": 0.5391530197229172,
+    "old_ci95_ms": [
+      11738.344857264785,
+      11787.655142735215
+    ],
+    "new_ci95_ms": [
+      11721.928764967297,
+      11747.404568366035
+    ],
+    "old_ci99_ms": [
+      11729.771903512281,
+      11796.228096487719
+    ],
+    "new_ci99_ms": [
+      11717.499610232911,
+      11751.83372310042
+    ],
+    "new_times_s": [
+      11.7,
+      11.66,
+      11.71,
+      11.78,
+      11.75,
+      11.71,
+      11.67,
+      11.75,
+      11.74,
+      11.69,
+      11.73,
+      11.69,
+      11.73,
+      11.73,
+      11.76,
+      11.81,
+      11.69,
+      11.72,
+      11.71,
+      11.75,
+      11.76,
+      11.72,
+      11.72,
+      11.77,
+      11.75,
+      11.73,
+      11.75,
+      11.77,
+      11.77,
+      11.75,
+      11.77
+    ],
+    "old_times_s": [
+      11.75,
+      11.7,
+      11.79,
+      11.68,
+      11.68,
+      11.75,
+      11.64,
+      11.69,
+      11.76,
+      11.76,
+      11.77,
+      11.78,
+      11.79,
+      11.73,
+      11.72,
+      11.72,
+      11.68,
+      11.83,
+      11.84,
+      11.71,
+      11.73,
+      11.7,
+      11.74,
+      11.78,
+      11.88,
+      11.83,
+      11.88,
+      11.79,
+      11.84,
+      11.82,
+      11.88
+    ]
+  },
+  "tests": {
+    "total_tests": 0,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": []
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

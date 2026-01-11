@@ -1,0 +1,287 @@
+{
+  "metadata": {
+    "collection_date": "2026-01-11T17:52:49.093828",
+    "repository": "https://github.com/oatpp/oatpp",
+    "repository_name": "oatpp/oatpp"
+  },
+  "commit_info": {
+    "old_sha": "a9cced74794b1ce9780924a821a40ba4537fa901",
+    "new_sha": "d200e60eb6bf49b6ff632cc9f2ab0d3f14b89c17",
+    "commit_message": [
+      "Change hash function for strings."
+    ],
+    "commit_date": "2020-01-25T13:37:45+00:00",
+    "patch": [
+      "--- src/oatpp/core/data/mapping/type/Primitive.hpp\n@@ -473,22 +473,16 @@ namespace std {\n     typedef v_uint32 result_type;\n     \n     result_type operator()(argument_type const& s) const noexcept {\n-      \n+\n       p_char8 data = s->getData();\n-      v_buff_size size4 = s->getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= *((p_uint32) data);\n-        data += 4;\n-      }\n-      \n-      for(v_buff_size i = 0; i < s->getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= data[i];\n+      for(v_buff_size i = 0; i < s->getSize(); i++) {\n+        v_char8 c = data[i] | 32;\n+        result = (31 * result) + c;\n       }\n-      \n+\n       return result;\n+\n     }\n     \n   };\n--- src/oatpp/core/data/share/MemoryLabel.hpp\n@@ -235,22 +235,16 @@ namespace std {\n     typedef v_uint32 result_type;\n     \n     result_type operator()(oatpp::data::share::StringKeyLabel const& s) const noexcept {\n-      \n+\n       p_char8 data = s.getData();\n-      v_buff_size size4 = s.getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= *((p_uint32) data);\n-        data += 4;\n-      }\n-      \n-      for(v_buff_size i = 0; i < s.getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= data[i];\n+      for(v_buff_size i = 0; i < s.getSize(); i++) {\n+        v_char8 c = data[i];\n+        result = (31 * result) + c;\n       }\n-      \n+\n       return result;\n+\n     }\n   };\n   \n@@ -261,22 +255,16 @@ namespace std {\n     typedef v_uint32 result_type;\n     \n     result_type operator()(oatpp::data::share::StringKeyLabelCI const& s) const noexcept {\n-      \n+\n       p_char8 data = s.getData();\n-      v_buff_size size4 = s.getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= (*((p_uint32) data) | 538976288); // 538976288 = 32 | (32 << 8) | (32 << 16) | (32 << 24);\n-        data += 4;\n-      }\n-      \n-      for(v_buff_size i = 0; i < s.getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= (data[i] | 32);\n+      for(v_buff_size i = 0; i < s.getSize(); i++) {\n+        v_char8 c = data[i] | 32;\n+        result = (31 * result) + c;\n       }\n-      \n+\n       return result;\n+\n     }\n   };\n   \n@@ -285,24 +273,18 @@ namespace std {\n     \n     typedef oatpp::data::share::StringKeyLabelCI_FAST argument_type;\n     typedef v_uint32 result_type;\n-    \n+\n     result_type operator()(oatpp::data::share::StringKeyLabelCI_FAST const& s) const noexcept {\n-      \n+\n       p_char8 data = s.getData();\n-      v_buff_size size4 = s.getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= (*((p_uint32) data) | 538976288); // 538976288 = 32 | (32 << 8) | (32 << 16) | (32 << 24);\n-        data += 4;\n+      for(v_buff_size i = 0; i < s.getSize(); i++) {\n+        v_char8 c = data[i] | 32;\n+        result = (31 * result) + c;\n       }\n-      \n-      for(v_buff_size i = 0; i < s.getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= (data[i] | 32);\n-      }\n-      \n+\n       return result;\n+\n     }\n   };\n   "
+    ],
+    "files_changed": [
+      {
+        "filename": "src/oatpp/core/data/mapping/type/Primitive.hpp",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 12,
+        "changes": 18,
+        "patch": "@@ -473,22 +473,16 @@ namespace std {\n     typedef v_uint32 result_type;\n     \n     result_type operator()(argument_type const& s) const noexcept {\n-      \n+\n       p_char8 data = s->getData();\n-      v_buff_size size4 = s->getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= *((p_uint32) data);\n-        data += 4;\n-      }\n-      \n-      for(v_buff_size i = 0; i < s->getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= data[i];\n+      for(v_buff_size i = 0; i < s->getSize(); i++) {\n+        v_char8 c = data[i] | 32;\n+        result = (31 * result) + c;\n       }\n-      \n+\n       return result;\n+\n     }\n     \n   };"
+      },
+      {
+        "filename": "src/oatpp/core/data/share/MemoryLabel.hpp",
+        "status": "modified",
+        "additions": 19,
+        "deletions": 37,
+        "changes": 56,
+        "patch": "@@ -235,22 +235,16 @@ namespace std {\n     typedef v_uint32 result_type;\n     \n     result_type operator()(oatpp::data::share::StringKeyLabel const& s) const noexcept {\n-      \n+\n       p_char8 data = s.getData();\n-      v_buff_size size4 = s.getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= *((p_uint32) data);\n-        data += 4;\n-      }\n-      \n-      for(v_buff_size i = 0; i < s.getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= data[i];\n+      for(v_buff_size i = 0; i < s.getSize(); i++) {\n+        v_char8 c = data[i];\n+        result = (31 * result) + c;\n       }\n-      \n+\n       return result;\n+\n     }\n   };\n   \n@@ -261,22 +255,16 @@ namespace std {\n     typedef v_uint32 result_type;\n     \n     result_type operator()(oatpp::data::share::StringKeyLabelCI const& s) const noexcept {\n-      \n+\n       p_char8 data = s.getData();\n-      v_buff_size size4 = s.getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= (*((p_uint32) data) | 538976288); // 538976288 = 32 | (32 << 8) | (32 << 16) | (32 << 24);\n-        data += 4;\n-      }\n-      \n-      for(v_buff_size i = 0; i < s.getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= (data[i] | 32);\n+      for(v_buff_size i = 0; i < s.getSize(); i++) {\n+        v_char8 c = data[i] | 32;\n+        result = (31 * result) + c;\n       }\n-      \n+\n       return result;\n+\n     }\n   };\n   \n@@ -285,24 +273,18 @@ namespace std {\n     \n     typedef oatpp::data::share::StringKeyLabelCI_FAST argument_type;\n     typedef v_uint32 result_type;\n-    \n+\n     result_type operator()(oatpp::data::share::StringKeyLabelCI_FAST const& s) const noexcept {\n-      \n+\n       p_char8 data = s.getData();\n-      v_buff_size size4 = s.getSize() >> 2;\n-      \n       result_type result = 0;\n-      \n-      for(v_buff_size i = 0; i < size4; i++) {\n-        result ^= (*((p_uint32) data) | 538976288); // 538976288 = 32 | (32 << 8) | (32 << 16) | (32 << 24);\n-        data += 4;\n+      for(v_buff_size i = 0; i < s.getSize(); i++) {\n+        v_char8 c = data[i] | 32;\n+        result = (31 * result) + c;\n       }\n-      \n-      for(v_buff_size i = 0; i < s.getSize() - (size4 << 2); i++ ) {\n-        ((p_char8) &result)[i] ^= (data[i] | 32);\n-      }\n-      \n+\n       return result;\n+\n     }\n   };\n   "
+      }
+    ],
+    "lines_added": 25,
+    "lines_removed": 49
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991333466779,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.9997646126727276,
+    "relative_improvement": -0.002190633823386354,
+    "absolute_improvement_ms": -329.9999999999841,
+    "old_mean_ms": 150641.33333333334,
+    "new_mean_ms": 150971.3333333333,
+    "old_std_ms": 345.3906667003011,
+    "new_std_ms": 377.201430989109,
+    "effect_size_cohens_d": -0.9124945849898681,
+    "old_ci95_ms": [
+      150512.36233880845,
+      150770.3043278582
+    ],
+    "new_ci95_ms": [
+      150830.48400420803,
+      151112.1826624586
+    ],
+    "old_ci99_ms": [
+      150467.51723759164,
+      150815.14942907504
+    ],
+    "new_ci99_ms": [
+      150781.5086323098,
+      151161.15803435683
+    ],
+    "new_times_s": [
+      150.77,
+      151.51,
+      150.49,
+      151.07,
+      151.0,
+      151.57,
+      151.3,
+      150.01,
+      151.49,
+      150.67,
+      150.9,
+      151.1,
+      150.91,
+      151.43,
+      151.32,
+      150.84,
+      150.89,
+      150.79,
+      150.81,
+      151.08,
+      151.24,
+      151.5,
+      151.08,
+      150.75,
+      151.17,
+      150.2,
+      150.96,
+      150.85,
+      150.47,
+      150.7,
+      151.04
+    ],
+    "old_times_s": [
+      150.4,
+      150.23,
+      150.86,
+      150.7,
+      150.4,
+      151.11,
+      150.46,
+      150.69,
+      150.68,
+      151.29,
+      150.6,
+      150.6,
+      151.21,
+      151.36,
+      150.37,
+      150.46,
+      150.32,
+      150.77,
+      150.11,
+      150.8,
+      150.64,
+      150.82,
+      149.96,
+      150.59,
+      150.75,
+      151.22,
+      150.34,
+      150.5,
+      150.31,
+      150.69,
+      150.4
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 1,
+    "significant_mannwhitney_regressions_tests": [
+      "oatppAllTests"
+    ],
+    "tests": [
+      {
+        "test_name": "oatppAllTests",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999987193211256,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.9994245376484022,
+        "relative_improvement": -0.0019684273409978676,
+        "absolute_improvement_ms": -296.5517241379416,
+        "old_mean_ms": 150654.13793103446,
+        "new_mean_ms": 150950.6896551724,
+        "old_std_ms": 342.0580280906734,
+        "new_std_ms": 367.9084808023684,
+        "effect_size_cohens_d": -0.8348431635036943,
+        "old_ci95_ms": [
+          150524.0260156626,
+          150784.2498464063
+        ],
+        "new_ci95_ms": [
+          150810.74475346686,
+          151090.63455687795
+        ],
+        "old_ci99_ms": [
+          150478.61942037352,
+          150829.65644169538
+        ],
+        "new_ci99_ms": [
+          150761.90663209758,
+          151139.47267824723
+        ],
+        "new_times": [
+          150.49,
+          151.07,
+          151.0,
+          151.57,
+          151.29,
+          150.01,
+          151.49,
+          150.67,
+          150.9,
+          151.1,
+          150.9,
+          151.42,
+          151.31,
+          150.84,
+          150.89,
+          150.79,
+          150.81,
+          151.07,
+          151.24,
+          151.49,
+          151.08,
+          150.75,
+          151.17,
+          150.2,
+          150.96,
+          150.85,
+          150.47,
+          150.7,
+          151.04
+        ],
+        "old_times": [
+          150.86,
+          150.7,
+          150.4,
+          151.11,
+          150.46,
+          150.68,
+          150.68,
+          151.29,
+          150.6,
+          150.6,
+          151.2,
+          151.36,
+          150.37,
+          150.46,
+          150.32,
+          150.77,
+          150.11,
+          150.8,
+          150.64,
+          150.81,
+          149.96,
+          150.59,
+          150.75,
+          151.22,
+          150.33,
+          150.5,
+          150.31,
+          150.69,
+          150.4
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}
