@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:53:14.284309",
+    "collection_date": "2026-01-14T18:38:17.609637",
     "repository": "https://github.com/quick-lint/quick-lint-js",
     "repository_name": "quick-lint/quick-lint-js"
   },
@@ -53,7 +53,7 @@
     "binom_p_value": 2.8870999813079834e-08,
     "is_wilcoxon_significant": true,
     "wilcoxon_p_value": 7.614748708343636e-07,
-    "is_mannwhitney_significant": true,
+    "is_mannwhitney_significant": false,
     "mannwhitney_p_value": 5.088472010946761e-12,
     "relative_improvement": 0.06679254189284868,
     "absolute_improvement_ms": 94.33333333333249,
@@ -193,7 +193,7 @@
         "binom_p_value": 1.862645149230957e-09,
         "is_wilcoxon_significant": true,
         "wilcoxon_p_value": 5.393095262114628e-07,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 1.3944812490236773e-12,
         "relative_improvement": 0.1132623426911907,
         "absolute_improvement_ms": 80.68965517241378,
@@ -291,7 +291,7 @@
         "binom_p_value": 1.862645149230957e-09,
         "is_wilcoxon_significant": true,
         "wilcoxon_p_value": 5.6863628284898115e-08,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 3.748379025355513e-14,
         "relative_improvement": 0.09374999999999994,
         "absolute_improvement_ms": 10.344827586206847,

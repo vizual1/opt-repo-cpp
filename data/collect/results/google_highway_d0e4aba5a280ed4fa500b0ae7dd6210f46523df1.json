@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:46:30.872764",
+    "collection_date": "2026-01-14T18:41:15.838027",
     "repository": "https://github.com/google/highway",
     "repository_name": "google/highway"
   },
@@ -1466,7 +1466,7 @@
         "binom_p_value": 0.132465448230505,
         "is_wilcoxon_significant": true,
         "wilcoxon_p_value": 0.0034336712292761303,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.005874552503412366,
         "relative_improvement": 0.1381578947368421,
         "absolute_improvement_ms": 7.241379310344826,

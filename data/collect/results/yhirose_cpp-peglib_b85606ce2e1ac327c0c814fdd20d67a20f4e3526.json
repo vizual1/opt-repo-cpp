@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:55:24.988034",
+    "collection_date": "2026-01-14T18:39:48.515180",
     "repository": "https://github.com/yhirose/cpp-peglib",
     "repository_name": "yhirose/cpp-peglib"
   },
@@ -45,7 +45,7 @@
     "binom_p_value": 2.9738061130046848e-05,
     "is_wilcoxon_significant": true,
     "wilcoxon_p_value": 0.0003614245126304294,
-    "is_mannwhitney_significant": true,
+    "is_mannwhitney_significant": false,
     "mannwhitney_p_value": 2.1172867279268307e-12,
     "relative_improvement": 0.05501481168006789,
     "absolute_improvement_ms": 43.33333333333344,

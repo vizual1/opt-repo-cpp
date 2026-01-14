@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:52:39.444033",
+    "collection_date": "2026-01-14T18:37:46.009342",
     "repository": "https://github.com/jeremy-rifkin/cpptrace",
     "repository_name": "jeremy-rifkin/cpptrace"
   },
@@ -6463,7 +6463,7 @@
         "binom_p_value": 0.132465448230505,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.2896408624947071,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.0010934352786839024,
         "relative_improvement": 0.05060256639240858,
         "absolute_improvement_ms": 3.644392382080572,
@@ -10775,7 +10775,7 @@
         "binom_p_value": 0.22912915982306004,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.3827709909528494,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.0008865781854217384,
         "relative_improvement": 0.052893981992014436,
         "absolute_improvement_ms": 3.6622523400402645,

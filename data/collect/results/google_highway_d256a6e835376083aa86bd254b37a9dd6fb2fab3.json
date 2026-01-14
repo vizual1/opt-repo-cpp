@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:46:32.426123",
+    "collection_date": "2026-01-14T18:41:16.348687",
     "repository": "https://github.com/google/highway",
     "repository_name": "google/highway"
   },
@@ -8,12 +8,10 @@
     "old_sha": "42d766b5364f184694ad8be46a91760781e05181",
     "new_sha": "d256a6e835376083aa86bd254b37a9dd6fb2fab3",
     "commit_message": [
-      "Merge pull request #1172 from johnplatts:jep_hwy_arm_stream_enhancements\n\nPiperOrigin-RevId: 513496569",
       "Added prefetch prior to store for Stream operation on AArch64\n\nAArch64 has support for a non-temporal prefetch for store via the prfm PSTL1STRM, memory_location instruction, and GCC/Clang/MSVC all have intrinsics for the non-temporal prefetch for store operation.\r\n\r\n__builtin_prefetch(aligned, 1, 0) is also already there before the store in the PPC8/PPC9/PPC10 implementation of the Stream operation, which compiles to a dcbtst instruction."
     ],
     "commit_date": "2023-02-28T14:44:39+00:00",
     "patch": [
-      "--- hwy/ops/arm_neon-inl.h\n@@ -3079,6 +3079,13 @@ HWY_API void BlendedStore(VFromD<D> v, MFromD<D> m, D d,\n \n template <class D>\n HWY_API void Stream(const VFromD<D> v, D d, TFromD<D>* HWY_RESTRICT aligned) {\n+#if HWY_ARCH_ARM_A64\n+#if HWY_COMPILER_GCC\n+  __builtin_prefetch(aligned, 1, 0);\n+#elif HWY_COMPILER_MSVC\n+  __prefetch2(aligned, 0x11);\n+#endif\n+#endif\n   Store(v, d, aligned);\n }\n ",
       "--- hwy/ops/arm_neon-inl.h\n@@ -2993,6 +2993,13 @@ HWY_API void BlendedStore(VFromD<D> v, MFromD<D> m, D d,\n \n template <class D>\n HWY_API void Stream(const VFromD<D> v, D d, TFromD<D>* HWY_RESTRICT aligned) {\n+#if HWY_ARCH_ARM_A64\n+#if HWY_COMPILER_GCC\n+  __builtin_prefetch(aligned, 1, 0);\n+#elif HWY_COMPILER_MSVC\n+  __prefetch2(aligned, 0x11);\n+#endif\n+#endif\n   Store(v, d, aligned);\n }\n "
     ],
     "files_changed": [

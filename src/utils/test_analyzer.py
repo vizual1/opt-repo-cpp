@@ -121,7 +121,7 @@ class TestAnalyzer:
     ) -> bool:
         p_mwu = self.get_mannwhitney_pvalue(old_times, new_times)
         delta  = self.relative_improvement(old_times, new_times)
-        return bool(p_mwu < self.min_p_value) and bool(delta > self.min_exec_time_improvement)
+        return bool(p_mwu < self.min_p_value) and bool(delta > self.config.mannwhitney_improvement) #min_exec_time_improvement)
     
     def get_binom_improvement_p_value(
         self,

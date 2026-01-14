@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:46:29.313357",
+    "collection_date": "2026-01-14T18:41:14.632287",
     "repository": "https://github.com/google/highway",
     "repository_name": "google/highway"
   },
@@ -8,12 +8,10 @@
     "old_sha": "68cc5de07c42a6670f53ad40bd15d8a73a13820e",
     "new_sha": "c6a4bd345fa4858a49011fffabcab34578204433",
     "commit_message": [
-      "Merge pull request #2334 from lsrcz:synthesized-mul-even-odd\n\nPiperOrigin-RevId: 779111979",
       "improve MulEven performance"
     ],
     "commit_date": "2024-09-27T20:11:58+00:00",
     "patch": [
-      "--- hwy/ops/rvv-inl.h\n@@ -5947,9 +5947,13 @@ HWY_API V64 BitShuffle(V64 values, VI idx) {\n template <class V, HWY_IF_T_SIZE_ONE_OF_V(V, (1 << 1) | (1 << 2) | (1 << 4)),\n           class D = DFromV<V>, class DW = RepartitionToWide<D>>\n HWY_API VFromD<DW> MulEven(const V a, const V b) {\n-  const auto lo = Mul(a, b);\n-  const auto hi = MulHigh(a, b);\n-  return BitCast(DW(), OddEven(detail::Slide1Up(hi), lo));\n+  constexpr int maskVal = sizeof(TFromD<D>) == 4 ? 5\n+                          : sizeof(TFromD<D>) == 2 ? 0x55\n+                                                   : 0x5555;\n+  const auto mask = Dup128MaskFromMaskBits(D(), maskVal);\n+  const auto hi = Slide1Up(D(), MulHigh(a, b));\n+  const auto res = MaskedMulOr(hi, mask, a, b);\n+  return BitCast(DW(), res);\n }\n \n template <class V, HWY_IF_T_SIZE_ONE_OF_V(V, (1 << 1) | (1 << 2) | (1 << 4)),\n@@ -5963,9 +5967,9 @@ HWY_API VFromD<DW> MulOdd(const V a, const V b) {\n // There is no 64x64 vwmul.\n template <class V, HWY_IF_T_SIZE_V(V, 8)>\n HWY_INLINE V MulEven(const V a, const V b) {\n-  const auto lo = Mul(a, b);\n-  const auto hi = MulHigh(a, b);\n-  return OddEven(detail::Slide1Up(hi), lo);\n+  const auto mask = Dup128MaskFromMaskBits(DFromV<V>(), 1);\n+  const auto hi = Slide1Up(DFromV<V>(), MulHigh(a, b));\n+  return MaskedMulOr(hi, mask, a, b);\n }\n \n template <class V, HWY_IF_T_SIZE_V(V, 8)>",
       "--- hwy/ops/rvv-inl.h\n@@ -5655,9 +5655,13 @@ HWY_API V64 BitShuffle(V64 values, VI idx) {\n template <class V, HWY_IF_T_SIZE_ONE_OF_V(V, (1 << 1) | (1 << 2) | (1 << 4)),\n           class D = DFromV<V>, class DW = RepartitionToWide<D>>\n HWY_API VFromD<DW> MulEven(const V a, const V b) {\n-  const auto lo = Mul(a, b);\n-  const auto hi = MulHigh(a, b);\n-  return BitCast(DW(), OddEven(detail::Slide1Up(hi), lo));\n+  constexpr int maskVal = sizeof(TFromD<D>) == 4 ? 5\n+                          : sizeof(TFromD<D>) == 2 ? 0x55\n+                                                   : 0x5555;\n+  const auto mask = Dup128MaskFromMaskBits(D(), maskVal);\n+  const auto hi = Slide1Up(D(), MulHigh(a, b));\n+  const auto res = MaskedMulOr(hi, mask, a, b);\n+  return BitCast(DW(), res);\n }\n \n template <class V, HWY_IF_T_SIZE_ONE_OF_V(V, (1 << 1) | (1 << 2) | (1 << 4)),\n@@ -5671,9 +5675,9 @@ HWY_API VFromD<DW> MulOdd(const V a, const V b) {\n // There is no 64x64 vwmul.\n template <class V, HWY_IF_T_SIZE_V(V, 8)>\n HWY_INLINE V MulEven(const V a, const V b) {\n-  const auto lo = Mul(a, b);\n-  const auto hi = MulHigh(a, b);\n-  return OddEven(detail::Slide1Up(hi), lo);\n+  const auto mask = Dup128MaskFromMaskBits(DFromV<V>(), 1);\n+  const auto hi = Slide1Up(DFromV<V>(), MulHigh(a, b));\n+  return MaskedMulOr(hi, mask, a, b);\n }\n \n template <class V, HWY_IF_T_SIZE_V(V, 8)>"
     ],
     "files_changed": [

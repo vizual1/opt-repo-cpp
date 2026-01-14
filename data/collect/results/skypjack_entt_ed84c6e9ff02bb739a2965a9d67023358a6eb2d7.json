@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:53:56.369354",
+    "collection_date": "2026-01-14T18:38:48.802781",
     "repository": "https://github.com/skypjack/entt",
     "repository_name": "skypjack/entt"
   },
@@ -760,7 +760,7 @@
         "binom_p_value": 0.987940227612853,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.513441554289576,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.007695560365414847,
         "relative_improvement": 0.06299212598425202,
         "absolute_improvement_ms": 2.7586206896551695,

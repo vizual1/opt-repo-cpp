@@ -29,6 +29,9 @@ def setup_parser() -> argparse.ArgumentParser:
     mode.add_argument("--genimages", action="store_true",
                       help="Given a folder of json files generated via the --testcommits flag, " \
                       "generate and save docker images (no test is run here) of each json file.")
+    mode.add_argument("--pushimages", action="store_true",
+                      help="Given a folder of json files generated via the --testcommits flag, " \
+                      "push the image to GitHub Container Registry and make it public.")
     mode.add_argument("--testdocker", action="store_true",
                       help="Build and test docker images. " \
                       "Given a file of docker images 'owner_repo_newsha' with commits in " \

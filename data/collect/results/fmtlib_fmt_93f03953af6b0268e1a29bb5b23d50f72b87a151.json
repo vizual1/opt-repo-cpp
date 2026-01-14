@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:50:45.705160",
+    "collection_date": "2026-01-14T18:36:51.605923",
     "repository": "https://github.com/fmtlib/fmt",
     "repository_name": "fmtlib/fmt"
   },
@@ -17848,7 +17848,7 @@
         "binom_p_value": 0.77087084017694,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.3195603806525469,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.0010934352786839024,
         "relative_improvement": 0.05802747277268488,
         "absolute_improvement_ms": 4.076751527087433,
@@ -25394,7 +25394,7 @@
         "binom_p_value": 0.5,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.4576078187674284,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.0010379368565837932,
         "relative_improvement": 0.059617668316925956,
         "absolute_improvement_ms": 4.074677953432346,
@@ -39212,7 +39212,7 @@
         "binom_p_value": 0.644464448094368,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.7853165864944458,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.0037384344795308552,
         "relative_improvement": 0.051849926076300484,
         "absolute_improvement_ms": 3.591112407117056,
@@ -47836,7 +47836,7 @@
         "binom_p_value": 0.22912915982306004,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.3586046379059553,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.0035685947551126118,
         "relative_improvement": 0.054807215473071845,
         "absolute_improvement_ms": 3.825343888381419,

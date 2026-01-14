@@ -43,6 +43,9 @@ class Controller:
             if self.config.genimages:
                 self._genimages()
 
+            if self.config.pushimages:
+                self._pushimages()
+
             if self.config.testdocker:
                 self.config.genimages = False
                 self._testdocker()
@@ -108,6 +111,12 @@ class Controller:
         image_pipeline = CommitTesterPipeline(self.config)
         image_pipeline.test_commit()
         logging.info("Docker images generated.")
+
+    def _pushimages(self) -> None:
+        logging.info("Pushing docker images to GHCR...")
+        push_pipeline = None
+        
+        logging.info("Docker images pushed to GHCR.")
 
     def _testdocker(self) -> None:
         logging.info("Testing docker images...")

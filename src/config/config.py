@@ -14,6 +14,7 @@ class Config:
     commits: bool = False 
     testcommits: bool = False
     genimages: bool = False
+    pushimages: bool = False
     testdocker: bool = False
     patch: bool = False
     testdockerpatch: bool = False
@@ -61,6 +62,7 @@ class Config:
     min_exec_time_improvement: float = 0.05
     min_p_value: float = 0.05
     overall_decline_limit: float = -0.01
+    mannwhitney_improvement: float = 0.3
     max_test_time: int = 600 # in seconds
     min_stars: int = 20
     

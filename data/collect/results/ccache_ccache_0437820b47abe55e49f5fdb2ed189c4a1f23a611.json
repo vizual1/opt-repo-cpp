@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:49:29.630246",
+    "collection_date": "2026-01-14T18:35:58.227198",
     "repository": "https://github.com/ccache/ccache",
     "repository_name": "ccache/ccache"
   },
@@ -196,7 +196,7 @@
         "binom_p_value": 0.644464448094368,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.38502617870828604,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.010030402067655762,
         "relative_improvement": 0.07004830917874387,
         "absolute_improvement_ms": 10.000000000000009,

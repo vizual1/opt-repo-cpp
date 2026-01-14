@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:46:52.021604",
+    "collection_date": "2026-01-14T18:41:32.451902",
     "repository": "https://github.com/kimci86/bkcrack",
     "repository_name": "kimci86/bkcrack"
   },
@@ -203,7 +203,7 @@
         "binom_p_value": 0.22912915982306004,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.3934655351953662,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.00020065048059231185,
         "relative_improvement": 0.05134045077105572,
         "absolute_improvement_ms": 746.2068965517279,
@@ -1085,7 +1085,7 @@
         "binom_p_value": 8.121132850646973e-07,
         "is_wilcoxon_significant": true,
         "wilcoxon_p_value": 7.230644872591653e-05,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 5.060678150924067e-06,
         "relative_improvement": 0.09150326797385629,
         "absolute_improvement_ms": 9.655172413793142,

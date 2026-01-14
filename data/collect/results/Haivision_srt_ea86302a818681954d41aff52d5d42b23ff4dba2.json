@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:46:48.974721",
+    "collection_date": "2026-01-14T18:41:28.046804",
     "repository": "https://github.com/Haivision/srt",
     "repository_name": "Haivision/srt"
   },
@@ -3115,7 +3115,7 @@
         "binom_p_value": 0.995934970676899,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.6862993980430508,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.014842546117879317,
         "relative_improvement": 0.08333333333333327,
         "absolute_improvement_ms": 2.4137931034482683,

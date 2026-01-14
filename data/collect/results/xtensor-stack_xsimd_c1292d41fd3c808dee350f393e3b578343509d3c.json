@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:55:09.147665",
+    "collection_date": "2026-01-14T18:39:37.761784",
     "repository": "https://github.com/xtensor-stack/xsimd",
     "repository_name": "xtensor-stack/xsimd"
   },
@@ -10579,7 +10579,7 @@
         "binom_p_value": 0.867534551769495,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.7176346965134144,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.04963146348899064,
         "relative_improvement": 0.052909293955559954,
         "absolute_improvement_ms": 3.65926482782955,

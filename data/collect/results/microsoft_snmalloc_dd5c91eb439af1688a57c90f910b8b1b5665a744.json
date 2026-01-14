@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "collection_date": "2026-01-11T17:47:07.547184",
+    "collection_date": "2026-01-14T18:43:30.014382",
     "repository": "https://github.com/microsoft/snmalloc",
     "repository_name": "microsoft/snmalloc"
   },
@@ -1952,7 +1952,7 @@
         "binom_p_value": 0.5,
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 0.261065473780036,
-        "is_mannwhitney_significant": true,
+        "is_mannwhitney_significant": false,
         "mannwhitney_p_value": 0.015924123419018936,
         "relative_improvement": 0.07266694008426226,
         "absolute_improvement_ms": 672.0689655172407,
