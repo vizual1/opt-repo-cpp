@@ -1,178 +1,192 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:41:05.417703",
-    "repository": "https://github.com/google/highway",
-    "repository_name": "google/highway"
-  },
-  "commit_info": {
-    "old_sha": "830780dab4cc7e274f7c0aa41d0fc902314cfc60",
-    "new_sha": "8365c57870eca18bb577d2ef1dcbc27bdad0f43d",
-    "commit_message": [
-      "SVE optimization: compute bits instead of MaskedLoad to enable reuse\n\nPiperOrigin-RevId: 454110244"
-    ],
-    "commit_date": "2022-06-10T08:52:39+00:00",
-    "patch": [
-      "--- hwy/ops/arm_sve-inl.h\n@@ -1832,10 +1832,8 @@ HWY_API V Compress(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition.\n@@ -1899,10 +1897,8 @@ HWY_API V CompressNot(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition."
-    ],
-    "files_changed": [
-      {
-        "filename": "hwy/ops/arm_sve-inl.h",
-        "status": "modified",
-        "additions": 4,
-        "deletions": 8,
-        "changes": 12,
-        "patch": "@@ -1832,10 +1832,8 @@ HWY_API V Compress(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition.\n@@ -1899,10 +1897,8 @@ HWY_API V CompressNot(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition."
-      }
-    ],
-    "lines_added": 4,
-    "lines_removed": 8
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 0.9999999930953236,
-    "is_pair_significant": false,
-    "pair_p_value": 0.9999996186818256,
-    "is_binom_significant": false,
-    "binom_p_value": 0.99997026193887,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999857898075477,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.7180009794251624,
-    "relative_improvement": -0.0033254866793707223,
-    "absolute_improvement_ms": -29.666666666669173,
-    "old_mean_ms": 8921.0,
-    "new_mean_ms": 8950.666666666668,
-    "old_std_ms": 307.8440043828737,
-    "new_std_ms": 264.4047750277427,
-    "effect_size_cohens_d": -0.1033870635167904,
-    "old_ci95_ms": [
-      8806.049159599248,
-      9035.950840400752
-    ],
-    "new_ci95_ms": [
-      8851.936301083164,
-      9049.397032250174
-    ],
-    "old_ci99_ms": [
-      8766.079071040016,
-      9075.920928959982
-    ],
-    "new_ci99_ms": [
-      8817.60630886997,
-      9083.727024463366
-    ],
-    "new_times_s": [
-      9.15,
-      9.13,
-      8.97,
-      8.62,
-      8.93,
-      8.62,
-      8.62,
-      8.8,
-      9.13,
-      9.18,
-      8.73,
-      8.81,
-      9.59,
-      8.98,
-      8.82,
-      8.89,
-      8.96,
-      8.92,
-      8.81,
-      9.04,
-      8.64,
-      8.81,
-      9.62,
-      8.81,
-      9.0,
-      9.15,
-      9.06,
-      8.74,
-      8.9,
-      9.5,
-      8.74
-    ],
-    "old_times_s": [
-      8.84,
-      8.45,
-      8.77,
-      8.41,
-      8.62,
-      9.37,
-      8.51,
-      9.66,
-      8.77,
-      8.73,
-      9.37,
-      8.74,
-      9.09,
-      8.74,
-      9.4,
-      8.82,
-      8.9,
-      8.59,
-      8.65,
-      8.87,
-      8.95,
-      8.94,
-      9.03,
-      9.17,
-      9.16,
-      8.87,
-      9.18,
-      8.79,
-      8.8,
-      8.89,
-      9.39
-    ]
-  },
-  "tests": {
-    "total_tests": 0,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": []
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    "metadata": {
+        "collection_date": "2026-01-14T18:41:05.417703",
+        "repository": "https://github.com/google/highway",
+        "repository_name": "google/highway"
+    },
+    "commit_info": {
+        "old_sha": "830780dab4cc7e274f7c0aa41d0fc902314cfc60",
+        "new_sha": "8365c57870eca18bb577d2ef1dcbc27bdad0f43d",
+        "commit_message": [
+            "SVE optimization: compute bits instead of MaskedLoad to enable reuse\n\nPiperOrigin-RevId: 454110244"
+        ],
+        "commit_date": "2022-06-10T08:52:39+00:00",
+        "patch": [
+            "--- hwy/ops/arm_sve-inl.h\n@@ -1832,10 +1832,8 @@ HWY_API V Compress(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition.\n@@ -1899,10 +1897,8 @@ HWY_API V CompressNot(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition."
+        ],
+        "files_changed": [
+            {
+                "filename": "hwy/ops/arm_sve-inl.h",
+                "status": "modified",
+                "additions": 4,
+                "deletions": 8,
+                "changes": 12,
+                "patch": "@@ -1832,10 +1832,8 @@ HWY_API V Compress(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition.\n@@ -1899,10 +1897,8 @@ HWY_API V CompressNot(V v, svbool_t mask) {\n \n   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked\n   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for\n-  // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.\n-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,\n-                                                                  4 * 4, 8 * 4};\n-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);\n+  // SetTableIndices.\n+  const svuint64_t bits = Shl(Set(du64, 1), Iota(du64, 2));\n   const size_t offset = detail::SumOfLanes(mask, bits);\n \n   // See CompressIsPartition."
+            }
+        ],
+        "lines_added": 4,
+        "lines_removed": 8
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.9999999930953236,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999996186818256,
+        "is_binom_significant": false,
+        "binom_p_value": 0.99997026193887,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999857898075477,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.7180009794251624,
+        "relative_improvement": -0.0033254866793707223,
+        "absolute_improvement_ms": -29.666666666669173,
+        "old_mean_ms": 8921.0,
+        "new_mean_ms": 8950.666666666668,
+        "old_std_ms": 307.8440043828737,
+        "new_std_ms": 264.4047750277427,
+        "effect_size_cohens_d": -0.1033870635167904,
+        "old_ci95_ms": [
+            8806.049159599248,
+            9035.950840400752
+        ],
+        "new_ci95_ms": [
+            8851.936301083164,
+            9049.397032250174
+        ],
+        "old_ci99_ms": [
+            8766.079071040016,
+            9075.920928959982
+        ],
+        "new_ci99_ms": [
+            8817.60630886997,
+            9083.727024463366
+        ],
+        "new_times_s": [
+            9.15,
+            9.13,
+            8.97,
+            8.62,
+            8.93,
+            8.62,
+            8.62,
+            8.8,
+            9.13,
+            9.18,
+            8.73,
+            8.81,
+            9.59,
+            8.98,
+            8.82,
+            8.89,
+            8.96,
+            8.92,
+            8.81,
+            9.04,
+            8.64,
+            8.81,
+            9.62,
+            8.81,
+            9.0,
+            9.15,
+            9.06,
+            8.74,
+            8.9,
+            9.5,
+            8.74
+        ],
+        "old_times_s": [
+            8.84,
+            8.45,
+            8.77,
+            8.41,
+            8.62,
+            9.37,
+            8.51,
+            9.66,
+            8.77,
+            8.73,
+            9.37,
+            8.74,
+            9.09,
+            8.74,
+            9.4,
+            8.82,
+            8.9,
+            8.59,
+            8.65,
+            8.87,
+            8.95,
+            8.94,
+            9.03,
+            9.17,
+            9.16,
+            8.87,
+            9.18,
+            8.79,
+            8.8,
+            8.89,
+            9.39
+        ]
+    },
+    "tests": {
+        "total_tests": 0,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": []
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

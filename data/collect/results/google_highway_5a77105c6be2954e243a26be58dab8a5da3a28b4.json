@@ -1,178 +1,192 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:40:58.143254",
-    "repository": "https://github.com/google/highway",
-    "repository_name": "google/highway"
-  },
-  "commit_info": {
-    "old_sha": "57ee09cfa3016aaf014c6b5113fc8b4be0a4a8ca",
-    "new_sha": "5a77105c6be2954e243a26be58dab8a5da3a28b4",
-    "commit_message": [
-      "2.0x AVX2 i64 sort speedup: use single Compress. 1.9x for int128, 2.4x for int32\n\nPiperOrigin-RevId: 436783936"
-    ],
-    "commit_date": "2022-03-23T18:10:06+00:00",
-    "patch": [
-      "--- hwy/contrib/sort/vqsort-inl.h\n@@ -273,11 +273,32 @@ HWY_INLINE void StoreLeftRight(D d, Traits st, const Vec<D> v,\n   const size_t N = Lanes(d);\n \n   const auto comp = st.Compare(d, pivot, v);\n+\n+#if HWY_COMPRESS_PARTITION\n+  // Non-native Compress (e.g. AVX2): we are able to partition a vector using\n+  // a single Compress+two StoreU instead of two Compress[Blended]Store. The\n+  // latter are more expensive. Because we store entire vectors, the contents\n+  // between the updated writeL and writeR are ignored and will be overwritten\n+  // by subsequent calls. This works because writeL and writeR are at least\n+  // two vectors apart.\n+  const auto mask = Not(comp);  // TODO(janwas): add NotCompare instead\n+  const auto lr = Compress(v, mask);\n+  const size_t num_left = CountTrue(d, mask);\n+  StoreU(lr, d, keys + writeL);\n+  writeL += num_left;\n+  // Now write the right-side elements (if any), such that the previous writeR\n+  // is one past the end of the newly written right elements, then advance.\n+  StoreU(lr, d, keys + writeR - N);\n+  writeR -= (N - num_left);\n+#else\n+  // Native Compress[Store] (e.g. AVX3), which only keep the left or right side,\n+  // not both, hence we require two calls.\n   const size_t num_left = CompressStore(v, Not(comp), d, keys + writeL);\n   writeL += num_left;\n \n   writeR -= (N - num_left);\n   (void)CompressBlendedStore(v, comp, d, keys + writeR);\n+#endif  // HWY_COMPRESS_PARTITION\n }\n \n template <class D, class Traits, typename T>"
-    ],
-    "files_changed": [
-      {
-        "filename": "hwy/contrib/sort/vqsort-inl.h",
-        "status": "modified",
-        "additions": 21,
-        "deletions": 0,
-        "changes": 21,
-        "patch": "@@ -273,11 +273,32 @@ HWY_INLINE void StoreLeftRight(D d, Traits st, const Vec<D> v,\n   const size_t N = Lanes(d);\n \n   const auto comp = st.Compare(d, pivot, v);\n+\n+#if HWY_COMPRESS_PARTITION\n+  // Non-native Compress (e.g. AVX2): we are able to partition a vector using\n+  // a single Compress+two StoreU instead of two Compress[Blended]Store. The\n+  // latter are more expensive. Because we store entire vectors, the contents\n+  // between the updated writeL and writeR are ignored and will be overwritten\n+  // by subsequent calls. This works because writeL and writeR are at least\n+  // two vectors apart.\n+  const auto mask = Not(comp);  // TODO(janwas): add NotCompare instead\n+  const auto lr = Compress(v, mask);\n+  const size_t num_left = CountTrue(d, mask);\n+  StoreU(lr, d, keys + writeL);\n+  writeL += num_left;\n+  // Now write the right-side elements (if any), such that the previous writeR\n+  // is one past the end of the newly written right elements, then advance.\n+  StoreU(lr, d, keys + writeR - N);\n+  writeR -= (N - num_left);\n+#else\n+  // Native Compress[Store] (e.g. AVX3), which only keep the left or right side,\n+  // not both, hence we require two calls.\n   const size_t num_left = CompressStore(v, Not(comp), d, keys + writeL);\n   writeL += num_left;\n \n   writeR -= (N - num_left);\n   (void)CompressBlendedStore(v, comp, d, keys + writeR);\n+#endif  // HWY_COMPRESS_PARTITION\n }\n \n template <class D, class Traits, typename T>"
-      }
-    ],
-    "lines_added": 21,
-    "lines_removed": 0
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 0.6453249891331523,
-    "is_pair_significant": false,
-    "pair_p_value": 0.6562139844142874,
-    "is_binom_significant": false,
-    "binom_p_value": 0.707667644135654,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.6855875726775261,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 1.134914960832141e-08,
-    "relative_improvement": 0.04778941025834159,
-    "absolute_improvement_ms": 422.9999999999983,
-    "old_mean_ms": 8851.333333333332,
-    "new_mean_ms": 8428.333333333334,
-    "old_std_ms": 197.35725235590218,
-    "new_std_ms": 216.0951791150872,
-    "effect_size_cohens_d": 2.04408644554713,
-    "old_ci95_ms": [
-      8777.638924169922,
-      8925.027742496743
-    ],
-    "new_ci95_ms": [
-      8347.642067327919,
-      8509.024599338749
-    ],
-    "old_ci99_ms": [
-      8752.014300197512,
-      8950.652366469154
-    ],
-    "new_ci99_ms": [
-      8319.584533890595,
-      8537.082132776075
-    ],
-    "new_times_s": [
-      8.25,
-      8.62,
-      8.18,
-      8.58,
-      8.35,
-      8.38,
-      8.36,
-      8.93,
-      8.28,
-      8.75,
-      8.17,
-      8.14,
-      8.28,
-      8.27,
-      8.16,
-      8.49,
-      8.16,
-      8.47,
-      8.4,
-      8.74,
-      8.72,
-      8.23,
-      8.56,
-      8.27,
-      8.62,
-      8.66,
-      8.49,
-      8.52,
-      8.4,
-      8.57,
-      8.1
-    ],
-    "old_times_s": [
-      8.68,
-      8.8,
-      9.16,
-      9.08,
-      8.9,
-      8.8,
-      8.63,
-      8.99,
-      8.91,
-      9.04,
-      8.52,
-      8.54,
-      8.85,
-      8.72,
-      9.11,
-      8.94,
-      8.84,
-      9.18,
-      8.54,
-      8.77,
-      8.7,
-      8.64,
-      8.77,
-      8.75,
-      9.04,
-      8.71,
-      9.08,
-      8.95,
-      8.54,
-      9.04,
-      9.0
-    ]
-  },
-  "tests": {
-    "total_tests": 0,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": []
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    "metadata": {
+        "collection_date": "2026-01-14T18:40:58.143254",
+        "repository": "https://github.com/google/highway",
+        "repository_name": "google/highway"
+    },
+    "commit_info": {
+        "old_sha": "57ee09cfa3016aaf014c6b5113fc8b4be0a4a8ca",
+        "new_sha": "5a77105c6be2954e243a26be58dab8a5da3a28b4",
+        "commit_message": [
+            "2.0x AVX2 i64 sort speedup: use single Compress. 1.9x for int128, 2.4x for int32\n\nPiperOrigin-RevId: 436783936"
+        ],
+        "commit_date": "2022-03-23T18:10:06+00:00",
+        "patch": [
+            "--- hwy/contrib/sort/vqsort-inl.h\n@@ -273,11 +273,32 @@ HWY_INLINE void StoreLeftRight(D d, Traits st, const Vec<D> v,\n   const size_t N = Lanes(d);\n \n   const auto comp = st.Compare(d, pivot, v);\n+\n+#if HWY_COMPRESS_PARTITION\n+  // Non-native Compress (e.g. AVX2): we are able to partition a vector using\n+  // a single Compress+two StoreU instead of two Compress[Blended]Store. The\n+  // latter are more expensive. Because we store entire vectors, the contents\n+  // between the updated writeL and writeR are ignored and will be overwritten\n+  // by subsequent calls. This works because writeL and writeR are at least\n+  // two vectors apart.\n+  const auto mask = Not(comp);  // TODO(janwas): add NotCompare instead\n+  const auto lr = Compress(v, mask);\n+  const size_t num_left = CountTrue(d, mask);\n+  StoreU(lr, d, keys + writeL);\n+  writeL += num_left;\n+  // Now write the right-side elements (if any), such that the previous writeR\n+  // is one past the end of the newly written right elements, then advance.\n+  StoreU(lr, d, keys + writeR - N);\n+  writeR -= (N - num_left);\n+#else\n+  // Native Compress[Store] (e.g. AVX3), which only keep the left or right side,\n+  // not both, hence we require two calls.\n   const size_t num_left = CompressStore(v, Not(comp), d, keys + writeL);\n   writeL += num_left;\n \n   writeR -= (N - num_left);\n   (void)CompressBlendedStore(v, comp, d, keys + writeR);\n+#endif  // HWY_COMPRESS_PARTITION\n }\n \n template <class D, class Traits, typename T>"
+        ],
+        "files_changed": [
+            {
+                "filename": "hwy/contrib/sort/vqsort-inl.h",
+                "status": "modified",
+                "additions": 21,
+                "deletions": 0,
+                "changes": 21,
+                "patch": "@@ -273,11 +273,32 @@ HWY_INLINE void StoreLeftRight(D d, Traits st, const Vec<D> v,\n   const size_t N = Lanes(d);\n \n   const auto comp = st.Compare(d, pivot, v);\n+\n+#if HWY_COMPRESS_PARTITION\n+  // Non-native Compress (e.g. AVX2): we are able to partition a vector using\n+  // a single Compress+two StoreU instead of two Compress[Blended]Store. The\n+  // latter are more expensive. Because we store entire vectors, the contents\n+  // between the updated writeL and writeR are ignored and will be overwritten\n+  // by subsequent calls. This works because writeL and writeR are at least\n+  // two vectors apart.\n+  const auto mask = Not(comp);  // TODO(janwas): add NotCompare instead\n+  const auto lr = Compress(v, mask);\n+  const size_t num_left = CountTrue(d, mask);\n+  StoreU(lr, d, keys + writeL);\n+  writeL += num_left;\n+  // Now write the right-side elements (if any), such that the previous writeR\n+  // is one past the end of the newly written right elements, then advance.\n+  StoreU(lr, d, keys + writeR - N);\n+  writeR -= (N - num_left);\n+#else\n+  // Native Compress[Store] (e.g. AVX3), which only keep the left or right side,\n+  // not both, hence we require two calls.\n   const size_t num_left = CompressStore(v, Not(comp), d, keys + writeL);\n   writeL += num_left;\n \n   writeR -= (N - num_left);\n   (void)CompressBlendedStore(v, comp, d, keys + writeR);\n+#endif  // HWY_COMPRESS_PARTITION\n }\n \n template <class D, class Traits, typename T>"
+            }
+        ],
+        "lines_added": 21,
+        "lines_removed": 0
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.6453249891331523,
+        "is_pair_significant": false,
+        "pair_p_value": 0.6562139844142874,
+        "is_binom_significant": false,
+        "binom_p_value": 0.707667644135654,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.6855875726775261,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.134914960832141e-08,
+        "relative_improvement": 0.04778941025834159,
+        "absolute_improvement_ms": 422.9999999999983,
+        "old_mean_ms": 8851.333333333332,
+        "new_mean_ms": 8428.333333333334,
+        "old_std_ms": 197.35725235590218,
+        "new_std_ms": 216.0951791150872,
+        "effect_size_cohens_d": 2.04408644554713,
+        "old_ci95_ms": [
+            8777.638924169922,
+            8925.027742496743
+        ],
+        "new_ci95_ms": [
+            8347.642067327919,
+            8509.024599338749
+        ],
+        "old_ci99_ms": [
+            8752.014300197512,
+            8950.652366469154
+        ],
+        "new_ci99_ms": [
+            8319.584533890595,
+            8537.082132776075
+        ],
+        "new_times_s": [
+            8.25,
+            8.62,
+            8.18,
+            8.58,
+            8.35,
+            8.38,
+            8.36,
+            8.93,
+            8.28,
+            8.75,
+            8.17,
+            8.14,
+            8.28,
+            8.27,
+            8.16,
+            8.49,
+            8.16,
+            8.47,
+            8.4,
+            8.74,
+            8.72,
+            8.23,
+            8.56,
+            8.27,
+            8.62,
+            8.66,
+            8.49,
+            8.52,
+            8.4,
+            8.57,
+            8.1
+        ],
+        "old_times_s": [
+            8.68,
+            8.8,
+            9.16,
+            9.08,
+            8.9,
+            8.8,
+            8.63,
+            8.99,
+            8.91,
+            9.04,
+            8.52,
+            8.54,
+            8.85,
+            8.72,
+            9.11,
+            8.94,
+            8.84,
+            9.18,
+            8.54,
+            8.77,
+            8.7,
+            8.64,
+            8.77,
+            8.75,
+            9.04,
+            8.71,
+            9.08,
+            8.95,
+            8.54,
+            9.04,
+            9.0
+        ]
+    },
+    "tests": {
+        "total_tests": 0,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": []
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

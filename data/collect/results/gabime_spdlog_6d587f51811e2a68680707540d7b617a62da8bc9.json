@@ -1,167 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:11.264956",
-    "repository": "https://github.com/gabime/spdlog",
-    "repository_name": "gabime/spdlog"
-  },
-  "commit_info": {
-    "old_sha": "9b4b37312157d30de928bea8347eb4382f89db07",
-    "new_sha": "6d587f51811e2a68680707540d7b617a62da8bc9",
-    "commit_message": [
-      "Use fmt::detail::vformat_to(buf, ...) since it is ~20ns faster than fmt::vformat_to(std::back_inserter(buf),..)"
-    ],
-    "commit_date": "2022-05-08T10:01:02+00:00",
-    "patch": [
-      "--- include/spdlog/logger.h\n@@ -364,7 +364,12 @@ class SPDLOG_API logger\n         SPDLOG_TRY\n         {\n             memory_buf_t buf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(buf), fmt, fmt_lib::make_format_args(std::forward<Args>(args)...));\n+#else\n+            //seems that fmt::detail::vformat_to(buf, ...) is ~20ns faster than fmt::vformat_to(std::back_inserter(buf),..)\n+            fmt::detail::vformat_to(buf, fmt, fmt::make_format_args(std::forward<Args>(args)...));\n+#endif\n \n             details::log_msg log_msg(loc, name_, lvl, string_view_t(buf.data(), buf.size()));\n             log_it_(log_msg, log_enabled, traceback_enabled);\n@@ -386,7 +391,11 @@ class SPDLOG_API logger\n         {\n             // format to wmemory_buffer and convert to utf8\n             wmemory_buf_t wbuf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(wbuf), fmt, fmt_lib::make_format_args<fmt_lib::wformat_context>(std::forward<Args>(args)...));\n+#else\n+            fmt::detail::vformat_to(wbuf, fmt, fmt::make_format_args<fmt::wformat_context>(std::forward<Args>(args)...));\n+#endif\n \n             memory_buf_t buf;\n             details::os::wstr_to_utf8buf(wstring_view_t(wbuf.data(), wbuf.size()), buf);"
-    ],
-    "files_changed": [
-      {
-        "filename": "include/spdlog/logger.h",
-        "status": "modified",
-        "additions": 9,
-        "deletions": 0,
-        "changes": 9,
-        "patch": "@@ -364,7 +364,12 @@ class SPDLOG_API logger\n         SPDLOG_TRY\n         {\n             memory_buf_t buf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(buf), fmt, fmt_lib::make_format_args(std::forward<Args>(args)...));\n+#else\n+            //seems that fmt::detail::vformat_to(buf, ...) is ~20ns faster than fmt::vformat_to(std::back_inserter(buf),..)\n+            fmt::detail::vformat_to(buf, fmt, fmt::make_format_args(std::forward<Args>(args)...));\n+#endif\n \n             details::log_msg log_msg(loc, name_, lvl, string_view_t(buf.data(), buf.size()));\n             log_it_(log_msg, log_enabled, traceback_enabled);\n@@ -386,7 +391,11 @@ class SPDLOG_API logger\n         {\n             // format to wmemory_buffer and convert to utf8\n             wmemory_buf_t wbuf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(wbuf), fmt, fmt_lib::make_format_args<fmt_lib::wformat_context>(std::forward<Args>(args)...));\n+#else\n+            fmt::detail::vformat_to(wbuf, fmt, fmt::make_format_args<fmt::wformat_context>(std::forward<Args>(args)...));\n+#endif\n \n             memory_buf_t buf;\n             details::os::wstr_to_utf8buf(wstring_view_t(wbuf.data(), wbuf.size()), buf);"
-      }
-    ],
-    "lines_added": 9,
-    "lines_removed": 0
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "old_test_script": "#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_TESTING=ON -DSPDLOG_BUILD_TESTS=ON",
-    "new_test_script": "#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_TESTING=ON -DSPDLOG_BUILD_TESTS=ON",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991900826404,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.17620892168450258,
-    "relative_improvement": 0.0008066142367413089,
-    "absolute_improvement_ms": 4.000000000000448,
-    "old_mean_ms": 4959.000000000001,
-    "new_mean_ms": 4955.0,
-    "old_std_ms": 12.958820721144264,
-    "new_std_ms": 14.562587871571319,
-    "effect_size_cohens_d": 0.29019050004403946,
-    "old_ci95_ms": [
-      4954.161096817577,
-      4963.838903182424
-    ],
-    "new_ci95_ms": [
-      4949.562240321677,
-      4960.437759678323
-    ],
-    "old_ci99_ms": [
-      4952.478539403845,
-      4965.5214605961555
-    ],
-    "new_ci99_ms": [
-      4947.671451745024,
-      4962.328548254977
-    ],
-    "new_times_s": [
-      4.96,
-      4.95,
-      4.94,
-      4.92,
-      4.95,
-      4.95,
-      4.94,
-      4.94,
-      4.98,
-      4.95,
-      4.95,
-      4.97,
-      4.97,
-      4.97,
-      4.97,
-      4.97,
-      4.97,
-      4.95,
-      4.96,
-      4.94,
-      4.94,
-      4.96,
-      4.97,
-      4.94,
-      4.94,
-      4.97,
-      4.94,
-      4.97,
-      4.95,
-      4.97,
-      4.96
-    ],
-    "old_times_s": [
-      4.94,
-      4.96,
-      4.97,
-      4.98,
-      4.95,
-      4.94,
-      4.98,
-      4.96,
-      4.97,
-      4.96,
-      4.94,
-      4.96,
-      4.98,
-      4.96,
-      4.96,
-      4.95,
-      4.97,
-      4.96,
-      4.96,
-      4.94,
-      4.98,
-      4.95,
-      4.95,
-      4.98,
-      4.95,
-      4.94,
-      4.96,
-      4.96,
-      4.95,
-      4.94,
-      4.96
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "spdlog-utests",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:11.264956",
+        "repository": "https://github.com/gabime/spdlog",
+        "repository_name": "gabime/spdlog"
+    },
+    "commit_info": {
+        "old_sha": "9b4b37312157d30de928bea8347eb4382f89db07",
+        "new_sha": "6d587f51811e2a68680707540d7b617a62da8bc9",
+        "commit_message": [
+            "Use fmt::detail::vformat_to(buf, ...) since it is ~20ns faster than fmt::vformat_to(std::back_inserter(buf),..)"
+        ],
+        "commit_date": "2022-05-08T10:01:02+00:00",
+        "patch": [
+            "--- include/spdlog/logger.h\n@@ -364,7 +364,12 @@ class SPDLOG_API logger\n         SPDLOG_TRY\n         {\n             memory_buf_t buf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(buf), fmt, fmt_lib::make_format_args(std::forward<Args>(args)...));\n+#else\n+            //seems that fmt::detail::vformat_to(buf, ...) is ~20ns faster than fmt::vformat_to(std::back_inserter(buf),..)\n+            fmt::detail::vformat_to(buf, fmt, fmt::make_format_args(std::forward<Args>(args)...));\n+#endif\n \n             details::log_msg log_msg(loc, name_, lvl, string_view_t(buf.data(), buf.size()));\n             log_it_(log_msg, log_enabled, traceback_enabled);\n@@ -386,7 +391,11 @@ class SPDLOG_API logger\n         {\n             // format to wmemory_buffer and convert to utf8\n             wmemory_buf_t wbuf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(wbuf), fmt, fmt_lib::make_format_args<fmt_lib::wformat_context>(std::forward<Args>(args)...));\n+#else\n+            fmt::detail::vformat_to(wbuf, fmt, fmt::make_format_args<fmt::wformat_context>(std::forward<Args>(args)...));\n+#endif\n \n             memory_buf_t buf;\n             details::os::wstr_to_utf8buf(wstring_view_t(wbuf.data(), wbuf.size()), buf);"
+        ],
+        "files_changed": [
+            {
+                "filename": "include/spdlog/logger.h",
+                "status": "modified",
+                "additions": 9,
+                "deletions": 0,
+                "changes": 9,
+                "patch": "@@ -364,7 +364,12 @@ class SPDLOG_API logger\n         SPDLOG_TRY\n         {\n             memory_buf_t buf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(buf), fmt, fmt_lib::make_format_args(std::forward<Args>(args)...));\n+#else\n+            //seems that fmt::detail::vformat_to(buf, ...) is ~20ns faster than fmt::vformat_to(std::back_inserter(buf),..)\n+            fmt::detail::vformat_to(buf, fmt, fmt::make_format_args(std::forward<Args>(args)...));\n+#endif\n \n             details::log_msg log_msg(loc, name_, lvl, string_view_t(buf.data(), buf.size()));\n             log_it_(log_msg, log_enabled, traceback_enabled);\n@@ -386,7 +391,11 @@ class SPDLOG_API logger\n         {\n             // format to wmemory_buffer and convert to utf8\n             wmemory_buf_t wbuf;\n+#ifdef SPDLOG_USE_STD_FORMAT\n             fmt_lib::vformat_to(std::back_inserter(wbuf), fmt, fmt_lib::make_format_args<fmt_lib::wformat_context>(std::forward<Args>(args)...));\n+#else\n+            fmt::detail::vformat_to(wbuf, fmt, fmt::make_format_args<fmt::wformat_context>(std::forward<Args>(args)...));\n+#endif\n \n             memory_buf_t buf;\n             details::os::wstr_to_utf8buf(wstring_view_t(wbuf.data(), wbuf.size()), buf);"
+            }
+        ],
+        "lines_added": 9,
+        "lines_removed": 0
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPDLOG_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPDLOG_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -169,109 +58,234 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999987793569719,
+        "wilcoxon_p_value": 0.9999991900826404,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.3571434537392437,
-        "relative_improvement": 0.00041742034228469646,
-        "absolute_improvement_ms": 2.0689655172398957,
-        "old_mean_ms": 4956.55172413793,
-        "new_mean_ms": 4954.48275862069,
-        "old_std_ms": 13.958065274489007,
-        "new_std_ms": 14.037248126871706,
-        "effect_size_cohens_d": 0.14780739988400057,
+        "mannwhitney_p_value": 0.17620892168450258,
+        "relative_improvement": 0.0008066142367413089,
+        "absolute_improvement_ms": 4.000000000000448,
+        "old_mean_ms": 4959.000000000001,
+        "new_mean_ms": 4955.0,
+        "old_std_ms": 12.958820721144264,
+        "new_std_ms": 14.562587871571319,
+        "effect_size_cohens_d": 0.29019050004403946,
         "old_ci95_ms": [
-          4951.242360057554,
-          4961.861088218307
+            4954.161096817577,
+            4963.838903182424
         ],
         "new_ci95_ms": [
-          4949.1432749940905,
-          4959.82224224729
+            4949.562240321677,
+            4960.437759678323
         ],
         "old_ci99_ms": [
-          4949.389492506176,
-          4963.713955769685
+            4952.478539403845,
+            4965.5214605961555
         ],
         "new_ci99_ms": [
-          4947.27989629128,
-          4961.6856209501
+            4947.671451745024,
+            4962.328548254977
         ],
-        "new_times": [
-          4.94,
-          4.92,
-          4.95,
-          4.95,
-          4.94,
-          4.94,
-          4.97,
-          4.95,
-          4.95,
-          4.97,
-          4.97,
-          4.97,
-          4.96,
-          4.97,
-          4.97,
-          4.95,
-          4.96,
-          4.94,
-          4.94,
-          4.96,
-          4.97,
-          4.94,
-          4.94,
-          4.97,
-          4.94,
-          4.97,
-          4.95,
-          4.97,
-          4.96
+        "new_times_s": [
+            4.96,
+            4.95,
+            4.94,
+            4.92,
+            4.95,
+            4.95,
+            4.94,
+            4.94,
+            4.98,
+            4.95,
+            4.95,
+            4.97,
+            4.97,
+            4.97,
+            4.97,
+            4.97,
+            4.97,
+            4.95,
+            4.96,
+            4.94,
+            4.94,
+            4.96,
+            4.97,
+            4.94,
+            4.94,
+            4.97,
+            4.94,
+            4.97,
+            4.95,
+            4.97,
+            4.96
         ],
-        "old_times": [
-          4.97,
-          4.97,
-          4.95,
-          4.93,
-          4.98,
-          4.96,
-          4.97,
-          4.96,
-          4.94,
-          4.95,
-          4.98,
-          4.96,
-          4.96,
-          4.95,
-          4.96,
-          4.96,
-          4.95,
-          4.94,
-          4.98,
-          4.94,
-          4.94,
-          4.98,
-          4.95,
-          4.94,
-          4.96,
-          4.96,
-          4.95,
-          4.94,
-          4.96
+        "old_times_s": [
+            4.94,
+            4.96,
+            4.97,
+            4.98,
+            4.95,
+            4.94,
+            4.98,
+            4.96,
+            4.97,
+            4.96,
+            4.94,
+            4.96,
+            4.98,
+            4.96,
+            4.96,
+            4.95,
+            4.97,
+            4.96,
+            4.96,
+            4.94,
+            4.98,
+            4.95,
+            4.95,
+            4.98,
+            4.95,
+            4.94,
+            4.96,
+            4.96,
+            4.95,
+            4.94,
+            4.96
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "spdlog-utests",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999987793569719,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.3571434537392437,
+                "relative_improvement": 0.00041742034228469646,
+                "absolute_improvement_ms": 2.0689655172398957,
+                "old_mean_ms": 4956.55172413793,
+                "new_mean_ms": 4954.48275862069,
+                "old_std_ms": 13.958065274489007,
+                "new_std_ms": 14.037248126871706,
+                "effect_size_cohens_d": 0.14780739988400057,
+                "old_ci95_ms": [
+                    4951.242360057554,
+                    4961.861088218307
+                ],
+                "new_ci95_ms": [
+                    4949.1432749940905,
+                    4959.82224224729
+                ],
+                "old_ci99_ms": [
+                    4949.389492506176,
+                    4963.713955769685
+                ],
+                "new_ci99_ms": [
+                    4947.27989629128,
+                    4961.6856209501
+                ],
+                "new_times": [
+                    4.94,
+                    4.92,
+                    4.95,
+                    4.95,
+                    4.94,
+                    4.94,
+                    4.97,
+                    4.95,
+                    4.95,
+                    4.97,
+                    4.97,
+                    4.97,
+                    4.96,
+                    4.97,
+                    4.97,
+                    4.95,
+                    4.96,
+                    4.94,
+                    4.94,
+                    4.96,
+                    4.97,
+                    4.94,
+                    4.94,
+                    4.97,
+                    4.94,
+                    4.97,
+                    4.95,
+                    4.97,
+                    4.96
+                ],
+                "old_times": [
+                    4.97,
+                    4.97,
+                    4.95,
+                    4.93,
+                    4.98,
+                    4.96,
+                    4.97,
+                    4.96,
+                    4.94,
+                    4.95,
+                    4.98,
+                    4.96,
+                    4.96,
+                    4.95,
+                    4.96,
+                    4.96,
+                    4.95,
+                    4.94,
+                    4.98,
+                    4.94,
+                    4.94,
+                    4.98,
+                    4.95,
+                    4.94,
+                    4.96,
+                    4.96,
+                    4.95,
+                    4.94,
+                    4.96
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

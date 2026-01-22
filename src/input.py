@@ -25,28 +25,23 @@ def setup_parser() -> argparse.ArgumentParser:
     mode.add_argument("--commits", action="store_true",
                       help="Gather and filter commits from C++ Repositories.")
     mode.add_argument("--testcommits", action="store_true",
-                      help="Test commits between two versions or commit file.")
+                      help="Test commits between two versions and generates a commit file.")
     mode.add_argument("--genimages", action="store_true",
                       help="Given a folder of json files generated via the --testcommits flag, " \
                       "generate and save docker images (no test is run here) of each json file.")
     mode.add_argument("--pushimages", action="store_true",
                       help="Given a folder of json files generated via the --testcommits flag, " \
-                      "push the image to GitHub Container Registry and make it public.")
+                      "push the image to Dockerhub.")
     mode.add_argument("--testdocker", action="store_true",
                       help="Build and test docker images. " \
                       "Given a file of docker images 'owner_repo_newsha' with commits in " \
                       "'/test_workspace/workspace/new' and '/test_workspace/workspace/old' " \
-                      "Docker images should be named 'owner_repo_newsha'")
-    mode.add_argument("--patch", action="store_true",
-                      help="Given a file of docker images 'owner_repo_newsha' with commits in " \
-                      "'/test_workspace/workspace/new' and '/test_workspace/workspace/old', " \
-                      "generate a patch in '/test_workspace/workspace/patch' from the '/test_workspace/workspace/old'" \
-                      "and information from '/test_workspace/logs/results.json'")
+                      "Docker images should be named 'owner_repo_newsha' or 'dockerhub_user/dockerhub_repo:owner_repo_newsha'")
     mode.add_argument("--testdockerpatch", action="store_true",
                       help="Build and test docker images." \
                       "Given a file of docker images (or a docker image tar files) with a " \
                       "commit at '/test_workspace/workspace/old' and its patch in '/test_workspace/workspace/patch'. " \
-                      "Docker images should be named 'owner_repo_newsha'")
+                      "Docker images should be named 'owner_repo_newsha' or 'dockerhub_user/dockerhub_repo:owner_repo_newsha'")
     
     
 

@@ -1,183 +1,72 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:53.761835",
-    "repository": "https://github.com/oatpp/oatpp",
-    "repository_name": "oatpp/oatpp"
-  },
-  "commit_info": {
-    "old_sha": "8badb89a1c811698b67803615ba8524a8d59e849",
-    "new_sha": "ca19e5b0723312be765d5ab2e1b8450ff85a6479",
-    "commit_message": [
-      "Implemented move-constructor of `HttpProcessor::Task` to use its performance-gain over copy."
-    ],
-    "commit_date": "2021-02-23T08:45:46+00:00",
-    "patch": [
-      "--- src/oatpp/web/server/HttpConnectionHandler.cpp\n@@ -74,7 +74,7 @@ void HttpConnectionHandler::handleConnection(const std::shared_ptr<oatpp::data::\n     connection->setInputStreamIOMode(oatpp::data::stream::IOMode::BLOCKING);\n \n     /* Create working thread */\n-    std::thread thread(&HttpProcessor::Task::run, HttpProcessor::Task(m_components, connection, &m_spawns));\n+    std::thread thread(&HttpProcessor::Task::run, std::move(HttpProcessor::Task(m_components, connection, &m_spawns)));\n \n     /* Get hardware concurrency -1 in order to have 1cpu free of workers. */\n     v_int32 concurrency = oatpp::concurrency::getHardwareConcurrency();\n--- src/oatpp/web/server/HttpProcessor.cpp\n@@ -236,6 +236,14 @@ HttpProcessor::Task::Task(const HttpProcessor::Task &copy)\n   (*m_counter)++;\n }\n \n+HttpProcessor::Task::Task(HttpProcessor::Task &&move)\n+  : m_components(std::move(move.m_components))\n+  , m_connection(std::move(move.m_connection))\n+  , m_counter(move.m_counter)\n+{\n+  move.m_counter = nullptr;\n+}\n+\n void HttpProcessor::Task::run(){\n \n   m_connection->initContexts();\n@@ -258,7 +266,9 @@ void HttpProcessor::Task::run(){\n \n }\n HttpProcessor::Task::~Task() {\n-  (*m_counter)--;\n+  if (m_counter != nullptr) {\n+    (*m_counter)--;\n+  }\n }\n \n ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n--- src/oatpp/web/server/HttpProcessor.hpp\n@@ -207,6 +207,11 @@ class HttpProcessor {\n      */\n     Task(const Task &copy);\n \n+    /**\n+     * Move-Constructor to correclty count tasks;\n+     */\n+     Task(Task &&move);\n+\n     /**\n      * Destructor, needed for counting.\n      */"
-    ],
-    "files_changed": [
-      {
-        "filename": "src/oatpp/web/server/HttpConnectionHandler.cpp",
-        "status": "modified",
-        "additions": 1,
-        "deletions": 1,
-        "changes": 2,
-        "patch": "@@ -74,7 +74,7 @@ void HttpConnectionHandler::handleConnection(const std::shared_ptr<oatpp::data::\n     connection->setInputStreamIOMode(oatpp::data::stream::IOMode::BLOCKING);\n \n     /* Create working thread */\n-    std::thread thread(&HttpProcessor::Task::run, HttpProcessor::Task(m_components, connection, &m_spawns));\n+    std::thread thread(&HttpProcessor::Task::run, std::move(HttpProcessor::Task(m_components, connection, &m_spawns)));\n \n     /* Get hardware concurrency -1 in order to have 1cpu free of workers. */\n     v_int32 concurrency = oatpp::concurrency::getHardwareConcurrency();"
-      },
-      {
-        "filename": "src/oatpp/web/server/HttpProcessor.cpp",
-        "status": "modified",
-        "additions": 11,
-        "deletions": 1,
-        "changes": 12,
-        "patch": "@@ -236,6 +236,14 @@ HttpProcessor::Task::Task(const HttpProcessor::Task &copy)\n   (*m_counter)++;\n }\n \n+HttpProcessor::Task::Task(HttpProcessor::Task &&move)\n+  : m_components(std::move(move.m_components))\n+  , m_connection(std::move(move.m_connection))\n+  , m_counter(move.m_counter)\n+{\n+  move.m_counter = nullptr;\n+}\n+\n void HttpProcessor::Task::run(){\n \n   m_connection->initContexts();\n@@ -258,7 +266,9 @@ void HttpProcessor::Task::run(){\n \n }\n HttpProcessor::Task::~Task() {\n-  (*m_counter)--;\n+  if (m_counter != nullptr) {\n+    (*m_counter)--;\n+  }\n }\n \n ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////"
-      },
-      {
-        "filename": "src/oatpp/web/server/HttpProcessor.hpp",
-        "status": "modified",
-        "additions": 5,
-        "deletions": 0,
-        "changes": 5,
-        "patch": "@@ -207,6 +207,11 @@ class HttpProcessor {\n      */\n     Task(const Task &copy);\n \n+    /**\n+     * Move-Constructor to correclty count tasks;\n+     */\n+     Task(Task &&move);\n+\n     /**\n      * Destructor, needed for counting.\n      */"
-      }
-    ],
-    "lines_added": 17,
-    "lines_removed": 2
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 1.0,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.33132780195191175,
-    "relative_improvement": -0.00024968332846155955,
-    "absolute_improvement_ms": -41.00000000005366,
-    "old_mean_ms": 164208.0,
-    "new_mean_ms": 164249.00000000006,
-    "old_std_ms": 425.8735444496044,
-    "new_std_ms": 554.2086623098849,
-    "effect_size_cohens_d": -0.0829582673592054,
-    "old_ci95_ms": [
-      164048.97620501957,
-      164367.0237949804
-    ],
-    "new_ci95_ms": [
-      164042.05508444904,
-      164455.94491555108
-    ],
-    "old_ci99_ms": [
-      163993.68130551095,
-      164422.31869448905
-    ],
-    "new_ci99_ms": [
-      163970.09731038997,
-      164527.90268961014
-    ],
-    "new_times_s": [
-      164.61,
-      164.87,
-      164.64,
-      164.21,
-      163.95,
-      164.38,
-      166.33,
-      163.93,
-      163.55,
-      163.87,
-      163.84,
-      164.09,
-      164.75,
-      163.75,
-      163.81,
-      163.87,
-      163.89,
-      164.49,
-      163.64,
-      164.71,
-      164.17,
-      164.13,
-      163.98,
-      163.75,
-      164.47,
-      164.22,
-      164.82,
-      164.85,
-      164.6,
-      164.06,
-      163.85
-    ],
-    "old_times_s": [
-      165.05,
-      164.64,
-      164.76,
-      164.86,
-      164.19,
-      164.85,
-      164.21,
-      164.21,
-      164.16,
-      163.35,
-      164.17,
-      163.37,
-      163.56,
-      164.27,
-      164.08,
-      163.85,
-      164.05,
-      164.78,
-      164.38,
-      164.34,
-      163.39,
-      163.82,
-      164.08,
-      164.64,
-      164.24,
-      164.06,
-      164.55,
-      164.24,
-      164.7,
-      163.98,
-      164.46
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "oatppAllTests",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:53.761835",
+        "repository": "https://github.com/oatpp/oatpp",
+        "repository_name": "oatpp/oatpp"
+    },
+    "commit_info": {
+        "old_sha": "8badb89a1c811698b67803615ba8524a8d59e849",
+        "new_sha": "ca19e5b0723312be765d5ab2e1b8450ff85a6479",
+        "commit_message": [
+            "Implemented move-constructor of `HttpProcessor::Task` to use its performance-gain over copy."
+        ],
+        "commit_date": "2021-02-23T08:45:46+00:00",
+        "patch": [
+            "--- src/oatpp/web/server/HttpConnectionHandler.cpp\n@@ -74,7 +74,7 @@ void HttpConnectionHandler::handleConnection(const std::shared_ptr<oatpp::data::\n     connection->setInputStreamIOMode(oatpp::data::stream::IOMode::BLOCKING);\n \n     /* Create working thread */\n-    std::thread thread(&HttpProcessor::Task::run, HttpProcessor::Task(m_components, connection, &m_spawns));\n+    std::thread thread(&HttpProcessor::Task::run, std::move(HttpProcessor::Task(m_components, connection, &m_spawns)));\n \n     /* Get hardware concurrency -1 in order to have 1cpu free of workers. */\n     v_int32 concurrency = oatpp::concurrency::getHardwareConcurrency();\n--- src/oatpp/web/server/HttpProcessor.cpp\n@@ -236,6 +236,14 @@ HttpProcessor::Task::Task(const HttpProcessor::Task &copy)\n   (*m_counter)++;\n }\n \n+HttpProcessor::Task::Task(HttpProcessor::Task &&move)\n+  : m_components(std::move(move.m_components))\n+  , m_connection(std::move(move.m_connection))\n+  , m_counter(move.m_counter)\n+{\n+  move.m_counter = nullptr;\n+}\n+\n void HttpProcessor::Task::run(){\n \n   m_connection->initContexts();\n@@ -258,7 +266,9 @@ void HttpProcessor::Task::run(){\n \n }\n HttpProcessor::Task::~Task() {\n-  (*m_counter)--;\n+  if (m_counter != nullptr) {\n+    (*m_counter)--;\n+  }\n }\n \n ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n--- src/oatpp/web/server/HttpProcessor.hpp\n@@ -207,6 +207,11 @@ class HttpProcessor {\n      */\n     Task(const Task &copy);\n \n+    /**\n+     * Move-Constructor to correclty count tasks;\n+     */\n+     Task(Task &&move);\n+\n     /**\n      * Destructor, needed for counting.\n      */"
+        ],
+        "files_changed": [
+            {
+                "filename": "src/oatpp/web/server/HttpConnectionHandler.cpp",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "changes": 2,
+                "patch": "@@ -74,7 +74,7 @@ void HttpConnectionHandler::handleConnection(const std::shared_ptr<oatpp::data::\n     connection->setInputStreamIOMode(oatpp::data::stream::IOMode::BLOCKING);\n \n     /* Create working thread */\n-    std::thread thread(&HttpProcessor::Task::run, HttpProcessor::Task(m_components, connection, &m_spawns));\n+    std::thread thread(&HttpProcessor::Task::run, std::move(HttpProcessor::Task(m_components, connection, &m_spawns)));\n \n     /* Get hardware concurrency -1 in order to have 1cpu free of workers. */\n     v_int32 concurrency = oatpp::concurrency::getHardwareConcurrency();"
+            },
+            {
+                "filename": "src/oatpp/web/server/HttpProcessor.cpp",
+                "status": "modified",
+                "additions": 11,
+                "deletions": 1,
+                "changes": 12,
+                "patch": "@@ -236,6 +236,14 @@ HttpProcessor::Task::Task(const HttpProcessor::Task &copy)\n   (*m_counter)++;\n }\n \n+HttpProcessor::Task::Task(HttpProcessor::Task &&move)\n+  : m_components(std::move(move.m_components))\n+  , m_connection(std::move(move.m_connection))\n+  , m_counter(move.m_counter)\n+{\n+  move.m_counter = nullptr;\n+}\n+\n void HttpProcessor::Task::run(){\n \n   m_connection->initContexts();\n@@ -258,7 +266,9 @@ void HttpProcessor::Task::run(){\n \n }\n HttpProcessor::Task::~Task() {\n-  (*m_counter)--;\n+  if (m_counter != nullptr) {\n+    (*m_counter)--;\n+  }\n }\n \n ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////"
+            },
+            {
+                "filename": "src/oatpp/web/server/HttpProcessor.hpp",
+                "status": "modified",
+                "additions": 5,
+                "deletions": 0,
+                "changes": 5,
+                "patch": "@@ -207,6 +207,11 @@ class HttpProcessor {\n      */\n     Task(const Task &copy);\n \n+    /**\n+     * Move-Constructor to correclty count tasks;\n+     */\n+     Task(Task &&move);\n+\n     /**\n      * Destructor, needed for counting.\n      */"
+            }
+        ],
+        "lines_added": 17,
+        "lines_removed": 2
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -187,107 +76,232 @@
         "is_wilcoxon_significant": false,
         "wilcoxon_p_value": 1.0,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.27984291151628654,
-        "relative_improvement": -0.00020791505304979495,
-        "absolute_improvement_ms": -34.13793103456442,
-        "old_mean_ms": 164191.724137931,
-        "new_mean_ms": 164225.86206896557,
-        "old_std_ms": 425.56742763982857,
-        "new_std_ms": 549.5811212796469,
-        "effect_size_cohens_d": -0.06945644180336545,
+        "mannwhitney_p_value": 0.33132780195191175,
+        "relative_improvement": -0.00024968332846155955,
+        "absolute_improvement_ms": -41.00000000005366,
+        "old_mean_ms": 164208.0,
+        "new_mean_ms": 164249.00000000006,
+        "old_std_ms": 425.8735444496044,
+        "new_std_ms": 554.2086623098849,
+        "effect_size_cohens_d": -0.0829582673592054,
         "old_ci95_ms": [
-          164029.84694580905,
-          164353.60133005294
+            164048.97620501957,
+            164367.0237949804
         ],
         "new_ci95_ms": [
-          164016.81259060354,
-          164434.9115473276
+            164042.05508444904,
+            164455.94491555108
         ],
         "old_ci99_ms": [
-          163973.35487028921,
-          164410.09340557278
+            163993.68130551095,
+            164422.31869448905
         ],
         "new_ci99_ms": [
-          163943.85828021425,
-          164507.86585771688
+            163970.09731038997,
+            164527.90268961014
         ],
-        "new_times": [
-          164.63,
-          164.21,
-          163.95,
-          164.38,
-          166.32,
-          163.93,
-          163.55,
-          163.87,
-          163.84,
-          164.08,
-          164.75,
-          163.75,
-          163.81,
-          163.87,
-          163.89,
-          164.49,
-          163.64,
-          164.71,
-          164.17,
-          164.13,
-          163.98,
-          163.75,
-          164.47,
-          164.22,
-          164.82,
-          164.85,
-          164.59,
-          164.05,
-          163.85
+        "new_times_s": [
+            164.61,
+            164.87,
+            164.64,
+            164.21,
+            163.95,
+            164.38,
+            166.33,
+            163.93,
+            163.55,
+            163.87,
+            163.84,
+            164.09,
+            164.75,
+            163.75,
+            163.81,
+            163.87,
+            163.89,
+            164.49,
+            163.64,
+            164.71,
+            164.17,
+            164.13,
+            163.98,
+            163.75,
+            164.47,
+            164.22,
+            164.82,
+            164.85,
+            164.6,
+            164.06,
+            163.85
         ],
-        "old_times": [
-          164.76,
-          164.86,
-          164.18,
-          164.85,
-          164.21,
-          164.21,
-          164.15,
-          163.35,
-          164.17,
-          163.37,
-          163.56,
-          164.27,
-          164.08,
-          163.85,
-          164.05,
-          164.78,
-          164.38,
-          164.34,
-          163.39,
-          163.82,
-          164.08,
-          164.64,
-          164.23,
-          164.06,
-          164.55,
-          164.24,
-          164.7,
-          163.97,
-          164.46
+        "old_times_s": [
+            165.05,
+            164.64,
+            164.76,
+            164.86,
+            164.19,
+            164.85,
+            164.21,
+            164.21,
+            164.16,
+            163.35,
+            164.17,
+            163.37,
+            163.56,
+            164.27,
+            164.08,
+            163.85,
+            164.05,
+            164.78,
+            164.38,
+            164.34,
+            163.39,
+            163.82,
+            164.08,
+            164.64,
+            164.24,
+            164.06,
+            164.55,
+            164.24,
+            164.7,
+            163.98,
+            164.46
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "oatppAllTests",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 1.0,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.27984291151628654,
+                "relative_improvement": -0.00020791505304979495,
+                "absolute_improvement_ms": -34.13793103456442,
+                "old_mean_ms": 164191.724137931,
+                "new_mean_ms": 164225.86206896557,
+                "old_std_ms": 425.56742763982857,
+                "new_std_ms": 549.5811212796469,
+                "effect_size_cohens_d": -0.06945644180336545,
+                "old_ci95_ms": [
+                    164029.84694580905,
+                    164353.60133005294
+                ],
+                "new_ci95_ms": [
+                    164016.81259060354,
+                    164434.9115473276
+                ],
+                "old_ci99_ms": [
+                    163973.35487028921,
+                    164410.09340557278
+                ],
+                "new_ci99_ms": [
+                    163943.85828021425,
+                    164507.86585771688
+                ],
+                "new_times": [
+                    164.63,
+                    164.21,
+                    163.95,
+                    164.38,
+                    166.32,
+                    163.93,
+                    163.55,
+                    163.87,
+                    163.84,
+                    164.08,
+                    164.75,
+                    163.75,
+                    163.81,
+                    163.87,
+                    163.89,
+                    164.49,
+                    163.64,
+                    164.71,
+                    164.17,
+                    164.13,
+                    163.98,
+                    163.75,
+                    164.47,
+                    164.22,
+                    164.82,
+                    164.85,
+                    164.59,
+                    164.05,
+                    163.85
+                ],
+                "old_times": [
+                    164.76,
+                    164.86,
+                    164.18,
+                    164.85,
+                    164.21,
+                    164.21,
+                    164.15,
+                    163.35,
+                    164.17,
+                    163.37,
+                    163.56,
+                    164.27,
+                    164.08,
+                    163.85,
+                    164.05,
+                    164.78,
+                    164.38,
+                    164.34,
+                    163.39,
+                    163.82,
+                    164.08,
+                    164.64,
+                    164.23,
+                    164.06,
+                    164.55,
+                    164.24,
+                    164.7,
+                    163.97,
+                    164.46
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

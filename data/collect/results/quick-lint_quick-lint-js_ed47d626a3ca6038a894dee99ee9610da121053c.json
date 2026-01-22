@@ -1,398 +1,412 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:38:17.609637",
-    "repository": "https://github.com/quick-lint/quick-lint-js",
-    "repository_name": "quick-lint/quick-lint-js"
-  },
-  "commit_info": {
-    "old_sha": "c102dfcf6be5e888dd1494cea20a7c6bd9042887",
-    "new_sha": "ed47d626a3ca6038a894dee99ee9610da121053c",
-    "commit_message": [
-      "perf(fe): optimize building global variable hash table\n\nOur four-hash-table scheme for storing global variables is inefficient.\nRewrite it with only one hash table, improving performance by over 50%:\n\n    Benchmark                                                 Time             CPU      Time Old      Time New       CPU Old       CPU New\n    --------------------------------------------------------------------------------------------------------------------------------------\n    benchmark_config_globals_default                       -0.5199         -0.5199        176509         84736        176490         84727\n    benchmark_config_globals_default                       -0.5177         -0.5177        177473         85589        177455         85580\n    benchmark_config_globals_default                       -0.5108         -0.5108        178097         87122        178079         87113\n    benchmark_config_globals_default_pvalue                 0.1000          0.1000      U Test, Repetitions: 3 vs 3. WARNING: Results unreliable! 9+ repetitions recommended.\n    benchmark_config_globals_default_mean                  -0.5161         -0.5161        177360         85816        177341         85807\n    benchmark_config_globals_default_median                -0.5177         -0.5177        177473         85589        177455         85580\n    benchmark_config_globals_default_stddev                +0.5113         +0.5108           800          1209           800          1209\n    benchmark_config_globals_default_cv                    +2.1235         +2.1224             0             0             0             0\n    OVERALL_GEOMEAN                                        -0.5162         -0.5162             0             0             0             0"
-    ],
-    "commit_date": "2022-10-05T05:55:20+00:00",
-    "patch": [
-      "--- src/quick-lint-js/fe/global-declared-variable-set.cpp\n@@ -26,19 +26,20 @@ void global_declared_variable_set::add_predefined_global_variable(\n \n void global_declared_variable_set::add_global_variable(\n     global_declared_variable global_variable) {\n-  this->undeclare_variable(global_variable.name);\n-  this->variables_[global_variable.is_shadowable][global_variable.is_writable]\n-      .emplace(global_variable.name);\n+  this->variables_[global_variable.name] = variable_options{\n+      .is_writable = global_variable.is_writable,\n+      .is_shadowable = global_variable.is_shadowable,\n+  };\n }\n \n void global_declared_variable_set::add_literally_everything() {\n   this->all_variables_declared_ = true;\n }\n \n void global_declared_variable_set::reserve_more_global_variables(\n-    std::size_t extra_count, bool is_shadowable, bool is_writable) {\n-  auto &vars = this->variables_[is_shadowable][is_writable];\n-  vars.reserve(vars.size() + extra_count);\n+    std::size_t extra_count, [[maybe_unused]] bool is_shadowable,\n+    [[maybe_unused]] bool is_writable) {\n+  this->variables_.reserve(this->variables_.size() + extra_count);\n }\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n@@ -48,16 +49,13 @@ std::optional<global_declared_variable> global_declared_variable_set::find(\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n     string8_view name) const noexcept {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      if (this->variables_[is_shadowable][is_writable].contains(name)) {\n-        return global_declared_variable{\n-            .name = name,\n-            .is_writable = is_writable,\n-            .is_shadowable = is_shadowable,\n-        };\n-      }\n-    }\n+  auto it = this->variables_.find(name);\n+  if (it != this->variables_.end()) {\n+    return global_declared_variable{\n+        .name = name,\n+        .is_writable = it->second.is_writable,\n+        .is_shadowable = it->second.is_shadowable,\n+    };\n   }\n   if (this->all_variables_declared_) {\n     return global_declared_variable{\n@@ -85,22 +83,12 @@ std::optional<global_declared_variable> global_declared_variable_set::find_type(\n std::vector<string8_view> global_declared_variable_set::get_all_variable_names()\n     const {\n   std::vector<string8_view> result;\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      auto &vars = this->variables_[is_shadowable][is_writable];\n-      result.insert(result.end(), vars.begin(), vars.end());\n-    }\n+  result.reserve(this->variables_.size());\n+  for (auto &[name, _options] : this->variables_) {\n+    result.push_back(name);\n   }\n   return result;\n }\n-\n-void global_declared_variable_set::undeclare_variable(string8_view name) {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      this->variables_[is_shadowable][is_writable].erase(name);\n-    }\n-  }\n-}\n }\n \n // quick-lint-js finds bugs in JavaScript programs.\n--- src/quick-lint-js/fe/global-declared-variable-set.h\n@@ -5,7 +5,7 @@\n #define QUICK_LINT_JS_FE_GLOBAL_DECLARED_VARIABLE_SET_H\n \n #include <optional>\n-#include <quick-lint-js/container/hash-set.h>\n+#include <quick-lint-js/container/hash-map.h>\n #include <quick-lint-js/fe/identifier.h>\n #include <quick-lint-js/fe/language.h>\n #include <quick-lint-js/port/char8.h>\n@@ -51,11 +51,14 @@ class global_declared_variable_set {\n   std::vector<string8_view> get_all_variable_names() const;\n \n  private:\n-  void undeclare_variable(string8_view name);\n-\n-  // First index: is_shadowable\n-  // Second index: is_writable\n-  hash_set<string8_view> variables_[2][2];\n+  struct variable_options {\n+    // See global_declared_variable::is_writable.\n+    bool is_writable;\n+    // See global_declared_variable::is_shadowable.\n+    bool is_shadowable;\n+  };\n+\n+  hash_map<string8_view, variable_options> variables_;\n   bool all_variables_declared_ = false;\n };\n }"
-    ],
-    "files_changed": [
-      {
-        "filename": "src/quick-lint-js/fe/global-declared-variable-set.cpp",
-        "status": "modified",
-        "additions": 17,
-        "deletions": 29,
-        "changes": 46,
-        "patch": "@@ -26,19 +26,20 @@ void global_declared_variable_set::add_predefined_global_variable(\n \n void global_declared_variable_set::add_global_variable(\n     global_declared_variable global_variable) {\n-  this->undeclare_variable(global_variable.name);\n-  this->variables_[global_variable.is_shadowable][global_variable.is_writable]\n-      .emplace(global_variable.name);\n+  this->variables_[global_variable.name] = variable_options{\n+      .is_writable = global_variable.is_writable,\n+      .is_shadowable = global_variable.is_shadowable,\n+  };\n }\n \n void global_declared_variable_set::add_literally_everything() {\n   this->all_variables_declared_ = true;\n }\n \n void global_declared_variable_set::reserve_more_global_variables(\n-    std::size_t extra_count, bool is_shadowable, bool is_writable) {\n-  auto &vars = this->variables_[is_shadowable][is_writable];\n-  vars.reserve(vars.size() + extra_count);\n+    std::size_t extra_count, [[maybe_unused]] bool is_shadowable,\n+    [[maybe_unused]] bool is_writable) {\n+  this->variables_.reserve(this->variables_.size() + extra_count);\n }\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n@@ -48,16 +49,13 @@ std::optional<global_declared_variable> global_declared_variable_set::find(\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n     string8_view name) const noexcept {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      if (this->variables_[is_shadowable][is_writable].contains(name)) {\n-        return global_declared_variable{\n-            .name = name,\n-            .is_writable = is_writable,\n-            .is_shadowable = is_shadowable,\n-        };\n-      }\n-    }\n+  auto it = this->variables_.find(name);\n+  if (it != this->variables_.end()) {\n+    return global_declared_variable{\n+        .name = name,\n+        .is_writable = it->second.is_writable,\n+        .is_shadowable = it->second.is_shadowable,\n+    };\n   }\n   if (this->all_variables_declared_) {\n     return global_declared_variable{\n@@ -85,22 +83,12 @@ std::optional<global_declared_variable> global_declared_variable_set::find_type(\n std::vector<string8_view> global_declared_variable_set::get_all_variable_names()\n     const {\n   std::vector<string8_view> result;\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      auto &vars = this->variables_[is_shadowable][is_writable];\n-      result.insert(result.end(), vars.begin(), vars.end());\n-    }\n+  result.reserve(this->variables_.size());\n+  for (auto &[name, _options] : this->variables_) {\n+    result.push_back(name);\n   }\n   return result;\n }\n-\n-void global_declared_variable_set::undeclare_variable(string8_view name) {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      this->variables_[is_shadowable][is_writable].erase(name);\n-    }\n-  }\n-}\n }\n \n // quick-lint-js finds bugs in JavaScript programs."
-      },
-      {
-        "filename": "src/quick-lint-js/fe/global-declared-variable-set.h",
-        "status": "modified",
-        "additions": 9,
-        "deletions": 6,
-        "changes": 15,
-        "patch": "@@ -5,7 +5,7 @@\n #define QUICK_LINT_JS_FE_GLOBAL_DECLARED_VARIABLE_SET_H\n \n #include <optional>\n-#include <quick-lint-js/container/hash-set.h>\n+#include <quick-lint-js/container/hash-map.h>\n #include <quick-lint-js/fe/identifier.h>\n #include <quick-lint-js/fe/language.h>\n #include <quick-lint-js/port/char8.h>\n@@ -51,11 +51,14 @@ class global_declared_variable_set {\n   std::vector<string8_view> get_all_variable_names() const;\n \n  private:\n-  void undeclare_variable(string8_view name);\n-\n-  // First index: is_shadowable\n-  // Second index: is_writable\n-  hash_set<string8_view> variables_[2][2];\n+  struct variable_options {\n+    // See global_declared_variable::is_writable.\n+    bool is_writable;\n+    // See global_declared_variable::is_shadowable.\n+    bool is_shadowable;\n+  };\n+\n+  hash_map<string8_view, variable_options> variables_;\n   bool all_variables_declared_ = false;\n };\n }"
-      }
-    ],
-    "lines_added": 26,
-    "lines_removed": 35
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBUILD_TESTING=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBUILD_TESTING=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": true,
-    "p_value": 3.711836179617308e-13,
-    "is_pair_significant": true,
-    "pair_p_value": 2.817582798002401e-10,
-    "is_binom_significant": true,
-    "binom_p_value": 2.8870999813079834e-08,
-    "is_wilcoxon_significant": true,
-    "wilcoxon_p_value": 7.614748708343636e-07,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 5.088472010946761e-12,
-    "relative_improvement": 0.06679254189284868,
-    "absolute_improvement_ms": 94.33333333333249,
-    "old_mean_ms": 1412.3333333333328,
-    "new_mean_ms": 1318.0000000000002,
-    "old_std_ms": 11.943352886058413,
-    "new_std_ms": 7.611243951073879,
-    "effect_size_cohens_d": 9.419808834144273,
-    "old_ci95_ms": [
-      1407.873612072211,
-      1416.7930545944546
-    ],
-    "new_ci95_ms": [
-      1315.1579148003063,
-      1320.8420851996943
-    ],
-    "old_ci99_ms": [
-      1406.3229017586973,
-      1418.3437649079683
-    ],
-    "new_ci99_ms": [
-      1314.1696802060346,
-      1321.830319793966
-    ],
-    "new_times_s": [
-      1.32,
-      1.32,
-      1.31,
-      1.33,
-      1.32,
-      1.31,
-      1.32,
-      1.31,
-      1.31,
-      1.33,
-      1.31,
-      1.32,
-      1.32,
-      1.32,
-      1.31,
-      1.31,
-      1.32,
-      1.32,
-      1.32,
-      1.34,
-      1.32,
-      1.33,
-      1.32,
-      1.31,
-      1.32,
-      1.31,
-      1.32,
-      1.31,
-      1.32,
-      1.31,
-      1.32
-    ],
-    "old_times_s": [
-      1.4,
-      1.4,
-      1.4,
-      1.41,
-      1.42,
-      1.41,
-      1.4,
-      1.41,
-      1.45,
-      1.41,
-      1.42,
-      1.41,
-      1.41,
-      1.41,
-      1.4,
-      1.4,
-      1.42,
-      1.42,
-      1.41,
-      1.41,
-      1.41,
-      1.41,
-      1.41,
-      1.41,
-      1.45,
-      1.41,
-      1.41,
-      1.41,
-      1.42,
-      1.41,
-      1.4
-    ]
-  },
-  "tests": {
-    "total_tests": 2,
-    "significant_improvements": 2,
-    "significant_improvements_tests": [
-      "quick-lint-js-test",
-      "quick-lint-js-test-cli"
-    ],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 2,
-    "significant_pair_improvements_tests": [
-      "quick-lint-js-test",
-      "quick-lint-js-test-cli"
-    ],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 2,
-    "significant_binom_improvements_tests": [
-      "quick-lint-js-test",
-      "quick-lint-js-test-cli"
-    ],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 2,
-    "significant_wilcoxon_improvements_tests": [
-      "quick-lint-js-test",
-      "quick-lint-js-test-cli"
-    ],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 2,
-    "significant_mannwhitney_improvements_tests": [
-      "quick-lint-js-test",
-      "quick-lint-js-test-cli"
-    ],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "quick-lint-js-test",
+    "metadata": {
+        "collection_date": "2026-01-14T18:38:17.609637",
+        "repository": "https://github.com/quick-lint/quick-lint-js",
+        "repository_name": "quick-lint/quick-lint-js"
+    },
+    "commit_info": {
+        "old_sha": "c102dfcf6be5e888dd1494cea20a7c6bd9042887",
+        "new_sha": "ed47d626a3ca6038a894dee99ee9610da121053c",
+        "commit_message": [
+            "perf(fe): optimize building global variable hash table\n\nOur four-hash-table scheme for storing global variables is inefficient.\nRewrite it with only one hash table, improving performance by over 50%:\n\n    Benchmark                                                 Time             CPU      Time Old      Time New       CPU Old       CPU New\n    --------------------------------------------------------------------------------------------------------------------------------------\n    benchmark_config_globals_default                       -0.5199         -0.5199        176509         84736        176490         84727\n    benchmark_config_globals_default                       -0.5177         -0.5177        177473         85589        177455         85580\n    benchmark_config_globals_default                       -0.5108         -0.5108        178097         87122        178079         87113\n    benchmark_config_globals_default_pvalue                 0.1000          0.1000      U Test, Repetitions: 3 vs 3. WARNING: Results unreliable! 9+ repetitions recommended.\n    benchmark_config_globals_default_mean                  -0.5161         -0.5161        177360         85816        177341         85807\n    benchmark_config_globals_default_median                -0.5177         -0.5177        177473         85589        177455         85580\n    benchmark_config_globals_default_stddev                +0.5113         +0.5108           800          1209           800          1209\n    benchmark_config_globals_default_cv                    +2.1235         +2.1224             0             0             0             0\n    OVERALL_GEOMEAN                                        -0.5162         -0.5162             0             0             0             0"
+        ],
+        "commit_date": "2022-10-05T05:55:20+00:00",
+        "patch": [
+            "--- src/quick-lint-js/fe/global-declared-variable-set.cpp\n@@ -26,19 +26,20 @@ void global_declared_variable_set::add_predefined_global_variable(\n \n void global_declared_variable_set::add_global_variable(\n     global_declared_variable global_variable) {\n-  this->undeclare_variable(global_variable.name);\n-  this->variables_[global_variable.is_shadowable][global_variable.is_writable]\n-      .emplace(global_variable.name);\n+  this->variables_[global_variable.name] = variable_options{\n+      .is_writable = global_variable.is_writable,\n+      .is_shadowable = global_variable.is_shadowable,\n+  };\n }\n \n void global_declared_variable_set::add_literally_everything() {\n   this->all_variables_declared_ = true;\n }\n \n void global_declared_variable_set::reserve_more_global_variables(\n-    std::size_t extra_count, bool is_shadowable, bool is_writable) {\n-  auto &vars = this->variables_[is_shadowable][is_writable];\n-  vars.reserve(vars.size() + extra_count);\n+    std::size_t extra_count, [[maybe_unused]] bool is_shadowable,\n+    [[maybe_unused]] bool is_writable) {\n+  this->variables_.reserve(this->variables_.size() + extra_count);\n }\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n@@ -48,16 +49,13 @@ std::optional<global_declared_variable> global_declared_variable_set::find(\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n     string8_view name) const noexcept {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      if (this->variables_[is_shadowable][is_writable].contains(name)) {\n-        return global_declared_variable{\n-            .name = name,\n-            .is_writable = is_writable,\n-            .is_shadowable = is_shadowable,\n-        };\n-      }\n-    }\n+  auto it = this->variables_.find(name);\n+  if (it != this->variables_.end()) {\n+    return global_declared_variable{\n+        .name = name,\n+        .is_writable = it->second.is_writable,\n+        .is_shadowable = it->second.is_shadowable,\n+    };\n   }\n   if (this->all_variables_declared_) {\n     return global_declared_variable{\n@@ -85,22 +83,12 @@ std::optional<global_declared_variable> global_declared_variable_set::find_type(\n std::vector<string8_view> global_declared_variable_set::get_all_variable_names()\n     const {\n   std::vector<string8_view> result;\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      auto &vars = this->variables_[is_shadowable][is_writable];\n-      result.insert(result.end(), vars.begin(), vars.end());\n-    }\n+  result.reserve(this->variables_.size());\n+  for (auto &[name, _options] : this->variables_) {\n+    result.push_back(name);\n   }\n   return result;\n }\n-\n-void global_declared_variable_set::undeclare_variable(string8_view name) {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      this->variables_[is_shadowable][is_writable].erase(name);\n-    }\n-  }\n-}\n }\n \n // quick-lint-js finds bugs in JavaScript programs.\n--- src/quick-lint-js/fe/global-declared-variable-set.h\n@@ -5,7 +5,7 @@\n #define QUICK_LINT_JS_FE_GLOBAL_DECLARED_VARIABLE_SET_H\n \n #include <optional>\n-#include <quick-lint-js/container/hash-set.h>\n+#include <quick-lint-js/container/hash-map.h>\n #include <quick-lint-js/fe/identifier.h>\n #include <quick-lint-js/fe/language.h>\n #include <quick-lint-js/port/char8.h>\n@@ -51,11 +51,14 @@ class global_declared_variable_set {\n   std::vector<string8_view> get_all_variable_names() const;\n \n  private:\n-  void undeclare_variable(string8_view name);\n-\n-  // First index: is_shadowable\n-  // Second index: is_writable\n-  hash_set<string8_view> variables_[2][2];\n+  struct variable_options {\n+    // See global_declared_variable::is_writable.\n+    bool is_writable;\n+    // See global_declared_variable::is_shadowable.\n+    bool is_shadowable;\n+  };\n+\n+  hash_map<string8_view, variable_options> variables_;\n   bool all_variables_declared_ = false;\n };\n }"
+        ],
+        "files_changed": [
+            {
+                "filename": "src/quick-lint-js/fe/global-declared-variable-set.cpp",
+                "status": "modified",
+                "additions": 17,
+                "deletions": 29,
+                "changes": 46,
+                "patch": "@@ -26,19 +26,20 @@ void global_declared_variable_set::add_predefined_global_variable(\n \n void global_declared_variable_set::add_global_variable(\n     global_declared_variable global_variable) {\n-  this->undeclare_variable(global_variable.name);\n-  this->variables_[global_variable.is_shadowable][global_variable.is_writable]\n-      .emplace(global_variable.name);\n+  this->variables_[global_variable.name] = variable_options{\n+      .is_writable = global_variable.is_writable,\n+      .is_shadowable = global_variable.is_shadowable,\n+  };\n }\n \n void global_declared_variable_set::add_literally_everything() {\n   this->all_variables_declared_ = true;\n }\n \n void global_declared_variable_set::reserve_more_global_variables(\n-    std::size_t extra_count, bool is_shadowable, bool is_writable) {\n-  auto &vars = this->variables_[is_shadowable][is_writable];\n-  vars.reserve(vars.size() + extra_count);\n+    std::size_t extra_count, [[maybe_unused]] bool is_shadowable,\n+    [[maybe_unused]] bool is_writable) {\n+  this->variables_.reserve(this->variables_.size() + extra_count);\n }\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n@@ -48,16 +49,13 @@ std::optional<global_declared_variable> global_declared_variable_set::find(\n \n std::optional<global_declared_variable> global_declared_variable_set::find(\n     string8_view name) const noexcept {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      if (this->variables_[is_shadowable][is_writable].contains(name)) {\n-        return global_declared_variable{\n-            .name = name,\n-            .is_writable = is_writable,\n-            .is_shadowable = is_shadowable,\n-        };\n-      }\n-    }\n+  auto it = this->variables_.find(name);\n+  if (it != this->variables_.end()) {\n+    return global_declared_variable{\n+        .name = name,\n+        .is_writable = it->second.is_writable,\n+        .is_shadowable = it->second.is_shadowable,\n+    };\n   }\n   if (this->all_variables_declared_) {\n     return global_declared_variable{\n@@ -85,22 +83,12 @@ std::optional<global_declared_variable> global_declared_variable_set::find_type(\n std::vector<string8_view> global_declared_variable_set::get_all_variable_names()\n     const {\n   std::vector<string8_view> result;\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      auto &vars = this->variables_[is_shadowable][is_writable];\n-      result.insert(result.end(), vars.begin(), vars.end());\n-    }\n+  result.reserve(this->variables_.size());\n+  for (auto &[name, _options] : this->variables_) {\n+    result.push_back(name);\n   }\n   return result;\n }\n-\n-void global_declared_variable_set::undeclare_variable(string8_view name) {\n-  for (bool is_shadowable : {false, true}) {\n-    for (bool is_writable : {false, true}) {\n-      this->variables_[is_shadowable][is_writable].erase(name);\n-    }\n-  }\n-}\n }\n \n // quick-lint-js finds bugs in JavaScript programs."
+            },
+            {
+                "filename": "src/quick-lint-js/fe/global-declared-variable-set.h",
+                "status": "modified",
+                "additions": 9,
+                "deletions": 6,
+                "changes": 15,
+                "patch": "@@ -5,7 +5,7 @@\n #define QUICK_LINT_JS_FE_GLOBAL_DECLARED_VARIABLE_SET_H\n \n #include <optional>\n-#include <quick-lint-js/container/hash-set.h>\n+#include <quick-lint-js/container/hash-map.h>\n #include <quick-lint-js/fe/identifier.h>\n #include <quick-lint-js/fe/language.h>\n #include <quick-lint-js/port/char8.h>\n@@ -51,11 +51,14 @@ class global_declared_variable_set {\n   std::vector<string8_view> get_all_variable_names() const;\n \n  private:\n-  void undeclare_variable(string8_view name);\n-\n-  // First index: is_shadowable\n-  // Second index: is_writable\n-  hash_set<string8_view> variables_[2][2];\n+  struct variable_options {\n+    // See global_declared_variable::is_writable.\n+    bool is_writable;\n+    // See global_declared_variable::is_shadowable.\n+    bool is_shadowable;\n+  };\n+\n+  hash_map<string8_view, variable_options> variables_;\n   bool all_variables_declared_ = false;\n };\n }"
+            }
+        ],
+        "lines_added": 26,
+        "lines_removed": 35
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": true,
-        "p_value": 2.0684204882042557e-23,
+        "p_value": 3.711836179617308e-13,
         "is_pair_significant": true,
-        "pair_p_value": 1.3009597964382754e-18,
+        "pair_p_value": 2.817582798002401e-10,
         "is_binom_significant": true,
-        "binom_p_value": 1.862645149230957e-09,
+        "binom_p_value": 2.8870999813079834e-08,
         "is_wilcoxon_significant": true,
-        "wilcoxon_p_value": 5.393095262114628e-07,
+        "wilcoxon_p_value": 7.614748708343636e-07,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 1.3944812490236773e-12,
-        "relative_improvement": 0.1132623426911907,
-        "absolute_improvement_ms": 80.68965517241378,
-        "old_mean_ms": 712.4137931034484,
-        "new_mean_ms": 631.7241379310345,
-        "old_std_ms": 10.907131485472222,
-        "new_std_ms": 4.682006222337802,
-        "effect_size_cohens_d": 9.613861466050002,
+        "mannwhitney_p_value": 5.088472010946761e-12,
+        "relative_improvement": 0.06679254189284868,
+        "absolute_improvement_ms": 94.33333333333249,
+        "old_mean_ms": 1412.3333333333328,
+        "new_mean_ms": 1318.0000000000002,
+        "old_std_ms": 11.943352886058413,
+        "new_std_ms": 7.611243951073879,
+        "effect_size_cohens_d": 9.419808834144273,
         "old_ci95_ms": [
-          708.2649421710236,
-          716.5626440358731
+            1407.873612072211,
+            1416.7930545944546
         ],
         "new_ci95_ms": [
-          629.9431980104846,
-          633.5050778515845
+            1315.1579148003063,
+            1320.8420851996943
         ],
         "old_ci99_ms": [
-          706.8170717383654,
-          718.0105144685313
+            1406.3229017586973,
+            1418.3437649079683
         ],
         "new_ci99_ms": [
-          629.3216836935559,
-          634.1265921685132
+            1314.1696802060346,
+            1321.830319793966
         ],
-        "new_times": [
-          0.63,
-          0.64,
-          0.64,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.64,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.64,
-          0.63,
-          0.64,
-          0.64,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.63,
-          0.62,
-          0.63
+        "new_times_s": [
+            1.32,
+            1.32,
+            1.31,
+            1.33,
+            1.32,
+            1.31,
+            1.32,
+            1.31,
+            1.31,
+            1.33,
+            1.31,
+            1.32,
+            1.32,
+            1.32,
+            1.31,
+            1.31,
+            1.32,
+            1.32,
+            1.32,
+            1.34,
+            1.32,
+            1.33,
+            1.32,
+            1.31,
+            1.32,
+            1.31,
+            1.32,
+            1.31,
+            1.32,
+            1.31,
+            1.32
         ],
-        "old_times": [
-          0.7,
-          0.71,
-          0.72,
-          0.71,
-          0.71,
-          0.71,
-          0.75,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.75,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.71,
-          0.7
+        "old_times_s": [
+            1.4,
+            1.4,
+            1.4,
+            1.41,
+            1.42,
+            1.41,
+            1.4,
+            1.41,
+            1.45,
+            1.41,
+            1.42,
+            1.41,
+            1.41,
+            1.41,
+            1.4,
+            1.4,
+            1.42,
+            1.42,
+            1.41,
+            1.41,
+            1.41,
+            1.41,
+            1.41,
+            1.41,
+            1.45,
+            1.41,
+            1.41,
+            1.41,
+            1.42,
+            1.41,
+            1.4
         ]
-      },
-      {
-        "test_name": "quick-lint-js-test-cli",
-        "is_significant": true,
-        "p_value": 5.075714012032126e-15,
-        "is_pair_significant": true,
-        "pair_p_value": 1.807776143838824e-14,
-        "is_binom_significant": true,
-        "binom_p_value": 1.862645149230957e-09,
-        "is_wilcoxon_significant": true,
-        "wilcoxon_p_value": 5.6863628284898115e-08,
-        "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 3.748379025355513e-14,
-        "relative_improvement": 0.09374999999999994,
-        "absolute_improvement_ms": 10.344827586206847,
-        "old_mean_ms": 110.34482758620688,
-        "new_mean_ms": 100.00000000000003,
-        "old_std_ms": 1.8569533817705175,
-        "new_std_ms": 2.824686288200359e-14,
-        "effect_size_cohens_d": 7.878385971583321,
-        "old_ci95_ms": [
-          109.63848029593267,
-          111.0511748764811
+    },
+    "tests": {
+        "total_tests": 2,
+        "significant_improvements": 2,
+        "significant_improvements_tests": [
+            "quick-lint-js-test",
+            "quick-lint-js-test-cli"
         ],
-        "new_ci95_ms": [
-          100.00000000000001,
-          100.00000000000004
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 2,
+        "significant_pair_improvements_tests": [
+            "quick-lint-js-test",
+            "quick-lint-js-test-cli"
         ],
-        "old_ci99_ms": [
-          109.3919784636341,
-          111.29767670877966
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 2,
+        "significant_binom_improvements_tests": [
+            "quick-lint-js-test",
+            "quick-lint-js-test-cli"
         ],
-        "new_ci99_ms": [
-          100.00000000000001,
-          100.00000000000004
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 2,
+        "significant_wilcoxon_improvements_tests": [
+            "quick-lint-js-test",
+            "quick-lint-js-test-cli"
         ],
-        "new_times": [
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1,
-          0.1
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 2,
+        "significant_mannwhitney_improvements_tests": [
+            "quick-lint-js-test",
+            "quick-lint-js-test-cli"
         ],
-        "old_times": [
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.11,
-          0.12,
-          0.11,
-          0.11
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "quick-lint-js-test",
+                "is_significant": true,
+                "p_value": 2.0684204882042557e-23,
+                "is_pair_significant": true,
+                "pair_p_value": 1.3009597964382754e-18,
+                "is_binom_significant": true,
+                "binom_p_value": 1.862645149230957e-09,
+                "is_wilcoxon_significant": true,
+                "wilcoxon_p_value": 5.393095262114628e-07,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 1.3944812490236773e-12,
+                "relative_improvement": 0.1132623426911907,
+                "absolute_improvement_ms": 80.68965517241378,
+                "old_mean_ms": 712.4137931034484,
+                "new_mean_ms": 631.7241379310345,
+                "old_std_ms": 10.907131485472222,
+                "new_std_ms": 4.682006222337802,
+                "effect_size_cohens_d": 9.613861466050002,
+                "old_ci95_ms": [
+                    708.2649421710236,
+                    716.5626440358731
+                ],
+                "new_ci95_ms": [
+                    629.9431980104846,
+                    633.5050778515845
+                ],
+                "old_ci99_ms": [
+                    706.8170717383654,
+                    718.0105144685313
+                ],
+                "new_ci99_ms": [
+                    629.3216836935559,
+                    634.1265921685132
+                ],
+                "new_times": [
+                    0.63,
+                    0.64,
+                    0.64,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.64,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.64,
+                    0.63,
+                    0.64,
+                    0.64,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.63,
+                    0.62,
+                    0.63
+                ],
+                "old_times": [
+                    0.7,
+                    0.71,
+                    0.72,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.75,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.75,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.71,
+                    0.7
+                ]
+            },
+            {
+                "test_name": "quick-lint-js-test-cli",
+                "is_significant": true,
+                "p_value": 5.075714012032126e-15,
+                "is_pair_significant": true,
+                "pair_p_value": 1.807776143838824e-14,
+                "is_binom_significant": true,
+                "binom_p_value": 1.862645149230957e-09,
+                "is_wilcoxon_significant": true,
+                "wilcoxon_p_value": 5.6863628284898115e-08,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 3.748379025355513e-14,
+                "relative_improvement": 0.09374999999999994,
+                "absolute_improvement_ms": 10.344827586206847,
+                "old_mean_ms": 110.34482758620688,
+                "new_mean_ms": 100.00000000000003,
+                "old_std_ms": 1.8569533817705175,
+                "new_std_ms": 2.824686288200359e-14,
+                "effect_size_cohens_d": 7.878385971583321,
+                "old_ci95_ms": [
+                    109.63848029593267,
+                    111.0511748764811
+                ],
+                "new_ci95_ms": [
+                    100.00000000000001,
+                    100.00000000000004
+                ],
+                "old_ci99_ms": [
+                    109.3919784636341,
+                    111.29767670877966
+                ],
+                "new_ci99_ms": [
+                    100.00000000000001,
+                    100.00000000000004
+                ],
+                "new_times": [
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "old_times": [
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.11,
+                    0.12,
+                    0.11,
+                    0.11
+                ]
+            }
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

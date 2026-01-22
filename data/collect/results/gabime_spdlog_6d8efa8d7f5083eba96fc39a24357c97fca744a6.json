@@ -1,279 +1,293 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:40:48.689121",
-    "repository": "https://github.com/gabime/spdlog",
-    "repository_name": "gabime/spdlog"
-  },
-  "commit_info": {
-    "old_sha": "343904b56d8745d2b7b9b07d92b96a460657c6ed",
-    "new_sha": "6d8efa8d7f5083eba96fc39a24357c97fca744a6",
-    "commit_message": [
-      "store thread_id in tls"
-    ],
-    "commit_date": "2016-12-02T15:33:49+00:00",
-    "patch": [
-      "--- include/spdlog/details/os.h\n@@ -294,7 +294,7 @@ inline int utc_minutes_offset(const std::tm& tm = details::os::localtime())\n \n //Return current thread id as size_t\n //It exists because the std::this_thread::get_id() is much slower(espcially under VS 2013)\n-inline size_t thread_id()\n+inline size_t _thread_id()\n {\n #ifdef _WIN32\n     return  static_cast<size_t>(::GetCurrentThreadId());\n@@ -310,11 +310,18 @@ inline size_t thread_id()\n #else //Default to standard C++11 (OSX and other Unix)\n     return static_cast<size_t>(std::hash<std::thread::id>()(std::this_thread::get_id()));\n #endif\n+}\n \n-\n+//Return current thread id as size_t (from thread local storage)\n+inline size_t thread_id()\n+{\n+    static thread_local const size_t tid = _thread_id();\n+\treturn tid;\n }\n \n \n+\n+\n // wchar support for windows file names (SPDLOG_WCHAR_FILENAMES must be defined)\n #if defined(_WIN32) && defined(SPDLOG_WCHAR_FILENAMES)\n #define SPDLOG_FILENAME_T(s) L ## s"
-    ],
-    "files_changed": [
-      {
-        "filename": "include/spdlog/details/os.h",
-        "status": "modified",
-        "additions": 9,
-        "deletions": 2,
-        "changes": 11,
-        "patch": "@@ -294,7 +294,7 @@ inline int utc_minutes_offset(const std::tm& tm = details::os::localtime())\n \n //Return current thread id as size_t\n //It exists because the std::this_thread::get_id() is much slower(espcially under VS 2013)\n-inline size_t thread_id()\n+inline size_t _thread_id()\n {\n #ifdef _WIN32\n     return  static_cast<size_t>(::GetCurrentThreadId());\n@@ -310,11 +310,18 @@ inline size_t thread_id()\n #else //Default to standard C++11 (OSX and other Unix)\n     return static_cast<size_t>(std::hash<std::thread::id>()(std::this_thread::get_id()));\n #endif\n+}\n \n-\n+//Return current thread id as size_t (from thread local storage)\n+inline size_t thread_id()\n+{\n+    static thread_local const size_t tid = _thread_id();\n+\treturn tid;\n }\n \n \n+\n+\n // wchar support for windows file names (SPDLOG_WCHAR_FILENAMES must be defined)\n #if defined(_WIN32) && defined(SPDLOG_WCHAR_FILENAMES)\n #define SPDLOG_FILENAME_T(s) L ## s"
-      }
-    ],
-    "lines_added": 9,
-    "lines_removed": 2
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\nctest --output-on-failure",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\nctest --output-on-failure",
-    "old_test_script": "#!/bin/bash\n",
-    "new_test_script": "#!/bin/bash\n",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 0.9935252879292348,
-    "is_pair_significant": false,
-    "pair_p_value": 0.9973616626177709,
-    "is_binom_significant": false,
-    "binom_p_value": 0.9992845468223095,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9962858959688552,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.9721012467693972,
-    "relative_improvement": -0.11678832116788314,
-    "absolute_improvement_ms": -5.333333333333336,
-    "old_mean_ms": 45.66666666666667,
-    "new_mean_ms": 51.00000000000001,
-    "old_std_ms": 11.043279539543756,
-    "new_std_ms": 12.41522980192001,
-    "effect_size_cohens_d": -0.4539278725315344,
-    "old_ci95_ms": [
-      41.54303831666587,
-      49.79029501666748
-    ],
-    "new_ci95_ms": [
-      46.36407700270103,
-      55.63592299729899
-    ],
-    "old_ci99_ms": [
-      40.109192424280316,
-      51.224140909053034
-    ],
-    "new_ci99_ms": [
-      44.75209876826785,
-      57.24790123173217
-    ],
-    "new_times_s": [
-      0.08,
-      0.05,
-      0.08,
-      0.06,
-      0.05,
-      0.04,
-      0.04,
-      0.04,
-      0.04,
-      0.04,
-      0.04,
-      0.05,
-      0.07,
-      0.04,
-      0.08,
-      0.06,
-      0.05,
-      0.06,
-      0.04,
-      0.04,
-      0.04,
-      0.07,
-      0.05,
-      0.04,
-      0.04,
-      0.04,
-      0.05,
-      0.06,
-      0.06,
-      0.05,
-      0.06
-    ],
-    "old_times_s": [
-      0.11,
-      0.06,
-      0.09,
-      0.05,
-      0.04,
-      0.04,
-      0.04,
-      0.04,
-      0.05,
-      0.05,
-      0.04,
-      0.05,
-      0.05,
-      0.04,
-      0.04,
-      0.04,
-      0.03,
-      0.04,
-      0.04,
-      0.05,
-      0.04,
-      0.04,
-      0.04,
-      0.06,
-      0.04,
-      0.04,
-      0.04,
-      0.05,
-      0.04,
-      0.06,
-      0.04
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 1,
-    "significant_mannwhitney_regressions_tests": [
-      "catch_tests"
-    ],
-    "tests": [
-      {
-        "test_name": "catch_tests",
+    "metadata": {
+        "collection_date": "2026-01-14T18:40:48.689121",
+        "repository": "https://github.com/gabime/spdlog",
+        "repository_name": "gabime/spdlog"
+    },
+    "commit_info": {
+        "old_sha": "343904b56d8745d2b7b9b07d92b96a460657c6ed",
+        "new_sha": "6d8efa8d7f5083eba96fc39a24357c97fca744a6",
+        "commit_message": [
+            "store thread_id in tls"
+        ],
+        "commit_date": "2016-12-02T15:33:49+00:00",
+        "patch": [
+            "--- include/spdlog/details/os.h\n@@ -294,7 +294,7 @@ inline int utc_minutes_offset(const std::tm& tm = details::os::localtime())\n \n //Return current thread id as size_t\n //It exists because the std::this_thread::get_id() is much slower(espcially under VS 2013)\n-inline size_t thread_id()\n+inline size_t _thread_id()\n {\n #ifdef _WIN32\n     return  static_cast<size_t>(::GetCurrentThreadId());\n@@ -310,11 +310,18 @@ inline size_t thread_id()\n #else //Default to standard C++11 (OSX and other Unix)\n     return static_cast<size_t>(std::hash<std::thread::id>()(std::this_thread::get_id()));\n #endif\n+}\n \n-\n+//Return current thread id as size_t (from thread local storage)\n+inline size_t thread_id()\n+{\n+    static thread_local const size_t tid = _thread_id();\n+\treturn tid;\n }\n \n \n+\n+\n // wchar support for windows file names (SPDLOG_WCHAR_FILENAMES must be defined)\n #if defined(_WIN32) && defined(SPDLOG_WCHAR_FILENAMES)\n #define SPDLOG_FILENAME_T(s) L ## s"
+        ],
+        "files_changed": [
+            {
+                "filename": "include/spdlog/details/os.h",
+                "status": "modified",
+                "additions": 9,
+                "deletions": 2,
+                "changes": 11,
+                "patch": "@@ -294,7 +294,7 @@ inline int utc_minutes_offset(const std::tm& tm = details::os::localtime())\n \n //Return current thread id as size_t\n //It exists because the std::this_thread::get_id() is much slower(espcially under VS 2013)\n-inline size_t thread_id()\n+inline size_t _thread_id()\n {\n #ifdef _WIN32\n     return  static_cast<size_t>(::GetCurrentThreadId());\n@@ -310,11 +310,18 @@ inline size_t thread_id()\n #else //Default to standard C++11 (OSX and other Unix)\n     return static_cast<size_t>(std::hash<std::thread::id>()(std::this_thread::get_id()));\n #endif\n+}\n \n-\n+//Return current thread id as size_t (from thread local storage)\n+inline size_t thread_id()\n+{\n+    static thread_local const size_t tid = _thread_id();\n+\treturn tid;\n }\n \n \n+\n+\n // wchar support for windows file names (SPDLOG_WCHAR_FILENAMES must be defined)\n #if defined(_WIN32) && defined(SPDLOG_WCHAR_FILENAMES)\n #define SPDLOG_FILENAME_T(s) L ## s"
+            }
+        ],
+        "lines_added": 9,
+        "lines_removed": 2
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
-        "p_value": 0.9957152753692504,
+        "p_value": 0.9935252879292348,
         "is_pair_significant": false,
-        "pair_p_value": 0.998884887794847,
+        "pair_p_value": 0.9973616626177709,
         "is_binom_significant": false,
-        "binom_p_value": 0.9999481420964003,
+        "binom_p_value": 0.9992845468223095,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9990405425066482,
+        "wilcoxon_p_value": 0.9962858959688552,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.9887594868200827,
-        "relative_improvement": -0.15079365079365076,
-        "absolute_improvement_ms": -6.551724137931044,
-        "old_mean_ms": 43.448275862068975,
-        "new_mean_ms": 50.000000000000014,
-        "old_std_ms": 11.425492196014236,
-        "new_std_ms": 13.363062095621217,
-        "effect_size_cohens_d": -0.5270013828069372,
+        "mannwhitney_p_value": 0.9721012467693972,
+        "relative_improvement": -0.11678832116788314,
+        "absolute_improvement_ms": -5.333333333333336,
+        "old_mean_ms": 45.66666666666667,
+        "new_mean_ms": 51.00000000000001,
+        "old_std_ms": 11.043279539543756,
+        "new_std_ms": 12.41522980192001,
+        "effect_size_cohens_d": -0.4539278725315344,
         "old_ci95_ms": [
-          39.10225106040744,
-          47.7943006637305
+            41.54303831666587,
+            49.79029501666748
         ],
         "new_ci95_ms": [
-          44.91696302466755,
-          55.08303697533248
+            46.36407700270103,
+            55.63592299729899
         ],
         "old_ci99_ms": [
-          37.585570680125045,
-          49.3109810440129
+            40.109192424280316,
+            51.224140909053034
         ],
         "new_ci99_ms": [
-          43.143079348304404,
-          56.856920651695624
+            44.75209876826785,
+            57.24790123173217
         ],
-        "new_times": [
-          0.08,
-          0.06,
-          0.05,
-          0.04,
-          0.04,
-          0.04,
-          0.04,
-          0.03,
-          0.04,
-          0.05,
-          0.07,
-          0.04,
-          0.08,
-          0.06,
-          0.05,
-          0.06,
-          0.04,
-          0.04,
-          0.03,
-          0.07,
-          0.05,
-          0.04,
-          0.04,
-          0.04,
-          0.05,
-          0.06,
-          0.06,
-          0.05,
-          0.05
+        "new_times_s": [
+            0.08,
+            0.05,
+            0.08,
+            0.06,
+            0.05,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.05,
+            0.07,
+            0.04,
+            0.08,
+            0.06,
+            0.05,
+            0.06,
+            0.04,
+            0.04,
+            0.04,
+            0.07,
+            0.05,
+            0.04,
+            0.04,
+            0.04,
+            0.05,
+            0.06,
+            0.06,
+            0.05,
+            0.06
         ],
-        "old_times": [
-          0.09,
-          0.05,
-          0.04,
-          0.04,
-          0.04,
-          0.04,
-          0.04,
-          0.04,
-          0.04,
-          0.05,
-          0.04,
-          0.04,
-          0.04,
-          0.04,
-          0.03,
-          0.04,
-          0.04,
-          0.05,
-          0.03,
-          0.04,
-          0.03,
-          0.06,
-          0.04,
-          0.04,
-          0.04,
-          0.05,
-          0.04,
-          0.06,
-          0.04
+        "old_times_s": [
+            0.11,
+            0.06,
+            0.09,
+            0.05,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.05,
+            0.05,
+            0.04,
+            0.05,
+            0.05,
+            0.04,
+            0.04,
+            0.04,
+            0.03,
+            0.04,
+            0.04,
+            0.05,
+            0.04,
+            0.04,
+            0.04,
+            0.06,
+            0.04,
+            0.04,
+            0.04,
+            0.05,
+            0.04,
+            0.06,
+            0.04
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 1,
+        "significant_mannwhitney_regressions_tests": [
+            "catch_tests"
+        ],
+        "tests": [
+            {
+                "test_name": "catch_tests",
+                "is_significant": false,
+                "p_value": 0.9957152753692504,
+                "is_pair_significant": false,
+                "pair_p_value": 0.998884887794847,
+                "is_binom_significant": false,
+                "binom_p_value": 0.9999481420964003,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9990405425066482,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.9887594868200827,
+                "relative_improvement": -0.15079365079365076,
+                "absolute_improvement_ms": -6.551724137931044,
+                "old_mean_ms": 43.448275862068975,
+                "new_mean_ms": 50.000000000000014,
+                "old_std_ms": 11.425492196014236,
+                "new_std_ms": 13.363062095621217,
+                "effect_size_cohens_d": -0.5270013828069372,
+                "old_ci95_ms": [
+                    39.10225106040744,
+                    47.7943006637305
+                ],
+                "new_ci95_ms": [
+                    44.91696302466755,
+                    55.08303697533248
+                ],
+                "old_ci99_ms": [
+                    37.585570680125045,
+                    49.3109810440129
+                ],
+                "new_ci99_ms": [
+                    43.143079348304404,
+                    56.856920651695624
+                ],
+                "new_times": [
+                    0.08,
+                    0.06,
+                    0.05,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.03,
+                    0.04,
+                    0.05,
+                    0.07,
+                    0.04,
+                    0.08,
+                    0.06,
+                    0.05,
+                    0.06,
+                    0.04,
+                    0.04,
+                    0.03,
+                    0.07,
+                    0.05,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.05,
+                    0.06,
+                    0.06,
+                    0.05,
+                    0.05
+                ],
+                "old_times": [
+                    0.09,
+                    0.05,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.05,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.03,
+                    0.04,
+                    0.04,
+                    0.05,
+                    0.03,
+                    0.04,
+                    0.03,
+                    0.06,
+                    0.04,
+                    0.04,
+                    0.04,
+                    0.05,
+                    0.04,
+                    0.06,
+                    0.04
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

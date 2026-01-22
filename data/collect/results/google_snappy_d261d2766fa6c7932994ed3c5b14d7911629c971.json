@@ -1,169 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:41.747429",
-    "repository": "https://github.com/google/snappy",
-    "repository_name": "google/snappy"
-  },
-  "commit_info": {
-    "old_sha": "6a2b78a379e4a6ca11eaacb3e26bea397a46d74b",
-    "new_sha": "d261d2766fa6c7932994ed3c5b14d7911629c971",
-    "commit_message": [
-      "Optimize zippy MemCpy / MemMove during decompression\n\nBy default MemCpy() / MemMove() always copies 64 bytes in DecompressBranchless().  Profiling shows that the vast majority of the time we need to copy many fewer bytes (typically <= 16 bytes).  It is safe to copy fewer bytes as long as we exceed len.\n\nThis change improves throughput by ~12% on ARM, ~35% on AMD Milan, and ~7% on Intel Cascade Lake.\n\nPiperOrigin-RevId: 453917840"
-    ],
-    "commit_date": "2022-06-09T14:13:38+00:00",
-    "patch": [
-      "--- snappy.cc\n@@ -983,22 +983,35 @@ inline bool Copy64BytesWithPatternExtension(ptrdiff_t dst, size_t offset) {\n   return offset != 0;\n }\n \n-void MemCopy(char* dst, const uint8_t* src, size_t size) {\n-  std::memcpy(dst, src, size);\n-}\n-\n-void MemCopy(ptrdiff_t dst, const uint8_t* src, size_t size) {\n-  // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n-  (void)dst;\n-  (void)src;\n-  (void)size;\n-}\n-\n-void MemMove(char* dst, const void* src, size_t size) {\n-  std::memmove(dst, src, size);\n+// Copies between size bytes and 64 bytes from src to dest.  size cannot exceed\n+// 64.  More than size bytes, but never exceeding 64, might be copied if doing\n+// so gives better performance.\n+void MemCopy64(char* dst, const void* src, size_t size) {\n+  // Always copy this many bytes, test if we need to copy more.\n+  constexpr int kShortMemCopy = 32;\n+  // We're always allowed to copy 64 bytes, so if we exceed kShortMemCopy just\n+  // copy 64 rather than the exact amount.\n+  constexpr int kLongMemCopy = 64;\n+\n+  assert(size <= kLongMemCopy);\n+  // [src, src + size) must not overlap with [dst, dst + size)\n+  assert(std::less_equal<const void*>()(static_cast<const char*>(src) + size,\n+                                        dst) ||\n+         std::less_equal<const void*>()(dst + size, src));\n+\n+  // We know that src and dst are at least size bytes apart. However, because we\n+  // might copy more than size bytes the copy still might overlap past size.\n+  // E.g. if src and dst appear consecutively in memory (src + size == dst).\n+  std::memmove(dst, src, kShortMemCopy);\n+  // Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                 static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                 kLongMemCopy - kShortMemCopy);\n+  }\n }\n \n-void MemMove(ptrdiff_t dst, const void* src, size_t size) {\n+void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {\n   // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n   (void)dst;\n   (void)src;\n@@ -1170,7 +1183,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n           // Due to the spurious offset in literals have this will trigger\n           // at the start of a block when op is still smaller than 256.\n           if (tag_type != 0) goto break_loop;\n-          MemCopy(op_base + op, old_ip, 64);\n+          MemCopy64(op_base + op, old_ip, len);\n           op += len;\n           continue;\n         }\n@@ -1179,7 +1192,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n         // we need to copy from ip instead of from the stream.\n         const void* from =\n             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;\n-        MemMove(op_base + op, from, 64);\n+        MemCopy64(op_base + op, from, len);\n         op += len;\n       }\n     } while (ip < ip_limit_min_slop && op < op_limit_min_slop);"
-    ],
-    "files_changed": [
-      {
-        "filename": "snappy.cc",
-        "status": "modified",
-        "additions": 29,
-        "deletions": 16,
-        "changes": 45,
-        "patch": "@@ -983,22 +983,35 @@ inline bool Copy64BytesWithPatternExtension(ptrdiff_t dst, size_t offset) {\n   return offset != 0;\n }\n \n-void MemCopy(char* dst, const uint8_t* src, size_t size) {\n-  std::memcpy(dst, src, size);\n-}\n-\n-void MemCopy(ptrdiff_t dst, const uint8_t* src, size_t size) {\n-  // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n-  (void)dst;\n-  (void)src;\n-  (void)size;\n-}\n-\n-void MemMove(char* dst, const void* src, size_t size) {\n-  std::memmove(dst, src, size);\n+// Copies between size bytes and 64 bytes from src to dest.  size cannot exceed\n+// 64.  More than size bytes, but never exceeding 64, might be copied if doing\n+// so gives better performance.\n+void MemCopy64(char* dst, const void* src, size_t size) {\n+  // Always copy this many bytes, test if we need to copy more.\n+  constexpr int kShortMemCopy = 32;\n+  // We're always allowed to copy 64 bytes, so if we exceed kShortMemCopy just\n+  // copy 64 rather than the exact amount.\n+  constexpr int kLongMemCopy = 64;\n+\n+  assert(size <= kLongMemCopy);\n+  // [src, src + size) must not overlap with [dst, dst + size)\n+  assert(std::less_equal<const void*>()(static_cast<const char*>(src) + size,\n+                                        dst) ||\n+         std::less_equal<const void*>()(dst + size, src));\n+\n+  // We know that src and dst are at least size bytes apart. However, because we\n+  // might copy more than size bytes the copy still might overlap past size.\n+  // E.g. if src and dst appear consecutively in memory (src + size == dst).\n+  std::memmove(dst, src, kShortMemCopy);\n+  // Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                 static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                 kLongMemCopy - kShortMemCopy);\n+  }\n }\n \n-void MemMove(ptrdiff_t dst, const void* src, size_t size) {\n+void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {\n   // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n   (void)dst;\n   (void)src;\n@@ -1170,7 +1183,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n           // Due to the spurious offset in literals have this will trigger\n           // at the start of a block when op is still smaller than 256.\n           if (tag_type != 0) goto break_loop;\n-          MemCopy(op_base + op, old_ip, 64);\n+          MemCopy64(op_base + op, old_ip, len);\n           op += len;\n           continue;\n         }\n@@ -1179,7 +1192,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n         // we need to copy from ip instead of from the stream.\n         const void* from =\n             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;\n-        MemMove(op_base + op, from, 64);\n+        MemCopy64(op_base + op, from, len);\n         op += len;\n       }\n     } while (ip < ip_limit_min_slop && op < op_limit_min_slop);"
-      }
-    ],
-    "lines_added": 29,
-    "lines_removed": 16
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991501153951,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 1.3285539979107986e-11,
-    "relative_improvement": 0.02271753107586783,
-    "absolute_improvement_ms": 211.99999999999795,
-    "old_mean_ms": 9331.999999999998,
-    "new_mean_ms": 9120.000000000002,
-    "old_std_ms": 43.89642982890687,
-    "new_std_ms": 24.91364395612222,
-    "effect_size_cohens_d": 5.939999580719574,
-    "old_ci95_ms": [
-      9315.608803720113,
-      9348.391196279885
-    ],
-    "new_ci95_ms": [
-      9110.697092457778,
-      9129.302907542224
-    ],
-    "old_ci99_ms": [
-      9309.909345024425,
-      9354.090654975571
-    ],
-    "new_ci99_ms": [
-      9107.462335434475,
-      9132.537664565527
-    ],
-    "new_times_s": [
-      9.13,
-      9.11,
-      9.11,
-      9.1,
-      9.11,
-      9.16,
-      9.14,
-      9.17,
-      9.1,
-      9.12,
-      9.09,
-      9.14,
-      9.12,
-      9.1,
-      9.13,
-      9.09,
-      9.09,
-      9.11,
-      9.1,
-      9.1,
-      9.17,
-      9.09,
-      9.1,
-      9.13,
-      9.11,
-      9.16,
-      9.11,
-      9.14,
-      9.16,
-      9.13,
-      9.11
-    ],
-    "old_times_s": [
-      9.27,
-      9.32,
-      9.35,
-      9.35,
-      9.33,
-      9.26,
-      9.4,
-      9.34,
-      9.33,
-      9.3,
-      9.34,
-      9.35,
-      9.33,
-      9.34,
-      9.34,
-      9.33,
-      9.23,
-      9.31,
-      9.29,
-      9.35,
-      9.32,
-      9.2,
-      9.36,
-      9.38,
-      9.41,
-      9.38,
-      9.34,
-      9.33,
-      9.37,
-      9.34,
-      9.34
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 1,
-    "significant_mannwhitney_improvements_tests": [
-      "snappy_unittest"
-    ],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "snappy_unittest",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:41.747429",
+        "repository": "https://github.com/google/snappy",
+        "repository_name": "google/snappy"
+    },
+    "commit_info": {
+        "old_sha": "6a2b78a379e4a6ca11eaacb3e26bea397a46d74b",
+        "new_sha": "d261d2766fa6c7932994ed3c5b14d7911629c971",
+        "commit_message": [
+            "Optimize zippy MemCpy / MemMove during decompression\n\nBy default MemCpy() / MemMove() always copies 64 bytes in DecompressBranchless().  Profiling shows that the vast majority of the time we need to copy many fewer bytes (typically <= 16 bytes).  It is safe to copy fewer bytes as long as we exceed len.\n\nThis change improves throughput by ~12% on ARM, ~35% on AMD Milan, and ~7% on Intel Cascade Lake.\n\nPiperOrigin-RevId: 453917840"
+        ],
+        "commit_date": "2022-06-09T14:13:38+00:00",
+        "patch": [
+            "--- snappy.cc\n@@ -983,22 +983,35 @@ inline bool Copy64BytesWithPatternExtension(ptrdiff_t dst, size_t offset) {\n   return offset != 0;\n }\n \n-void MemCopy(char* dst, const uint8_t* src, size_t size) {\n-  std::memcpy(dst, src, size);\n-}\n-\n-void MemCopy(ptrdiff_t dst, const uint8_t* src, size_t size) {\n-  // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n-  (void)dst;\n-  (void)src;\n-  (void)size;\n-}\n-\n-void MemMove(char* dst, const void* src, size_t size) {\n-  std::memmove(dst, src, size);\n+// Copies between size bytes and 64 bytes from src to dest.  size cannot exceed\n+// 64.  More than size bytes, but never exceeding 64, might be copied if doing\n+// so gives better performance.\n+void MemCopy64(char* dst, const void* src, size_t size) {\n+  // Always copy this many bytes, test if we need to copy more.\n+  constexpr int kShortMemCopy = 32;\n+  // We're always allowed to copy 64 bytes, so if we exceed kShortMemCopy just\n+  // copy 64 rather than the exact amount.\n+  constexpr int kLongMemCopy = 64;\n+\n+  assert(size <= kLongMemCopy);\n+  // [src, src + size) must not overlap with [dst, dst + size)\n+  assert(std::less_equal<const void*>()(static_cast<const char*>(src) + size,\n+                                        dst) ||\n+         std::less_equal<const void*>()(dst + size, src));\n+\n+  // We know that src and dst are at least size bytes apart. However, because we\n+  // might copy more than size bytes the copy still might overlap past size.\n+  // E.g. if src and dst appear consecutively in memory (src + size == dst).\n+  std::memmove(dst, src, kShortMemCopy);\n+  // Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                 static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                 kLongMemCopy - kShortMemCopy);\n+  }\n }\n \n-void MemMove(ptrdiff_t dst, const void* src, size_t size) {\n+void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {\n   // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n   (void)dst;\n   (void)src;\n@@ -1170,7 +1183,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n           // Due to the spurious offset in literals have this will trigger\n           // at the start of a block when op is still smaller than 256.\n           if (tag_type != 0) goto break_loop;\n-          MemCopy(op_base + op, old_ip, 64);\n+          MemCopy64(op_base + op, old_ip, len);\n           op += len;\n           continue;\n         }\n@@ -1179,7 +1192,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n         // we need to copy from ip instead of from the stream.\n         const void* from =\n             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;\n-        MemMove(op_base + op, from, 64);\n+        MemCopy64(op_base + op, from, len);\n         op += len;\n       }\n     } while (ip < ip_limit_min_slop && op < op_limit_min_slop);"
+        ],
+        "files_changed": [
+            {
+                "filename": "snappy.cc",
+                "status": "modified",
+                "additions": 29,
+                "deletions": 16,
+                "changes": 45,
+                "patch": "@@ -983,22 +983,35 @@ inline bool Copy64BytesWithPatternExtension(ptrdiff_t dst, size_t offset) {\n   return offset != 0;\n }\n \n-void MemCopy(char* dst, const uint8_t* src, size_t size) {\n-  std::memcpy(dst, src, size);\n-}\n-\n-void MemCopy(ptrdiff_t dst, const uint8_t* src, size_t size) {\n-  // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n-  (void)dst;\n-  (void)src;\n-  (void)size;\n-}\n-\n-void MemMove(char* dst, const void* src, size_t size) {\n-  std::memmove(dst, src, size);\n+// Copies between size bytes and 64 bytes from src to dest.  size cannot exceed\n+// 64.  More than size bytes, but never exceeding 64, might be copied if doing\n+// so gives better performance.\n+void MemCopy64(char* dst, const void* src, size_t size) {\n+  // Always copy this many bytes, test if we need to copy more.\n+  constexpr int kShortMemCopy = 32;\n+  // We're always allowed to copy 64 bytes, so if we exceed kShortMemCopy just\n+  // copy 64 rather than the exact amount.\n+  constexpr int kLongMemCopy = 64;\n+\n+  assert(size <= kLongMemCopy);\n+  // [src, src + size) must not overlap with [dst, dst + size)\n+  assert(std::less_equal<const void*>()(static_cast<const char*>(src) + size,\n+                                        dst) ||\n+         std::less_equal<const void*>()(dst + size, src));\n+\n+  // We know that src and dst are at least size bytes apart. However, because we\n+  // might copy more than size bytes the copy still might overlap past size.\n+  // E.g. if src and dst appear consecutively in memory (src + size == dst).\n+  std::memmove(dst, src, kShortMemCopy);\n+  // Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                 static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                 kLongMemCopy - kShortMemCopy);\n+  }\n }\n \n-void MemMove(ptrdiff_t dst, const void* src, size_t size) {\n+void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {\n   // TODO: Switch to [[maybe_unused]] when we can assume C++17.\n   (void)dst;\n   (void)src;\n@@ -1170,7 +1183,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n           // Due to the spurious offset in literals have this will trigger\n           // at the start of a block when op is still smaller than 256.\n           if (tag_type != 0) goto break_loop;\n-          MemCopy(op_base + op, old_ip, 64);\n+          MemCopy64(op_base + op, old_ip, len);\n           op += len;\n           continue;\n         }\n@@ -1179,7 +1192,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n         // we need to copy from ip instead of from the stream.\n         const void* from =\n             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;\n-        MemMove(op_base + op, from, 64);\n+        MemCopy64(op_base + op, from, len);\n         op += len;\n       }\n     } while (ip < ip_limit_min_slop && op < op_limit_min_slop);"
+            }
+        ],
+        "lines_added": 29,
+        "lines_removed": 16
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -171,109 +58,236 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999987373278878,
+        "wilcoxon_p_value": 0.9999991501153951,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 2.7674238962606888e-11,
-        "relative_improvement": 0.022765910266834093,
-        "absolute_improvement_ms": 212.41379310344755,
-        "old_mean_ms": 9330.344827586207,
-        "new_mean_ms": 9117.931034482759,
-        "old_std_ms": 44.11695160274805,
-        "new_std_ms": 26.10135606012359,
-        "effect_size_cohens_d": 5.860291585547917,
+        "mannwhitney_p_value": 1.3285539979107986e-11,
+        "relative_improvement": 0.02271753107586783,
+        "absolute_improvement_ms": 211.99999999999795,
+        "old_mean_ms": 9331.999999999998,
+        "new_mean_ms": 9120.000000000002,
+        "old_std_ms": 43.89642982890687,
+        "new_std_ms": 24.91364395612222,
+        "effect_size_cohens_d": 5.939999580719574,
         "old_ci95_ms": [
-          9313.563636671197,
-          9347.126018501214
+            9315.608803720113,
+            9348.391196279885
         ],
         "new_ci95_ms": [
-          9108.002609619463,
-          9127.859459346053
+            9110.697092457778,
+            9129.302907542224
         ],
         "old_ci99_ms": [
-          9307.707318730068,
-          9352.982336442343
+            9309.909345024425,
+            9354.090654975571
         ],
         "new_ci99_ms": [
-          9104.537777299243,
-          9131.324291666273
+            9107.462335434475,
+            9132.537664565527
         ],
-        "new_times": [
-          9.11,
-          9.1,
-          9.11,
-          9.16,
-          9.14,
-          9.17,
-          9.1,
-          9.11,
-          9.09,
-          9.14,
-          9.12,
-          9.1,
-          9.13,
-          9.09,
-          9.08,
-          9.11,
-          9.09,
-          9.1,
-          9.17,
-          9.09,
-          9.09,
-          9.13,
-          9.11,
-          9.16,
-          9.1,
-          9.14,
-          9.15,
-          9.12,
-          9.11
+        "new_times_s": [
+            9.13,
+            9.11,
+            9.11,
+            9.1,
+            9.11,
+            9.16,
+            9.14,
+            9.17,
+            9.1,
+            9.12,
+            9.09,
+            9.14,
+            9.12,
+            9.1,
+            9.13,
+            9.09,
+            9.09,
+            9.11,
+            9.1,
+            9.1,
+            9.17,
+            9.09,
+            9.1,
+            9.13,
+            9.11,
+            9.16,
+            9.11,
+            9.14,
+            9.16,
+            9.13,
+            9.11
         ],
-        "old_times": [
-          9.34,
-          9.34,
-          9.33,
-          9.26,
-          9.4,
-          9.33,
-          9.33,
-          9.3,
-          9.34,
-          9.34,
-          9.33,
-          9.34,
-          9.34,
-          9.33,
-          9.23,
-          9.3,
-          9.29,
-          9.35,
-          9.32,
-          9.2,
-          9.36,
-          9.37,
-          9.41,
-          9.38,
-          9.34,
-          9.33,
-          9.37,
-          9.34,
-          9.34
+        "old_times_s": [
+            9.27,
+            9.32,
+            9.35,
+            9.35,
+            9.33,
+            9.26,
+            9.4,
+            9.34,
+            9.33,
+            9.3,
+            9.34,
+            9.35,
+            9.33,
+            9.34,
+            9.34,
+            9.33,
+            9.23,
+            9.31,
+            9.29,
+            9.35,
+            9.32,
+            9.2,
+            9.36,
+            9.38,
+            9.41,
+            9.38,
+            9.34,
+            9.33,
+            9.37,
+            9.34,
+            9.34
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 1,
+        "significant_mannwhitney_improvements_tests": [
+            "snappy_unittest"
+        ],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "snappy_unittest",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999987373278878,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 2.7674238962606888e-11,
+                "relative_improvement": 0.022765910266834093,
+                "absolute_improvement_ms": 212.41379310344755,
+                "old_mean_ms": 9330.344827586207,
+                "new_mean_ms": 9117.931034482759,
+                "old_std_ms": 44.11695160274805,
+                "new_std_ms": 26.10135606012359,
+                "effect_size_cohens_d": 5.860291585547917,
+                "old_ci95_ms": [
+                    9313.563636671197,
+                    9347.126018501214
+                ],
+                "new_ci95_ms": [
+                    9108.002609619463,
+                    9127.859459346053
+                ],
+                "old_ci99_ms": [
+                    9307.707318730068,
+                    9352.982336442343
+                ],
+                "new_ci99_ms": [
+                    9104.537777299243,
+                    9131.324291666273
+                ],
+                "new_times": [
+                    9.11,
+                    9.1,
+                    9.11,
+                    9.16,
+                    9.14,
+                    9.17,
+                    9.1,
+                    9.11,
+                    9.09,
+                    9.14,
+                    9.12,
+                    9.1,
+                    9.13,
+                    9.09,
+                    9.08,
+                    9.11,
+                    9.09,
+                    9.1,
+                    9.17,
+                    9.09,
+                    9.09,
+                    9.13,
+                    9.11,
+                    9.16,
+                    9.1,
+                    9.14,
+                    9.15,
+                    9.12,
+                    9.11
+                ],
+                "old_times": [
+                    9.34,
+                    9.34,
+                    9.33,
+                    9.26,
+                    9.4,
+                    9.33,
+                    9.33,
+                    9.3,
+                    9.34,
+                    9.34,
+                    9.33,
+                    9.34,
+                    9.34,
+                    9.33,
+                    9.23,
+                    9.3,
+                    9.29,
+                    9.35,
+                    9.32,
+                    9.2,
+                    9.36,
+                    9.37,
+                    9.41,
+                    9.38,
+                    9.34,
+                    9.33,
+                    9.37,
+                    9.34,
+                    9.34
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

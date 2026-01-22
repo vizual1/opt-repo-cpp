@@ -1,169 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:10.201345",
-    "repository": "https://github.com/gabime/spdlog",
-    "repository_name": "gabime/spdlog"
-  },
-  "commit_info": {
-    "old_sha": "bbff8abf5824c6edcbc05ab9626c39fcb0be73ee",
-    "new_sha": "21524c16fadaab4c5c8b852325685651e3048c57",
-    "commit_message": [
-      "faster reset of cached buffer"
-    ],
-    "commit_date": "2018-07-09T12:05:48+00:00",
-    "patch": [
-      "--- include/spdlog/details/pattern_formatter.h\n@@ -460,9 +460,9 @@ class full_formatter SPDLOG_FINAL : public flag_formatter\n         // each second cache the header\n         auto duration = msg.time.time_since_epoch();\n         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();\n-        if (cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n+        if (true || cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n         {\n-            cached_header_ = fmt::memory_buffer();\n+            cached_header_.resize(0);\n             cached_header_.push_back('[');\n             fmt_helper::append_int(tm_time.tm_year + 1900, cached_header_);\n             cached_header_.push_back('-');"
-    ],
-    "files_changed": [
-      {
-        "filename": "include/spdlog/details/pattern_formatter.h",
-        "status": "modified",
-        "additions": 2,
-        "deletions": 2,
-        "changes": 4,
-        "patch": "@@ -460,9 +460,9 @@ class full_formatter SPDLOG_FINAL : public flag_formatter\n         // each second cache the header\n         auto duration = msg.time.time_since_epoch();\n         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();\n-        if (cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n+        if (true || cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n         {\n-            cached_header_ = fmt::memory_buffer();\n+            cached_header_.resize(0);\n             cached_header_.push_back('[');\n             fmt_helper::append_int(tm_time.tm_year + 1900, cached_header_);\n             cached_header_.push_back('-');"
-      }
-    ],
-    "lines_added": 2,
-    "lines_removed": 2
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "old_test_script": "#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DSPDLOG_BUILD_TESTING=ON",
-    "new_test_script": "#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DSPDLOG_BUILD_TESTING=ON",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999995487195642,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.9771499071600092,
-    "relative_improvement": -0.002758077226162344,
-    "absolute_improvement_ms": -2.3333333333331874,
-    "old_mean_ms": 846.0000000000002,
-    "new_mean_ms": 848.3333333333334,
-    "old_std_ms": 4.982728791224401,
-    "new_std_ms": 3.7904902178945203,
-    "effect_size_cohens_d": -0.5270771875933298,
-    "old_ci95_ms": [
-      844.1394184915557,
-      847.8605815084446
-    ],
-    "new_ci95_ms": [
-      846.91794102465,
-      849.7487256420168
-    ],
-    "old_ci99_ms": [
-      843.4924670868951,
-      848.5075329131054
-    ],
-    "new_ci99_ms": [
-      846.4257884163968,
-      850.2408782502699
-    ],
-    "new_times_s": [
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.84,
-      0.84,
-      0.85,
-      0.85,
-      0.85
-    ],
-    "old_times_s": [
-      0.85,
-      0.84,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.84,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.84,
-      0.85,
-      0.84,
-      0.84,
-      0.84,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 1,
-    "significant_mannwhitney_regressions_tests": [
-      "spdlog-utests"
-    ],
-    "tests": [
-      {
-        "test_name": "spdlog-utests",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:10.201345",
+        "repository": "https://github.com/gabime/spdlog",
+        "repository_name": "gabime/spdlog"
+    },
+    "commit_info": {
+        "old_sha": "bbff8abf5824c6edcbc05ab9626c39fcb0be73ee",
+        "new_sha": "21524c16fadaab4c5c8b852325685651e3048c57",
+        "commit_message": [
+            "faster reset of cached buffer"
+        ],
+        "commit_date": "2018-07-09T12:05:48+00:00",
+        "patch": [
+            "--- include/spdlog/details/pattern_formatter.h\n@@ -460,9 +460,9 @@ class full_formatter SPDLOG_FINAL : public flag_formatter\n         // each second cache the header\n         auto duration = msg.time.time_since_epoch();\n         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();\n-        if (cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n+        if (true || cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n         {\n-            cached_header_ = fmt::memory_buffer();\n+            cached_header_.resize(0);\n             cached_header_.push_back('[');\n             fmt_helper::append_int(tm_time.tm_year + 1900, cached_header_);\n             cached_header_.push_back('-');"
+        ],
+        "files_changed": [
+            {
+                "filename": "include/spdlog/details/pattern_formatter.h",
+                "status": "modified",
+                "additions": 2,
+                "deletions": 2,
+                "changes": 4,
+                "patch": "@@ -460,9 +460,9 @@ class full_formatter SPDLOG_FINAL : public flag_formatter\n         // each second cache the header\n         auto duration = msg.time.time_since_epoch();\n         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();\n-        if (cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n+        if (true || cached_header_.size() == 0 || cached_seconds_ts_ != seconds)\n         {\n-            cached_header_ = fmt::memory_buffer();\n+            cached_header_.resize(0);\n             cached_header_.push_back('[');\n             fmt_helper::append_int(tm_time.tm_year + 1900, cached_header_);\n             cached_header_.push_back('-');"
+            }
+        ],
+        "lines_added": 2,
+        "lines_removed": 2
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPDLOG_BUILD_TESTING=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPDLOG_BUILD_TESTING=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -171,109 +58,236 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999992412056856,
+        "wilcoxon_p_value": 0.9999995487195642,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.9912190404718013,
-        "relative_improvement": -0.0036764705882352884,
-        "absolute_improvement_ms": -3.103448275861953,
-        "old_mean_ms": 844.137931034483,
-        "new_mean_ms": 847.2413793103449,
-        "old_std_ms": 5.012300141587657,
-        "new_std_ms": 4.548588261473425,
-        "effect_size_cohens_d": -0.6484344113030442,
+        "mannwhitney_p_value": 0.9771499071600092,
+        "relative_improvement": -0.002758077226162344,
+        "absolute_improvement_ms": -2.3333333333331874,
+        "old_mean_ms": 846.0000000000002,
+        "new_mean_ms": 848.3333333333334,
+        "old_std_ms": 4.982728791224401,
+        "new_std_ms": 3.7904902178945203,
+        "effect_size_cohens_d": -0.5270771875933298,
         "old_ci95_ms": [
-          842.2313540262461,
-          846.0445080427199
+            844.1394184915557,
+            847.8605815084446
         ],
         "new_ci95_ms": [
-          845.5111888679755,
-          848.9715697527143
+            846.91794102465,
+            849.7487256420168
         ],
         "old_ci99_ms": [
-          841.5659947441764,
-          846.7098673247896
+            843.4924670868951,
+            848.5075329131054
         ],
         "new_ci99_ms": [
-          844.9073851581829,
-          849.5753734625068
+            846.4257884163968,
+            850.2408782502699
         ],
-        "new_times": [
-          0.85,
-          0.85,
-          0.85,
-          0.85,
-          0.85,
-          0.85,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.85,
-          0.85,
-          0.85,
-          0.85,
-          0.85,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.85,
-          0.85
+        "new_times_s": [
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.84,
+            0.84,
+            0.85,
+            0.85,
+            0.85
         ],
-        "old_times": [
-          0.84,
-          0.84,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.85,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.85,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.85,
-          0.85
+        "old_times_s": [
+            0.85,
+            0.84,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.84,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.84,
+            0.85,
+            0.84,
+            0.84,
+            0.84,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 1,
+        "significant_mannwhitney_regressions_tests": [
+            "spdlog-utests"
+        ],
+        "tests": [
+            {
+                "test_name": "spdlog-utests",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999992412056856,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.9912190404718013,
+                "relative_improvement": -0.0036764705882352884,
+                "absolute_improvement_ms": -3.103448275861953,
+                "old_mean_ms": 844.137931034483,
+                "new_mean_ms": 847.2413793103449,
+                "old_std_ms": 5.012300141587657,
+                "new_std_ms": 4.548588261473425,
+                "effect_size_cohens_d": -0.6484344113030442,
+                "old_ci95_ms": [
+                    842.2313540262461,
+                    846.0445080427199
+                ],
+                "new_ci95_ms": [
+                    845.5111888679755,
+                    848.9715697527143
+                ],
+                "old_ci99_ms": [
+                    841.5659947441764,
+                    846.7098673247896
+                ],
+                "new_ci99_ms": [
+                    844.9073851581829,
+                    849.5753734625068
+                ],
+                "new_times": [
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.85
+                ],
+                "old_times": [
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.85
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

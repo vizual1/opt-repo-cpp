@@ -1,167 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:11.933897",
-    "repository": "https://github.com/gabime/spdlog",
-    "repository_name": "gabime/spdlog"
-  },
-  "commit_info": {
-    "old_sha": "b4dcd592d85438f328c5b41f1a591a2cfb7cd182",
-    "new_sha": "c887907d4a48dc689c26c1db6c864ce2cb94fe56",
-    "commit_message": [
-      "faster reset of cached buffer"
-    ],
-    "commit_date": "2018-07-09T12:10:43+00:00",
-    "patch": [
-      "--- include/spdlog/details/pattern_formatter.h\n@@ -29,16 +29,6 @@ class flag_formatter\n public:\n     virtual ~flag_formatter() = default;\n     virtual void format(const details::log_msg &msg, const std::tm &tm_time, fmt::memory_buffer &dest) = 0;\n-\n-protected:\n-    fmt::memory_buffer cached_buf_;\n-    std::tm cached_tm_;\n-    bool from_cache(const std::tm &tm_time, fmt::memory_buffer &dest)\n-    {\n-\n-    }\n-\n-\n };\n \n ///////////////////////////////////////////////////////////////////////"
-    ],
-    "files_changed": [
-      {
-        "filename": "include/spdlog/details/pattern_formatter.h",
-        "status": "modified",
-        "additions": 0,
-        "deletions": 10,
-        "changes": 10,
-        "patch": "@@ -29,16 +29,6 @@ class flag_formatter\n public:\n     virtual ~flag_formatter() = default;\n     virtual void format(const details::log_msg &msg, const std::tm &tm_time, fmt::memory_buffer &dest) = 0;\n-\n-protected:\n-    fmt::memory_buffer cached_buf_;\n-    std::tm cached_tm_;\n-    bool from_cache(const std::tm &tm_time, fmt::memory_buffer &dest)\n-    {\n-\n-    }\n-\n-\n };\n \n ///////////////////////////////////////////////////////////////////////"
-      }
-    ],
-    "lines_added": 0,
-    "lines_removed": 10
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "old_test_script": "#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DSPDLOG_BUILD_TESTING=ON",
-    "new_test_script": "#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DSPDLOG_BUILD_TESTING=ON",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999993975346615,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.8201233975096129,
-    "relative_improvement": -0.0015772870662460231,
-    "absolute_improvement_ms": -1.3333333333330755,
-    "old_mean_ms": 845.3333333333337,
-    "new_mean_ms": 846.6666666666667,
-    "old_std_ms": 5.074162634049253,
-    "new_std_ms": 5.466722735905345,
-    "effect_size_cohens_d": -0.2528079226013352,
-    "old_ci95_ms": [
-      843.438609866871,
-      847.2280567997964
-    ],
-    "new_ci95_ms": [
-      844.6253588491247,
-      848.7079744842089
-    ],
-    "old_ci99_ms": [
-      842.7797868040232,
-      847.8868798626443
-    ],
-    "new_ci99_ms": [
-      843.9155662633606,
-      849.4177670699729
-    ],
-    "new_times_s": [
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.85,
-      0.86,
-      0.85,
-      0.85,
-      0.84,
-      0.84,
-      0.85,
-      0.84,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.84,
-      0.84,
-      0.84,
-      0.85
-    ],
-    "old_times_s": [
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.84,
-      0.84,
-      0.84,
-      0.84,
-      0.84,
-      0.85,
-      0.84,
-      0.84,
-      0.85,
-      0.85,
-      0.84,
-      0.84,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.84,
-      0.85,
-      0.85,
-      0.85,
-      0.85
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "spdlog-utests",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:11.933897",
+        "repository": "https://github.com/gabime/spdlog",
+        "repository_name": "gabime/spdlog"
+    },
+    "commit_info": {
+        "old_sha": "b4dcd592d85438f328c5b41f1a591a2cfb7cd182",
+        "new_sha": "c887907d4a48dc689c26c1db6c864ce2cb94fe56",
+        "commit_message": [
+            "faster reset of cached buffer"
+        ],
+        "commit_date": "2018-07-09T12:10:43+00:00",
+        "patch": [
+            "--- include/spdlog/details/pattern_formatter.h\n@@ -29,16 +29,6 @@ class flag_formatter\n public:\n     virtual ~flag_formatter() = default;\n     virtual void format(const details::log_msg &msg, const std::tm &tm_time, fmt::memory_buffer &dest) = 0;\n-\n-protected:\n-    fmt::memory_buffer cached_buf_;\n-    std::tm cached_tm_;\n-    bool from_cache(const std::tm &tm_time, fmt::memory_buffer &dest)\n-    {\n-\n-    }\n-\n-\n };\n \n ///////////////////////////////////////////////////////////////////////"
+        ],
+        "files_changed": [
+            {
+                "filename": "include/spdlog/details/pattern_formatter.h",
+                "status": "modified",
+                "additions": 0,
+                "deletions": 10,
+                "changes": 10,
+                "patch": "@@ -29,16 +29,6 @@ class flag_formatter\n public:\n     virtual ~flag_formatter() = default;\n     virtual void format(const details::log_msg &msg, const std::tm &tm_time, fmt::memory_buffer &dest) = 0;\n-\n-protected:\n-    fmt::memory_buffer cached_buf_;\n-    std::tm cached_tm_;\n-    bool from_cache(const std::tm &tm_time, fmt::memory_buffer &dest)\n-    {\n-\n-    }\n-\n-\n };\n \n ///////////////////////////////////////////////////////////////////////"
+            }
+        ],
+        "lines_added": 0,
+        "lines_removed": 10
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DSPDLOG_BUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DSPDLOG_BUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -169,109 +58,234 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999995957768991,
+        "wilcoxon_p_value": 0.9999993975346615,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.5036904617700579,
-        "relative_improvement": 0.0,
-        "absolute_improvement_ms": 0.0,
-        "old_mean_ms": 843.7931034482759,
-        "new_mean_ms": 843.7931034482759,
-        "old_std_ms": 4.938039737912405,
-        "new_std_ms": 4.938039737912405,
-        "effect_size_cohens_d": 0.0,
+        "mannwhitney_p_value": 0.8201233975096129,
+        "relative_improvement": -0.0015772870662460231,
+        "absolute_improvement_ms": -1.3333333333330755,
+        "old_mean_ms": 845.3333333333337,
+        "new_mean_ms": 846.6666666666667,
+        "old_std_ms": 5.074162634049253,
+        "new_std_ms": 5.466722735905345,
+        "effect_size_cohens_d": -0.2528079226013352,
         "old_ci95_ms": [
-          841.9147735869117,
-          845.6714333096402
+            843.438609866871,
+            847.2280567997964
         ],
         "new_ci95_ms": [
-          841.9147735869117,
-          845.6714333096402
+            844.6253588491247,
+            848.7079744842089
         ],
         "old_ci99_ms": [
-          841.259272024348,
-          846.3269348722039
+            842.7797868040232,
+            847.8868798626443
         ],
         "new_ci99_ms": [
-          841.259272024348,
-          846.3269348722039
+            843.9155662633606,
+            849.4177670699729
         ],
-        "new_times": [
-          0.84,
-          0.85,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.84,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.84,
-          0.85
+        "new_times_s": [
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.85,
+            0.86,
+            0.85,
+            0.85,
+            0.84,
+            0.84,
+            0.85,
+            0.84,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.84,
+            0.84,
+            0.84,
+            0.85
         ],
-        "old_times": [
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.84,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.85,
-          0.84,
-          0.85,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.85,
-          0.84,
-          0.84,
-          0.84,
-          0.84,
-          0.85,
-          0.85
+        "old_times_s": [
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.84,
+            0.84,
+            0.84,
+            0.84,
+            0.84,
+            0.85,
+            0.84,
+            0.84,
+            0.85,
+            0.85,
+            0.84,
+            0.84,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.84,
+            0.85,
+            0.85,
+            0.85,
+            0.85
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "spdlog-utests",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999995957768991,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.5036904617700579,
+                "relative_improvement": 0.0,
+                "absolute_improvement_ms": 0.0,
+                "old_mean_ms": 843.7931034482759,
+                "new_mean_ms": 843.7931034482759,
+                "old_std_ms": 4.938039737912405,
+                "new_std_ms": 4.938039737912405,
+                "effect_size_cohens_d": 0.0,
+                "old_ci95_ms": [
+                    841.9147735869117,
+                    845.6714333096402
+                ],
+                "new_ci95_ms": [
+                    841.9147735869117,
+                    845.6714333096402
+                ],
+                "old_ci99_ms": [
+                    841.259272024348,
+                    846.3269348722039
+                ],
+                "new_ci99_ms": [
+                    841.259272024348,
+                    846.3269348722039
+                ],
+                "new_times": [
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85
+                ],
+                "old_times": [
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.84,
+                    0.85,
+                    0.85
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

@@ -1,169 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:51.104462",
-    "repository": "https://github.com/oatpp/oatpp",
-    "repository_name": "oatpp/oatpp"
-  },
-  "commit_info": {
-    "old_sha": "ffcc180dc19e0bb0141b2fd7520cc2b9efa553de",
-    "new_sha": "25a7d4c8bfb4676c420e03c6272ad9c4fe5c5b3b",
-    "commit_message": [
-      "Utilized std::vector constructor to default initialize n elements instead of calling push_back n times"
-    ],
-    "commit_date": "2021-05-03T10:12:43+00:00",
-    "patch": [
-      "--- src/oatpp/core/data/buffer/Processor.cpp\n@@ -86,11 +86,8 @@ void InlineWriteData::setEof() {\n // ProcessingPipeline\n \n ProcessingPipeline::ProcessingPipeline(const std::vector<base::ObjectHandle<Processor>>& processors)\n-  : m_processors(processors)\n+  : m_processors(processors), m_intermediateData(processors.size() - 1)\n {\n-  for(v_int32 i = 0; i < (v_int32) m_processors.size() - 1; i ++) {\n-    m_intermediateData.push_back(data::buffer::InlineReadData());\n-  }\n }\n \n v_io_size ProcessingPipeline::suggestInputStreamReadSize() {"
-    ],
-    "files_changed": [
-      {
-        "filename": "src/oatpp/core/data/buffer/Processor.cpp",
-        "status": "modified",
-        "additions": 1,
-        "deletions": 4,
-        "changes": 5,
-        "patch": "@@ -86,11 +86,8 @@ void InlineWriteData::setEof() {\n // ProcessingPipeline\n \n ProcessingPipeline::ProcessingPipeline(const std::vector<base::ObjectHandle<Processor>>& processors)\n-  : m_processors(processors)\n+  : m_processors(processors), m_intermediateData(processors.size() - 1)\n {\n-  for(v_int32 i = 0; i < (v_int32) m_processors.size() - 1; i ++) {\n-    m_intermediateData.push_back(data::buffer::InlineReadData());\n-  }\n }\n \n v_io_size ProcessingPipeline::suggestInputStreamReadSize() {"
-      }
-    ],
-    "lines_added": 1,
-    "lines_removed": 4
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991338918834,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 4.0592879634986076e-11,
-    "relative_improvement": 0.009687369501933728,
-    "absolute_improvement_ms": 1600.666666666683,
-    "old_mean_ms": 165232.33333333334,
-    "new_mean_ms": 163631.66666666666,
-    "old_std_ms": 433.9766665691106,
-    "new_std_ms": 490.0815085855303,
-    "effect_size_cohens_d": 3.4580603162301093,
-    "old_ci95_ms": [
-      165070.28378282662,
-      165394.38288384007
-    ],
-    "new_ci95_ms": [
-      163448.66722384916,
-      163814.66610948415
-    ],
-    "old_ci99_ms": [
-      165013.93678386466,
-      165450.72988280203
-    ],
-    "new_ci99_ms": [
-      163385.03564090288,
-      163878.29769243044
-    ],
-    "new_times_s": [
-      163.52,
-      162.9,
-      163.38,
-      163.28,
-      163.24,
-      164.77,
-      163.77,
-      163.62,
-      163.27,
-      163.87,
-      163.7,
-      163.37,
-      162.58,
-      163.62,
-      163.11,
-      163.22,
-      164.23,
-      163.55,
-      163.74,
-      163.66,
-      163.13,
-      164.34,
-      163.7,
-      164.02,
-      164.04,
-      163.77,
-      163.84,
-      164.79,
-      163.5,
-      163.61,
-      163.33
-    ],
-    "old_times_s": [
-      165.63,
-      164.91,
-      165.7,
-      164.75,
-      164.87,
-      165.74,
-      165.46,
-      165.52,
-      164.73,
-      165.51,
-      165.04,
-      164.95,
-      164.54,
-      165.19,
-      165.39,
-      166.04,
-      165.62,
-      165.04,
-      165.25,
-      165.17,
-      164.76,
-      164.5,
-      165.89,
-      165.04,
-      164.85,
-      165.45,
-      165.55,
-      166.17,
-      165.34,
-      164.82,
-      165.18
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 1,
-    "significant_mannwhitney_improvements_tests": [
-      "oatppAllTests"
-    ],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "oatppAllTests",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:51.104462",
+        "repository": "https://github.com/oatpp/oatpp",
+        "repository_name": "oatpp/oatpp"
+    },
+    "commit_info": {
+        "old_sha": "ffcc180dc19e0bb0141b2fd7520cc2b9efa553de",
+        "new_sha": "25a7d4c8bfb4676c420e03c6272ad9c4fe5c5b3b",
+        "commit_message": [
+            "Utilized std::vector constructor to default initialize n elements instead of calling push_back n times"
+        ],
+        "commit_date": "2021-05-03T10:12:43+00:00",
+        "patch": [
+            "--- src/oatpp/core/data/buffer/Processor.cpp\n@@ -86,11 +86,8 @@ void InlineWriteData::setEof() {\n // ProcessingPipeline\n \n ProcessingPipeline::ProcessingPipeline(const std::vector<base::ObjectHandle<Processor>>& processors)\n-  : m_processors(processors)\n+  : m_processors(processors), m_intermediateData(processors.size() - 1)\n {\n-  for(v_int32 i = 0; i < (v_int32) m_processors.size() - 1; i ++) {\n-    m_intermediateData.push_back(data::buffer::InlineReadData());\n-  }\n }\n \n v_io_size ProcessingPipeline::suggestInputStreamReadSize() {"
+        ],
+        "files_changed": [
+            {
+                "filename": "src/oatpp/core/data/buffer/Processor.cpp",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 4,
+                "changes": 5,
+                "patch": "@@ -86,11 +86,8 @@ void InlineWriteData::setEof() {\n // ProcessingPipeline\n \n ProcessingPipeline::ProcessingPipeline(const std::vector<base::ObjectHandle<Processor>>& processors)\n-  : m_processors(processors)\n+  : m_processors(processors), m_intermediateData(processors.size() - 1)\n {\n-  for(v_int32 i = 0; i < (v_int32) m_processors.size() - 1; i ++) {\n-    m_intermediateData.push_back(data::buffer::InlineReadData());\n-  }\n }\n \n v_io_size ProcessingPipeline::suggestInputStreamReadSize() {"
+            }
+        ],
+        "lines_added": 1,
+        "lines_removed": 4
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -171,109 +58,236 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999987201833946,
+        "wilcoxon_p_value": 0.9999991338918834,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 9.034557593336889e-11,
-        "relative_improvement": 0.009601419031719578,
-        "absolute_improvement_ms": 1586.5517241379337,
-        "old_mean_ms": 165241.3793103448,
-        "new_mean_ms": 163654.8275862069,
-        "old_std_ms": 437.67832396742654,
-        "new_std_ms": 479.528195876313,
-        "effect_size_cohens_d": 3.4559344385960467,
+        "mannwhitney_p_value": 4.0592879634986076e-11,
+        "relative_improvement": 0.009687369501933728,
+        "absolute_improvement_ms": 1600.666666666683,
+        "old_mean_ms": 165232.33333333334,
+        "new_mean_ms": 163631.66666666666,
+        "old_std_ms": 433.9766665691106,
+        "new_std_ms": 490.0815085855303,
+        "effect_size_cohens_d": 3.4580603162301093,
         "old_ci95_ms": [
-          165074.8953796328,
-          165407.86324105685
+            165070.28378282662,
+            165394.38288384007
         ],
         "new_ci95_ms": [
-          163472.424815576,
-          163837.23035683777
+            163448.66722384916,
+            163814.66610948415
         ],
         "old_ci99_ms": [
-          165016.79563955613,
-          165465.96298113352
+            165013.93678386466,
+            165450.72988280203
         ],
         "new_ci99_ms": [
-          163408.76970173055,
-          163900.88547068325
+            163385.03564090288,
+            163878.29769243044
         ],
-        "new_times": [
-          163.37,
-          163.28,
-          163.24,
-          164.77,
-          163.77,
-          163.62,
-          163.27,
-          163.87,
-          163.7,
-          163.36,
-          162.58,
-          163.62,
-          163.11,
-          163.22,
-          164.23,
-          163.55,
-          163.73,
-          163.65,
-          163.12,
-          164.34,
-          163.7,
-          164.02,
-          164.04,
-          163.77,
-          163.84,
-          164.79,
-          163.5,
-          163.61,
-          163.32
+        "new_times_s": [
+            163.52,
+            162.9,
+            163.38,
+            163.28,
+            163.24,
+            164.77,
+            163.77,
+            163.62,
+            163.27,
+            163.87,
+            163.7,
+            163.37,
+            162.58,
+            163.62,
+            163.11,
+            163.22,
+            164.23,
+            163.55,
+            163.74,
+            163.66,
+            163.13,
+            164.34,
+            163.7,
+            164.02,
+            164.04,
+            163.77,
+            163.84,
+            164.79,
+            163.5,
+            163.61,
+            163.33
         ],
-        "old_times": [
-          165.7,
-          164.74,
-          164.87,
-          165.74,
-          165.45,
-          165.52,
-          164.72,
-          165.51,
-          165.04,
-          164.95,
-          164.54,
-          165.19,
-          165.39,
-          166.03,
-          165.62,
-          165.04,
-          165.25,
-          165.17,
-          164.76,
-          164.5,
-          165.89,
-          165.04,
-          164.84,
-          165.45,
-          165.55,
-          166.17,
-          165.34,
-          164.82,
-          165.17
+        "old_times_s": [
+            165.63,
+            164.91,
+            165.7,
+            164.75,
+            164.87,
+            165.74,
+            165.46,
+            165.52,
+            164.73,
+            165.51,
+            165.04,
+            164.95,
+            164.54,
+            165.19,
+            165.39,
+            166.04,
+            165.62,
+            165.04,
+            165.25,
+            165.17,
+            164.76,
+            164.5,
+            165.89,
+            165.04,
+            164.85,
+            165.45,
+            165.55,
+            166.17,
+            165.34,
+            164.82,
+            165.18
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 1,
+        "significant_mannwhitney_improvements_tests": [
+            "oatppAllTests"
+        ],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "oatppAllTests",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999987201833946,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 9.034557593336889e-11,
+                "relative_improvement": 0.009601419031719578,
+                "absolute_improvement_ms": 1586.5517241379337,
+                "old_mean_ms": 165241.3793103448,
+                "new_mean_ms": 163654.8275862069,
+                "old_std_ms": 437.67832396742654,
+                "new_std_ms": 479.528195876313,
+                "effect_size_cohens_d": 3.4559344385960467,
+                "old_ci95_ms": [
+                    165074.8953796328,
+                    165407.86324105685
+                ],
+                "new_ci95_ms": [
+                    163472.424815576,
+                    163837.23035683777
+                ],
+                "old_ci99_ms": [
+                    165016.79563955613,
+                    165465.96298113352
+                ],
+                "new_ci99_ms": [
+                    163408.76970173055,
+                    163900.88547068325
+                ],
+                "new_times": [
+                    163.37,
+                    163.28,
+                    163.24,
+                    164.77,
+                    163.77,
+                    163.62,
+                    163.27,
+                    163.87,
+                    163.7,
+                    163.36,
+                    162.58,
+                    163.62,
+                    163.11,
+                    163.22,
+                    164.23,
+                    163.55,
+                    163.73,
+                    163.65,
+                    163.12,
+                    164.34,
+                    163.7,
+                    164.02,
+                    164.04,
+                    163.77,
+                    163.84,
+                    164.79,
+                    163.5,
+                    163.61,
+                    163.32
+                ],
+                "old_times": [
+                    165.7,
+                    164.74,
+                    164.87,
+                    165.74,
+                    165.45,
+                    165.52,
+                    164.72,
+                    165.51,
+                    165.04,
+                    164.95,
+                    164.54,
+                    165.19,
+                    165.39,
+                    166.03,
+                    165.62,
+                    165.04,
+                    165.25,
+                    165.17,
+                    164.76,
+                    164.5,
+                    165.89,
+                    165.04,
+                    164.84,
+                    165.45,
+                    165.55,
+                    166.17,
+                    165.34,
+                    164.82,
+                    165.17
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

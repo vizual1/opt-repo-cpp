@@ -1,9 +1,10 @@
-import logging, os, docker
+import logging, os
 from tqdm import tqdm
 from src.config.config import Config
 from src.utils.commit import Commit
 from src.core.docker.tester import DockerTester
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from src.utils.image_handling import image_exists, image, delete_image
 
 def get_available_cpus() -> list[int]:
     """Returns the list of CPUs the current process is allowed to run on."""
@@ -36,7 +37,22 @@ def generate_cpu_sets(cpus: list[int], cpus_per_job: int, max_jobs: int) -> list
 
 def run_one_commit(repo_id: str, new_sha: str, old_sha: str, pr_shas: list[str], config: Config, cpuset_cpus: str = ""):
     try:
-        if config.genimages and image_exists("_".join(repo_id.split("/")) + f"_{new_sha}"):
+        # checks if the image is already uploaded to dockerhub given a DOCKERHUB_USER and DOCKERHUB_REPO
+        if config.genimages and config.check_dockerhub and not config.genforce:
+            local_image = image(repo_id, new_sha)
+            if local_image in config.dockerhub_containers:
+                return
+        
+        # deletes the old docker image
+        if config.genforce and image_exists(repo_id, new_sha):
+            delete_image(repo_id, new_sha)
+            if config.check_dockerhub:
+                local_image = image(repo_id, new_sha)
+                remote_image = f"{config.dockerhub_user}/{config.dockerhub_repo}:{local_image}"
+                delete_image(other=remote_image)
+
+        # the docker image is already generated for repo_id and new_sha
+        if config.genimages and image_exists(repo_id, new_sha):
             logging.info("Image already exists, no need to generate the docker image")
             return
 
@@ -54,16 +70,6 @@ def run_one_commit(repo_id: str, new_sha: str, old_sha: str, pr_shas: list[str],
 
     except Exception:
         logging.exception(f"[{repo_id}] Error testing commits")
-
-def image_exists(image_name: str) -> bool:
-    client = docker.from_env()
-    try:
-        client.images.get(image_name)
-        return True
-    except docker.errors.ImageNotFound: #type:ignore
-        return False
-    except docker.errors.APIError as e: #type:ignore
-        raise RuntimeError(f"Docker error: {e}")
 
 class CommitTesterPipeline:
     """

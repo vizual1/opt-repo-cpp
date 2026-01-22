@@ -1,178 +1,192 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:41:13.460377",
-    "repository": "https://github.com/google/highway",
-    "repository_name": "google/highway"
-  },
-  "commit_info": {
-    "old_sha": "8a21b3cc298a7d9cc75b6a6b48396a2efde96252",
-    "new_sha": "b61761af8917e5dea18a13f0ff8c845dd0971e05",
-    "commit_message": [
-      "faster NEON CountTrue/FindFirstTrue/AllFalse/AllTrue\n\nPiperOrigin-RevId: 452736280"
-    ],
-    "commit_date": "2022-06-03T11:00:00+00:00",
-    "patch": [
-      "--- hwy/ops/arm_neon-inl.h\n@@ -814,6 +814,9 @@ class Mask128 {\n   Raw raw;\n };\n \n+template <typename T>\n+using Mask64 = Mask128<T, 8 / sizeof(T)>;\n+\n namespace detail {\n \n // Deduce Simd<T, N, 0> from Vec128<T, N>\n@@ -5038,6 +5041,34 @@ HWY_API Mask128<T, N> LoadMaskBits(Simd<T, N, 0> d,\n \n namespace detail {\n \n+// Returns mask[i]? 0xF : 0 in each nibble. This is more efficient than\n+// BitsFromMask for use in (partial) CountTrue, FindFirstTrue and AllFalse.\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full128<T> d, Mask128<T> mask) {\n+  const Full128<uint16_t> du16;\n+  const Vec128<uint16_t> vu16 = BitCast(du16, VecFromMask(d, mask));\n+  const Vec64<uint8_t> nib(vshrn_n_u16(vu16.raw, 4));\n+  return GetLane(BitCast(Full64<uint64_t>(), nib));\n+}\n+\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full64<T> d, Mask64<T> mask) {\n+  // There is no vshrn_n_u16 for uint16x4, so zero-extend.\n+  const Twice<decltype(d)> d2;\n+  const Vec128<T> v128 = ZeroExtendVector(d2, VecFromMask(d, mask));\n+  // No need to mask, upper half is zero thanks to ZeroExtendVector.\n+  return NibblesFromMask(d2, MaskFromVec(v128));\n+}\n+\n+template <typename T, size_t N, HWY_IF_LE32(T, N)>\n+HWY_INLINE uint64_t NibblesFromMask(Simd<T, N, 0> /*d*/, Mask128<T, N> mask) {\n+  const Mask64<T> mask64(mask.raw);\n+  const uint64_t nib = NibblesFromMask(Full64<T>(), mask64);\n+  // Clear nibbles from upper half of 64-bits\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return nib & ((1ull << (kBytes * 4)) - 1);\n+}\n+\n template <typename T>\n HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<1> /*tag*/,\n                                  const Mask128<T> mask) {\n@@ -5195,6 +5226,10 @@ HWY_INLINE uint64_t BitsFromMask(const Mask128<T, N> mask) {\n // Masks are either FF..FF or 0. Unfortunately there is no reduce-sub op\n // (\"vsubv\"). ANDing with 1 would work but requires a constant. Negating also\n // changes each lane to 1 (if mask set) or 0.\n+// NOTE: PopCount also operates on vectors, so we still have to do horizontal\n+// sums separately. We specialize CountTrue for full vectors (negating instead\n+// of PopCount because it avoids an extra shift), and use PopCount of\n+// NibblesFromMask for partial vectors.\n \n template <typename T>\n HWY_INLINE size_t CountTrue(hwy::SizeTag<1> /*tag*/, const Mask128<T> mask) {\n@@ -5265,15 +5300,17 @@ HWY_API size_t CountTrue(Full128<T> /* tag */, const Mask128<T> mask) {\n \n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API size_t CountTrue(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask) {\n-  return PopCount(detail::BitsFromMask(mask));\n+HWY_API size_t CountTrue(Simd<T, N, 0> d, const Mask128<T, N> mask) {\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return PopCount(detail::NibblesFromMask(d, mask)) / kDiv;\n }\n-\n template <typename T, size_t N>\n-HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> /* tag */,\n+HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> d,\n                                const Mask128<T, N> mask) {\n-  const uint64_t bits = detail::BitsFromMask(mask);\n-  return bits ? static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(bits)) : -1;\n+  const uint64_t nib = detail::NibblesFromMask(d, mask);\n+  if (nib == 0) return -1;\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(nib) / kDiv);\n }\n \n // `p` points to at least 8 writable bytes.\n@@ -5286,29 +5323,21 @@ HWY_API size_t StoreMaskBits(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask,\n   return kNumBytes;\n }\n \n+template <typename T, size_t N>\n+HWY_API bool AllFalse(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n+  return detail::NibblesFromMask(d, m) == 0;\n+}\n+\n // Full\n template <typename T>\n-HWY_API bool AllFalse(const Full128<T> d, const Mask128<T> m) {\n-#if HWY_ARCH_ARM_A64\n-  const Full128<uint32_t> d32;\n-  const auto m32 = MaskFromVec(BitCast(d32, VecFromMask(d, m)));\n-  return (vmaxvq_u32(m32.raw) == 0);\n-#else\n-  const auto v64 = BitCast(Full128<uint64_t>(), VecFromMask(d, m));\n-  uint32x2_t a = vqmovn_u64(v64.raw);\n-  return vget_lane_u64(vreinterpret_u64_u32(a), 0) == 0;\n-#endif\n+HWY_API bool AllTrue(const Full128<T> d, const Mask128<T> m) {\n+  return detail::NibblesFromMask(d, m) == ~0ull;\n }\n-\n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API bool AllFalse(const Simd<T, N, 0> /* tag */, const Mask128<T, N> m) {\n-  return detail::BitsFromMask(m) == 0;\n-}\n-\n-template <typename T, size_t N>\n HWY_API bool AllTrue(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n-  return AllFalse(d, VecFromMask(d, m) == Zero(d));\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return detail::NibblesFromMask(d, m) == (1ull << (kBytes * 4)) - 1;\n }\n \n // ------------------------------ Compress"
-    ],
-    "files_changed": [
-      {
-        "filename": "hwy/ops/arm_neon-inl.h",
-        "status": "modified",
-        "additions": 52,
-        "deletions": 23,
-        "changes": 75,
-        "patch": "@@ -814,6 +814,9 @@ class Mask128 {\n   Raw raw;\n };\n \n+template <typename T>\n+using Mask64 = Mask128<T, 8 / sizeof(T)>;\n+\n namespace detail {\n \n // Deduce Simd<T, N, 0> from Vec128<T, N>\n@@ -5038,6 +5041,34 @@ HWY_API Mask128<T, N> LoadMaskBits(Simd<T, N, 0> d,\n \n namespace detail {\n \n+// Returns mask[i]? 0xF : 0 in each nibble. This is more efficient than\n+// BitsFromMask for use in (partial) CountTrue, FindFirstTrue and AllFalse.\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full128<T> d, Mask128<T> mask) {\n+  const Full128<uint16_t> du16;\n+  const Vec128<uint16_t> vu16 = BitCast(du16, VecFromMask(d, mask));\n+  const Vec64<uint8_t> nib(vshrn_n_u16(vu16.raw, 4));\n+  return GetLane(BitCast(Full64<uint64_t>(), nib));\n+}\n+\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full64<T> d, Mask64<T> mask) {\n+  // There is no vshrn_n_u16 for uint16x4, so zero-extend.\n+  const Twice<decltype(d)> d2;\n+  const Vec128<T> v128 = ZeroExtendVector(d2, VecFromMask(d, mask));\n+  // No need to mask, upper half is zero thanks to ZeroExtendVector.\n+  return NibblesFromMask(d2, MaskFromVec(v128));\n+}\n+\n+template <typename T, size_t N, HWY_IF_LE32(T, N)>\n+HWY_INLINE uint64_t NibblesFromMask(Simd<T, N, 0> /*d*/, Mask128<T, N> mask) {\n+  const Mask64<T> mask64(mask.raw);\n+  const uint64_t nib = NibblesFromMask(Full64<T>(), mask64);\n+  // Clear nibbles from upper half of 64-bits\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return nib & ((1ull << (kBytes * 4)) - 1);\n+}\n+\n template <typename T>\n HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<1> /*tag*/,\n                                  const Mask128<T> mask) {\n@@ -5195,6 +5226,10 @@ HWY_INLINE uint64_t BitsFromMask(const Mask128<T, N> mask) {\n // Masks are either FF..FF or 0. Unfortunately there is no reduce-sub op\n // (\"vsubv\"). ANDing with 1 would work but requires a constant. Negating also\n // changes each lane to 1 (if mask set) or 0.\n+// NOTE: PopCount also operates on vectors, so we still have to do horizontal\n+// sums separately. We specialize CountTrue for full vectors (negating instead\n+// of PopCount because it avoids an extra shift), and use PopCount of\n+// NibblesFromMask for partial vectors.\n \n template <typename T>\n HWY_INLINE size_t CountTrue(hwy::SizeTag<1> /*tag*/, const Mask128<T> mask) {\n@@ -5265,15 +5300,17 @@ HWY_API size_t CountTrue(Full128<T> /* tag */, const Mask128<T> mask) {\n \n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API size_t CountTrue(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask) {\n-  return PopCount(detail::BitsFromMask(mask));\n+HWY_API size_t CountTrue(Simd<T, N, 0> d, const Mask128<T, N> mask) {\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return PopCount(detail::NibblesFromMask(d, mask)) / kDiv;\n }\n-\n template <typename T, size_t N>\n-HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> /* tag */,\n+HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> d,\n                                const Mask128<T, N> mask) {\n-  const uint64_t bits = detail::BitsFromMask(mask);\n-  return bits ? static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(bits)) : -1;\n+  const uint64_t nib = detail::NibblesFromMask(d, mask);\n+  if (nib == 0) return -1;\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(nib) / kDiv);\n }\n \n // `p` points to at least 8 writable bytes.\n@@ -5286,29 +5323,21 @@ HWY_API size_t StoreMaskBits(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask,\n   return kNumBytes;\n }\n \n+template <typename T, size_t N>\n+HWY_API bool AllFalse(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n+  return detail::NibblesFromMask(d, m) == 0;\n+}\n+\n // Full\n template <typename T>\n-HWY_API bool AllFalse(const Full128<T> d, const Mask128<T> m) {\n-#if HWY_ARCH_ARM_A64\n-  const Full128<uint32_t> d32;\n-  const auto m32 = MaskFromVec(BitCast(d32, VecFromMask(d, m)));\n-  return (vmaxvq_u32(m32.raw) == 0);\n-#else\n-  const auto v64 = BitCast(Full128<uint64_t>(), VecFromMask(d, m));\n-  uint32x2_t a = vqmovn_u64(v64.raw);\n-  return vget_lane_u64(vreinterpret_u64_u32(a), 0) == 0;\n-#endif\n+HWY_API bool AllTrue(const Full128<T> d, const Mask128<T> m) {\n+  return detail::NibblesFromMask(d, m) == ~0ull;\n }\n-\n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API bool AllFalse(const Simd<T, N, 0> /* tag */, const Mask128<T, N> m) {\n-  return detail::BitsFromMask(m) == 0;\n-}\n-\n-template <typename T, size_t N>\n HWY_API bool AllTrue(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n-  return AllFalse(d, VecFromMask(d, m) == Zero(d));\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return detail::NibblesFromMask(d, m) == (1ull << (kBytes * 4)) - 1;\n }\n \n // ------------------------------ Compress"
-      }
-    ],
-    "lines_added": 52,
-    "lines_removed": 23
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 0.9999999910017734,
-    "is_pair_significant": false,
-    "pair_p_value": 0.9999997314316483,
-    "is_binom_significant": false,
-    "binom_p_value": 0.9999995660036802,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999844534425408,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.5992454837761844,
-    "relative_improvement": -0.000217485863418886,
-    "absolute_improvement_ms": -2.000000000000668,
-    "old_mean_ms": 9196.0,
-    "new_mean_ms": 9198.0,
-    "old_std_ms": 287.04919679265834,
-    "new_std_ms": 275.1225432295643,
-    "effect_size_cohens_d": -0.007113662675332016,
-    "old_ci95_ms": [
-      9088.814068366137,
-      9303.185931633863
-    ],
-    "new_ci95_ms": [
-      9095.267553997586,
-      9300.732446002416
-    ],
-    "old_ci99_ms": [
-      9051.543952160175,
-      9340.456047839823
-    ],
-    "new_ci99_ms": [
-      9059.545979885492,
-      9336.454020114508
-    ],
-    "new_times_s": [
-      9.09,
-      8.84,
-      9.07,
-      9.86,
-      9.05,
-      9.07,
-      8.85,
-      9.88,
-      8.96,
-      9.64,
-      8.93,
-      9.09,
-      9.17,
-      9.5,
-      8.98,
-      9.28,
-      9.21,
-      9.06,
-      9.25,
-      9.39,
-      8.99,
-      9.25,
-      9.36,
-      9.16,
-      9.24,
-      9.23,
-      9.02,
-      9.55,
-      8.78,
-      9.27,
-      9.01
-    ],
-    "old_times_s": [
-      9.15,
-      9.95,
-      9.68,
-      8.92,
-      8.83,
-      9.08,
-      8.89,
-      9.24,
-      8.98,
-      9.04,
-      8.83,
-      9.2,
-      9.19,
-      9.31,
-      9.18,
-      9.35,
-      8.94,
-      8.92,
-      9.22,
-      9.21,
-      9.38,
-      9.0,
-      9.07,
-      9.01,
-      9.23,
-      9.13,
-      9.24,
-      10.0,
-      9.16,
-      9.18,
-      9.52
-    ]
-  },
-  "tests": {
-    "total_tests": 0,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": []
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    "metadata": {
+        "collection_date": "2026-01-14T18:41:13.460377",
+        "repository": "https://github.com/google/highway",
+        "repository_name": "google/highway"
+    },
+    "commit_info": {
+        "old_sha": "8a21b3cc298a7d9cc75b6a6b48396a2efde96252",
+        "new_sha": "b61761af8917e5dea18a13f0ff8c845dd0971e05",
+        "commit_message": [
+            "faster NEON CountTrue/FindFirstTrue/AllFalse/AllTrue\n\nPiperOrigin-RevId: 452736280"
+        ],
+        "commit_date": "2022-06-03T11:00:00+00:00",
+        "patch": [
+            "--- hwy/ops/arm_neon-inl.h\n@@ -814,6 +814,9 @@ class Mask128 {\n   Raw raw;\n };\n \n+template <typename T>\n+using Mask64 = Mask128<T, 8 / sizeof(T)>;\n+\n namespace detail {\n \n // Deduce Simd<T, N, 0> from Vec128<T, N>\n@@ -5038,6 +5041,34 @@ HWY_API Mask128<T, N> LoadMaskBits(Simd<T, N, 0> d,\n \n namespace detail {\n \n+// Returns mask[i]? 0xF : 0 in each nibble. This is more efficient than\n+// BitsFromMask for use in (partial) CountTrue, FindFirstTrue and AllFalse.\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full128<T> d, Mask128<T> mask) {\n+  const Full128<uint16_t> du16;\n+  const Vec128<uint16_t> vu16 = BitCast(du16, VecFromMask(d, mask));\n+  const Vec64<uint8_t> nib(vshrn_n_u16(vu16.raw, 4));\n+  return GetLane(BitCast(Full64<uint64_t>(), nib));\n+}\n+\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full64<T> d, Mask64<T> mask) {\n+  // There is no vshrn_n_u16 for uint16x4, so zero-extend.\n+  const Twice<decltype(d)> d2;\n+  const Vec128<T> v128 = ZeroExtendVector(d2, VecFromMask(d, mask));\n+  // No need to mask, upper half is zero thanks to ZeroExtendVector.\n+  return NibblesFromMask(d2, MaskFromVec(v128));\n+}\n+\n+template <typename T, size_t N, HWY_IF_LE32(T, N)>\n+HWY_INLINE uint64_t NibblesFromMask(Simd<T, N, 0> /*d*/, Mask128<T, N> mask) {\n+  const Mask64<T> mask64(mask.raw);\n+  const uint64_t nib = NibblesFromMask(Full64<T>(), mask64);\n+  // Clear nibbles from upper half of 64-bits\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return nib & ((1ull << (kBytes * 4)) - 1);\n+}\n+\n template <typename T>\n HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<1> /*tag*/,\n                                  const Mask128<T> mask) {\n@@ -5195,6 +5226,10 @@ HWY_INLINE uint64_t BitsFromMask(const Mask128<T, N> mask) {\n // Masks are either FF..FF or 0. Unfortunately there is no reduce-sub op\n // (\"vsubv\"). ANDing with 1 would work but requires a constant. Negating also\n // changes each lane to 1 (if mask set) or 0.\n+// NOTE: PopCount also operates on vectors, so we still have to do horizontal\n+// sums separately. We specialize CountTrue for full vectors (negating instead\n+// of PopCount because it avoids an extra shift), and use PopCount of\n+// NibblesFromMask for partial vectors.\n \n template <typename T>\n HWY_INLINE size_t CountTrue(hwy::SizeTag<1> /*tag*/, const Mask128<T> mask) {\n@@ -5265,15 +5300,17 @@ HWY_API size_t CountTrue(Full128<T> /* tag */, const Mask128<T> mask) {\n \n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API size_t CountTrue(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask) {\n-  return PopCount(detail::BitsFromMask(mask));\n+HWY_API size_t CountTrue(Simd<T, N, 0> d, const Mask128<T, N> mask) {\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return PopCount(detail::NibblesFromMask(d, mask)) / kDiv;\n }\n-\n template <typename T, size_t N>\n-HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> /* tag */,\n+HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> d,\n                                const Mask128<T, N> mask) {\n-  const uint64_t bits = detail::BitsFromMask(mask);\n-  return bits ? static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(bits)) : -1;\n+  const uint64_t nib = detail::NibblesFromMask(d, mask);\n+  if (nib == 0) return -1;\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(nib) / kDiv);\n }\n \n // `p` points to at least 8 writable bytes.\n@@ -5286,29 +5323,21 @@ HWY_API size_t StoreMaskBits(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask,\n   return kNumBytes;\n }\n \n+template <typename T, size_t N>\n+HWY_API bool AllFalse(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n+  return detail::NibblesFromMask(d, m) == 0;\n+}\n+\n // Full\n template <typename T>\n-HWY_API bool AllFalse(const Full128<T> d, const Mask128<T> m) {\n-#if HWY_ARCH_ARM_A64\n-  const Full128<uint32_t> d32;\n-  const auto m32 = MaskFromVec(BitCast(d32, VecFromMask(d, m)));\n-  return (vmaxvq_u32(m32.raw) == 0);\n-#else\n-  const auto v64 = BitCast(Full128<uint64_t>(), VecFromMask(d, m));\n-  uint32x2_t a = vqmovn_u64(v64.raw);\n-  return vget_lane_u64(vreinterpret_u64_u32(a), 0) == 0;\n-#endif\n+HWY_API bool AllTrue(const Full128<T> d, const Mask128<T> m) {\n+  return detail::NibblesFromMask(d, m) == ~0ull;\n }\n-\n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API bool AllFalse(const Simd<T, N, 0> /* tag */, const Mask128<T, N> m) {\n-  return detail::BitsFromMask(m) == 0;\n-}\n-\n-template <typename T, size_t N>\n HWY_API bool AllTrue(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n-  return AllFalse(d, VecFromMask(d, m) == Zero(d));\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return detail::NibblesFromMask(d, m) == (1ull << (kBytes * 4)) - 1;\n }\n \n // ------------------------------ Compress"
+        ],
+        "files_changed": [
+            {
+                "filename": "hwy/ops/arm_neon-inl.h",
+                "status": "modified",
+                "additions": 52,
+                "deletions": 23,
+                "changes": 75,
+                "patch": "@@ -814,6 +814,9 @@ class Mask128 {\n   Raw raw;\n };\n \n+template <typename T>\n+using Mask64 = Mask128<T, 8 / sizeof(T)>;\n+\n namespace detail {\n \n // Deduce Simd<T, N, 0> from Vec128<T, N>\n@@ -5038,6 +5041,34 @@ HWY_API Mask128<T, N> LoadMaskBits(Simd<T, N, 0> d,\n \n namespace detail {\n \n+// Returns mask[i]? 0xF : 0 in each nibble. This is more efficient than\n+// BitsFromMask for use in (partial) CountTrue, FindFirstTrue and AllFalse.\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full128<T> d, Mask128<T> mask) {\n+  const Full128<uint16_t> du16;\n+  const Vec128<uint16_t> vu16 = BitCast(du16, VecFromMask(d, mask));\n+  const Vec64<uint8_t> nib(vshrn_n_u16(vu16.raw, 4));\n+  return GetLane(BitCast(Full64<uint64_t>(), nib));\n+}\n+\n+template <typename T>\n+HWY_INLINE uint64_t NibblesFromMask(const Full64<T> d, Mask64<T> mask) {\n+  // There is no vshrn_n_u16 for uint16x4, so zero-extend.\n+  const Twice<decltype(d)> d2;\n+  const Vec128<T> v128 = ZeroExtendVector(d2, VecFromMask(d, mask));\n+  // No need to mask, upper half is zero thanks to ZeroExtendVector.\n+  return NibblesFromMask(d2, MaskFromVec(v128));\n+}\n+\n+template <typename T, size_t N, HWY_IF_LE32(T, N)>\n+HWY_INLINE uint64_t NibblesFromMask(Simd<T, N, 0> /*d*/, Mask128<T, N> mask) {\n+  const Mask64<T> mask64(mask.raw);\n+  const uint64_t nib = NibblesFromMask(Full64<T>(), mask64);\n+  // Clear nibbles from upper half of 64-bits\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return nib & ((1ull << (kBytes * 4)) - 1);\n+}\n+\n template <typename T>\n HWY_INLINE uint64_t BitsFromMask(hwy::SizeTag<1> /*tag*/,\n                                  const Mask128<T> mask) {\n@@ -5195,6 +5226,10 @@ HWY_INLINE uint64_t BitsFromMask(const Mask128<T, N> mask) {\n // Masks are either FF..FF or 0. Unfortunately there is no reduce-sub op\n // (\"vsubv\"). ANDing with 1 would work but requires a constant. Negating also\n // changes each lane to 1 (if mask set) or 0.\n+// NOTE: PopCount also operates on vectors, so we still have to do horizontal\n+// sums separately. We specialize CountTrue for full vectors (negating instead\n+// of PopCount because it avoids an extra shift), and use PopCount of\n+// NibblesFromMask for partial vectors.\n \n template <typename T>\n HWY_INLINE size_t CountTrue(hwy::SizeTag<1> /*tag*/, const Mask128<T> mask) {\n@@ -5265,15 +5300,17 @@ HWY_API size_t CountTrue(Full128<T> /* tag */, const Mask128<T> mask) {\n \n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API size_t CountTrue(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask) {\n-  return PopCount(detail::BitsFromMask(mask));\n+HWY_API size_t CountTrue(Simd<T, N, 0> d, const Mask128<T, N> mask) {\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return PopCount(detail::NibblesFromMask(d, mask)) / kDiv;\n }\n-\n template <typename T, size_t N>\n-HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> /* tag */,\n+HWY_API intptr_t FindFirstTrue(const Simd<T, N, 0> d,\n                                const Mask128<T, N> mask) {\n-  const uint64_t bits = detail::BitsFromMask(mask);\n-  return bits ? static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(bits)) : -1;\n+  const uint64_t nib = detail::NibblesFromMask(d, mask);\n+  if (nib == 0) return -1;\n+  constexpr int kDiv = 4 * sizeof(T);\n+  return static_cast<intptr_t>(Num0BitsBelowLS1Bit_Nonzero64(nib) / kDiv);\n }\n \n // `p` points to at least 8 writable bytes.\n@@ -5286,29 +5323,21 @@ HWY_API size_t StoreMaskBits(Simd<T, N, 0> /* tag */, const Mask128<T, N> mask,\n   return kNumBytes;\n }\n \n+template <typename T, size_t N>\n+HWY_API bool AllFalse(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n+  return detail::NibblesFromMask(d, m) == 0;\n+}\n+\n // Full\n template <typename T>\n-HWY_API bool AllFalse(const Full128<T> d, const Mask128<T> m) {\n-#if HWY_ARCH_ARM_A64\n-  const Full128<uint32_t> d32;\n-  const auto m32 = MaskFromVec(BitCast(d32, VecFromMask(d, m)));\n-  return (vmaxvq_u32(m32.raw) == 0);\n-#else\n-  const auto v64 = BitCast(Full128<uint64_t>(), VecFromMask(d, m));\n-  uint32x2_t a = vqmovn_u64(v64.raw);\n-  return vget_lane_u64(vreinterpret_u64_u32(a), 0) == 0;\n-#endif\n+HWY_API bool AllTrue(const Full128<T> d, const Mask128<T> m) {\n+  return detail::NibblesFromMask(d, m) == ~0ull;\n }\n-\n // Partial\n template <typename T, size_t N, HWY_IF_LE64(T, N)>\n-HWY_API bool AllFalse(const Simd<T, N, 0> /* tag */, const Mask128<T, N> m) {\n-  return detail::BitsFromMask(m) == 0;\n-}\n-\n-template <typename T, size_t N>\n HWY_API bool AllTrue(const Simd<T, N, 0> d, const Mask128<T, N> m) {\n-  return AllFalse(d, VecFromMask(d, m) == Zero(d));\n+  constexpr size_t kBytes = sizeof(T) * N;\n+  return detail::NibblesFromMask(d, m) == (1ull << (kBytes * 4)) - 1;\n }\n \n // ------------------------------ Compress"
+            }
+        ],
+        "lines_added": 52,
+        "lines_removed": 23
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.9999999910017734,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999997314316483,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999995660036802,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999844534425408,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.5992454837761844,
+        "relative_improvement": -0.000217485863418886,
+        "absolute_improvement_ms": -2.000000000000668,
+        "old_mean_ms": 9196.0,
+        "new_mean_ms": 9198.0,
+        "old_std_ms": 287.04919679265834,
+        "new_std_ms": 275.1225432295643,
+        "effect_size_cohens_d": -0.007113662675332016,
+        "old_ci95_ms": [
+            9088.814068366137,
+            9303.185931633863
+        ],
+        "new_ci95_ms": [
+            9095.267553997586,
+            9300.732446002416
+        ],
+        "old_ci99_ms": [
+            9051.543952160175,
+            9340.456047839823
+        ],
+        "new_ci99_ms": [
+            9059.545979885492,
+            9336.454020114508
+        ],
+        "new_times_s": [
+            9.09,
+            8.84,
+            9.07,
+            9.86,
+            9.05,
+            9.07,
+            8.85,
+            9.88,
+            8.96,
+            9.64,
+            8.93,
+            9.09,
+            9.17,
+            9.5,
+            8.98,
+            9.28,
+            9.21,
+            9.06,
+            9.25,
+            9.39,
+            8.99,
+            9.25,
+            9.36,
+            9.16,
+            9.24,
+            9.23,
+            9.02,
+            9.55,
+            8.78,
+            9.27,
+            9.01
+        ],
+        "old_times_s": [
+            9.15,
+            9.95,
+            9.68,
+            8.92,
+            8.83,
+            9.08,
+            8.89,
+            9.24,
+            8.98,
+            9.04,
+            8.83,
+            9.2,
+            9.19,
+            9.31,
+            9.18,
+            9.35,
+            8.94,
+            8.92,
+            9.22,
+            9.21,
+            9.38,
+            9.0,
+            9.07,
+            9.01,
+            9.23,
+            9.13,
+            9.24,
+            10.0,
+            9.16,
+            9.18,
+            9.52
+        ]
+    },
+    "tests": {
+        "total_tests": 0,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": []
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

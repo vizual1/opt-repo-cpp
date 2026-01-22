@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Generator, Optional, Any
 from github.Repository import Repository
 from src.utils.exceptions import TestFailed, UndefinedStructureFilter
+from src.utils.image_handling import image_exists, image
 
 class DockerTester:
     def __init__(self, repo: Repository, config: Config):
@@ -38,9 +39,12 @@ class DockerTester:
                 not new_struct.process or not old_struct.process):
                 return
             
-            new_cmd = [" ".join(s) for s in new_struct.process.build_commands + new_struct.process.test_commands]
-            old_cmd = [" ".join(s) for s in old_struct.process.build_commands + old_struct.process.test_commands]
-            
+            new_build_cmd = [" ".join(s) for s in new_struct.process.build_commands]
+            old_build_cmd = [" ".join(s) for s in old_struct.process.build_commands]
+            new_test_cmd = [" ".join(s) for s in new_struct.process.test_commands]
+            old_test_cmd = [" ".join(s) for s in old_struct.process.test_commands]
+
+            # --genimages just generates the docker image from an existing json results file
             if self.config.genimages:
                 file_name = "_".join(self.repo_id.split("/") + [new_sha]) + ".json"
                 json_file = Path(self.config.input, file_name) 
@@ -48,7 +52,15 @@ class DockerTester:
                 with open(json_file, 'r', errors='ignore') as f:
                     results = json.load(f)
 
-                old_struct.process.save_docker_image(self.repo_id, new_sha, new_cmd, old_cmd, results)
+                results["build_info"]["old_build_script"] = old_build_cmd
+                results["build_info"]["new_build_script"] = new_build_cmd
+                results["build_info"]["old_test_script"] = old_test_cmd
+                results["build_info"]["new_test_script"] = new_test_cmd
+
+                with open(json_file, 'w', errors='ignore') as f:
+                    json.dump(results, f, indent=4)
+
+                old_struct.process.save_docker_image(self.repo_id, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
                 logging.info(f"[{self.repo_id}:{new_sha}] Docker image saved.")
                 return
 
@@ -97,14 +109,13 @@ class DockerTester:
             commit = self.repo.get_commit(new_sha)
             results = test.create_test_log(
                 commit, self.repo, old_sha, new_sha, pr_shas,
-                old_times, new_times, old_cmd, new_cmd
+                old_times, new_times, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd,
             )
             logging.info(f"Results: {results['performance_analysis']}")
             writer = Writer(self.repo_id, self.config.storage_paths["performance"])
             writer.write_results(results)
 
-            #if not self.config.testdocker and not self.config.testdockerpatch:
-            old_struct.process.save_docker_image(self.repo_id, new_sha, new_cmd, old_cmd, results)
+            old_struct.process.save_docker_image(self.repo_id, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
                 
             if total_improvement < self.config.commits_time['min-p-value'] or overall_change_with_new_outperforms_old:
                 logging.info(f"[{self.repo_id}:{new_sha}] significantly improves execution time.")
@@ -134,8 +145,15 @@ class DockerTester:
         old_times = []
 
         try:
-            owner, repo = self.repo_id.split("/")
-            container_name = f"{owner}_{repo}_{new_sha}" if self.config.testdocker or self.config.testdockerpatch else new_sha 
+            if self.config.testdocker or self.config.testdockerpatch:
+                # tests an already existing docker image
+                local_image = image(self.repo_id, new_sha)
+                if not image_exists(self.repo_id, new_sha):
+                    container_name = f"{self.config.dockerhub_user}/{self.config.dockerhub_repo}:{local_image}"
+                else:
+                    container_name = local_image
+            else:
+                container_name = new_sha
             new_structure = new_pf.commit_setup_and_build("New", container_name=container_name, cpuset_cpus=cpuset_cpus)
             docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
             
@@ -147,6 +165,7 @@ class DockerTester:
             if not old_structure or not old_structure.process:
                 raise UndefinedStructureFilter("Old commit StructureFilter or its CMakeProcess is None")
             
+            # --genimages just generates the docker image from an existing json results file
             if not self.config.genimages:
                 self._run_tests(new_structure, old_structure, new_pf, old_pf)
 

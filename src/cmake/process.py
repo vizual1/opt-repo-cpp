@@ -7,6 +7,7 @@ from typing import Optional, Union
 from src.core.docker.manager import DockerManager
 from src.config.config import Config
 from src.utils.permission import check_and_fix_path_permissions
+from src.utils.image_handling import image
 
 class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
@@ -87,7 +88,11 @@ class CMakeProcess:
             if stdout: logging.info(f"stdout: {stdout}")
 
 
-    def save_docker_image(self, repo_id: str, sha: str, new_cmd: list[str], old_cmd: list[str], results_json: dict) -> None:
+    def save_docker_image(
+            self, repo_id: str, sha: str, 
+            new_build_cmd: list[str], old_build_cmd: list[str], 
+            new_test_cmd: list[str], old_test_cmd: list[str],
+            results_json: dict) -> None:
         """
         Saved docker image structure:
         | /workspace -- mount folder
@@ -106,7 +111,7 @@ class CMakeProcess:
             | old_test.sh -- old ctest used => OK
             | new_test.sh -- new ctest used => OK
         """
-        image_name = ("_".join(repo_id.split("/")) + f"_{sha}").lower()
+        image_name = image(repo_id, sha)
         container_id = self.container.id if self.container and self.container.id else "test"
         
         inspect = subprocess.run(
@@ -126,7 +131,7 @@ class CMakeProcess:
                 logging.error(f"Failed to remove old image {image_name}: {rm.stderr}")
 
         self.copy_log_to_container(container_id, results_json)
-        self.docker.copy_commands_to_container(self.root, new_cmd, old_cmd)
+        self.docker.copy_commands_to_container(self.root, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd)
 
         clean_cmd = [
             ["apt-get", "autoremove", "-y"], 
@@ -436,6 +441,8 @@ class CMakeProcess:
 
         logging.info(f"Commands: {self.test_commands}")
         if len(self.test_commands) == 0: # no test commands
+            root = ['cd', str(self.test_path)]
+            self.test_commands.append(list(map(str, root))) # TODO: test
             self.test_commands.append(list(map(str, cmd)))
         return True
 

@@ -5,6 +5,7 @@ from github import Auth, Github
 
 from src.config.constants import *
 from src.config.settings import LLMSettings, TestingSettings, GitHubSettings, ResourceSettings, ResourceSettingsCrawl
+from src.utils.image_handling import dockerhub_containers, check_dockerhub
 
 @dataclass
 class Config:
@@ -16,18 +17,18 @@ class Config:
     genimages: bool = False
     pushimages: bool = False
     testdocker: bool = False
-    patch: bool = False
     testdockerpatch: bool = False
     
     # Limits and filters
-    limit: int = 10
-    stars: int = 1000
-    filter: str = "llm"
+    limit: int = 10 # indicates the number of repositories collected from github before stopping
+    stars: int = 1000 # indicates the maximum number of stars of repositories collected from github
+    filter: str = "llm" # filter type for filtering commits
     filter_type: str = field(init=False)
     
     input: str = ""
     output: str = ""
     repo: str = ""
+    genforce: bool = True # --genimages
 
     # File paths
     repo_id: str = field(init=False)
@@ -43,6 +44,13 @@ class Config:
     docker_image: str = field(init=False)
     analyze: bool = False
     tar: bool = False
+
+    # Dockerhub settings
+    check_dockerhub: bool = True # checks if the image is already uploaded to dockerhub
+    dockerhub_user: str = field(init=False) # export DOCKERHUB_USER=...
+    dockerhub_repo: str = field(init=False) # export DOCKERHUB_REPO=...
+    dockerhub_containers: list[str] = field(init=False)
+    dockerhub_force: bool = True # forces docker push to dockerhub via --pushimages
     
     # Configuration sections
     llm: LLMSettings = field(default_factory=LLMSettings)
@@ -78,6 +86,9 @@ class Config:
         self.docker_image = self.docker
         if self.testcollect:
             self.resources = ResourceSettingsCrawl()
+        self.dockerhub_user, self.dockerhub_repo = check_dockerhub()
+        if self.check_dockerhub:
+            self.dockerhub_containers = dockerhub_containers(self.dockerhub_user, self.dockerhub_repo)
         self._validate()
         self._setup_github()
 

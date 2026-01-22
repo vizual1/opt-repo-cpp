@@ -1,177 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:39:51.906978",
-    "repository": "https://github.com/zxing-cpp/zxing-cpp",
-    "repository_name": "zxing-cpp/zxing-cpp"
-  },
-  "commit_info": {
-    "old_sha": "80aac6bebb5da8225abef53426acb788ff3142b0",
-    "new_sha": "4fb11b43c36e017b63440cad1c0c8ccc7c532a2b",
-    "commit_message": [
-      "tryDownscale: help compiler with auto vectorization (>4x faster scaling)\n\nThis reduces the runtime penalty payed for `tryDownscale(true)`\non a Google Pixel 3 to 50% or less (depending on other hints)."
-    ],
-    "commit_date": "2023-01-20T22:51:22+00:00",
-    "patch": [
-      "--- core/src/ReadBarcode.cpp\n@@ -45,9 +45,9 @@ static LumImage ExtractLum(const ImageView& iv, P projection)\n \n class LumImagePyramid\n {\n-\tint N = 3;\n \tstd::vector<LumImage> buffers;\n \n+\ttemplate<int N>\n \tvoid addLayer()\n \t{\n \t\tauto siv = layers.back();\n@@ -66,19 +66,27 @@ class LumImagePyramid\n \t\t\t}\n \t}\n \n+\tvoid addLayer(int factor)\n+\t{\n+\t\t// help the compiler's auto-vectorizer by hard-coding the scale factor\n+\t\tswitch (factor) {\n+\t\tcase 2: addLayer<2>(); break;\n+\t\tcase 3: addLayer<3>(); break;\n+\t\tcase 4: addLayer<4>(); break;\n+\t\tdefault: throw std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\"); break;\n+\t\t}\n+\t}\n+\n public:\n \tstd::vector<ImageView> layers;\n \n-\tLumImagePyramid(const ImageView& iv, int threshold, int factor) : N(factor)\n+\tLumImagePyramid(const ImageView& iv, int threshold, int factor)\n \t{\n-\t\tif (factor < 2)\n-\t\t\tthrow std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\");\n-\n \t\tlayers.push_back(iv);\n \t\t// TODO: if only matrix codes were considered, then using std::min would be sufficient (see #425)\n \t\twhile (threshold > 0 && std::max(layers.back().width(), layers.back().height()) > threshold &&\n-\t\t\t   std::min(layers.back().width(), layers.back().height()) >= N)\n-\t\t\taddLayer();\n+\t\t\t   std::min(layers.back().width(), layers.back().height()) >= factor)\n+\t\t\taddLayer(factor);\n #if 0\n \t\t// Reversing the layers means we'd start with the smallest. that can make sense if we are only looking for a\n \t\t// single symbol. If we start with the higher resolution, we get better (high res) position information."
-    ],
-    "files_changed": [
-      {
-        "filename": "core/src/ReadBarcode.cpp",
-        "status": "modified",
-        "additions": 15,
-        "deletions": 7,
-        "changes": 22,
-        "patch": "@@ -45,9 +45,9 @@ static LumImage ExtractLum(const ImageView& iv, P projection)\n \n class LumImagePyramid\n {\n-\tint N = 3;\n \tstd::vector<LumImage> buffers;\n \n+\ttemplate<int N>\n \tvoid addLayer()\n \t{\n \t\tauto siv = layers.back();\n@@ -66,19 +66,27 @@ class LumImagePyramid\n \t\t\t}\n \t}\n \n+\tvoid addLayer(int factor)\n+\t{\n+\t\t// help the compiler's auto-vectorizer by hard-coding the scale factor\n+\t\tswitch (factor) {\n+\t\tcase 2: addLayer<2>(); break;\n+\t\tcase 3: addLayer<3>(); break;\n+\t\tcase 4: addLayer<4>(); break;\n+\t\tdefault: throw std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\"); break;\n+\t\t}\n+\t}\n+\n public:\n \tstd::vector<ImageView> layers;\n \n-\tLumImagePyramid(const ImageView& iv, int threshold, int factor) : N(factor)\n+\tLumImagePyramid(const ImageView& iv, int threshold, int factor)\n \t{\n-\t\tif (factor < 2)\n-\t\t\tthrow std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\");\n-\n \t\tlayers.push_back(iv);\n \t\t// TODO: if only matrix codes were considered, then using std::min would be sufficient (see #425)\n \t\twhile (threshold > 0 && std::max(layers.back().width(), layers.back().height()) > threshold &&\n-\t\t\t   std::min(layers.back().width(), layers.back().height()) >= N)\n-\t\t\taddLayer();\n+\t\t\t   std::min(layers.back().width(), layers.back().height()) >= factor)\n+\t\t\taddLayer(factor);\n #if 0\n \t\t// Reversing the layers means we'd start with the smallest. that can make sense if we are only looking for a\n \t\t// single symbol. If we start with the higher resolution, we get better (high res) position information."
-      }
-    ],
-    "lines_added": 15,
-    "lines_removed": 7
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991404120431,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.9999999999866338,
-    "relative_improvement": -0.06488475692426884,
-    "absolute_improvement_ms": -558.3333333333336,
-    "old_mean_ms": 8604.999999999998,
-    "new_mean_ms": 9163.333333333332,
-    "old_std_ms": 77.62642635704367,
-    "new_std_ms": 90.10849144162307,
-    "effect_size_cohens_d": -6.638973005458528,
-    "old_ci95_ms": [
-      8576.013816023678,
-      8633.986183976318
-    ],
-    "new_ci95_ms": [
-      9129.686269655016,
-      9196.980397011648
-    ],
-    "old_ci99_ms": [
-      8565.934895882785,
-      8644.065104117211
-    ],
-    "new_ci99_ms": [
-      9117.98669346843,
-      9208.679973198234
-    ],
-    "new_times_s": [
-      9.24,
-      9.09,
-      9.21,
-      9.22,
-      9.11,
-      9.24,
-      9.24,
-      9.01,
-      9.11,
-      9.08,
-      9.09,
-      9.22,
-      9.18,
-      9.18,
-      9.21,
-      9.26,
-      9.22,
-      8.96,
-      9.26,
-      8.99,
-      9.27,
-      9.26,
-      9.15,
-      9.2,
-      9.25,
-      9.24,
-      9.16,
-      9.0,
-      9.23,
-      9.09,
-      9.17
-    ],
-    "old_times_s": [
-      8.68,
-      8.49,
-      8.69,
-      8.61,
-      8.61,
-      8.64,
-      8.54,
-      8.54,
-      8.6,
-      8.66,
-      8.65,
-      8.66,
-      8.62,
-      8.44,
-      8.63,
-      8.65,
-      8.55,
-      8.68,
-      8.63,
-      8.6,
-      8.5,
-      8.55,
-      8.65,
-      8.58,
-      8.79,
-      8.45,
-      8.66,
-      8.68,
-      8.62,
-      8.51,
-      8.67
-    ]
-  },
-  "tests": {
-    "total_tests": 2,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 1,
-    "significant_regressions_tests": [
-      "UnitTest"
-    ],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 1,
-    "significant_pair_regressions_tests": [
-      "UnitTest"
-    ],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 1,
-    "significant_binom_regressions_tests": [
-      "UnitTest"
-    ],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 1,
-    "significant_wilcoxon_regressions_tests": [
-      "UnitTest"
-    ],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 1,
-    "significant_mannwhitney_regressions_tests": [
-      "UnitTest"
-    ],
-    "tests": [
-      {
-        "test_name": "ZXingWriterTest",
+    "metadata": {
+        "collection_date": "2026-01-14T18:39:51.906978",
+        "repository": "https://github.com/zxing-cpp/zxing-cpp",
+        "repository_name": "zxing-cpp/zxing-cpp"
+    },
+    "commit_info": {
+        "old_sha": "80aac6bebb5da8225abef53426acb788ff3142b0",
+        "new_sha": "4fb11b43c36e017b63440cad1c0c8ccc7c532a2b",
+        "commit_message": [
+            "tryDownscale: help compiler with auto vectorization (>4x faster scaling)\n\nThis reduces the runtime penalty payed for `tryDownscale(true)`\non a Google Pixel 3 to 50% or less (depending on other hints)."
+        ],
+        "commit_date": "2023-01-20T22:51:22+00:00",
+        "patch": [
+            "--- core/src/ReadBarcode.cpp\n@@ -45,9 +45,9 @@ static LumImage ExtractLum(const ImageView& iv, P projection)\n \n class LumImagePyramid\n {\n-\tint N = 3;\n \tstd::vector<LumImage> buffers;\n \n+\ttemplate<int N>\n \tvoid addLayer()\n \t{\n \t\tauto siv = layers.back();\n@@ -66,19 +66,27 @@ class LumImagePyramid\n \t\t\t}\n \t}\n \n+\tvoid addLayer(int factor)\n+\t{\n+\t\t// help the compiler's auto-vectorizer by hard-coding the scale factor\n+\t\tswitch (factor) {\n+\t\tcase 2: addLayer<2>(); break;\n+\t\tcase 3: addLayer<3>(); break;\n+\t\tcase 4: addLayer<4>(); break;\n+\t\tdefault: throw std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\"); break;\n+\t\t}\n+\t}\n+\n public:\n \tstd::vector<ImageView> layers;\n \n-\tLumImagePyramid(const ImageView& iv, int threshold, int factor) : N(factor)\n+\tLumImagePyramid(const ImageView& iv, int threshold, int factor)\n \t{\n-\t\tif (factor < 2)\n-\t\t\tthrow std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\");\n-\n \t\tlayers.push_back(iv);\n \t\t// TODO: if only matrix codes were considered, then using std::min would be sufficient (see #425)\n \t\twhile (threshold > 0 && std::max(layers.back().width(), layers.back().height()) > threshold &&\n-\t\t\t   std::min(layers.back().width(), layers.back().height()) >= N)\n-\t\t\taddLayer();\n+\t\t\t   std::min(layers.back().width(), layers.back().height()) >= factor)\n+\t\t\taddLayer(factor);\n #if 0\n \t\t// Reversing the layers means we'd start with the smallest. that can make sense if we are only looking for a\n \t\t// single symbol. If we start with the higher resolution, we get better (high res) position information."
+        ],
+        "files_changed": [
+            {
+                "filename": "core/src/ReadBarcode.cpp",
+                "status": "modified",
+                "additions": 15,
+                "deletions": 7,
+                "changes": 22,
+                "patch": "@@ -45,9 +45,9 @@ static LumImage ExtractLum(const ImageView& iv, P projection)\n \n class LumImagePyramid\n {\n-\tint N = 3;\n \tstd::vector<LumImage> buffers;\n \n+\ttemplate<int N>\n \tvoid addLayer()\n \t{\n \t\tauto siv = layers.back();\n@@ -66,19 +66,27 @@ class LumImagePyramid\n \t\t\t}\n \t}\n \n+\tvoid addLayer(int factor)\n+\t{\n+\t\t// help the compiler's auto-vectorizer by hard-coding the scale factor\n+\t\tswitch (factor) {\n+\t\tcase 2: addLayer<2>(); break;\n+\t\tcase 3: addLayer<3>(); break;\n+\t\tcase 4: addLayer<4>(); break;\n+\t\tdefault: throw std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\"); break;\n+\t\t}\n+\t}\n+\n public:\n \tstd::vector<ImageView> layers;\n \n-\tLumImagePyramid(const ImageView& iv, int threshold, int factor) : N(factor)\n+\tLumImagePyramid(const ImageView& iv, int threshold, int factor)\n \t{\n-\t\tif (factor < 2)\n-\t\t\tthrow std::invalid_argument(\"Invalid DecodeHints::downscaleFactor\");\n-\n \t\tlayers.push_back(iv);\n \t\t// TODO: if only matrix codes were considered, then using std::min would be sufficient (see #425)\n \t\twhile (threshold > 0 && std::max(layers.back().width(), layers.back().height()) > threshold &&\n-\t\t\t   std::min(layers.back().width(), layers.back().height()) >= N)\n-\t\t\taddLayer();\n+\t\t\t   std::min(layers.back().width(), layers.back().height()) >= factor)\n+\t\t\taddLayer(factor);\n #if 0\n \t\t// Reversing the layers means we'd start with the smallest. that can make sense if we are only looking for a\n \t\t// single symbol. If we start with the higher resolution, we get better (high res) position information."
+            }
+        ],
+        "lines_added": 15,
+        "lines_removed": 7
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -179,207 +58,342 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999999638108507,
+        "wilcoxon_p_value": 0.9999991404120431,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 1.0,
-        "relative_improvement": 0.0,
-        "absolute_improvement_ms": 0.0,
-        "old_mean_ms": 10.000000000000002,
-        "new_mean_ms": 10.000000000000002,
-        "old_std_ms": 1.7654289301252243e-15,
-        "new_std_ms": 1.7654289301252243e-15,
-        "effect_size_cohens_d": 0.0,
+        "mannwhitney_p_value": 0.9999999999866338,
+        "relative_improvement": -0.06488475692426884,
+        "absolute_improvement_ms": -558.3333333333336,
+        "old_mean_ms": 8604.999999999998,
+        "new_mean_ms": 9163.333333333332,
+        "old_std_ms": 77.62642635704367,
+        "new_std_ms": 90.10849144162307,
+        "effect_size_cohens_d": -6.638973005458528,
         "old_ci95_ms": [
-          10.000000000000002,
-          10.000000000000002
+            8576.013816023678,
+            8633.986183976318
         ],
         "new_ci95_ms": [
-          10.000000000000002,
-          10.000000000000002
+            9129.686269655016,
+            9196.980397011648
         ],
         "old_ci99_ms": [
-          10.0,
-          10.000000000000004
+            8565.934895882785,
+            8644.065104117211
         ],
         "new_ci99_ms": [
-          10.0,
-          10.000000000000004
+            9117.98669346843,
+            9208.679973198234
         ],
-        "new_times": [
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01
+        "new_times_s": [
+            9.24,
+            9.09,
+            9.21,
+            9.22,
+            9.11,
+            9.24,
+            9.24,
+            9.01,
+            9.11,
+            9.08,
+            9.09,
+            9.22,
+            9.18,
+            9.18,
+            9.21,
+            9.26,
+            9.22,
+            8.96,
+            9.26,
+            8.99,
+            9.27,
+            9.26,
+            9.15,
+            9.2,
+            9.25,
+            9.24,
+            9.16,
+            9.0,
+            9.23,
+            9.09,
+            9.17
         ],
-        "old_times": [
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01,
-          0.01
+        "old_times_s": [
+            8.68,
+            8.49,
+            8.69,
+            8.61,
+            8.61,
+            8.64,
+            8.54,
+            8.54,
+            8.6,
+            8.66,
+            8.65,
+            8.66,
+            8.62,
+            8.44,
+            8.63,
+            8.65,
+            8.55,
+            8.68,
+            8.63,
+            8.6,
+            8.5,
+            8.55,
+            8.65,
+            8.58,
+            8.79,
+            8.45,
+            8.66,
+            8.68,
+            8.62,
+            8.51,
+            8.67
         ]
-      },
-      {
-        "test_name": "UnitTest",
-        "is_significant": false,
-        "p_value": 1.0,
-        "is_pair_significant": false,
-        "pair_p_value": 1.0,
-        "is_binom_significant": false,
-        "binom_p_value": 1.0,
-        "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999987253468997,
-        "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.9999999999712544,
-        "relative_improvement": -0.06486161251504217,
-        "absolute_improvement_ms": -557.5862068965538,
-        "old_mean_ms": 8596.55172413793,
-        "new_mean_ms": 9154.137931034484,
-        "old_std_ms": 75.88882197328292,
-        "new_std_ms": 92.25420011264337,
-        "effect_size_cohens_d": -6.601091958921556,
-        "old_ci95_ms": [
-          8567.685160071673,
-          8625.418288204188
+    },
+    "tests": {
+        "total_tests": 2,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 1,
+        "significant_regressions_tests": [
+            "UnitTest"
         ],
-        "new_ci95_ms": [
-          9119.046310046211,
-          9189.229552022756
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 1,
+        "significant_pair_regressions_tests": [
+            "UnitTest"
         ],
-        "old_ci99_ms": [
-          8557.611275691464,
-          8635.492172584396
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 1,
+        "significant_binom_regressions_tests": [
+            "UnitTest"
         ],
-        "new_ci99_ms": [
-          9106.799998648065,
-          9201.475863420903
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 1,
+        "significant_wilcoxon_regressions_tests": [
+            "UnitTest"
         ],
-        "new_times": [
-          9.2,
-          9.2,
-          9.1,
-          9.23,
-          9.23,
-          8.99,
-          9.09,
-          9.07,
-          9.07,
-          9.21,
-          9.17,
-          9.17,
-          9.2,
-          9.25,
-          9.21,
-          8.95,
-          9.25,
-          8.98,
-          9.26,
-          9.25,
-          9.14,
-          9.19,
-          9.24,
-          9.23,
-          9.15,
-          8.98,
-          9.22,
-          9.08,
-          9.16
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 1,
+        "significant_mannwhitney_regressions_tests": [
+            "UnitTest"
         ],
-        "old_times": [
-          8.68,
-          8.6,
-          8.6,
-          8.63,
-          8.53,
-          8.53,
-          8.58,
-          8.65,
-          8.63,
-          8.65,
-          8.6,
-          8.42,
-          8.62,
-          8.64,
-          8.54,
-          8.67,
-          8.61,
-          8.59,
-          8.49,
-          8.54,
-          8.64,
-          8.57,
-          8.78,
-          8.44,
-          8.64,
-          8.66,
-          8.61,
-          8.5,
-          8.66
+        "tests": [
+            {
+                "test_name": "ZXingWriterTest",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999999638108507,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 1.0,
+                "relative_improvement": 0.0,
+                "absolute_improvement_ms": 0.0,
+                "old_mean_ms": 10.000000000000002,
+                "new_mean_ms": 10.000000000000002,
+                "old_std_ms": 1.7654289301252243e-15,
+                "new_std_ms": 1.7654289301252243e-15,
+                "effect_size_cohens_d": 0.0,
+                "old_ci95_ms": [
+                    10.000000000000002,
+                    10.000000000000002
+                ],
+                "new_ci95_ms": [
+                    10.000000000000002,
+                    10.000000000000002
+                ],
+                "old_ci99_ms": [
+                    10.0,
+                    10.000000000000004
+                ],
+                "new_ci99_ms": [
+                    10.0,
+                    10.000000000000004
+                ],
+                "new_times": [
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01
+                ],
+                "old_times": [
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.01
+                ]
+            },
+            {
+                "test_name": "UnitTest",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999987253468997,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.9999999999712544,
+                "relative_improvement": -0.06486161251504217,
+                "absolute_improvement_ms": -557.5862068965538,
+                "old_mean_ms": 8596.55172413793,
+                "new_mean_ms": 9154.137931034484,
+                "old_std_ms": 75.88882197328292,
+                "new_std_ms": 92.25420011264337,
+                "effect_size_cohens_d": -6.601091958921556,
+                "old_ci95_ms": [
+                    8567.685160071673,
+                    8625.418288204188
+                ],
+                "new_ci95_ms": [
+                    9119.046310046211,
+                    9189.229552022756
+                ],
+                "old_ci99_ms": [
+                    8557.611275691464,
+                    8635.492172584396
+                ],
+                "new_ci99_ms": [
+                    9106.799998648065,
+                    9201.475863420903
+                ],
+                "new_times": [
+                    9.2,
+                    9.2,
+                    9.1,
+                    9.23,
+                    9.23,
+                    8.99,
+                    9.09,
+                    9.07,
+                    9.07,
+                    9.21,
+                    9.17,
+                    9.17,
+                    9.2,
+                    9.25,
+                    9.21,
+                    8.95,
+                    9.25,
+                    8.98,
+                    9.26,
+                    9.25,
+                    9.14,
+                    9.19,
+                    9.24,
+                    9.23,
+                    9.15,
+                    8.98,
+                    9.22,
+                    9.08,
+                    9.16
+                ],
+                "old_times": [
+                    8.68,
+                    8.6,
+                    8.6,
+                    8.63,
+                    8.53,
+                    8.53,
+                    8.58,
+                    8.65,
+                    8.63,
+                    8.65,
+                    8.6,
+                    8.42,
+                    8.62,
+                    8.64,
+                    8.54,
+                    8.67,
+                    8.61,
+                    8.59,
+                    8.49,
+                    8.54,
+                    8.64,
+                    8.57,
+                    8.78,
+                    8.44,
+                    8.64,
+                    8.66,
+                    8.61,
+                    8.5,
+                    8.66
+                ]
+            }
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

@@ -1,169 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:42.343531",
-    "repository": "https://github.com/google/snappy",
-    "repository_name": "google/snappy"
-  },
-  "commit_info": {
-    "old_sha": "802ef73aed1be6bf62447a587f459ad067914b4d",
-    "new_sha": "eb8d19fc1ebc684043e310d211585d364dca63b5",
-    "commit_message": [
-      "Merge branch 'add_rvv_support' of https://github.com/anthony-zy/snappy into add_rvv_support"
-    ],
-    "commit_date": "2025-08-28T12:42:49+00:00",
-    "patch": [
-      "--- snappy.cc\n@@ -1288,42 +1288,43 @@ void MemCopy64(char* dst, const void* src, size_t size) {\n     data = _mm256_lddqu_si256(static_cast<const __m256i *>(src) + 1);\n     _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst) + 1, data);\n   }\n-#else\n-#ifdef SNAPPY_HAVE_RVV\n-uint8_t* dst_u8 = (uint8_t*)dst;\n-const uint8_t* src_u8 = (const uint8_t*)src;\n-if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) {  //overlap bwd copy\n-  size_t offset = size;\n-  while (offset > 0) {\n-    size_t vl = VSETVL_E8M1(offset);\n-    offset -= vl;\n-    vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n-    VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-  }\n-} else {\n-  size_t vl = VSETVL_E8M1(size);\n-    if (vl < size) {  // if size >vl,use the max_vlen copy\n-      size_t offset = 0;\n-      while (offset < size) {\n-        vl = VSETVL_E8M1(size - offset);\n-        vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n-        VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-        offset += vl;\n-              }\n-    } else {  // copy the leaft\n-      vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n-      VSE8_V_U8M1(dst_u8, vec, vl);\n+  //  RVV acceleration available on RISC-V when compiled with -march=rv64gcv\n+#elif defined(__riscv) & SNAPPY_HAVE_RVV\n+  uint8_t* dst_u8 = (uint8_t*)dst;\n+  const uint8_t* src_u8 = (const uint8_t*)src;\n+   //overlap bwd copy\n+  if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) { \n+    size_t offset = size;\n+    while (offset > 0) {\n+      size_t vl = VSETVL_E8M1(offset);\n+      offset -= vl;\n+      vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n+      VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+    }\n+  } else {\n+    size_t vl = VSETVL_E8M1(size);\n+    // if size >vl,use the max_vlen copy\n+      if (vl < size) {  \n+        size_t offset = 0;\n+        while (offset < size) {\n+          vl = VSETVL_E8M1(size - offset);\n+          vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n+          VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+          offset += vl;\n+                }\n+      } else { \n+         // Copy the rest\n+        vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n+        VSE8_V_U8M1(dst_u8, vec, vl);\n+      }\n     }\n-  }\n #else\n-std::memmove(dst, src, kShortMemCopy);\n-  //Profiling shows that nearly all copies are short.\n-if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n-  std::memmove(dst + kShortMemCopy,\n-                static_cast<const uint8_t*>(src) + kShortMemCopy,\n-                64 - kShortMemCopy);}\n-\n-#endif\n+  std::memmove(dst, src, kShortMemCopy);\n+    //Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                  static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                  64 - kShortMemCopy);}\n #endif\n }\n "
-    ],
-    "files_changed": [
-      {
-        "filename": "snappy.cc",
-        "status": "modified",
-        "additions": 35,
-        "deletions": 34,
-        "changes": 69,
-        "patch": "@@ -1288,42 +1288,43 @@ void MemCopy64(char* dst, const void* src, size_t size) {\n     data = _mm256_lddqu_si256(static_cast<const __m256i *>(src) + 1);\n     _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst) + 1, data);\n   }\n-#else\n-#ifdef SNAPPY_HAVE_RVV\n-uint8_t* dst_u8 = (uint8_t*)dst;\n-const uint8_t* src_u8 = (const uint8_t*)src;\n-if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) {  //overlap bwd copy\n-  size_t offset = size;\n-  while (offset > 0) {\n-    size_t vl = VSETVL_E8M1(offset);\n-    offset -= vl;\n-    vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n-    VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-  }\n-} else {\n-  size_t vl = VSETVL_E8M1(size);\n-    if (vl < size) {  // if size >vl,use the max_vlen copy\n-      size_t offset = 0;\n-      while (offset < size) {\n-        vl = VSETVL_E8M1(size - offset);\n-        vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n-        VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-        offset += vl;\n-              }\n-    } else {  // copy the leaft\n-      vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n-      VSE8_V_U8M1(dst_u8, vec, vl);\n+  //  RVV acceleration available on RISC-V when compiled with -march=rv64gcv\n+#elif defined(__riscv) & SNAPPY_HAVE_RVV\n+  uint8_t* dst_u8 = (uint8_t*)dst;\n+  const uint8_t* src_u8 = (const uint8_t*)src;\n+   //overlap bwd copy\n+  if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) { \n+    size_t offset = size;\n+    while (offset > 0) {\n+      size_t vl = VSETVL_E8M1(offset);\n+      offset -= vl;\n+      vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n+      VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+    }\n+  } else {\n+    size_t vl = VSETVL_E8M1(size);\n+    // if size >vl,use the max_vlen copy\n+      if (vl < size) {  \n+        size_t offset = 0;\n+        while (offset < size) {\n+          vl = VSETVL_E8M1(size - offset);\n+          vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n+          VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+          offset += vl;\n+                }\n+      } else { \n+         // Copy the rest\n+        vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n+        VSE8_V_U8M1(dst_u8, vec, vl);\n+      }\n     }\n-  }\n #else\n-std::memmove(dst, src, kShortMemCopy);\n-  //Profiling shows that nearly all copies are short.\n-if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n-  std::memmove(dst + kShortMemCopy,\n-                static_cast<const uint8_t*>(src) + kShortMemCopy,\n-                64 - kShortMemCopy);}\n-\n-#endif\n+  std::memmove(dst, src, kShortMemCopy);\n+    //Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                  static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                  64 - kShortMemCopy);}\n #endif\n }\n "
-      }
-    ],
-    "lines_added": 35,
-    "lines_removed": 34
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991565333336,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.9774204452838962,
-    "relative_improvement": -0.001797466152552705,
-    "absolute_improvement_ms": -20.666666666667055,
-    "old_mean_ms": 11497.666666666668,
-    "new_mean_ms": 11518.333333333334,
-    "old_std_ms": 30.249916880288463,
-    "new_std_ms": 36.01564155726788,
-    "effect_size_cohens_d": -0.6214051070293624,
-    "old_ci95_ms": [
-      11486.371162067146,
-      11508.962171266188
-    ],
-    "new_ci95_ms": [
-      11504.884871756569,
-      11531.781794910099
-    ],
-    "old_ci99_ms": [
-      11482.443549901891,
-      11512.889783431443
-    ],
-    "new_ci99_ms": [
-      11500.208644959666,
-      11536.458021707002
-    ],
-    "new_times_s": [
-      11.5,
-      11.53,
-      11.53,
-      11.49,
-      11.52,
-      11.58,
-      11.51,
-      11.49,
-      11.48,
-      11.5,
-      11.52,
-      11.58,
-      11.57,
-      11.52,
-      11.55,
-      11.46,
-      11.53,
-      11.57,
-      11.55,
-      11.58,
-      11.51,
-      11.54,
-      11.49,
-      11.49,
-      11.49,
-      11.47,
-      11.46,
-      11.51,
-      11.55,
-      11.5,
-      11.48
-    ],
-    "old_times_s": [
-      11.47,
-      11.51,
-      11.48,
-      11.5,
-      11.47,
-      11.49,
-      11.51,
-      11.5,
-      11.48,
-      11.55,
-      11.52,
-      11.52,
-      11.55,
-      11.49,
-      11.43,
-      11.53,
-      11.54,
-      11.47,
-      11.41,
-      11.48,
-      11.48,
-      11.51,
-      11.49,
-      11.51,
-      11.51,
-      11.51,
-      11.51,
-      11.48,
-      11.51,
-      11.51,
-      11.48
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 1,
-    "significant_mannwhitney_regressions_tests": [
-      "snappy_unittest"
-    ],
-    "tests": [
-      {
-        "test_name": "snappy_unittest",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:42.343531",
+        "repository": "https://github.com/google/snappy",
+        "repository_name": "google/snappy"
+    },
+    "commit_info": {
+        "old_sha": "802ef73aed1be6bf62447a587f459ad067914b4d",
+        "new_sha": "eb8d19fc1ebc684043e310d211585d364dca63b5",
+        "commit_message": [
+            "Merge branch 'add_rvv_support' of https://github.com/anthony-zy/snappy into add_rvv_support"
+        ],
+        "commit_date": "2025-08-28T12:42:49+00:00",
+        "patch": [
+            "--- snappy.cc\n@@ -1288,42 +1288,43 @@ void MemCopy64(char* dst, const void* src, size_t size) {\n     data = _mm256_lddqu_si256(static_cast<const __m256i *>(src) + 1);\n     _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst) + 1, data);\n   }\n-#else\n-#ifdef SNAPPY_HAVE_RVV\n-uint8_t* dst_u8 = (uint8_t*)dst;\n-const uint8_t* src_u8 = (const uint8_t*)src;\n-if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) {  //overlap bwd copy\n-  size_t offset = size;\n-  while (offset > 0) {\n-    size_t vl = VSETVL_E8M1(offset);\n-    offset -= vl;\n-    vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n-    VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-  }\n-} else {\n-  size_t vl = VSETVL_E8M1(size);\n-    if (vl < size) {  // if size >vl,use the max_vlen copy\n-      size_t offset = 0;\n-      while (offset < size) {\n-        vl = VSETVL_E8M1(size - offset);\n-        vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n-        VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-        offset += vl;\n-              }\n-    } else {  // copy the leaft\n-      vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n-      VSE8_V_U8M1(dst_u8, vec, vl);\n+  //  RVV acceleration available on RISC-V when compiled with -march=rv64gcv\n+#elif defined(__riscv) & SNAPPY_HAVE_RVV\n+  uint8_t* dst_u8 = (uint8_t*)dst;\n+  const uint8_t* src_u8 = (const uint8_t*)src;\n+   //overlap bwd copy\n+  if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) { \n+    size_t offset = size;\n+    while (offset > 0) {\n+      size_t vl = VSETVL_E8M1(offset);\n+      offset -= vl;\n+      vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n+      VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+    }\n+  } else {\n+    size_t vl = VSETVL_E8M1(size);\n+    // if size >vl,use the max_vlen copy\n+      if (vl < size) {  \n+        size_t offset = 0;\n+        while (offset < size) {\n+          vl = VSETVL_E8M1(size - offset);\n+          vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n+          VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+          offset += vl;\n+                }\n+      } else { \n+         // Copy the rest\n+        vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n+        VSE8_V_U8M1(dst_u8, vec, vl);\n+      }\n     }\n-  }\n #else\n-std::memmove(dst, src, kShortMemCopy);\n-  //Profiling shows that nearly all copies are short.\n-if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n-  std::memmove(dst + kShortMemCopy,\n-                static_cast<const uint8_t*>(src) + kShortMemCopy,\n-                64 - kShortMemCopy);}\n-\n-#endif\n+  std::memmove(dst, src, kShortMemCopy);\n+    //Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                  static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                  64 - kShortMemCopy);}\n #endif\n }\n "
+        ],
+        "files_changed": [
+            {
+                "filename": "snappy.cc",
+                "status": "modified",
+                "additions": 35,
+                "deletions": 34,
+                "changes": 69,
+                "patch": "@@ -1288,42 +1288,43 @@ void MemCopy64(char* dst, const void* src, size_t size) {\n     data = _mm256_lddqu_si256(static_cast<const __m256i *>(src) + 1);\n     _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst) + 1, data);\n   }\n-#else\n-#ifdef SNAPPY_HAVE_RVV\n-uint8_t* dst_u8 = (uint8_t*)dst;\n-const uint8_t* src_u8 = (const uint8_t*)src;\n-if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) {  //overlap bwd copy\n-  size_t offset = size;\n-  while (offset > 0) {\n-    size_t vl = VSETVL_E8M1(offset);\n-    offset -= vl;\n-    vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n-    VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-  }\n-} else {\n-  size_t vl = VSETVL_E8M1(size);\n-    if (vl < size) {  // if size >vl,use the max_vlen copy\n-      size_t offset = 0;\n-      while (offset < size) {\n-        vl = VSETVL_E8M1(size - offset);\n-        vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n-        VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n-        offset += vl;\n-              }\n-    } else {  // copy the leaft\n-      vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n-      VSE8_V_U8M1(dst_u8, vec, vl);\n+  //  RVV acceleration available on RISC-V when compiled with -march=rv64gcv\n+#elif defined(__riscv) & SNAPPY_HAVE_RVV\n+  uint8_t* dst_u8 = (uint8_t*)dst;\n+  const uint8_t* src_u8 = (const uint8_t*)src;\n+   //overlap bwd copy\n+  if (src_u8 < dst_u8 && dst_u8 < src_u8 + size) { \n+    size_t offset = size;\n+    while (offset > 0) {\n+      size_t vl = VSETVL_E8M1(offset);\n+      offset -= vl;\n+      vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);\n+      VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+    }\n+  } else {\n+    size_t vl = VSETVL_E8M1(size);\n+    // if size >vl,use the max_vlen copy\n+      if (vl < size) {  \n+        size_t offset = 0;\n+        while (offset < size) {\n+          vl = VSETVL_E8M1(size - offset);\n+          vuint8m1_t vec = VLE8_V_U8M1(src_u8 + offset, vl);  \n+          VSE8_V_U8M1(dst_u8 + offset, vec, vl);\n+          offset += vl;\n+                }\n+      } else { \n+         // Copy the rest\n+        vuint8m1_t vec = VLE8_V_U8M1(src_u8, vl);\n+        VSE8_V_U8M1(dst_u8, vec, vl);\n+      }\n     }\n-  }\n #else\n-std::memmove(dst, src, kShortMemCopy);\n-  //Profiling shows that nearly all copies are short.\n-if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n-  std::memmove(dst + kShortMemCopy,\n-                static_cast<const uint8_t*>(src) + kShortMemCopy,\n-                64 - kShortMemCopy);}\n-\n-#endif\n+  std::memmove(dst, src, kShortMemCopy);\n+    //Profiling shows that nearly all copies are short.\n+  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {\n+    std::memmove(dst + kShortMemCopy,\n+                  static_cast<const uint8_t*>(src) + kShortMemCopy,\n+                  64 - kShortMemCopy);}\n #endif\n }\n "
+            }
+        ],
+        "lines_added": 35,
+        "lines_removed": 34
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -171,109 +58,236 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999987509058601,
+        "wilcoxon_p_value": 0.9999991565333336,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.9647233709191242,
-        "relative_improvement": -0.0017998560115189762,
-        "absolute_improvement_ms": -20.689655172414945,
-        "old_mean_ms": 11495.172413793103,
-        "new_mean_ms": 11515.862068965518,
-        "old_std_ms": 31.69279882776111,
-        "new_std_ms": 36.30399834131899,
-        "effect_size_cohens_d": -0.6071534249828797,
+        "mannwhitney_p_value": 0.9774204452838962,
+        "relative_improvement": -0.001797466152552705,
+        "absolute_improvement_ms": -20.666666666667055,
+        "old_mean_ms": 11497.666666666668,
+        "new_mean_ms": 11518.333333333334,
+        "old_std_ms": 30.249916880288463,
+        "new_std_ms": 36.01564155726788,
+        "effect_size_cohens_d": -0.6214051070293624,
         "old_ci95_ms": [
-          11483.117117848167,
-          11507.22770973804
+            11486.371162067146,
+            11508.962171266188
         ],
         "new_ci95_ms": [
-          11502.052766531624,
-          11529.67137139941
+            11504.884871756569,
+            11531.781794910099
         ],
         "old_ci99_ms": [
-          11478.910047784693,
-          11511.434779801513
+            11482.443549901891,
+            11512.889783431443
         ],
         "new_ci99_ms": [
-          11497.233581408966,
-          11534.49055652207
+            11500.208644959666,
+            11536.458021707002
         ],
-        "new_times": [
-          11.53,
-          11.49,
-          11.52,
-          11.58,
-          11.51,
-          11.49,
-          11.47,
-          11.5,
-          11.51,
-          11.58,
-          11.57,
-          11.51,
-          11.55,
-          11.46,
-          11.53,
-          11.57,
-          11.55,
-          11.57,
-          11.5,
-          11.54,
-          11.49,
-          11.49,
-          11.49,
-          11.47,
-          11.46,
-          11.51,
-          11.54,
-          11.5,
-          11.48
+        "new_times_s": [
+            11.5,
+            11.53,
+            11.53,
+            11.49,
+            11.52,
+            11.58,
+            11.51,
+            11.49,
+            11.48,
+            11.5,
+            11.52,
+            11.58,
+            11.57,
+            11.52,
+            11.55,
+            11.46,
+            11.53,
+            11.57,
+            11.55,
+            11.58,
+            11.51,
+            11.54,
+            11.49,
+            11.49,
+            11.49,
+            11.47,
+            11.46,
+            11.51,
+            11.55,
+            11.5,
+            11.48
         ],
-        "old_times": [
-          11.48,
-          11.5,
-          11.47,
-          11.49,
-          11.51,
-          11.49,
-          11.48,
-          11.55,
-          11.52,
-          11.52,
-          11.55,
-          11.49,
-          11.43,
-          11.53,
-          11.54,
-          11.46,
-          11.41,
-          11.47,
-          11.47,
-          11.51,
-          11.49,
-          11.51,
-          11.51,
-          11.51,
-          11.5,
-          11.48,
-          11.51,
-          11.51,
-          11.47
+        "old_times_s": [
+            11.47,
+            11.51,
+            11.48,
+            11.5,
+            11.47,
+            11.49,
+            11.51,
+            11.5,
+            11.48,
+            11.55,
+            11.52,
+            11.52,
+            11.55,
+            11.49,
+            11.43,
+            11.53,
+            11.54,
+            11.47,
+            11.41,
+            11.48,
+            11.48,
+            11.51,
+            11.49,
+            11.51,
+            11.51,
+            11.51,
+            11.51,
+            11.48,
+            11.51,
+            11.51,
+            11.48
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 1,
+        "significant_mannwhitney_regressions_tests": [
+            "snappy_unittest"
+        ],
+        "tests": [
+            {
+                "test_name": "snappy_unittest",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999987509058601,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.9647233709191242,
+                "relative_improvement": -0.0017998560115189762,
+                "absolute_improvement_ms": -20.689655172414945,
+                "old_mean_ms": 11495.172413793103,
+                "new_mean_ms": 11515.862068965518,
+                "old_std_ms": 31.69279882776111,
+                "new_std_ms": 36.30399834131899,
+                "effect_size_cohens_d": -0.6071534249828797,
+                "old_ci95_ms": [
+                    11483.117117848167,
+                    11507.22770973804
+                ],
+                "new_ci95_ms": [
+                    11502.052766531624,
+                    11529.67137139941
+                ],
+                "old_ci99_ms": [
+                    11478.910047784693,
+                    11511.434779801513
+                ],
+                "new_ci99_ms": [
+                    11497.233581408966,
+                    11534.49055652207
+                ],
+                "new_times": [
+                    11.53,
+                    11.49,
+                    11.52,
+                    11.58,
+                    11.51,
+                    11.49,
+                    11.47,
+                    11.5,
+                    11.51,
+                    11.58,
+                    11.57,
+                    11.51,
+                    11.55,
+                    11.46,
+                    11.53,
+                    11.57,
+                    11.55,
+                    11.57,
+                    11.5,
+                    11.54,
+                    11.49,
+                    11.49,
+                    11.49,
+                    11.47,
+                    11.46,
+                    11.51,
+                    11.54,
+                    11.5,
+                    11.48
+                ],
+                "old_times": [
+                    11.48,
+                    11.5,
+                    11.47,
+                    11.49,
+                    11.51,
+                    11.49,
+                    11.48,
+                    11.55,
+                    11.52,
+                    11.52,
+                    11.55,
+                    11.49,
+                    11.43,
+                    11.53,
+                    11.54,
+                    11.46,
+                    11.41,
+                    11.47,
+                    11.47,
+                    11.51,
+                    11.49,
+                    11.51,
+                    11.51,
+                    11.51,
+                    11.5,
+                    11.48,
+                    11.51,
+                    11.51,
+                    11.47
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

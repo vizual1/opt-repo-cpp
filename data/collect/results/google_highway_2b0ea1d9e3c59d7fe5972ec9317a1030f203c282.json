@@ -1,293 +1,307 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:40:54.417927",
-    "repository": "https://github.com/google/highway",
-    "repository_name": "google/highway"
-  },
-  "commit_info": {
-    "old_sha": "f00f9c86cc92c707368632a684a96c7bce0e2d54",
-    "new_sha": "2b0ea1d9e3c59d7fe5972ec9317a1030f203c282",
-    "commit_message": [
-      "Added optimized implementations of I8/U8 SumsOf4 for AVX3"
-    ],
-    "commit_date": "2023-09-26T13:50:00+00:00",
-    "patch": [
-      "--- hwy/ops/x86_128-inl.h\n@@ -3332,6 +3332,28 @@ HWY_API VFromD<RepartitionToWideX3<DFromV<V>>> SumsOf8AbsDiff(V a, V b) {\n   return BitCast(di64, SumsOf8AbsDiff(a_adj, b_adj));\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+template <size_t N>\n+HWY_INLINE Vec128<uint32_t, (N + 3) / 4> SumsOf4(\n+    hwy::UnsignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/,\n+    Vec128<uint8_t, N> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm_maskz_dbsad_epu8 result.\n+  return Vec128<uint32_t, (N + 3) / 4>{\n+      _mm_maskz_dbsad_epu8(static_cast<__mmask8>(0x55), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec128<int8_t, N> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range.\n--- hwy/ops/x86_256-inl.h\n@@ -1792,6 +1792,27 @@ HWY_API Vec256<uint64_t> SumsOf8AbsDiff(Vec256<uint8_t> a, Vec256<uint8_t> b) {\n   return Vec256<uint64_t>{_mm256_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+HWY_INLINE Vec256<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec256<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm256_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm256_maskz_dbsad_epu8 result.\n+  return Vec256<uint32_t>{_mm256_maskz_dbsad_epu8(\n+      static_cast<__mmask16>(0x5555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec256<int8_t> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range.\n--- hwy/ops/x86_512-inl.h\n@@ -1000,6 +1000,44 @@ HWY_API Vec512<uint64_t> SumsOf8AbsDiff(Vec512<uint8_t> a, Vec512<uint8_t> b) {\n   return Vec512<uint64_t>{_mm512_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+namespace detail {\n+\n+HWY_INLINE Vec512<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec512<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm512_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm512_maskz_dbsad_epu8 result.\n+  return Vec512<uint32_t>{_mm512_maskz_dbsad_epu8(\n+      static_cast<__mmask32>(0x55555555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// I8->I32 SumsOf4\n+// Generic for all vector lengths\n+template <class V>\n+HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(\n+    hwy::SignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {\n+  const DFromV<decltype(v)> d;\n+  const RebindToUnsigned<decltype(d)> du;\n+  const RepartitionToWideX2<decltype(d)> di32;\n+\n+  // Adjust the values of v to be in the 0..255 range by adding 128 to each lane\n+  // of v (which is the same as an bitwise XOR of each i8 lane by 128) and then\n+  // bitcasting the Xor result to an u8 vector.\n+  const auto v_adj = BitCast(du, Xor(v, SignBit(d)));\n+\n+  // Need to add -512 to each i32 lane of the result of the\n+  // SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj) operation to account\n+  // for the adjustment made above.\n+  return BitCast(di32, SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj)) +\n+         Set(di32, int32_t{-512});\n+}\n+\n+}  // namespace detail\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
-    ],
-    "files_changed": [
-      {
-        "filename": "hwy/ops/x86_128-inl.h",
-        "status": "modified",
-        "additions": 22,
-        "deletions": 0,
-        "changes": 22,
-        "patch": "@@ -3332,6 +3332,28 @@ HWY_API VFromD<RepartitionToWideX3<DFromV<V>>> SumsOf8AbsDiff(V a, V b) {\n   return BitCast(di64, SumsOf8AbsDiff(a_adj, b_adj));\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+template <size_t N>\n+HWY_INLINE Vec128<uint32_t, (N + 3) / 4> SumsOf4(\n+    hwy::UnsignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/,\n+    Vec128<uint8_t, N> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm_maskz_dbsad_epu8 result.\n+  return Vec128<uint32_t, (N + 3) / 4>{\n+      _mm_maskz_dbsad_epu8(static_cast<__mmask8>(0x55), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec128<int8_t, N> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
-      },
-      {
-        "filename": "hwy/ops/x86_256-inl.h",
-        "status": "modified",
-        "additions": 21,
-        "deletions": 0,
-        "changes": 21,
-        "patch": "@@ -1792,6 +1792,27 @@ HWY_API Vec256<uint64_t> SumsOf8AbsDiff(Vec256<uint8_t> a, Vec256<uint8_t> b) {\n   return Vec256<uint64_t>{_mm256_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+HWY_INLINE Vec256<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec256<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm256_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm256_maskz_dbsad_epu8 result.\n+  return Vec256<uint32_t>{_mm256_maskz_dbsad_epu8(\n+      static_cast<__mmask16>(0x5555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec256<int8_t> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
-      },
-      {
-        "filename": "hwy/ops/x86_512-inl.h",
-        "status": "modified",
-        "additions": 38,
-        "deletions": 0,
-        "changes": 38,
-        "patch": "@@ -1000,6 +1000,44 @@ HWY_API Vec512<uint64_t> SumsOf8AbsDiff(Vec512<uint8_t> a, Vec512<uint8_t> b) {\n   return Vec512<uint64_t>{_mm512_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+namespace detail {\n+\n+HWY_INLINE Vec512<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec512<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm512_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm512_maskz_dbsad_epu8 result.\n+  return Vec512<uint32_t>{_mm512_maskz_dbsad_epu8(\n+      static_cast<__mmask32>(0x55555555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// I8->I32 SumsOf4\n+// Generic for all vector lengths\n+template <class V>\n+HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(\n+    hwy::SignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {\n+  const DFromV<decltype(v)> d;\n+  const RebindToUnsigned<decltype(d)> du;\n+  const RepartitionToWideX2<decltype(d)> di32;\n+\n+  // Adjust the values of v to be in the 0..255 range by adding 128 to each lane\n+  // of v (which is the same as an bitwise XOR of each i8 lane by 128) and then\n+  // bitcasting the Xor result to an u8 vector.\n+  const auto v_adj = BitCast(du, Xor(v, SignBit(d)));\n+\n+  // Need to add -512 to each i32 lane of the result of the\n+  // SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj) operation to account\n+  // for the adjustment made above.\n+  return BitCast(di32, SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj)) +\n+         Set(di32, int32_t{-512});\n+}\n+\n+}  // namespace detail\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
-      }
-    ],
-    "lines_added": 81,
-    "lines_removed": 0
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 0.9999999999918122,
-    "is_pair_significant": false,
-    "pair_p_value": 0.9999999999996142,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991349814353,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.6713632823701597,
-    "relative_improvement": -0.0035705011685277293,
-    "absolute_improvement_ms": -73.33333333333769,
-    "old_mean_ms": 20538.66666666666,
-    "new_mean_ms": 20612.0,
-    "old_std_ms": 465.57145703876154,
-    "new_std_ms": 559.9532000148729,
-    "effect_size_cohens_d": -0.14241437289710412,
-    "old_ci95_ms": [
-      20364.819427508977,
-      20712.513905824344
-    ],
-    "new_ci95_ms": [
-      20402.910038817106,
-      20821.08996118289
-    ],
-    "old_ci99_ms": [
-      20304.370199641784,
-      20772.963133691537
-    ],
-    "new_ci99_ms": [
-      20330.206401016898,
-      20893.7935989831
-    ],
-    "new_times_s": [
-      20.39,
-      20.13,
-      21.22,
-      21.15,
-      20.3,
-      21.05,
-      21.18,
-      22.56,
-      21.4,
-      20.55,
-      21.57,
-      20.99,
-      20.09,
-      20.08,
-      20.09,
-      20.05,
-      20.24,
-      20.14,
-      20.2,
-      20.43,
-      20.36,
-      20.68,
-      20.3,
-      20.44,
-      20.38,
-      20.48,
-      20.55,
-      20.36,
-      20.43,
-      20.48,
-      20.48
-    ],
-    "old_times_s": [
-      21.28,
-      21.02,
-      20.9,
-      20.91,
-      20.45,
-      21.79,
-      20.27,
-      20.54,
-      21.49,
-      21.34,
-      21.27,
-      20.91,
-      19.95,
-      20.02,
-      20.18,
-      20.11,
-      20.19,
-      19.99,
-      20.15,
-      20.23,
-      20.27,
-      20.57,
-      20.3,
-      20.31,
-      20.38,
-      20.28,
-      20.47,
-      20.43,
-      20.53,
-      20.36,
-      20.55
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "NanobenchmarkTest.RunAll",
+    "metadata": {
+        "collection_date": "2026-01-14T18:40:54.417927",
+        "repository": "https://github.com/google/highway",
+        "repository_name": "google/highway"
+    },
+    "commit_info": {
+        "old_sha": "f00f9c86cc92c707368632a684a96c7bce0e2d54",
+        "new_sha": "2b0ea1d9e3c59d7fe5972ec9317a1030f203c282",
+        "commit_message": [
+            "Added optimized implementations of I8/U8 SumsOf4 for AVX3"
+        ],
+        "commit_date": "2023-09-26T13:50:00+00:00",
+        "patch": [
+            "--- hwy/ops/x86_128-inl.h\n@@ -3332,6 +3332,28 @@ HWY_API VFromD<RepartitionToWideX3<DFromV<V>>> SumsOf8AbsDiff(V a, V b) {\n   return BitCast(di64, SumsOf8AbsDiff(a_adj, b_adj));\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+template <size_t N>\n+HWY_INLINE Vec128<uint32_t, (N + 3) / 4> SumsOf4(\n+    hwy::UnsignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/,\n+    Vec128<uint8_t, N> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm_maskz_dbsad_epu8 result.\n+  return Vec128<uint32_t, (N + 3) / 4>{\n+      _mm_maskz_dbsad_epu8(static_cast<__mmask8>(0x55), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec128<int8_t, N> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range.\n--- hwy/ops/x86_256-inl.h\n@@ -1792,6 +1792,27 @@ HWY_API Vec256<uint64_t> SumsOf8AbsDiff(Vec256<uint8_t> a, Vec256<uint8_t> b) {\n   return Vec256<uint64_t>{_mm256_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+HWY_INLINE Vec256<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec256<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm256_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm256_maskz_dbsad_epu8 result.\n+  return Vec256<uint32_t>{_mm256_maskz_dbsad_epu8(\n+      static_cast<__mmask16>(0x5555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec256<int8_t> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range.\n--- hwy/ops/x86_512-inl.h\n@@ -1000,6 +1000,44 @@ HWY_API Vec512<uint64_t> SumsOf8AbsDiff(Vec512<uint8_t> a, Vec512<uint8_t> b) {\n   return Vec512<uint64_t>{_mm512_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+namespace detail {\n+\n+HWY_INLINE Vec512<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec512<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm512_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm512_maskz_dbsad_epu8 result.\n+  return Vec512<uint32_t>{_mm512_maskz_dbsad_epu8(\n+      static_cast<__mmask32>(0x55555555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// I8->I32 SumsOf4\n+// Generic for all vector lengths\n+template <class V>\n+HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(\n+    hwy::SignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {\n+  const DFromV<decltype(v)> d;\n+  const RebindToUnsigned<decltype(d)> du;\n+  const RepartitionToWideX2<decltype(d)> di32;\n+\n+  // Adjust the values of v to be in the 0..255 range by adding 128 to each lane\n+  // of v (which is the same as an bitwise XOR of each i8 lane by 128) and then\n+  // bitcasting the Xor result to an u8 vector.\n+  const auto v_adj = BitCast(du, Xor(v, SignBit(d)));\n+\n+  // Need to add -512 to each i32 lane of the result of the\n+  // SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj) operation to account\n+  // for the adjustment made above.\n+  return BitCast(di32, SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj)) +\n+         Set(di32, int32_t{-512});\n+}\n+\n+}  // namespace detail\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
+        ],
+        "files_changed": [
+            {
+                "filename": "hwy/ops/x86_128-inl.h",
+                "status": "modified",
+                "additions": 22,
+                "deletions": 0,
+                "changes": 22,
+                "patch": "@@ -3332,6 +3332,28 @@ HWY_API VFromD<RepartitionToWideX3<DFromV<V>>> SumsOf8AbsDiff(V a, V b) {\n   return BitCast(di64, SumsOf8AbsDiff(a_adj, b_adj));\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+template <size_t N>\n+HWY_INLINE Vec128<uint32_t, (N + 3) / 4> SumsOf4(\n+    hwy::UnsignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/,\n+    Vec128<uint8_t, N> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm_maskz_dbsad_epu8 result.\n+  return Vec128<uint32_t, (N + 3) / 4>{\n+      _mm_maskz_dbsad_epu8(static_cast<__mmask8>(0x55), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec128<int8_t, N> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
+            },
+            {
+                "filename": "hwy/ops/x86_256-inl.h",
+                "status": "modified",
+                "additions": 21,
+                "deletions": 0,
+                "changes": 21,
+                "patch": "@@ -1792,6 +1792,27 @@ HWY_API Vec256<uint64_t> SumsOf8AbsDiff(Vec256<uint8_t> a, Vec256<uint8_t> b) {\n   return Vec256<uint64_t>{_mm256_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+#if HWY_TARGET <= HWY_AVX3\n+namespace detail {\n+\n+HWY_INLINE Vec256<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec256<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm256_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm256_maskz_dbsad_epu8 result.\n+  return Vec256<uint32_t>{_mm256_maskz_dbsad_epu8(\n+      static_cast<__mmask16>(0x5555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// detail::SumsOf4 for Vec256<int8_t> on AVX3 is implemented in x86_512-inl.h\n+\n+}  // namespace detail\n+#endif  // HWY_TARGET <= HWY_AVX3\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
+            },
+            {
+                "filename": "hwy/ops/x86_512-inl.h",
+                "status": "modified",
+                "additions": 38,
+                "deletions": 0,
+                "changes": 38,
+                "patch": "@@ -1000,6 +1000,44 @@ HWY_API Vec512<uint64_t> SumsOf8AbsDiff(Vec512<uint8_t> a, Vec512<uint8_t> b) {\n   return Vec512<uint64_t>{_mm512_sad_epu8(a.raw, b.raw)};\n }\n \n+// ------------------------------ SumsOf4\n+namespace detail {\n+\n+HWY_INLINE Vec512<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,\n+                                    hwy::SizeTag<1> /*lane_size_tag*/,\n+                                    Vec512<uint8_t> v) {\n+  const DFromV<decltype(v)> d;\n+\n+  // _mm512_maskz_dbsad_epu8 is used below as the odd uint16_t lanes need to be\n+  // zeroed out and the sums of the 4 consecutive lanes are already in the\n+  // even uint16_t lanes of the _mm512_maskz_dbsad_epu8 result.\n+  return Vec512<uint32_t>{_mm512_maskz_dbsad_epu8(\n+      static_cast<__mmask32>(0x55555555), v.raw, Zero(d).raw, 0)};\n+}\n+\n+// I8->I32 SumsOf4\n+// Generic for all vector lengths\n+template <class V>\n+HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(\n+    hwy::SignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {\n+  const DFromV<decltype(v)> d;\n+  const RebindToUnsigned<decltype(d)> du;\n+  const RepartitionToWideX2<decltype(d)> di32;\n+\n+  // Adjust the values of v to be in the 0..255 range by adding 128 to each lane\n+  // of v (which is the same as an bitwise XOR of each i8 lane by 128) and then\n+  // bitcasting the Xor result to an u8 vector.\n+  const auto v_adj = BitCast(du, Xor(v, SignBit(d)));\n+\n+  // Need to add -512 to each i32 lane of the result of the\n+  // SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj) operation to account\n+  // for the adjustment made above.\n+  return BitCast(di32, SumsOf4(hwy::UnsignedTag(), hwy::SizeTag<1>(), v_adj)) +\n+         Set(di32, int32_t{-512});\n+}\n+\n+}  // namespace detail\n+\n // ------------------------------ SaturatedAdd\n \n // Returns a + b clamped to the destination range."
+            }
+        ],
+        "lines_added": 81,
+        "lines_removed": 0
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
-        "p_value": 0.8005071925737091,
+        "p_value": 0.9999999999918122,
         "is_pair_significant": false,
-        "pair_p_value": 0.8030374213493425,
+        "pair_p_value": 0.9999999999996142,
         "is_binom_significant": false,
-        "binom_p_value": 0.8275357745587826,
+        "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.8427234164330393,
+        "wilcoxon_p_value": 0.9999991349814353,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.5403445542506504,
-        "relative_improvement": 0.016101694915254344,
-        "absolute_improvement_ms": 6.551724137931092,
-        "old_mean_ms": 406.89655172413796,
-        "new_mean_ms": 400.34482758620686,
-        "old_std_ms": 52.311119295714214,
-        "new_std_ms": 71.78752172809749,
-        "effect_size_cohens_d": 0.1043121293383383,
+        "mannwhitney_p_value": 0.6713632823701597,
+        "relative_improvement": -0.0035705011685277293,
+        "absolute_improvement_ms": -73.33333333333769,
+        "old_mean_ms": 20538.66666666666,
+        "new_mean_ms": 20612.0,
+        "old_std_ms": 465.57145703876154,
+        "new_std_ms": 559.9532000148729,
+        "effect_size_cohens_d": -0.14241437289710412,
         "old_ci95_ms": [
-          386.9984661133353,
-          426.7946373349406
+            20364.819427508977,
+            20712.513905824344
         ],
         "new_ci95_ms": [
-          373.03831470013927,
-          427.6513404722745
+            20402.910038817106,
+            20821.08996118289
         ],
         "old_ci99_ms": [
-          380.0544109299534,
-          433.7386925183225
+            20304.370199641784,
+            20772.963133691537
         ],
         "new_ci99_ms": [
-          363.50885864816416,
-          437.18079652424956
+            20330.206401016898,
+            20893.7935989831
         ],
-        "new_times": [
-          0.42,
-          0.2,
-          0.35,
-          0.32,
-          0.25,
-          0.46,
-          0.33,
-          0.45,
-          0.45,
-          0.48,
-          0.53,
-          0.36,
-          0.44,
-          0.39,
-          0.48,
-          0.43,
-          0.38,
-          0.46,
-          0.31,
-          0.47,
-          0.4,
-          0.41,
-          0.39,
-          0.37,
-          0.46,
-          0.36,
-          0.4,
-          0.43,
-          0.43
+        "new_times_s": [
+            20.39,
+            20.13,
+            21.22,
+            21.15,
+            20.3,
+            21.05,
+            21.18,
+            22.56,
+            21.4,
+            20.55,
+            21.57,
+            20.99,
+            20.09,
+            20.08,
+            20.09,
+            20.05,
+            20.24,
+            20.14,
+            20.2,
+            20.43,
+            20.36,
+            20.68,
+            20.3,
+            20.44,
+            20.38,
+            20.48,
+            20.55,
+            20.36,
+            20.43,
+            20.48,
+            20.48
         ],
-        "old_times": [
-          0.5,
-          0.44,
-          0.39,
-          0.37,
-          0.35,
-          0.54,
-          0.37,
-          0.37,
-          0.36,
-          0.46,
-          0.36,
-          0.4,
-          0.46,
-          0.41,
-          0.43,
-          0.27,
-          0.4,
-          0.42,
-          0.46,
-          0.35,
-          0.42,
-          0.41,
-          0.44,
-          0.4,
-          0.44,
-          0.36,
-          0.43,
-          0.38,
-          0.41
+        "old_times_s": [
+            21.28,
+            21.02,
+            20.9,
+            20.91,
+            20.45,
+            21.79,
+            20.27,
+            20.54,
+            21.49,
+            21.34,
+            21.27,
+            20.91,
+            19.95,
+            20.02,
+            20.18,
+            20.11,
+            20.19,
+            19.99,
+            20.15,
+            20.23,
+            20.27,
+            20.57,
+            20.3,
+            20.31,
+            20.38,
+            20.28,
+            20.47,
+            20.43,
+            20.53,
+            20.36,
+            20.55
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "NanobenchmarkTest.RunAll",
+                "is_significant": false,
+                "p_value": 0.8005071925737091,
+                "is_pair_significant": false,
+                "pair_p_value": 0.8030374213493425,
+                "is_binom_significant": false,
+                "binom_p_value": 0.8275357745587826,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.8427234164330393,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.5403445542506504,
+                "relative_improvement": 0.016101694915254344,
+                "absolute_improvement_ms": 6.551724137931092,
+                "old_mean_ms": 406.89655172413796,
+                "new_mean_ms": 400.34482758620686,
+                "old_std_ms": 52.311119295714214,
+                "new_std_ms": 71.78752172809749,
+                "effect_size_cohens_d": 0.1043121293383383,
+                "old_ci95_ms": [
+                    386.9984661133353,
+                    426.7946373349406
+                ],
+                "new_ci95_ms": [
+                    373.03831470013927,
+                    427.6513404722745
+                ],
+                "old_ci99_ms": [
+                    380.0544109299534,
+                    433.7386925183225
+                ],
+                "new_ci99_ms": [
+                    363.50885864816416,
+                    437.18079652424956
+                ],
+                "new_times": [
+                    0.42,
+                    0.2,
+                    0.35,
+                    0.32,
+                    0.25,
+                    0.46,
+                    0.33,
+                    0.45,
+                    0.45,
+                    0.48,
+                    0.53,
+                    0.36,
+                    0.44,
+                    0.39,
+                    0.48,
+                    0.43,
+                    0.38,
+                    0.46,
+                    0.31,
+                    0.47,
+                    0.4,
+                    0.41,
+                    0.39,
+                    0.37,
+                    0.46,
+                    0.36,
+                    0.4,
+                    0.43,
+                    0.43
+                ],
+                "old_times": [
+                    0.5,
+                    0.44,
+                    0.39,
+                    0.37,
+                    0.35,
+                    0.54,
+                    0.37,
+                    0.37,
+                    0.36,
+                    0.46,
+                    0.36,
+                    0.4,
+                    0.46,
+                    0.41,
+                    0.43,
+                    0.27,
+                    0.4,
+                    0.42,
+                    0.46,
+                    0.35,
+                    0.42,
+                    0.41,
+                    0.44,
+                    0.4,
+                    0.44,
+                    0.36,
+                    0.43,
+                    0.38,
+                    0.41
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

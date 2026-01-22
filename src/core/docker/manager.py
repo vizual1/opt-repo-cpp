@@ -131,25 +131,22 @@ class DockerManager:
         return exit_code, output, logs, end-start
     
 
-    def copy_commands_to_container(self, project_root: Path, new_cmd: list[str], old_cmd: list[str]) -> None:
-        for i, c in enumerate(new_cmd): 
-            if i < 2:
-                save = "build"
-            else:
-                save = "test"
-            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/new_{save}.sh"]
+    def copy_commands_to_container(
+            self, project_root: Path, 
+            new_build_cmd: list[str], old_build_cmd: list[str], 
+            new_test_cmd: list[str], old_test_cmd: list[str]) -> None:
+        self._copy(project_root, new_build_cmd, "new_build")
+        self._copy(project_root, old_build_cmd, "old_build")
+        self._copy(project_root, new_test_cmd, "new_test")
+        self._copy(project_root, old_test_cmd, "old_test")
+
+    def _copy(self, project_root: Path, cmd: list[str], save: str) -> None:
+        for c in cmd: 
+            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/{save}.sh"]
             exit_code, _, _, _ = self.run_command_in_docker(cmd, project_root, check=False, log=False)
             if exit_code != 0:
-                logging.error(f"Copying the build and test commands failed with: {exit_code}")
-        for i, c in enumerate(old_cmd):
-            if i < 2:
-                save = "build"
-            else:
-                save = "test"
-            cmd = ["bash", "-c", f"echo '{c}' >> {self.docker_test_dir}/old_{save}.sh"]
-            exit_code, _, _, _ = self.run_command_in_docker(cmd, project_root, check=False)
-            if exit_code != 0:
-                logging.error(f"Copying the build and test commands failed with: {exit_code}")
+                logging.error(f"Copying the commands to {save}.sh failed with: {exit_code}")
+        
 
     def load_docker_image(self, tar_path: Path):
         self.client = docker.from_env()

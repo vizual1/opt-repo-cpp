@@ -1,191 +1,80 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:52.702171",
-    "repository": "https://github.com/oatpp/oatpp",
-    "repository_name": "oatpp/oatpp"
-  },
-  "commit_info": {
-    "old_sha": "c0c6267757bdfc904fc172bcd4d402afdaf43332",
-    "new_sha": "56f4d667a93e68d7a7d88e9a562e1a2bf86c43da",
-    "commit_message": [
-      "Merge pull request #200 from oatpp/optimize_large_files_upload\n\nUse stream::ChunkedBuffer instead of stream::BufferOutputStream for uploads\r\nPerformance when uploading large files increased noticeably."
-    ],
-    "commit_date": "2020-02-17T06:00:28+00:00",
-    "patch": [
-      "--- src/oatpp/core/data/mapping/ObjectMapper.cpp\n@@ -24,7 +24,7 @@\n \n #include \"ObjectMapper.hpp\"\n \n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n \n namespace oatpp { namespace data { namespace mapping {\n \n@@ -37,7 +37,7 @@ const ObjectMapper::Info& ObjectMapper::getInfo() const {\n }\n \n oatpp::String ObjectMapper::writeToString(const type::AbstractObjectWrapper& variant) const {\n-  stream::BufferOutputStream stream;\n+  stream::ChunkedBuffer stream;\n   write(&stream, variant);\n   return stream.toString();\n }\n--- src/oatpp/parser/json/Beautifier.cpp\n@@ -47,7 +47,7 @@ void Beautifier::writeIndent(ConsistentOutputStream* outputStream) {\n \n v_io_size Beautifier::write(const void *data, v_buff_size count, async::Action& action) {\n \n-  oatpp::data::stream::BufferOutputStream buffer;\n+  oatpp::data::stream::BufferOutputStream buffer(count);\n \n   for(v_buff_size i = 0; i < count; i ++) {\n \n--- src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp\n@@ -37,7 +37,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n     const BodyDecoder* m_decoder;\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n \n     ToStringDecoder(const BodyDecoder* decoder,\n@@ -46,7 +46,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n       : m_decoder(decoder)\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n-      , m_outputStream(std::make_shared<data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<data::stream::ChunkedBuffer>())\n     {}\n \n     Action act() override {\n--- src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp\n@@ -27,7 +27,7 @@\n \n #include \"oatpp/web/protocol/http/Http.hpp\"\n #include \"oatpp/core/data/mapping/ObjectMapper.hpp\"\n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n #include \"oatpp/core/async/Coroutine.hpp\"\n \n namespace oatpp { namespace web { namespace protocol { namespace http { namespace incoming {\n@@ -48,7 +48,7 @@ class BodyDecoder {\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n     std::shared_ptr<oatpp::data::mapping::ObjectMapper> m_objectMapper;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n     \n     ToDtoDecoder(const BodyDecoder* decoder,\n@@ -59,7 +59,7 @@ class BodyDecoder {\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n       , m_objectMapper(objectMapper)\n-      , m_outputStream(std::make_shared<oatpp::data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<oatpp::data::stream::ChunkedBuffer>())\n     {}\n     \n     oatpp::async::Action act() override {\n@@ -111,7 +111,7 @@ class BodyDecoder {\n    * @return - &oatpp::String;.\n    */\n   oatpp::String decodeToString(const Headers& headers, data::stream::InputStream* bodyStream) const {\n-    oatpp::data::stream::BufferOutputStream stream;\n+    oatpp::data::stream::ChunkedBuffer stream;\n     decode(headers, bodyStream, &stream);\n     return stream.toString();\n   }"
-    ],
-    "files_changed": [
-      {
-        "filename": "src/oatpp/core/data/mapping/ObjectMapper.cpp",
-        "status": "modified",
-        "additions": 2,
-        "deletions": 2,
-        "changes": 4,
-        "patch": "@@ -24,7 +24,7 @@\n \n #include \"ObjectMapper.hpp\"\n \n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n \n namespace oatpp { namespace data { namespace mapping {\n \n@@ -37,7 +37,7 @@ const ObjectMapper::Info& ObjectMapper::getInfo() const {\n }\n \n oatpp::String ObjectMapper::writeToString(const type::AbstractObjectWrapper& variant) const {\n-  stream::BufferOutputStream stream;\n+  stream::ChunkedBuffer stream;\n   write(&stream, variant);\n   return stream.toString();\n }"
-      },
-      {
-        "filename": "src/oatpp/parser/json/Beautifier.cpp",
-        "status": "modified",
-        "additions": 1,
-        "deletions": 1,
-        "changes": 2,
-        "patch": "@@ -47,7 +47,7 @@ void Beautifier::writeIndent(ConsistentOutputStream* outputStream) {\n \n v_io_size Beautifier::write(const void *data, v_buff_size count, async::Action& action) {\n \n-  oatpp::data::stream::BufferOutputStream buffer;\n+  oatpp::data::stream::BufferOutputStream buffer(count);\n \n   for(v_buff_size i = 0; i < count; i ++) {\n "
-      },
-      {
-        "filename": "src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp",
-        "status": "modified",
-        "additions": 2,
-        "deletions": 2,
-        "changes": 4,
-        "patch": "@@ -37,7 +37,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n     const BodyDecoder* m_decoder;\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n \n     ToStringDecoder(const BodyDecoder* decoder,\n@@ -46,7 +46,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n       : m_decoder(decoder)\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n-      , m_outputStream(std::make_shared<data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<data::stream::ChunkedBuffer>())\n     {}\n \n     Action act() override {"
-      },
-      {
-        "filename": "src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp",
-        "status": "modified",
-        "additions": 4,
-        "deletions": 4,
-        "changes": 8,
-        "patch": "@@ -27,7 +27,7 @@\n \n #include \"oatpp/web/protocol/http/Http.hpp\"\n #include \"oatpp/core/data/mapping/ObjectMapper.hpp\"\n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n #include \"oatpp/core/async/Coroutine.hpp\"\n \n namespace oatpp { namespace web { namespace protocol { namespace http { namespace incoming {\n@@ -48,7 +48,7 @@ class BodyDecoder {\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n     std::shared_ptr<oatpp::data::mapping::ObjectMapper> m_objectMapper;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n     \n     ToDtoDecoder(const BodyDecoder* decoder,\n@@ -59,7 +59,7 @@ class BodyDecoder {\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n       , m_objectMapper(objectMapper)\n-      , m_outputStream(std::make_shared<oatpp::data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<oatpp::data::stream::ChunkedBuffer>())\n     {}\n     \n     oatpp::async::Action act() override {\n@@ -111,7 +111,7 @@ class BodyDecoder {\n    * @return - &oatpp::String;.\n    */\n   oatpp::String decodeToString(const Headers& headers, data::stream::InputStream* bodyStream) const {\n-    oatpp::data::stream::BufferOutputStream stream;\n+    oatpp::data::stream::ChunkedBuffer stream;\n     decode(headers, bodyStream, &stream);\n     return stream.toString();\n   }"
-      }
-    ],
-    "lines_added": 9,
-    "lines_removed": 9
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991344368026,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.1645517504119945,
-    "relative_improvement": 0.0007774442113788074,
-    "absolute_improvement_ms": 120.33333333334895,
-    "old_mean_ms": 154780.66666666666,
-    "new_mean_ms": 154660.3333333333,
-    "old_std_ms": 561.1068699813161,
-    "new_std_ms": 419.5686071335111,
-    "effect_size_cohens_d": 0.24289234923647407,
-    "old_ci95_ms": [
-      154571.1459180385,
-      154990.18741529481
-    ],
-    "new_ci95_ms": [
-      154503.66384063862,
-      154817.002826028
-    ],
-    "old_ci99_ms": [
-      154498.2924891426,
-      155063.04084419075
-    ],
-    "new_ci99_ms": [
-      154449.1875664704,
-      154871.47910019621
-    ],
-    "new_times_s": [
-      154.18,
-      154.41,
-      154.39,
-      154.78,
-      154.72,
-      154.71,
-      155.0,
-      155.02,
-      154.24,
-      154.64,
-      154.25,
-      154.03,
-      154.71,
-      154.64,
-      154.76,
-      155.12,
-      154.29,
-      155.82,
-      154.31,
-      154.06,
-      154.39,
-      154.29,
-      154.35,
-      154.84,
-      155.13,
-      155.05,
-      154.51,
-      155.16,
-      154.28,
-      155.44,
-      154.47
-    ],
-    "old_times_s": [
-      155.46,
-      155.45,
-      154.84,
-      155.17,
-      154.74,
-      154.52,
-      155.34,
-      154.99,
-      154.48,
-      154.57,
-      154.57,
-      154.93,
-      155.42,
-      154.89,
-      154.69,
-      154.04,
-      155.18,
-      154.52,
-      154.5,
-      153.93,
-      154.59,
-      153.77,
-      155.19,
-      155.83,
-      154.42,
-      154.3,
-      154.7,
-      154.12,
-      154.59,
-      156.43,
-      154.71
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "oatppAllTests",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:52.702171",
+        "repository": "https://github.com/oatpp/oatpp",
+        "repository_name": "oatpp/oatpp"
+    },
+    "commit_info": {
+        "old_sha": "c0c6267757bdfc904fc172bcd4d402afdaf43332",
+        "new_sha": "56f4d667a93e68d7a7d88e9a562e1a2bf86c43da",
+        "commit_message": [
+            "Merge pull request #200 from oatpp/optimize_large_files_upload\n\nUse stream::ChunkedBuffer instead of stream::BufferOutputStream for uploads\r\nPerformance when uploading large files increased noticeably."
+        ],
+        "commit_date": "2020-02-17T06:00:28+00:00",
+        "patch": [
+            "--- src/oatpp/core/data/mapping/ObjectMapper.cpp\n@@ -24,7 +24,7 @@\n \n #include \"ObjectMapper.hpp\"\n \n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n \n namespace oatpp { namespace data { namespace mapping {\n \n@@ -37,7 +37,7 @@ const ObjectMapper::Info& ObjectMapper::getInfo() const {\n }\n \n oatpp::String ObjectMapper::writeToString(const type::AbstractObjectWrapper& variant) const {\n-  stream::BufferOutputStream stream;\n+  stream::ChunkedBuffer stream;\n   write(&stream, variant);\n   return stream.toString();\n }\n--- src/oatpp/parser/json/Beautifier.cpp\n@@ -47,7 +47,7 @@ void Beautifier::writeIndent(ConsistentOutputStream* outputStream) {\n \n v_io_size Beautifier::write(const void *data, v_buff_size count, async::Action& action) {\n \n-  oatpp::data::stream::BufferOutputStream buffer;\n+  oatpp::data::stream::BufferOutputStream buffer(count);\n \n   for(v_buff_size i = 0; i < count; i ++) {\n \n--- src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp\n@@ -37,7 +37,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n     const BodyDecoder* m_decoder;\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n \n     ToStringDecoder(const BodyDecoder* decoder,\n@@ -46,7 +46,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n       : m_decoder(decoder)\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n-      , m_outputStream(std::make_shared<data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<data::stream::ChunkedBuffer>())\n     {}\n \n     Action act() override {\n--- src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp\n@@ -27,7 +27,7 @@\n \n #include \"oatpp/web/protocol/http/Http.hpp\"\n #include \"oatpp/core/data/mapping/ObjectMapper.hpp\"\n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n #include \"oatpp/core/async/Coroutine.hpp\"\n \n namespace oatpp { namespace web { namespace protocol { namespace http { namespace incoming {\n@@ -48,7 +48,7 @@ class BodyDecoder {\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n     std::shared_ptr<oatpp::data::mapping::ObjectMapper> m_objectMapper;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n     \n     ToDtoDecoder(const BodyDecoder* decoder,\n@@ -59,7 +59,7 @@ class BodyDecoder {\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n       , m_objectMapper(objectMapper)\n-      , m_outputStream(std::make_shared<oatpp::data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<oatpp::data::stream::ChunkedBuffer>())\n     {}\n     \n     oatpp::async::Action act() override {\n@@ -111,7 +111,7 @@ class BodyDecoder {\n    * @return - &oatpp::String;.\n    */\n   oatpp::String decodeToString(const Headers& headers, data::stream::InputStream* bodyStream) const {\n-    oatpp::data::stream::BufferOutputStream stream;\n+    oatpp::data::stream::ChunkedBuffer stream;\n     decode(headers, bodyStream, &stream);\n     return stream.toString();\n   }"
+        ],
+        "files_changed": [
+            {
+                "filename": "src/oatpp/core/data/mapping/ObjectMapper.cpp",
+                "status": "modified",
+                "additions": 2,
+                "deletions": 2,
+                "changes": 4,
+                "patch": "@@ -24,7 +24,7 @@\n \n #include \"ObjectMapper.hpp\"\n \n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n \n namespace oatpp { namespace data { namespace mapping {\n \n@@ -37,7 +37,7 @@ const ObjectMapper::Info& ObjectMapper::getInfo() const {\n }\n \n oatpp::String ObjectMapper::writeToString(const type::AbstractObjectWrapper& variant) const {\n-  stream::BufferOutputStream stream;\n+  stream::ChunkedBuffer stream;\n   write(&stream, variant);\n   return stream.toString();\n }"
+            },
+            {
+                "filename": "src/oatpp/parser/json/Beautifier.cpp",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "changes": 2,
+                "patch": "@@ -47,7 +47,7 @@ void Beautifier::writeIndent(ConsistentOutputStream* outputStream) {\n \n v_io_size Beautifier::write(const void *data, v_buff_size count, async::Action& action) {\n \n-  oatpp::data::stream::BufferOutputStream buffer;\n+  oatpp::data::stream::BufferOutputStream buffer(count);\n \n   for(v_buff_size i = 0; i < count; i ++) {\n "
+            },
+            {
+                "filename": "src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp",
+                "status": "modified",
+                "additions": 2,
+                "deletions": 2,
+                "changes": 4,
+                "patch": "@@ -37,7 +37,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n     const BodyDecoder* m_decoder;\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n \n     ToStringDecoder(const BodyDecoder* decoder,\n@@ -46,7 +46,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d\n       : m_decoder(decoder)\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n-      , m_outputStream(std::make_shared<data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<data::stream::ChunkedBuffer>())\n     {}\n \n     Action act() override {"
+            },
+            {
+                "filename": "src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp",
+                "status": "modified",
+                "additions": 4,
+                "deletions": 4,
+                "changes": 8,
+                "patch": "@@ -27,7 +27,7 @@\n \n #include \"oatpp/web/protocol/http/Http.hpp\"\n #include \"oatpp/core/data/mapping/ObjectMapper.hpp\"\n-#include \"oatpp/core/data/stream/BufferStream.hpp\"\n+#include \"oatpp/core/data/stream/ChunkedBuffer.hpp\"\n #include \"oatpp/core/async/Coroutine.hpp\"\n \n namespace oatpp { namespace web { namespace protocol { namespace http { namespace incoming {\n@@ -48,7 +48,7 @@ class BodyDecoder {\n     Headers m_headers;\n     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;\n     std::shared_ptr<oatpp::data::mapping::ObjectMapper> m_objectMapper;\n-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;\n+    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;\n   public:\n     \n     ToDtoDecoder(const BodyDecoder* decoder,\n@@ -59,7 +59,7 @@ class BodyDecoder {\n       , m_headers(headers)\n       , m_bodyStream(bodyStream)\n       , m_objectMapper(objectMapper)\n-      , m_outputStream(std::make_shared<oatpp::data::stream::BufferOutputStream>())\n+      , m_outputStream(std::make_shared<oatpp::data::stream::ChunkedBuffer>())\n     {}\n     \n     oatpp::async::Action act() override {\n@@ -111,7 +111,7 @@ class BodyDecoder {\n    * @return - &oatpp::String;.\n    */\n   oatpp::String decodeToString(const Headers& headers, data::stream::InputStream* bodyStream) const {\n-    oatpp::data::stream::BufferOutputStream stream;\n+    oatpp::data::stream::ChunkedBuffer stream;\n     decode(headers, bodyStream, &stream);\n     return stream.toString();\n   }"
+            }
+        ],
+        "lines_added": 9,
+        "lines_removed": 9
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOATPP_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -193,109 +82,234 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.999998721045182,
+        "wilcoxon_p_value": 0.9999991344368026,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.25679596179786157,
-        "relative_improvement": 0.0005637367950782759,
-        "absolute_improvement_ms": 87.24137931037035,
-        "old_mean_ms": 154755.5172413793,
-        "new_mean_ms": 154668.27586206893,
-        "old_std_ms": 556.8635778491682,
-        "new_std_ms": 425.08880555812965,
-        "effect_size_cohens_d": 0.17611093946328302,
+        "mannwhitney_p_value": 0.1645517504119945,
+        "relative_improvement": 0.0007774442113788074,
+        "absolute_improvement_ms": 120.33333333334895,
+        "old_mean_ms": 154780.66666666666,
+        "new_mean_ms": 154660.3333333333,
+        "old_std_ms": 561.1068699813161,
+        "new_std_ms": 419.5686071335111,
+        "effect_size_cohens_d": 0.24289234923647407,
         "old_ci95_ms": [
-          154543.6976646858,
-          154967.33681807277
+            154571.1459180385,
+            154990.18741529481
         ],
         "new_ci95_ms": [
-          154506.5807280502,
-          154829.97099608765
+            154503.66384063862,
+            154817.002826028
         ],
         "old_ci99_ms": [
-          154469.77664242015,
-          155041.25784033843
+            154498.2924891426,
+            155063.04084419075
         ],
         "new_ci99_ms": [
-          154450.15218736182,
-          154886.39953677604
+            154449.1875664704,
+            154871.47910019621
         ],
-        "new_times": [
-          154.39,
-          154.78,
-          154.72,
-          154.71,
-          155.0,
-          155.02,
-          154.24,
-          154.64,
-          154.25,
-          154.02,
-          154.71,
-          154.64,
-          154.76,
-          155.12,
-          154.29,
-          155.82,
-          154.31,
-          154.06,
-          154.39,
-          154.29,
-          154.34,
-          154.84,
-          155.13,
-          155.05,
-          154.51,
-          155.16,
-          154.28,
-          155.44,
-          154.47
+        "new_times_s": [
+            154.18,
+            154.41,
+            154.39,
+            154.78,
+            154.72,
+            154.71,
+            155.0,
+            155.02,
+            154.24,
+            154.64,
+            154.25,
+            154.03,
+            154.71,
+            154.64,
+            154.76,
+            155.12,
+            154.29,
+            155.82,
+            154.31,
+            154.06,
+            154.39,
+            154.29,
+            154.35,
+            154.84,
+            155.13,
+            155.05,
+            154.51,
+            155.16,
+            154.28,
+            155.44,
+            154.47
         ],
-        "old_times": [
-          154.84,
-          155.16,
-          154.74,
-          154.52,
-          155.34,
-          154.98,
-          154.48,
-          154.56,
-          154.57,
-          154.93,
-          155.42,
-          154.89,
-          154.68,
-          154.04,
-          155.18,
-          154.52,
-          154.5,
-          153.93,
-          154.59,
-          153.76,
-          155.19,
-          155.83,
-          154.42,
-          154.3,
-          154.7,
-          154.12,
-          154.58,
-          156.43,
-          154.71
+        "old_times_s": [
+            155.46,
+            155.45,
+            154.84,
+            155.17,
+            154.74,
+            154.52,
+            155.34,
+            154.99,
+            154.48,
+            154.57,
+            154.57,
+            154.93,
+            155.42,
+            154.89,
+            154.69,
+            154.04,
+            155.18,
+            154.52,
+            154.5,
+            153.93,
+            154.59,
+            153.77,
+            155.19,
+            155.83,
+            154.42,
+            154.3,
+            154.7,
+            154.12,
+            154.59,
+            156.43,
+            154.71
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "oatppAllTests",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.999998721045182,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.25679596179786157,
+                "relative_improvement": 0.0005637367950782759,
+                "absolute_improvement_ms": 87.24137931037035,
+                "old_mean_ms": 154755.5172413793,
+                "new_mean_ms": 154668.27586206893,
+                "old_std_ms": 556.8635778491682,
+                "new_std_ms": 425.08880555812965,
+                "effect_size_cohens_d": 0.17611093946328302,
+                "old_ci95_ms": [
+                    154543.6976646858,
+                    154967.33681807277
+                ],
+                "new_ci95_ms": [
+                    154506.5807280502,
+                    154829.97099608765
+                ],
+                "old_ci99_ms": [
+                    154469.77664242015,
+                    155041.25784033843
+                ],
+                "new_ci99_ms": [
+                    154450.15218736182,
+                    154886.39953677604
+                ],
+                "new_times": [
+                    154.39,
+                    154.78,
+                    154.72,
+                    154.71,
+                    155.0,
+                    155.02,
+                    154.24,
+                    154.64,
+                    154.25,
+                    154.02,
+                    154.71,
+                    154.64,
+                    154.76,
+                    155.12,
+                    154.29,
+                    155.82,
+                    154.31,
+                    154.06,
+                    154.39,
+                    154.29,
+                    154.34,
+                    154.84,
+                    155.13,
+                    155.05,
+                    154.51,
+                    155.16,
+                    154.28,
+                    155.44,
+                    154.47
+                ],
+                "old_times": [
+                    154.84,
+                    155.16,
+                    154.74,
+                    154.52,
+                    155.34,
+                    154.98,
+                    154.48,
+                    154.56,
+                    154.57,
+                    154.93,
+                    155.42,
+                    154.89,
+                    154.68,
+                    154.04,
+                    155.18,
+                    154.52,
+                    154.5,
+                    153.93,
+                    154.59,
+                    153.76,
+                    155.19,
+                    155.83,
+                    154.42,
+                    154.3,
+                    154.7,
+                    154.12,
+                    154.58,
+                    156.43,
+                    154.71
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

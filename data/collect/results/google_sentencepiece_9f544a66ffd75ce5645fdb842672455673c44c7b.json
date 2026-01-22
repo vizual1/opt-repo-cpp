@@ -1,167 +1,56 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:34.776400",
-    "repository": "https://github.com/google/sentencepiece",
-    "repository_name": "google/sentencepiece"
-  },
-  "commit_info": {
-    "old_sha": "bc53923a9147dc8ffa54034c8ed774de78cc4d39",
-    "new_sha": "9f544a66ffd75ce5645fdb842672455673c44c7b",
-    "commit_message": [
-      "Restore the sentence boundary marker insertion for the unigram\ntrainer.  Dramatically speeds up training time."
-    ],
-    "commit_date": "2021-03-22T17:26:20+00:00",
-    "patch": [
-      "--- src/unigram_model_trainer.cc\n@@ -119,6 +119,7 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePieces() const {\n         all_chars[string_util::UnicodeCharToUTF8(c)] += w.second;\n       }\n     }\n+    array.push_back(kSentenceBoundary);  // sentence boundary marker.\n   }\n \n   CHECK_LE(array.size(),"
-    ],
-    "files_changed": [
-      {
-        "filename": "src/unigram_model_trainer.cc",
-        "status": "modified",
-        "additions": 1,
-        "deletions": 0,
-        "changes": 1,
-        "patch": "@@ -119,6 +119,7 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePieces() const {\n         all_chars[string_util::UnicodeCharToUTF8(c)] += w.second;\n       }\n     }\n+    array.push_back(kSentenceBoundary);  // sentence boundary marker.\n   }\n \n   CHECK_LE(array.size(),"
-      }
-    ],
-    "lines_added": 1,
-    "lines_removed": 0
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPM_BUILD_TEST=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPM_BUILD_TEST=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991414947408,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.9327457534655035,
-    "relative_improvement": -0.00201044557592701,
-    "absolute_improvement_ms": -30.66666666666862,
-    "old_mean_ms": 15253.666666666666,
-    "new_mean_ms": 15284.333333333334,
-    "old_std_ms": 71.3651771226493,
-    "new_std_ms": 56.731875935195596,
-    "effect_size_cohens_d": -0.4757097098261651,
-    "old_ci95_ms": [
-      15227.01847157824,
-      15280.31486175509
-    ],
-    "new_ci95_ms": [
-      15263.149302709333,
-      15305.517363957335
-    ],
-    "old_ci99_ms": [
-      15217.752504370737,
-      15289.580828962593
-    ],
-    "new_ci99_ms": [
-      15255.783305408828,
-      15312.88336125784
-    ],
-    "new_times_s": [
-      15.25,
-      15.34,
-      15.27,
-      15.26,
-      15.32,
-      15.24,
-      15.31,
-      15.24,
-      15.26,
-      15.29,
-      15.34,
-      15.29,
-      15.36,
-      15.29,
-      15.31,
-      15.33,
-      15.21,
-      15.43,
-      15.32,
-      15.17,
-      15.27,
-      15.21,
-      15.24,
-      15.27,
-      15.24,
-      15.24,
-      15.38,
-      15.32,
-      15.21,
-      15.32,
-      15.25
-    ],
-    "old_times_s": [
-      15.33,
-      15.22,
-      15.19,
-      15.35,
-      15.21,
-      15.11,
-      15.28,
-      15.14,
-      15.29,
-      15.28,
-      15.24,
-      15.31,
-      15.28,
-      15.25,
-      15.21,
-      15.3,
-      15.28,
-      15.22,
-      15.31,
-      15.29,
-      15.14,
-      15.35,
-      15.13,
-      15.17,
-      15.33,
-      15.3,
-      15.34,
-      15.39,
-      15.24,
-      15.25,
-      15.21
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "sentencepiece_test",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:34.776400",
+        "repository": "https://github.com/google/sentencepiece",
+        "repository_name": "google/sentencepiece"
+    },
+    "commit_info": {
+        "old_sha": "bc53923a9147dc8ffa54034c8ed774de78cc4d39",
+        "new_sha": "9f544a66ffd75ce5645fdb842672455673c44c7b",
+        "commit_message": [
+            "Restore the sentence boundary marker insertion for the unigram\ntrainer.  Dramatically speeds up training time."
+        ],
+        "commit_date": "2021-03-22T17:26:20+00:00",
+        "patch": [
+            "--- src/unigram_model_trainer.cc\n@@ -119,6 +119,7 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePieces() const {\n         all_chars[string_util::UnicodeCharToUTF8(c)] += w.second;\n       }\n     }\n+    array.push_back(kSentenceBoundary);  // sentence boundary marker.\n   }\n \n   CHECK_LE(array.size(),"
+        ],
+        "files_changed": [
+            {
+                "filename": "src/unigram_model_trainer.cc",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 0,
+                "changes": 1,
+                "patch": "@@ -119,6 +119,7 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePieces() const {\n         all_chars[string_util::UnicodeCharToUTF8(c)] += w.second;\n       }\n     }\n+    array.push_back(kSentenceBoundary);  // sentence boundary marker.\n   }\n \n   CHECK_LE(array.size(),"
+            }
+        ],
+        "lines_added": 1,
+        "lines_removed": 0
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPM_BUILD_TEST=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPM_BUILD_TEST=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -169,109 +58,234 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.99999873134913,
+        "wilcoxon_p_value": 0.9999991414947408,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.8908985013752416,
-        "relative_improvement": -0.0018537357296258463,
-        "absolute_improvement_ms": -28.275862068966262,
-        "old_mean_ms": 15253.448275862069,
-        "new_mean_ms": 15281.724137931034,
-        "old_std_ms": 73.10832774866947,
-        "new_std_ms": 57.69804190272729,
-        "effect_size_cohens_d": -0.4293622483877776,
+        "mannwhitney_p_value": 0.9327457534655035,
+        "relative_improvement": -0.00201044557592701,
+        "absolute_improvement_ms": -30.66666666666862,
+        "old_mean_ms": 15253.666666666666,
+        "new_mean_ms": 15284.333333333334,
+        "old_std_ms": 71.3651771226493,
+        "new_std_ms": 56.731875935195596,
+        "effect_size_cohens_d": -0.4757097098261651,
         "old_ci95_ms": [
-          15225.639355235036,
-          15281.2571964891
+            15227.01847157824,
+            15280.31486175509
         ],
         "new_ci95_ms": [
-          15259.77697654712,
-          15303.671299314947
+            15263.149302709333,
+            15305.517363957335
         ],
         "old_ci99_ms": [
-          15215.934568392651,
-          15290.961983331485
+            15217.752504370737,
+            15289.580828962593
         ],
         "new_ci99_ms": [
-          15252.117832710404,
-          15311.330443151664
+            15255.783305408828,
+            15312.88336125784
         ],
-        "new_times": [
-          15.27,
-          15.26,
-          15.32,
-          15.24,
-          15.31,
-          15.24,
-          15.26,
-          15.29,
-          15.34,
-          15.29,
-          15.36,
-          15.29,
-          15.31,
-          15.33,
-          15.2,
-          15.43,
-          15.32,
-          15.17,
-          15.27,
-          15.2,
-          15.24,
-          15.27,
-          15.24,
-          15.24,
-          15.38,
-          15.32,
-          15.21,
-          15.32,
-          15.25
+        "new_times_s": [
+            15.25,
+            15.34,
+            15.27,
+            15.26,
+            15.32,
+            15.24,
+            15.31,
+            15.24,
+            15.26,
+            15.29,
+            15.34,
+            15.29,
+            15.36,
+            15.29,
+            15.31,
+            15.33,
+            15.21,
+            15.43,
+            15.32,
+            15.17,
+            15.27,
+            15.21,
+            15.24,
+            15.27,
+            15.24,
+            15.24,
+            15.38,
+            15.32,
+            15.21,
+            15.32,
+            15.25
         ],
-        "old_times": [
-          15.18,
-          15.35,
-          15.21,
-          15.1,
-          15.28,
-          15.14,
-          15.29,
-          15.27,
-          15.24,
-          15.31,
-          15.28,
-          15.25,
-          15.21,
-          15.29,
-          15.28,
-          15.22,
-          15.31,
-          15.29,
-          15.14,
-          15.35,
-          15.13,
-          15.17,
-          15.33,
-          15.3,
-          15.34,
-          15.39,
-          15.24,
-          15.25,
-          15.21
+        "old_times_s": [
+            15.33,
+            15.22,
+            15.19,
+            15.35,
+            15.21,
+            15.11,
+            15.28,
+            15.14,
+            15.29,
+            15.28,
+            15.24,
+            15.31,
+            15.28,
+            15.25,
+            15.21,
+            15.3,
+            15.28,
+            15.22,
+            15.31,
+            15.29,
+            15.14,
+            15.35,
+            15.13,
+            15.17,
+            15.33,
+            15.3,
+            15.34,
+            15.39,
+            15.24,
+            15.25,
+            15.21
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "sentencepiece_test",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.99999873134913,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.8908985013752416,
+                "relative_improvement": -0.0018537357296258463,
+                "absolute_improvement_ms": -28.275862068966262,
+                "old_mean_ms": 15253.448275862069,
+                "new_mean_ms": 15281.724137931034,
+                "old_std_ms": 73.10832774866947,
+                "new_std_ms": 57.69804190272729,
+                "effect_size_cohens_d": -0.4293622483877776,
+                "old_ci95_ms": [
+                    15225.639355235036,
+                    15281.2571964891
+                ],
+                "new_ci95_ms": [
+                    15259.77697654712,
+                    15303.671299314947
+                ],
+                "old_ci99_ms": [
+                    15215.934568392651,
+                    15290.961983331485
+                ],
+                "new_ci99_ms": [
+                    15252.117832710404,
+                    15311.330443151664
+                ],
+                "new_times": [
+                    15.27,
+                    15.26,
+                    15.32,
+                    15.24,
+                    15.31,
+                    15.24,
+                    15.26,
+                    15.29,
+                    15.34,
+                    15.29,
+                    15.36,
+                    15.29,
+                    15.31,
+                    15.33,
+                    15.2,
+                    15.43,
+                    15.32,
+                    15.17,
+                    15.27,
+                    15.2,
+                    15.24,
+                    15.27,
+                    15.24,
+                    15.24,
+                    15.38,
+                    15.32,
+                    15.21,
+                    15.32,
+                    15.25
+                ],
+                "old_times": [
+                    15.18,
+                    15.35,
+                    15.21,
+                    15.1,
+                    15.28,
+                    15.14,
+                    15.29,
+                    15.27,
+                    15.24,
+                    15.31,
+                    15.28,
+                    15.25,
+                    15.21,
+                    15.29,
+                    15.28,
+                    15.22,
+                    15.31,
+                    15.29,
+                    15.14,
+                    15.35,
+                    15.13,
+                    15.17,
+                    15.33,
+                    15.3,
+                    15.34,
+                    15.39,
+                    15.24,
+                    15.25,
+                    15.21
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

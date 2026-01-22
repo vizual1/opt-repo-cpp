@@ -182,7 +182,8 @@ class TestAnalyzer:
         
     def create_test_log(self, commit: Commit, repo: Repository, old_sha: str, new_sha: str, pr_shas: list[str],
                         old_full_times: list[float], new_full_times: list[float],
-                        old_commands: list[str], new_commands: list[str]) -> dict:
+                        new_build_cmd: list[str], old_build_cmd: list[str], 
+                        new_test_cmd: list[str], old_test_cmd: list[str],) -> dict:
         
         gh_refs: list[tuple[str, int, str, str, Issue]] = []
         messages: list[str] = []
@@ -238,10 +239,10 @@ class TestAnalyzer:
             "lines_removed": commit.stats.deletions, 
         }
         build_info = {
-            "old_build_script": "#!/bin/bash\n" + "\n".join(old_commands[0:2]),
-            "new_build_script": "#!/bin/bash\n" + "\n".join(new_commands[0:2]),
-            "old_test_script": "#!/bin/bash\n" + "\n".join(old_commands[2:]),
-            "new_test_script": "#!/bin/bash\n" + "\n".join(new_commands[2:]),
+            "old_build_script": old_build_cmd,
+            "new_build_script": new_build_cmd,
+            "old_test_script": old_test_cmd,
+            "new_test_script": new_test_cmd,
             "build_system": "cmake"
         }
 

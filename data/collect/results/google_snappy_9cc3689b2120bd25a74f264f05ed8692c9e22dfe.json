@@ -1,175 +1,64 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:37:38.817269",
-    "repository": "https://github.com/google/snappy",
-    "repository_name": "google/snappy"
-  },
-  "commit_info": {
-    "old_sha": "b4888f76161debdbcde30a64be577b82fd40de29",
-    "new_sha": "9cc3689b2120bd25a74f264f05ed8692c9e22dfe",
-    "commit_message": [
-      "Optimize memset to pure SIMD because compilers generate consistently bad code. clang for ARM and gcc for x86 https://gcc.godbolt.org/z/oxeGG7aEx\n\nPiperOrigin-RevId: 383467656"
-    ],
-    "commit_date": "2021-07-07T19:22:28+00:00",
-    "patch": [
-      "--- snappy-internal.h\n@@ -56,6 +56,9 @@ inline void V128_StoreU(V128* dst, V128 val);\n // Each packed integer in the shuffle mask must be in [0,16).\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask);\n \n+// Constructs V128 with 16 chars |c|.\n+inline V128 V128_DupChar(char c);\n+\n #if SNAPPY_HAVE_SSSE3\n inline V128 V128_Load(const V128* src) { return _mm_load_si128(src); }\n \n@@ -66,6 +69,9 @@ inline void V128_StoreU(V128* dst, V128 val) { _mm_storeu_si128(dst, val); }\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   return _mm_shuffle_epi8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return _mm_set1_epi8(c); }\n+\n #else\n inline V128 V128_Load(const V128* src) {\n   return vld1q_u8(reinterpret_cast<const uint8_t*>(src));\n@@ -83,6 +89,8 @@ inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   assert(vminvq_u8(shuffle_mask) >= 0 && vmaxvq_u8(shuffle_mask) <= 15);\n   return vqtbl1q_u8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return vdupq_n_u8(c); }\n #endif\n #endif  // SNAPPY_HAVE_VECTOR_BYTE_SHUFFLE\n \n--- snappy.cc\n@@ -80,6 +80,7 @@ using internal::V128_Load;\n using internal::V128_LoadU;\n using internal::V128_Shuffle;\n using internal::V128_StoreU;\n+using internal::V128_DupChar;\n #endif\n \n // We translate the information encoded in a tag through a lookup table to a\n@@ -308,7 +309,12 @@ static inline bool Copy64BytesWithPatternExtension(char* dst, size_t offset) {\n       case 0:\n         return false;\n       case 1: {\n-        std::memset(dst, dst[-1], 64);\n+        // TODO: Ideally we should memset, move back once the\n+        // codegen issues are fixed.\n+        V128 pattern = V128_DupChar(dst[-1]);\n+        for (int i = 0; i < 4; i++) {\n+          V128_StoreU(reinterpret_cast<V128*>(dst + 16 * i), pattern);\n+        }\n         return true;\n       }\n       case 2:"
-    ],
-    "files_changed": [
-      {
-        "filename": "snappy-internal.h",
-        "status": "modified",
-        "additions": 8,
-        "deletions": 0,
-        "changes": 8,
-        "patch": "@@ -56,6 +56,9 @@ inline void V128_StoreU(V128* dst, V128 val);\n // Each packed integer in the shuffle mask must be in [0,16).\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask);\n \n+// Constructs V128 with 16 chars |c|.\n+inline V128 V128_DupChar(char c);\n+\n #if SNAPPY_HAVE_SSSE3\n inline V128 V128_Load(const V128* src) { return _mm_load_si128(src); }\n \n@@ -66,6 +69,9 @@ inline void V128_StoreU(V128* dst, V128 val) { _mm_storeu_si128(dst, val); }\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   return _mm_shuffle_epi8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return _mm_set1_epi8(c); }\n+\n #else\n inline V128 V128_Load(const V128* src) {\n   return vld1q_u8(reinterpret_cast<const uint8_t*>(src));\n@@ -83,6 +89,8 @@ inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   assert(vminvq_u8(shuffle_mask) >= 0 && vmaxvq_u8(shuffle_mask) <= 15);\n   return vqtbl1q_u8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return vdupq_n_u8(c); }\n #endif\n #endif  // SNAPPY_HAVE_VECTOR_BYTE_SHUFFLE\n "
-      },
-      {
-        "filename": "snappy.cc",
-        "status": "modified",
-        "additions": 7,
-        "deletions": 1,
-        "changes": 8,
-        "patch": "@@ -80,6 +80,7 @@ using internal::V128_Load;\n using internal::V128_LoadU;\n using internal::V128_Shuffle;\n using internal::V128_StoreU;\n+using internal::V128_DupChar;\n #endif\n \n // We translate the information encoded in a tag through a lookup table to a\n@@ -308,7 +309,12 @@ static inline bool Copy64BytesWithPatternExtension(char* dst, size_t offset) {\n       case 0:\n         return false;\n       case 1: {\n-        std::memset(dst, dst[-1], 64);\n+        // TODO: Ideally we should memset, move back once the\n+        // codegen issues are fixed.\n+        V128 pattern = V128_DupChar(dst[-1]);\n+        for (int i = 0; i < 4; i++) {\n+          V128_StoreU(reinterpret_cast<V128*>(dst + 16 * i), pattern);\n+        }\n         return true;\n       }\n       case 2:"
-      }
-    ],
-    "lines_added": 15,
-    "lines_removed": 1
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 1.0,
-    "is_pair_significant": false,
-    "pair_p_value": 1.0,
-    "is_binom_significant": false,
-    "binom_p_value": 1.0,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999991441965038,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.19054283489943447,
-    "relative_improvement": 0.002346400981878483,
-    "absolute_improvement_ms": 21.666666666664725,
-    "old_mean_ms": 9234.0,
-    "new_mean_ms": 9212.333333333336,
-    "old_std_ms": 32.22763859880479,
-    "new_std_ms": 61.96124112942599,
-    "effect_size_cohens_d": 0.43872702652833173,
-    "old_ci95_ms": [
-      9221.966001973984,
-      9246.033998026016
-    ],
-    "new_ci95_ms": [
-      9189.196625654458,
-      9235.470041012211
-    ],
-    "old_ci99_ms": [
-      9217.781604842614,
-      9250.218395157386
-    ],
-    "new_ci99_ms": [
-      9181.151653980745,
-      9243.515012685926
-    ],
-    "new_times_s": [
-      9.23,
-      9.2,
-      9.21,
-      9.22,
-      9.2,
-      9.0,
-      9.03,
-      9.2,
-      9.24,
-      9.2,
-      9.23,
-      9.2,
-      9.22,
-      9.24,
-      9.3,
-      9.24,
-      9.23,
-      9.13,
-      9.25,
-      9.23,
-      9.23,
-      9.25,
-      9.23,
-      9.22,
-      9.23,
-      9.23,
-      9.31,
-      9.22,
-      9.22,
-      9.23,
-      9.23
-    ],
-    "old_times_s": [
-      9.22,
-      9.24,
-      9.2,
-      9.24,
-      9.2,
-      9.21,
-      9.22,
-      9.22,
-      9.22,
-      9.23,
-      9.33,
-      9.22,
-      9.22,
-      9.31,
-      9.21,
-      9.25,
-      9.24,
-      9.22,
-      9.23,
-      9.23,
-      9.22,
-      9.21,
-      9.31,
-      9.25,
-      9.22,
-      9.25,
-      9.23,
-      9.21,
-      9.24,
-      9.25,
-      9.19
-    ]
-  },
-  "tests": {
-    "total_tests": 1,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": [
-      {
-        "test_name": "snappy_unittest",
+    "metadata": {
+        "collection_date": "2026-01-14T18:37:38.817269",
+        "repository": "https://github.com/google/snappy",
+        "repository_name": "google/snappy"
+    },
+    "commit_info": {
+        "old_sha": "b4888f76161debdbcde30a64be577b82fd40de29",
+        "new_sha": "9cc3689b2120bd25a74f264f05ed8692c9e22dfe",
+        "commit_message": [
+            "Optimize memset to pure SIMD because compilers generate consistently bad code. clang for ARM and gcc for x86 https://gcc.godbolt.org/z/oxeGG7aEx\n\nPiperOrigin-RevId: 383467656"
+        ],
+        "commit_date": "2021-07-07T19:22:28+00:00",
+        "patch": [
+            "--- snappy-internal.h\n@@ -56,6 +56,9 @@ inline void V128_StoreU(V128* dst, V128 val);\n // Each packed integer in the shuffle mask must be in [0,16).\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask);\n \n+// Constructs V128 with 16 chars |c|.\n+inline V128 V128_DupChar(char c);\n+\n #if SNAPPY_HAVE_SSSE3\n inline V128 V128_Load(const V128* src) { return _mm_load_si128(src); }\n \n@@ -66,6 +69,9 @@ inline void V128_StoreU(V128* dst, V128 val) { _mm_storeu_si128(dst, val); }\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   return _mm_shuffle_epi8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return _mm_set1_epi8(c); }\n+\n #else\n inline V128 V128_Load(const V128* src) {\n   return vld1q_u8(reinterpret_cast<const uint8_t*>(src));\n@@ -83,6 +89,8 @@ inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   assert(vminvq_u8(shuffle_mask) >= 0 && vmaxvq_u8(shuffle_mask) <= 15);\n   return vqtbl1q_u8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return vdupq_n_u8(c); }\n #endif\n #endif  // SNAPPY_HAVE_VECTOR_BYTE_SHUFFLE\n \n--- snappy.cc\n@@ -80,6 +80,7 @@ using internal::V128_Load;\n using internal::V128_LoadU;\n using internal::V128_Shuffle;\n using internal::V128_StoreU;\n+using internal::V128_DupChar;\n #endif\n \n // We translate the information encoded in a tag through a lookup table to a\n@@ -308,7 +309,12 @@ static inline bool Copy64BytesWithPatternExtension(char* dst, size_t offset) {\n       case 0:\n         return false;\n       case 1: {\n-        std::memset(dst, dst[-1], 64);\n+        // TODO: Ideally we should memset, move back once the\n+        // codegen issues are fixed.\n+        V128 pattern = V128_DupChar(dst[-1]);\n+        for (int i = 0; i < 4; i++) {\n+          V128_StoreU(reinterpret_cast<V128*>(dst + 16 * i), pattern);\n+        }\n         return true;\n       }\n       case 2:"
+        ],
+        "files_changed": [
+            {
+                "filename": "snappy-internal.h",
+                "status": "modified",
+                "additions": 8,
+                "deletions": 0,
+                "changes": 8,
+                "patch": "@@ -56,6 +56,9 @@ inline void V128_StoreU(V128* dst, V128 val);\n // Each packed integer in the shuffle mask must be in [0,16).\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask);\n \n+// Constructs V128 with 16 chars |c|.\n+inline V128 V128_DupChar(char c);\n+\n #if SNAPPY_HAVE_SSSE3\n inline V128 V128_Load(const V128* src) { return _mm_load_si128(src); }\n \n@@ -66,6 +69,9 @@ inline void V128_StoreU(V128* dst, V128 val) { _mm_storeu_si128(dst, val); }\n inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   return _mm_shuffle_epi8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return _mm_set1_epi8(c); }\n+\n #else\n inline V128 V128_Load(const V128* src) {\n   return vld1q_u8(reinterpret_cast<const uint8_t*>(src));\n@@ -83,6 +89,8 @@ inline V128 V128_Shuffle(V128 input, V128 shuffle_mask) {\n   assert(vminvq_u8(shuffle_mask) >= 0 && vmaxvq_u8(shuffle_mask) <= 15);\n   return vqtbl1q_u8(input, shuffle_mask);\n }\n+\n+inline V128 V128_DupChar(char c) { return vdupq_n_u8(c); }\n #endif\n #endif  // SNAPPY_HAVE_VECTOR_BYTE_SHUFFLE\n "
+            },
+            {
+                "filename": "snappy.cc",
+                "status": "modified",
+                "additions": 7,
+                "deletions": 1,
+                "changes": 8,
+                "patch": "@@ -80,6 +80,7 @@ using internal::V128_Load;\n using internal::V128_LoadU;\n using internal::V128_Shuffle;\n using internal::V128_StoreU;\n+using internal::V128_DupChar;\n #endif\n \n // We translate the information encoded in a tag through a lookup table to a\n@@ -308,7 +309,12 @@ static inline bool Copy64BytesWithPatternExtension(char* dst, size_t offset) {\n       case 0:\n         return false;\n       case 1: {\n-        std::memset(dst, dst[-1], 64);\n+        // TODO: Ideally we should memset, move back once the\n+        // codegen issues are fixed.\n+        V128 pattern = V128_DupChar(dst[-1]);\n+        for (int i = 0; i < 4; i++) {\n+          V128_StoreU(reinterpret_cast<V128*>(dst + 16 * i), pattern);\n+        }\n         return true;\n       }\n       case 2:"
+            }
+        ],
+        "lines_added": 15,
+        "lines_removed": 1
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DSNAPPY_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_TESTING=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DSNAPPY_BUILD_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
         "is_significant": false,
         "p_value": 1.0,
         "is_pair_significant": false,
@@ -177,109 +66,234 @@
         "is_binom_significant": false,
         "binom_p_value": 1.0,
         "is_wilcoxon_significant": false,
-        "wilcoxon_p_value": 0.9999987424339092,
+        "wilcoxon_p_value": 0.9999991441965038,
         "is_mannwhitney_significant": false,
-        "mannwhitney_p_value": 0.26665217528714746,
-        "relative_improvement": 0.0022411474675034463,
-        "absolute_improvement_ms": 20.689655172411392,
-        "old_mean_ms": 9231.724137931034,
-        "new_mean_ms": 9211.034482758621,
-        "old_std_ms": 32.07902803092493,
-        "new_std_ms": 62.811783902738796,
-        "effect_size_cohens_d": 0.41485715630669046,
+        "mannwhitney_p_value": 0.19054283489943447,
+        "relative_improvement": 0.002346400981878483,
+        "absolute_improvement_ms": 21.666666666664725,
+        "old_mean_ms": 9234.0,
+        "new_mean_ms": 9212.333333333336,
+        "old_std_ms": 32.22763859880479,
+        "new_std_ms": 61.96124112942599,
+        "effect_size_cohens_d": 0.43872702652833173,
         "old_ci95_ms": [
-          9219.521928254304,
-          9243.926347607763
+            9221.966001973984,
+            9246.033998026016
         ],
         "new_ci95_ms": [
-          9187.142157947168,
-          9234.926807570077
+            9189.196625654458,
+            9235.470041012211
         ],
         "old_ci99_ms": [
-          9215.26358807969,
-          9248.184687782377
+            9217.781604842614,
+            9250.218395157386
         ],
         "new_ci99_ms": [
-          9178.80418889853,
-          9243.264776618715
+            9181.151653980745,
+            9243.515012685926
         ],
-        "new_times": [
-          9.21,
-          9.21,
-          9.2,
-          9.0,
-          9.03,
-          9.2,
-          9.24,
-          9.2,
-          9.23,
-          9.2,
-          9.22,
-          9.24,
-          9.3,
-          9.24,
-          9.23,
-          9.13,
-          9.25,
-          9.23,
-          9.23,
-          9.25,
-          9.23,
-          9.22,
-          9.23,
-          9.23,
-          9.31,
-          9.21,
-          9.21,
-          9.22,
-          9.22
+        "new_times_s": [
+            9.23,
+            9.2,
+            9.21,
+            9.22,
+            9.2,
+            9.0,
+            9.03,
+            9.2,
+            9.24,
+            9.2,
+            9.23,
+            9.2,
+            9.22,
+            9.24,
+            9.3,
+            9.24,
+            9.23,
+            9.13,
+            9.25,
+            9.23,
+            9.23,
+            9.25,
+            9.23,
+            9.22,
+            9.23,
+            9.23,
+            9.31,
+            9.22,
+            9.22,
+            9.23,
+            9.23
         ],
-        "old_times": [
-          9.2,
-          9.23,
-          9.2,
-          9.21,
-          9.22,
-          9.22,
-          9.22,
-          9.23,
-          9.33,
-          9.22,
-          9.22,
-          9.3,
-          9.21,
-          9.25,
-          9.23,
-          9.22,
-          9.22,
-          9.23,
-          9.22,
-          9.21,
-          9.31,
-          9.25,
-          9.22,
-          9.25,
-          9.22,
-          9.21,
-          9.23,
-          9.25,
-          9.19
+        "old_times_s": [
+            9.22,
+            9.24,
+            9.2,
+            9.24,
+            9.2,
+            9.21,
+            9.22,
+            9.22,
+            9.22,
+            9.23,
+            9.33,
+            9.22,
+            9.22,
+            9.31,
+            9.21,
+            9.25,
+            9.24,
+            9.22,
+            9.23,
+            9.23,
+            9.22,
+            9.21,
+            9.31,
+            9.25,
+            9.22,
+            9.25,
+            9.23,
+            9.21,
+            9.24,
+            9.25,
+            9.19
         ]
-      }
-    ]
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "snappy_unittest",
+                "is_significant": false,
+                "p_value": 1.0,
+                "is_pair_significant": false,
+                "pair_p_value": 1.0,
+                "is_binom_significant": false,
+                "binom_p_value": 1.0,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9999987424339092,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.26665217528714746,
+                "relative_improvement": 0.0022411474675034463,
+                "absolute_improvement_ms": 20.689655172411392,
+                "old_mean_ms": 9231.724137931034,
+                "new_mean_ms": 9211.034482758621,
+                "old_std_ms": 32.07902803092493,
+                "new_std_ms": 62.811783902738796,
+                "effect_size_cohens_d": 0.41485715630669046,
+                "old_ci95_ms": [
+                    9219.521928254304,
+                    9243.926347607763
+                ],
+                "new_ci95_ms": [
+                    9187.142157947168,
+                    9234.926807570077
+                ],
+                "old_ci99_ms": [
+                    9215.26358807969,
+                    9248.184687782377
+                ],
+                "new_ci99_ms": [
+                    9178.80418889853,
+                    9243.264776618715
+                ],
+                "new_times": [
+                    9.21,
+                    9.21,
+                    9.2,
+                    9.0,
+                    9.03,
+                    9.2,
+                    9.24,
+                    9.2,
+                    9.23,
+                    9.2,
+                    9.22,
+                    9.24,
+                    9.3,
+                    9.24,
+                    9.23,
+                    9.13,
+                    9.25,
+                    9.23,
+                    9.23,
+                    9.25,
+                    9.23,
+                    9.22,
+                    9.23,
+                    9.23,
+                    9.31,
+                    9.21,
+                    9.21,
+                    9.22,
+                    9.22
+                ],
+                "old_times": [
+                    9.2,
+                    9.23,
+                    9.2,
+                    9.21,
+                    9.22,
+                    9.22,
+                    9.22,
+                    9.23,
+                    9.33,
+                    9.22,
+                    9.22,
+                    9.3,
+                    9.21,
+                    9.25,
+                    9.23,
+                    9.22,
+                    9.22,
+                    9.23,
+                    9.22,
+                    9.21,
+                    9.31,
+                    9.25,
+                    9.22,
+                    9.25,
+                    9.22,
+                    9.21,
+                    9.23,
+                    9.25,
+                    9.19
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

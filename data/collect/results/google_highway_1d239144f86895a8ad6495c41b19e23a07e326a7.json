@@ -1,178 +1,192 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:40:52.161388",
-    "repository": "https://github.com/google/highway",
-    "repository_name": "google/highway"
-  },
-  "commit_info": {
-    "old_sha": "a9674ba7d58448bcf4f1b459fbf84de4eb6edf54",
-    "new_sha": "1d239144f86895a8ad6495c41b19e23a07e326a7",
-    "commit_message": [
-      "avoid unnecessary additional ChosenTarget::Update\n\nPiperOrigin-RevId: 454794664"
-    ],
-    "commit_date": "2022-06-14T08:14:37+00:00",
-    "patch": [
-      "--- hwy/targets.cc\n@@ -347,11 +347,10 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n     // DisableTargets or SetSupportedTargetsForTest.\n     targets = DetectTargets();\n \n-    ChosenTarget& chosen = GetChosenTarget();\n-\n     // VectorBytes invokes HWY_DYNAMIC_DISPATCH. To prevent infinite recursion,\n-    // first set up ChosenTarget.\n-    chosen.Update(targets);\n+    // first set up ChosenTarget. No need to Update() again afterwards with the\n+    // final targets - that will be done by a caller of this function.\n+    GetChosenTarget().Update(targets);\n \n     // Now that we can call VectorBytes, check for targets with specific sizes.\n     const size_t vec_bytes = VectorBytes();  // uncached, see declaration\n@@ -362,7 +361,6 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n       targets =\n           static_cast<uint32_t>(targets & ~static_cast<uint32_t>(HWY_SVE_256));\n     }\n-    chosen.Update(targets);\n   }\n \n   targets &= supported_mask_;"
-    ],
-    "files_changed": [
-      {
-        "filename": "hwy/targets.cc",
-        "status": "modified",
-        "additions": 3,
-        "deletions": 5,
-        "changes": 8,
-        "patch": "@@ -347,11 +347,10 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n     // DisableTargets or SetSupportedTargetsForTest.\n     targets = DetectTargets();\n \n-    ChosenTarget& chosen = GetChosenTarget();\n-\n     // VectorBytes invokes HWY_DYNAMIC_DISPATCH. To prevent infinite recursion,\n-    // first set up ChosenTarget.\n-    chosen.Update(targets);\n+    // first set up ChosenTarget. No need to Update() again afterwards with the\n+    // final targets - that will be done by a caller of this function.\n+    GetChosenTarget().Update(targets);\n \n     // Now that we can call VectorBytes, check for targets with specific sizes.\n     const size_t vec_bytes = VectorBytes();  // uncached, see declaration\n@@ -362,7 +361,6 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n       targets =\n           static_cast<uint32_t>(targets & ~static_cast<uint32_t>(HWY_SVE_256));\n     }\n-    chosen.Update(targets);\n   }\n \n   targets &= supported_mask_;"
-      }
-    ],
-    "lines_added": 3,
-    "lines_removed": 5
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 0.9999999999268198,
-    "is_pair_significant": false,
-    "pair_p_value": 0.9999999947349673,
-    "is_binom_significant": false,
-    "binom_p_value": 0.9999995660036802,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.999997642226191,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.6687096020088243,
-    "relative_improvement": -0.0018336511662021416,
-    "absolute_improvement_ms": -16.66666666666572,
-    "old_mean_ms": 9089.333333333334,
-    "new_mean_ms": 9106.0,
-    "old_std_ms": 234.76963519415236,
-    "new_std_ms": 245.01372234618006,
-    "effect_size_cohens_d": -0.06945997043869737,
-    "old_ci95_ms": [
-      9001.668910827377,
-      9176.997755839291
-    ],
-    "new_ci95_ms": [
-      9014.510372485991,
-      9197.489627514007
-    ],
-    "old_ci99_ms": [
-      8971.186708880517,
-      9207.47995778615
-    ],
-    "new_ci99_ms": [
-      8982.698090807691,
-      9229.301909192309
-    ],
-    "new_times_s": [
-      9.17,
-      9.57,
-      8.85,
-      9.39,
-      9.2,
-      8.92,
-      9.39,
-      8.89,
-      9.23,
-      8.73,
-      9.36,
-      9.18,
-      9.14,
-      8.93,
-      9.32,
-      9.06,
-      9.07,
-      8.89,
-      9.02,
-      8.56,
-      9.04,
-      8.98,
-      9.27,
-      8.87,
-      9.26,
-      9.61,
-      9.32,
-      8.77,
-      9.11,
-      9.06,
-      9.19
-    ],
-    "old_times_s": [
-      8.65,
-      8.81,
-      8.77,
-      8.99,
-      8.99,
-      8.84,
-      9.26,
-      9.0,
-      9.31,
-      9.02,
-      9.16,
-      9.14,
-      8.66,
-      8.99,
-      9.01,
-      8.61,
-      8.99,
-      9.1,
-      9.69,
-      9.07,
-      9.17,
-      9.61,
-      9.04,
-      9.02,
-      9.16,
-      9.34,
-      9.05,
-      9.16,
-      9.32,
-      9.2,
-      9.2
-    ]
-  },
-  "tests": {
-    "total_tests": 0,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": []
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    "metadata": {
+        "collection_date": "2026-01-14T18:40:52.161388",
+        "repository": "https://github.com/google/highway",
+        "repository_name": "google/highway"
+    },
+    "commit_info": {
+        "old_sha": "a9674ba7d58448bcf4f1b459fbf84de4eb6edf54",
+        "new_sha": "1d239144f86895a8ad6495c41b19e23a07e326a7",
+        "commit_message": [
+            "avoid unnecessary additional ChosenTarget::Update\n\nPiperOrigin-RevId: 454794664"
+        ],
+        "commit_date": "2022-06-14T08:14:37+00:00",
+        "patch": [
+            "--- hwy/targets.cc\n@@ -347,11 +347,10 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n     // DisableTargets or SetSupportedTargetsForTest.\n     targets = DetectTargets();\n \n-    ChosenTarget& chosen = GetChosenTarget();\n-\n     // VectorBytes invokes HWY_DYNAMIC_DISPATCH. To prevent infinite recursion,\n-    // first set up ChosenTarget.\n-    chosen.Update(targets);\n+    // first set up ChosenTarget. No need to Update() again afterwards with the\n+    // final targets - that will be done by a caller of this function.\n+    GetChosenTarget().Update(targets);\n \n     // Now that we can call VectorBytes, check for targets with specific sizes.\n     const size_t vec_bytes = VectorBytes();  // uncached, see declaration\n@@ -362,7 +361,6 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n       targets =\n           static_cast<uint32_t>(targets & ~static_cast<uint32_t>(HWY_SVE_256));\n     }\n-    chosen.Update(targets);\n   }\n \n   targets &= supported_mask_;"
+        ],
+        "files_changed": [
+            {
+                "filename": "hwy/targets.cc",
+                "status": "modified",
+                "additions": 3,
+                "deletions": 5,
+                "changes": 8,
+                "patch": "@@ -347,11 +347,10 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n     // DisableTargets or SetSupportedTargetsForTest.\n     targets = DetectTargets();\n \n-    ChosenTarget& chosen = GetChosenTarget();\n-\n     // VectorBytes invokes HWY_DYNAMIC_DISPATCH. To prevent infinite recursion,\n-    // first set up ChosenTarget.\n-    chosen.Update(targets);\n+    // first set up ChosenTarget. No need to Update() again afterwards with the\n+    // final targets - that will be done by a caller of this function.\n+    GetChosenTarget().Update(targets);\n \n     // Now that we can call VectorBytes, check for targets with specific sizes.\n     const size_t vec_bytes = VectorBytes();  // uncached, see declaration\n@@ -362,7 +361,6 @@ HWY_DLLEXPORT uint32_t SupportedTargets() {\n       targets =\n           static_cast<uint32_t>(targets & ~static_cast<uint32_t>(HWY_SVE_256));\n     }\n-    chosen.Update(targets);\n   }\n \n   targets &= supported_mask_;"
+            }
+        ],
+        "lines_added": 3,
+        "lines_removed": 5
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.9999999999268198,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999999947349673,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999995660036802,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.999997642226191,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.6687096020088243,
+        "relative_improvement": -0.0018336511662021416,
+        "absolute_improvement_ms": -16.66666666666572,
+        "old_mean_ms": 9089.333333333334,
+        "new_mean_ms": 9106.0,
+        "old_std_ms": 234.76963519415236,
+        "new_std_ms": 245.01372234618006,
+        "effect_size_cohens_d": -0.06945997043869737,
+        "old_ci95_ms": [
+            9001.668910827377,
+            9176.997755839291
+        ],
+        "new_ci95_ms": [
+            9014.510372485991,
+            9197.489627514007
+        ],
+        "old_ci99_ms": [
+            8971.186708880517,
+            9207.47995778615
+        ],
+        "new_ci99_ms": [
+            8982.698090807691,
+            9229.301909192309
+        ],
+        "new_times_s": [
+            9.17,
+            9.57,
+            8.85,
+            9.39,
+            9.2,
+            8.92,
+            9.39,
+            8.89,
+            9.23,
+            8.73,
+            9.36,
+            9.18,
+            9.14,
+            8.93,
+            9.32,
+            9.06,
+            9.07,
+            8.89,
+            9.02,
+            8.56,
+            9.04,
+            8.98,
+            9.27,
+            8.87,
+            9.26,
+            9.61,
+            9.32,
+            8.77,
+            9.11,
+            9.06,
+            9.19
+        ],
+        "old_times_s": [
+            8.65,
+            8.81,
+            8.77,
+            8.99,
+            8.99,
+            8.84,
+            9.26,
+            9.0,
+            9.31,
+            9.02,
+            9.16,
+            9.14,
+            8.66,
+            8.99,
+            9.01,
+            8.61,
+            8.99,
+            9.1,
+            9.69,
+            9.07,
+            9.17,
+            9.61,
+            9.04,
+            9.02,
+            9.16,
+            9.34,
+            9.05,
+            9.16,
+            9.32,
+            9.2,
+            9.2
+        ]
+    },
+    "tests": {
+        "total_tests": 0,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": []
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }

@@ -5,7 +5,7 @@ from src.core.pipelines.pipeline import (
     RepositoryPipeline, 
     CommitPipeline, 
     CommitTesterPipeline,
-    PatchingPipeline
+    PushPipeline
 )
 from src.config.config import Config
 
@@ -50,8 +50,6 @@ class Controller:
                 self.config.genimages = False
                 self._testdocker()
             
-            if self.config.patch:
-                self._patch()
 
             if self.config.testdockerpatch:
                 self.config.genimages = False
@@ -61,9 +59,9 @@ class Controller:
                 self.config.collect, self.config.testcollect, 
                 self.config.commits, self.config.testcommits, 
                 self.config.genimages, self.config.testdocker, 
-                self.config.patch, self.config.testdockerpatch
+                self.config.testdockerpatch
             ]):
-                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --genimages, --patch, --testdocker or --testdockerpatch")
+                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --genimages, --testdocker or --testdockerpatch")
                 
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
@@ -114,8 +112,8 @@ class Controller:
 
     def _pushimages(self) -> None:
         logging.info("Pushing docker images to GHCR...")
-        push_pipeline = None
-        
+        push_pipeline = PushPipeline(self.config)
+        push_pipeline.push()
         logging.info("Docker images pushed to GHCR.")
 
     def _testdocker(self) -> None:
@@ -123,12 +121,6 @@ class Controller:
         tester_pipeline = CommitTesterPipeline(self.config)
         tester_pipeline.test_commit()
         logging.info("Testing docker images completed.")
-
-    def _patch(self) -> None:
-        logging.info("Patching docker images...")
-        #patching_pipeline = PatchingPipeline(self.config)
-        #patching_pipeline.patch_all()
-        logging.info("Patching docker images completed.")
 
     def _testdockerpatch(self) -> None:
         logging.info("Testing patched docker images...")

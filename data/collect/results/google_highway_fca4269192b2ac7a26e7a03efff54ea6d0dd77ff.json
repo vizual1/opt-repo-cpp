@@ -1,178 +1,192 @@
 {
-  "metadata": {
-    "collection_date": "2026-01-14T18:41:23.091208",
-    "repository": "https://github.com/google/highway",
-    "repository_name": "google/highway"
-  },
-  "commit_info": {
-    "old_sha": "fd67c5295e7889636434937c9bc642bc50017ef1",
-    "new_sha": "fca4269192b2ac7a26e7a03efff54ea6d0dd77ff",
-    "commit_message": [
-      "improved SVE codegen: avoid Iota for per-block constants\n\nPiperOrigin-RevId: 447703259"
-    ],
-    "commit_date": "2022-05-10T11:59:44+00:00",
-    "patch": [
-      "--- hwy/ops/arm_sve-inl.h\n@@ -1749,12 +1749,45 @@ HWY_INLINE V OffsetsOf128BitBlocks(const D d, const V iota0) {\n   return detail::AndNotN(static_cast<T>(LanesPerBlock(d) - 1), iota0);\n }\n \n-template <size_t kLanes, class D>\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 1)>\n svbool_t FirstNPerBlock(D d) {\n-  const RebindToSigned<decltype(d)> di;\n-  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(di);\n-  const auto idx_mod = detail::AndN(Iota(di, 0), kLanesPerBlock - 1);\n-  return detail::LtN(BitCast(di, idx_mod), kLanes);\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint8_t idx_mod =\n+      svdupq_n_u8(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                  3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                  6 % kLanesPerBlock, 7 % kLanesPerBlock, 8 % kLanesPerBlock,\n+                  9 % kLanesPerBlock, 10 % kLanesPerBlock, 11 % kLanesPerBlock,\n+                  12 % kLanesPerBlock, 13 % kLanesPerBlock, 14 % kLanesPerBlock,\n+                  15 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 2)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint16_t idx_mod =\n+      svdupq_n_u16(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                   6 % kLanesPerBlock, 7 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 4)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint32_t idx_mod =\n+      svdupq_n_u32(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 8)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint64_t idx_mod =\n+      svdupq_n_u64(0 % kLanesPerBlock, 1 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n }\n \n }  // namespace detail\n@@ -2077,9 +2110,8 @@ HWY_INLINE svbool_t LoadMaskBits(D d, const uint8_t* HWY_RESTRICT bits) {\n   // Replicate bytes 8x such that each byte contains the bit that governs it.\n   const svuint8_t rep8 = svtbl_u8(bytes, detail::AndNotN(7, iota));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint8_t bit = Shl(Set(du, 1), detail::AndN(iota, 7));\n-\n+  const svuint8_t bit =\n+      svdupq_n_u8(1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(rep8, bit);\n }\n \n@@ -2095,9 +2127,7 @@ HWY_INLINE svbool_t LoadMaskBits(D /* tag */,\n   // Replicate bytes 16x such that each lane contains the bit that governs it.\n   const svuint8_t rep16 = svtbl_u8(bytes, ShiftRight<4>(Iota(du8, 0)));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint16_t bit = Shl(Set(du, 1), detail::AndN(Iota(du, 0), 7));\n-\n+  const svuint16_t bit = svdupq_n_u16(1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(BitCast(du, rep16), bit);\n }\n "
-    ],
-    "files_changed": [
-      {
-        "filename": "hwy/ops/arm_sve-inl.h",
-        "status": "modified",
-        "additions": 41,
-        "deletions": 11,
-        "changes": 52,
-        "patch": "@@ -1749,12 +1749,45 @@ HWY_INLINE V OffsetsOf128BitBlocks(const D d, const V iota0) {\n   return detail::AndNotN(static_cast<T>(LanesPerBlock(d) - 1), iota0);\n }\n \n-template <size_t kLanes, class D>\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 1)>\n svbool_t FirstNPerBlock(D d) {\n-  const RebindToSigned<decltype(d)> di;\n-  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(di);\n-  const auto idx_mod = detail::AndN(Iota(di, 0), kLanesPerBlock - 1);\n-  return detail::LtN(BitCast(di, idx_mod), kLanes);\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint8_t idx_mod =\n+      svdupq_n_u8(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                  3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                  6 % kLanesPerBlock, 7 % kLanesPerBlock, 8 % kLanesPerBlock,\n+                  9 % kLanesPerBlock, 10 % kLanesPerBlock, 11 % kLanesPerBlock,\n+                  12 % kLanesPerBlock, 13 % kLanesPerBlock, 14 % kLanesPerBlock,\n+                  15 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 2)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint16_t idx_mod =\n+      svdupq_n_u16(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                   6 % kLanesPerBlock, 7 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 4)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint32_t idx_mod =\n+      svdupq_n_u32(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 8)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint64_t idx_mod =\n+      svdupq_n_u64(0 % kLanesPerBlock, 1 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n }\n \n }  // namespace detail\n@@ -2077,9 +2110,8 @@ HWY_INLINE svbool_t LoadMaskBits(D d, const uint8_t* HWY_RESTRICT bits) {\n   // Replicate bytes 8x such that each byte contains the bit that governs it.\n   const svuint8_t rep8 = svtbl_u8(bytes, detail::AndNotN(7, iota));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint8_t bit = Shl(Set(du, 1), detail::AndN(iota, 7));\n-\n+  const svuint8_t bit =\n+      svdupq_n_u8(1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(rep8, bit);\n }\n \n@@ -2095,9 +2127,7 @@ HWY_INLINE svbool_t LoadMaskBits(D /* tag */,\n   // Replicate bytes 16x such that each lane contains the bit that governs it.\n   const svuint8_t rep16 = svtbl_u8(bytes, ShiftRight<4>(Iota(du8, 0)));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint16_t bit = Shl(Set(du, 1), detail::AndN(Iota(du, 0), 7));\n-\n+  const svuint16_t bit = svdupq_n_u16(1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(BitCast(du, rep16), bit);\n }\n "
-      }
-    ],
-    "lines_added": 41,
-    "lines_removed": 11
-  },
-  "issues": [],
-  "pull_requests": [],
-  "build_info": {
-    "old_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "new_build_script": "#!/bin/bash\n#!/bin/bash\ncmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
-    "old_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/old/build -- -j 1",
-    "new_test_script": "#!/bin/bash\ncmake --build /test_workspace/workspace/new/build -- -j 1",
-    "build_system": "cmake"
-  },
-  "performance_analysis": {
-    "is_significant": false,
-    "p_value": 0.9999999999911802,
-    "is_pair_significant": false,
-    "pair_p_value": 0.9999999708872354,
-    "is_binom_significant": false,
-    "binom_p_value": 0.9999999711290002,
-    "is_wilcoxon_significant": false,
-    "wilcoxon_p_value": 0.9999961588250201,
-    "is_mannwhitney_significant": false,
-    "mannwhitney_p_value": 0.6924683392473222,
-    "relative_improvement": -0.0011636199842350481,
-    "absolute_improvement_ms": -10.333333333333528,
-    "old_mean_ms": 8880.333333333334,
-    "new_mean_ms": 8890.666666666668,
-    "old_std_ms": 236.24188850637265,
-    "new_std_ms": 195.64100362360278,
-    "effect_size_cohens_d": -0.04764241669422198,
-    "old_ci95_ms": [
-      8792.119162405734,
-      8968.547504260936
-    ],
-    "new_ci95_ms": [
-      8817.6131153121,
-      8963.720218021235
-    ],
-    "old_ci99_ms": [
-      8761.445804891659,
-      8999.22086177501
-    ],
-    "new_ci99_ms": [
-      8792.211326973464,
-      8989.122006359872
-    ],
-    "new_times_s": [
-      8.87,
-      9.01,
-      8.53,
-      8.59,
-      8.74,
-      9.2,
-      9.28,
-      8.89,
-      8.76,
-      9.12,
-      8.82,
-      8.66,
-      8.78,
-      9.19,
-      9.05,
-      9.1,
-      8.62,
-      8.76,
-      9.22,
-      8.75,
-      8.71,
-      8.88,
-      8.85,
-      8.89,
-      8.81,
-      8.99,
-      8.8,
-      9.0,
-      8.85,
-      9.01,
-      8.86
-    ],
-    "old_times_s": [
-      8.88,
-      8.71,
-      8.72,
-      8.48,
-      9.04,
-      8.69,
-      8.77,
-      8.69,
-      8.83,
-      8.55,
-      8.7,
-      8.99,
-      8.83,
-      8.85,
-      8.74,
-      8.94,
-      9.02,
-      9.45,
-      8.54,
-      8.86,
-      9.14,
-      9.22,
-      8.81,
-      8.86,
-      8.73,
-      9.08,
-      9.1,
-      8.74,
-      9.45,
-      8.94,
-      8.94
-    ]
-  },
-  "tests": {
-    "total_tests": 0,
-    "significant_improvements": 0,
-    "significant_improvements_tests": [],
-    "significant_regressions": 0,
-    "significant_regressions_tests": [],
-    "significant_pair_improvements": 0,
-    "significant_pair_improvements_tests": [],
-    "significant_pair_regressions": 0,
-    "significant_pair_regressions_tests": [],
-    "significant_binom_improvements": 0,
-    "significant_binom_improvements_tests": [],
-    "significant_binom_regressions": 0,
-    "significant_binom_regressions_tests": [],
-    "significant_wilcoxon_improvements": 0,
-    "significant_wilcoxon_improvements_tests": [],
-    "significant_wilcoxon_regressions": 0,
-    "significant_wilcoxon_regressions_tests": [],
-    "significant_mannwhitney_improvements": 0,
-    "significant_mannwhitney_improvements_tests": [],
-    "significant_mannwhitney_regressions": 0,
-    "significant_mannwhitney_regressions_tests": [],
-    "tests": []
-  },
-  "logs": {
-    "full_log_path": "/logs/full.log",
-    "config_log_path": "/logs/config.log",
-    "build_log_path": "/logs/build.log",
-    "test_log_path": "/logs/test.log",
-    "build_success": true,
-    "test_success": true
-  },
-  "raw_timing_data": {
-    "warmup_runs": 1,
-    "measurement_runs": 30,
-    "min_exec_time_improvement": 0.05,
-    "min_p_value": 0.05
-  }
+    "metadata": {
+        "collection_date": "2026-01-14T18:41:23.091208",
+        "repository": "https://github.com/google/highway",
+        "repository_name": "google/highway"
+    },
+    "commit_info": {
+        "old_sha": "fd67c5295e7889636434937c9bc642bc50017ef1",
+        "new_sha": "fca4269192b2ac7a26e7a03efff54ea6d0dd77ff",
+        "commit_message": [
+            "improved SVE codegen: avoid Iota for per-block constants\n\nPiperOrigin-RevId: 447703259"
+        ],
+        "commit_date": "2022-05-10T11:59:44+00:00",
+        "patch": [
+            "--- hwy/ops/arm_sve-inl.h\n@@ -1749,12 +1749,45 @@ HWY_INLINE V OffsetsOf128BitBlocks(const D d, const V iota0) {\n   return detail::AndNotN(static_cast<T>(LanesPerBlock(d) - 1), iota0);\n }\n \n-template <size_t kLanes, class D>\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 1)>\n svbool_t FirstNPerBlock(D d) {\n-  const RebindToSigned<decltype(d)> di;\n-  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(di);\n-  const auto idx_mod = detail::AndN(Iota(di, 0), kLanesPerBlock - 1);\n-  return detail::LtN(BitCast(di, idx_mod), kLanes);\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint8_t idx_mod =\n+      svdupq_n_u8(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                  3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                  6 % kLanesPerBlock, 7 % kLanesPerBlock, 8 % kLanesPerBlock,\n+                  9 % kLanesPerBlock, 10 % kLanesPerBlock, 11 % kLanesPerBlock,\n+                  12 % kLanesPerBlock, 13 % kLanesPerBlock, 14 % kLanesPerBlock,\n+                  15 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 2)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint16_t idx_mod =\n+      svdupq_n_u16(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                   6 % kLanesPerBlock, 7 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 4)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint32_t idx_mod =\n+      svdupq_n_u32(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 8)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint64_t idx_mod =\n+      svdupq_n_u64(0 % kLanesPerBlock, 1 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n }\n \n }  // namespace detail\n@@ -2077,9 +2110,8 @@ HWY_INLINE svbool_t LoadMaskBits(D d, const uint8_t* HWY_RESTRICT bits) {\n   // Replicate bytes 8x such that each byte contains the bit that governs it.\n   const svuint8_t rep8 = svtbl_u8(bytes, detail::AndNotN(7, iota));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint8_t bit = Shl(Set(du, 1), detail::AndN(iota, 7));\n-\n+  const svuint8_t bit =\n+      svdupq_n_u8(1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(rep8, bit);\n }\n \n@@ -2095,9 +2127,7 @@ HWY_INLINE svbool_t LoadMaskBits(D /* tag */,\n   // Replicate bytes 16x such that each lane contains the bit that governs it.\n   const svuint8_t rep16 = svtbl_u8(bytes, ShiftRight<4>(Iota(du8, 0)));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint16_t bit = Shl(Set(du, 1), detail::AndN(Iota(du, 0), 7));\n-\n+  const svuint16_t bit = svdupq_n_u16(1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(BitCast(du, rep16), bit);\n }\n "
+        ],
+        "files_changed": [
+            {
+                "filename": "hwy/ops/arm_sve-inl.h",
+                "status": "modified",
+                "additions": 41,
+                "deletions": 11,
+                "changes": 52,
+                "patch": "@@ -1749,12 +1749,45 @@ HWY_INLINE V OffsetsOf128BitBlocks(const D d, const V iota0) {\n   return detail::AndNotN(static_cast<T>(LanesPerBlock(d) - 1), iota0);\n }\n \n-template <size_t kLanes, class D>\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 1)>\n svbool_t FirstNPerBlock(D d) {\n-  const RebindToSigned<decltype(d)> di;\n-  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(di);\n-  const auto idx_mod = detail::AndN(Iota(di, 0), kLanesPerBlock - 1);\n-  return detail::LtN(BitCast(di, idx_mod), kLanes);\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint8_t idx_mod =\n+      svdupq_n_u8(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                  3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                  6 % kLanesPerBlock, 7 % kLanesPerBlock, 8 % kLanesPerBlock,\n+                  9 % kLanesPerBlock, 10 % kLanesPerBlock, 11 % kLanesPerBlock,\n+                  12 % kLanesPerBlock, 13 % kLanesPerBlock, 14 % kLanesPerBlock,\n+                  15 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 2)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint16_t idx_mod =\n+      svdupq_n_u16(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock, 4 % kLanesPerBlock, 5 % kLanesPerBlock,\n+                   6 % kLanesPerBlock, 7 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 4)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint32_t idx_mod =\n+      svdupq_n_u32(0 % kLanesPerBlock, 1 % kLanesPerBlock, 2 % kLanesPerBlock,\n+                   3 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n+}\n+template <size_t kLanes, class D, HWY_IF_LANE_SIZE_D(D, 8)>\n+svbool_t FirstNPerBlock(D d) {\n+  const RebindToUnsigned<decltype(d)> du;\n+  constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);\n+  const svuint64_t idx_mod =\n+      svdupq_n_u64(0 % kLanesPerBlock, 1 % kLanesPerBlock);\n+  return detail::LtN(BitCast(du, idx_mod), kLanes);\n }\n \n }  // namespace detail\n@@ -2077,9 +2110,8 @@ HWY_INLINE svbool_t LoadMaskBits(D d, const uint8_t* HWY_RESTRICT bits) {\n   // Replicate bytes 8x such that each byte contains the bit that governs it.\n   const svuint8_t rep8 = svtbl_u8(bytes, detail::AndNotN(7, iota));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint8_t bit = Shl(Set(du, 1), detail::AndN(iota, 7));\n-\n+  const svuint8_t bit =\n+      svdupq_n_u8(1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(rep8, bit);\n }\n \n@@ -2095,9 +2127,7 @@ HWY_INLINE svbool_t LoadMaskBits(D /* tag */,\n   // Replicate bytes 16x such that each lane contains the bit that governs it.\n   const svuint8_t rep16 = svtbl_u8(bytes, ShiftRight<4>(Iota(du8, 0)));\n \n-  // 1, 2, 4, 8, 16, 32, 64, 128,  1, 2 ..\n-  const svuint16_t bit = Shl(Set(du, 1), detail::AndN(Iota(du, 0), 7));\n-\n+  const svuint16_t bit = svdupq_n_u16(1, 2, 4, 8, 16, 32, 64, 128);\n   return TestBit(BitCast(du, rep16), bit);\n }\n "
+            }
+        ],
+        "lines_added": 41,
+        "lines_removed": 11
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.9999999999911802,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999999708872354,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999999711290002,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999961588250201,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.6924683392473222,
+        "relative_improvement": -0.0011636199842350481,
+        "absolute_improvement_ms": -10.333333333333528,
+        "old_mean_ms": 8880.333333333334,
+        "new_mean_ms": 8890.666666666668,
+        "old_std_ms": 236.24188850637265,
+        "new_std_ms": 195.64100362360278,
+        "effect_size_cohens_d": -0.04764241669422198,
+        "old_ci95_ms": [
+            8792.119162405734,
+            8968.547504260936
+        ],
+        "new_ci95_ms": [
+            8817.6131153121,
+            8963.720218021235
+        ],
+        "old_ci99_ms": [
+            8761.445804891659,
+            8999.22086177501
+        ],
+        "new_ci99_ms": [
+            8792.211326973464,
+            8989.122006359872
+        ],
+        "new_times_s": [
+            8.87,
+            9.01,
+            8.53,
+            8.59,
+            8.74,
+            9.2,
+            9.28,
+            8.89,
+            8.76,
+            9.12,
+            8.82,
+            8.66,
+            8.78,
+            9.19,
+            9.05,
+            9.1,
+            8.62,
+            8.76,
+            9.22,
+            8.75,
+            8.71,
+            8.88,
+            8.85,
+            8.89,
+            8.81,
+            8.99,
+            8.8,
+            9.0,
+            8.85,
+            9.01,
+            8.86
+        ],
+        "old_times_s": [
+            8.88,
+            8.71,
+            8.72,
+            8.48,
+            9.04,
+            8.69,
+            8.77,
+            8.69,
+            8.83,
+            8.55,
+            8.7,
+            8.99,
+            8.83,
+            8.85,
+            8.74,
+            8.94,
+            9.02,
+            9.45,
+            8.54,
+            8.86,
+            9.14,
+            9.22,
+            8.81,
+            8.86,
+            8.73,
+            9.08,
+            9.1,
+            8.74,
+            9.45,
+            8.94,
+            8.94
+        ]
+    },
+    "tests": {
+        "total_tests": 0,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": []
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
 }
