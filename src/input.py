@@ -26,6 +26,8 @@ def setup_parser() -> argparse.ArgumentParser:
                       help="Gather and filter commits from C++ Repositories.")
     mode.add_argument("--testcommits", action="store_true",
                       help="Test commits between two versions and generates a commit file.")
+    mode.add_argument("--test", action="store_true",
+                      help="Call --testcollect on --collect output, or --testcommits on --commits output.")
     mode.add_argument("--genimages", action="store_true",
                       help="Given a folder of json files generated via the --testcommits flag, " \
                       "generate and save docker images (no test is run here) of each json file.")

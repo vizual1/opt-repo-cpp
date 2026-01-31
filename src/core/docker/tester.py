@@ -45,7 +45,7 @@ class DockerTester:
             old_test_cmd = [" ".join(s) for s in old_struct.process.test_commands]
 
             # --genimages just generates the docker image from an existing json results file
-            if self.config.genimages:
+            if self.config.genimages and not self.config.test:
                 file_name = "_".join(self.repo_id.split("/") + [new_sha]) + ".json"
                 json_file = Path(self.config.input, file_name) 
                 
@@ -117,7 +117,7 @@ class DockerTester:
 
             old_struct.process.save_docker_image(self.repo_id, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
                 
-            if total_improvement < self.config.commits_time['min-p-value'] or overall_change_with_new_outperforms_old:
+            if total_improvement < self.config.min_p_value or overall_change_with_new_outperforms_old:
                 logging.info(f"[{self.repo_id}:{new_sha}] significantly improves execution time.")
                 writer.write_improve(results)
                         
@@ -146,7 +146,7 @@ class DockerTester:
 
         try:
             if self.config.testdocker or self.config.testdockerpatch:
-                # tests an already existing docker image
+                # tests existing docker image
                 local_image = image(self.repo_id, new_sha)
                 if not image_exists(self.repo_id, new_sha):
                     container_name = f"{self.config.dockerhub_user}/{self.config.dockerhub_repo}:{local_image}"
@@ -166,7 +166,7 @@ class DockerTester:
                 raise UndefinedStructureFilter("Old commit StructureFilter or its CMakeProcess is None")
             
             # --genimages just generates the docker image from an existing json results file
-            if not self.config.genimages:
+            if (not self.config.genimages or self.config.test):
                 self._run_tests(new_structure, old_structure, new_pf, old_pf)
 
             new_cmd_times = new_structure.process.test_time
@@ -220,6 +220,8 @@ class DockerTester:
                     random.shuffle(order)
 
                     for label, cmd, structure, pf in order:
+                        if cmd and cmd[0] == "cd":
+                            continue
                         if not pf.test_run(label, cmd, structure, has_list_args):
                             raise TestFailed(f"Test run '{cmd}' failed")
         except TestFailed:

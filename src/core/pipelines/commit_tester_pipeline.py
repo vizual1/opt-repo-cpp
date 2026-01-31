@@ -1,10 +1,11 @@
 import logging, os
 from tqdm import tqdm
 from src.config.config import Config
-from src.utils.commit import Commit
+from src.utils.commit import CommitHandler
 from src.core.docker.tester import DockerTester
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from src.utils.image_handling import image_exists, image, delete_image
+from github.Commit import Commit
 
 def get_available_cpus() -> list[int]:
     """Returns the list of CPUs the current process is allowed to run on."""
@@ -56,12 +57,14 @@ def run_one_commit(repo_id: str, new_sha: str, old_sha: str, pr_shas: list[str],
             logging.info("Image already exists, no need to generate the docker image")
             return
 
-        commit = Commit(
+        commit = CommitHandler(
             config.input_file or config.storage_paths["commits"],
             config.storage_paths["clones"],
         )
 
         file = commit.get_file_prefix(repo_id)
+
+        # commits are clones into these paths
         new_path, old_path = commit.get_paths(file, new_sha, config.testdockerpatch)
 
         repo = config.git_client.get_repo(repo_id)
@@ -77,21 +80,16 @@ class CommitTesterPipeline:
     """
     def __init__(self, config: Config):
         self.config = config
-        self.commit = Commit(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
+        self.commit = CommitHandler(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
 
-    def test_commit(self) -> None:
-        if self.config.input or self.config.repo_id:
-            self._input_tester()
-        else:
-            self._sha_tester()
+    def test_commit(self, commits: list[Commit] = []) -> None:
+        self._input_tester(commits)
 
-    def _input_tester(self) -> None:
-        if self.config.genimages:
-            commits = self.commit.get_commits_from_json_files()
-        elif self.config.testdocker or self.config.testdockerpatch:
+    def _input_tester(self, commits_list: list[Commit] = []) -> None:
+        if self.config.genimages or self.config.testdocker or self.config.testdockerpatch:
             commits = self.commit.get_commit_from_input(self.config)
         else:
-            commits = self.commit.get_commits()
+            commits = self.commit.get_commits(commits_list)
         tasks: list[tuple[str, str, str, list[str], str]] = []
         available_cpus = get_available_cpus()
 
@@ -116,19 +114,3 @@ class CommitTesterPipeline:
 
             for future in tqdm(as_completed(futures), total=len(futures)):
                 future.result()
-                    
-    def _sha_tester(self):
-        if self.config.sha and self.config.repo_id:
-            repo = self.config.git_client.get_repo(self.config.repo_id)
-            commit = repo.get_commit(self.config.sha)
-            file_prefix = "_".join(repo.full_name.split("/"))
-            new_sha = self.config.sha
-            if not commit.parents:
-                logging.info(f"[{repo.full_name}] Commit {self.config.sha} has no parents (root commit).")
-                return
-            old_sha = commit.parents[0].sha
-            new_path, old_path = self.commit.get_paths(file_prefix, new_sha)
-            docker = DockerTester(repo, self.config)
-            docker.run_commit_pair(new_sha, old_sha, [], new_path, old_path)
-        else:
-            logging.error("Wrong sha input")

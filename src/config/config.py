@@ -14,6 +14,7 @@ class Config:
     testcollect: bool = False 
     commits: bool = False 
     testcommits: bool = False
+    test: bool = False
     genimages: bool = False
     pushimages: bool = False
     testdocker: bool = False

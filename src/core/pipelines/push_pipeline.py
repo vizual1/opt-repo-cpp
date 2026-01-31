@@ -1,16 +1,16 @@
 import logging, subprocess, docker
 from src.config.config import Config
-from src.utils.commit import Commit
+from src.utils.commit import CommitHandler
 from src.utils.image_handling import image_exists, image
 
 class PushPipeline():
     def __init__(self, config: Config):
         self.config = config
-        self.commit = Commit(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
+        self.commit = CommitHandler(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
 
     def push(self) -> None:
         if self.config.input:
-            commits = self.commit.get_commits_from_json_files()
+            commits = self.commit.get_commit_from_input(self.config)
             self._push_commits(commits)
         else:
             logging.warning(f"Invalid input: {self.config.input}")

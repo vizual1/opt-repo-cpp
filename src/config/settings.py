@@ -49,7 +49,7 @@ class ResourceSettings:
     cpu_quota: int = 200000
     cpu_period: int = 100000
     jobs: int = 1
-    max_parallel_jobs: int = 8 
+    max_parallel_jobs: int = 1 # tests multiple test commits at the same time
     
 @dataclass
 class ResourceSettingsCrawl(ResourceSettings):

@@ -37,7 +37,7 @@ class Controller:
             if self.config.commits:
                 self._commits()
 
-            if self.config.testcommits:
+            if self.config.testcommits or self.config.genimages:
                 self._testcommits()
 
             if self.config.genimages:
@@ -49,7 +49,6 @@ class Controller:
             if self.config.testdocker:
                 self.config.genimages = False
                 self._testdocker()
-            
 
             if self.config.testdockerpatch:
                 self.config.genimages = False
@@ -72,21 +71,21 @@ class Controller:
     def _collect(self) -> None:
         logging.info("Collecting popular GitHub repositories...")
         pipeline = CollectionPipeline(self.config)
-        pipeline.query_popular_repos()
-        logging.info("Popular repository colelction completed.")
-        
+        repos = pipeline.query_popular_repos()
+        logging.info(f"Collected {len(repos)} repositories.")
+
+        logging.info("Testing and validating GitHub repositories...")
+        repo_pipeline = RepositoryPipeline(self.config)
+        repo_pipeline.test_repos(repos)
+        valid_count = len(repo_pipeline.valid_repos)
+        logging.info(f"Collected {valid_count} valid repositories.")
+
     def _testcollect(self) -> None:
         logging.info("Testing and validating GitHub repositories...")
         repo_pipeline = RepositoryPipeline(self.config)
-
-        if self.config.analyze:
-            logging.info("Starting repository analysis...")
-            repo_pipeline.analyze_repos()
-            logging.info("Repository analysis completed.")
-        else:
-            repo_pipeline.test_repos()
-            valid_count = len(repo_pipeline.valid_repos)
-            logging.info(f"Found {valid_count} valid repositories.")
+        repo_pipeline.test_repos()
+        valid_count = len(repo_pipeline.valid_repos)
+        logging.info(f"Found {valid_count} valid repositories.")
 
     def _commits(self) -> None:
         logging.info("Gathering and filtering commits...")
@@ -96,14 +95,22 @@ class Controller:
             logging.warning("No repositories found for commit filtering.")
             return
         
-        CommitPipeline(repo_ids, self.config).filter_all_commits()
+        if self.config.test:
+            commit_pipeline = CommitPipeline(repo_ids, self.config)
+            commit_pipeline.filter_all_commits()
+            filtered_commits = commit_pipeline.filtered_commits
+
+            logging.info("Testing commits...")
+            tester_pipeline = CommitTesterPipeline(self.config)
+            tester_pipeline.test_commit(filtered_commits)
+            logging.info("Commit testing completed.")
 
     def _testcommits(self) -> None:
         logging.info("Testing commits...")
         tester_pipeline = CommitTesterPipeline(self.config)
         tester_pipeline.test_commit()
         logging.info("Commit testing completed.")
-
+        
     def _genimages(self) -> None:
         logging.info("Generating Docker Images...")
         image_pipeline = CommitTesterPipeline(self.config)

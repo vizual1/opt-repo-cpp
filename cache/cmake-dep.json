@@ -2080,8 +2080,12 @@
             "vcpkg": []
         }
     },
+    "httplib": {
+        "apt": "libhttplib-dev",
+        "vcpkg": ""
+    },
     "sdl3": {
-        "apt": "libsdl3-dev",
+        "apt": "libsdl2-dev",
         "vcpkg": "sdl3",
         "flags": {
             "apt": [
@@ -2867,7 +2871,10 @@
         }
     },
     "python": {
-        "apt": "python3-dev",
+        "apt": [
+            "python3-dev",
+            "python-is-python3"
+        ],
         "vcpkg": "python3",
         "flags": {
             "apt": [
@@ -11055,10 +11062,6 @@
             ]
         }
     },
-    "httplib": {
-        "apt": "libhttplib-dev",
-        "vcpkg": ""
-    },
     "nghttp2": {
         "apt": "libnghttp2-dev",
         "vcpkg": "nghttp2",
@@ -18798,5 +18801,11 @@
     "magic.h": {
         "apt": "libmagic1",
         "vcpkg": "libmagic"
+    },
+    "jansson>=2.5": {
+        "apt": [
+            "libjansson-dev"
+        ],
+        "vcpkg": "jansson"
     }
 }

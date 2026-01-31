@@ -36,7 +36,8 @@ class RepositoryCollector:
             List of Repository objects that match language and composition criteria
         """
         seen_repo_ids = set()
-        if self.config.input_file:
+        path = Path(self.config.input_file)
+        if path.is_file:
             seen_repo_ids = set(self._get_repo_ids(self.config.input_file))
             logging.info(f"Loaded {len(seen_repo_ids)} existing repositories to skip")
 
@@ -162,7 +163,11 @@ class RepositoryCollector:
                 logging.warning(f"Input file not found: {path}")
                 return repo_ids
             
-            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            if not file_path.is_file:
+                logging.warning(f"Input path is not a file: {path}")
+                return repo_ids
+            
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
 
             for i, line in enumerate(lines, 1):
@@ -198,10 +203,9 @@ class RepositoryCollector:
             Repository ID in 'owner/repo' format, or None if invalid
         """
         if '|' in line:
-            filename = Path(filepath).stem
-            parts = filename.split('_')
-            if len(parts) >= 2:
-                return f"{parts[0]}/{parts[1]}"
+            parts = line.split('|')
+            if len(parts) >= 1 and '/' in parts[0]:
+                return parts[0]
             return ""
         
         # CSV format

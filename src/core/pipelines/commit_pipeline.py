@@ -1,10 +1,11 @@
-import logging, ast, json
+import logging, ast
 from tqdm import tqdm
 from src.config.config import Config
 from src.utils.writer import Writer
 from src.core.filter.commit_filter import CommitFilter
 from src.utils.stats import CommitStats
 from github.Repository import Repository
+from github.Commit import Commit
 from pathlib import Path
 
 class CommitPipeline:
@@ -15,7 +16,7 @@ class CommitPipeline:
         self.config = config
         self.repo_ids = repo_ids
         self.stats = CommitStats()
-        self.filtered_commits: list[str] = []
+        self.filtered_commits: list[Commit] = []
 
     def filter_all_commits(self):
         if self.config.sha and self.config.repo_id:
@@ -50,13 +51,10 @@ class CommitPipeline:
         for commit in tqdm(self.commits, desc=f"{repo.full_name} commits", position=1, leave=False, mininterval=5):
             stats.num_commits += 1
             perf_improv_filter = CommitFilter(commit, self.config, repo)
-            try:
-                if not perf_improv_filter.accept():
-                    continue
-            except Exception as e:
-                logging.exception(f"[{repo.full_name}] Error processing commit: {e}")
+            if not perf_improv_filter.accept():
                 continue
-
+            
+            self.filtered_commits.append(commit)
             writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths['clones'])
             filtered_commits.append(writer.file or "")
             stats.perf_commits += 1

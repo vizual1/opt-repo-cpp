@@ -21,9 +21,12 @@ class RepositoryPipeline:
         collector = RepositoryCollector(config=self.config)
         return collector.get_repos()
 
-    def test_repos(self) -> None:
-        collector = RepositoryCollector(self.config)
-        repo_ids = collector.get_repos()
+    def test_repos(self, repos: list[Repository] = []) -> None:
+        if repos:
+            repo_ids = [repo.full_name for repo in repos]
+        else:
+            collector = RepositoryCollector(self.config)
+            repo_ids = collector.get_repos()
         if not repo_ids:
             logging.warning("No repositories found.")
             return
@@ -35,7 +38,7 @@ class RepositoryPipeline:
             process = ProcessFilter(repo, self.config)
 
             try:
-                if structure.is_valid() and process.valid_run("_".join(repo.full_name.split("/"))):
+                if structure.is_valid() and (not self.config.test or process.valid_run("_".join(repo.full_name.split("/")))):
                     self.valid_repos.append(repo)
                     if self.config.collect or self.config.output_file:
                         Writer(repo_id, self.config.output_file or self.config.storage_paths['testcollect']).write_repo()
@@ -45,24 +48,3 @@ class RepositoryPipeline:
 
             except Exception as e:
                 logging.exception(f"[{repo_id}] Error processing repository: {e}")
-            
-    def analyze_repos(self) -> None:
-        collector = RepositoryCollector(config=self.config)
-        repo_ids = collector.get_repos()
-        if not repo_ids:
-            logging.warning("No repositories found.")
-            return
-        
-        logging.info(f"Found {len(repo_ids)} repositories.")
-        for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Analyzing repositories...", mininterval=5):
-            repo = self.config.git_client.get_repo(repo_id)
-            structure = StructureFilter(repo, self.config)
-            try:
-                if structure.is_valid() and (self.config.collect or self.config.output_file):
-                    Writer(repo_id, self.config.output_file).write_repo()
-                self.stats += structure.stats
-
-            except Exception as e:
-                logging.exception(f"[{repo_id}] Error analyzing: {e}")
-
-        self.stats.write_final_log()

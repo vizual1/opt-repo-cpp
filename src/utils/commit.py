@@ -1,8 +1,9 @@
 import logging, ast, json
 from pathlib import Path
 from src.config.config import Config
+from github.Commit import Commit
 
-class Commit:
+class CommitHandler:
     def __init__(self, input_file: str, output_path: str):
         self.input_file = input_file
         self.output_path = output_path
@@ -18,23 +19,31 @@ class Commit:
             with open(path, "r", errors="ignore") as f:
                 images = [line.strip() for line in f if line.strip()]
         elif path.is_dir():
-            images = [p.stem for p in path.glob("*.json")]
-            return self.get_commits_from_json_files()
+            return self._get_commits_from_json_files()
         else:
             raise ValueError(f"Invalid input path: {self.input_file}")
+        
+        if config.genimages:
+            raise ValueError(f"--genimages should be a folder with json files. Invalid input files: {self.input_file}")
 
         commits_info: list[tuple[str, str, str, list[str]]] = []
-        for image in images: 
-            split = tuple(image.split("_"))
-            assert len(split) == 3
-            owner, repo_name, new_sha = split
-            repo_id = f"{owner}/{repo_name}"
-            repo = config.git_client.get_repo(repo_id)
-            old_sha = repo.get_commit(new_sha.strip().removesuffix(".tar")).parents[0].sha
+        for i, image in enumerate(images, 1): 
+            if "|" in image:
+                split = tuple(image.split("|"))
+                assert len(split) >= 3
+                repo_id, new_sha, old_sha, _ = split
+            elif "," in image:
+                split = tuple(image.split(","))
+                assert len(split) >= 3
+                repo_id, new_sha, old_sha, _ = split
+            else:
+                logging.warning(f"The image in line {i} has an unidentified pattern: {image}")
+                continue
+
             commits_info.append((repo_id, new_sha.strip(), old_sha.strip(), []))
         return commits_info
 
-    def get_commits_from_json_files(self) -> list[tuple[str, str, str, list[str]]]:
+    def _get_commits_from_json_files(self) -> list[tuple[str, str, str, list[str]]]:
         """
         Return list of (repo_id, new_sha, old_sha, pr_shas) pairs from
         json files generated from '--testcommits' flag. 
@@ -54,15 +63,21 @@ class Commit:
         
         return commits_info
     
-    def get_commits(self) -> list[tuple[str, str, str, list[str]]]:
+    def get_commits(self, commits_list: list[Commit] = []) -> list[tuple[str, str, str, list[str]]]:
         """Return list of (repo_id, new_sha, old_sha, pr_shas) pairs."""
         file_path = Path(self.input_file)
 
-        commits = self._get_filtered_commits(file_path)
-        if not commits:
+        if commits_list:
+            all_commits = [(commit.repository.full_name, commit.sha, commit.parents[0].sha, []) for commit in commits_list]
+        elif file_path.is_file():
+            all_commits = self._get_filtered_commits(file_path)
+        elif file_path.is_dir():
+            all_commits = self._get_commits_from_json_files()
+
+        if not all_commits:
             logging.warning(f"No valid commit pairs found in {file_path}")
 
-        return commits
+        return all_commits
     
     def get_paths(self, file_prefix: str, sha: str, patch: bool = False) -> tuple[Path, Path]:
         """
@@ -116,7 +131,6 @@ class Commit:
                         extra_commits = []
                     
                     commits_info.append((repo_id, new_sha, old_sha, extra_commits))
-
 
         except (OSError, IOError) as e:
             logging.error(f"Failed to read commits from {path}: {e}", exc_info=True)

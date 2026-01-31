@@ -442,7 +442,7 @@ class CMakeProcess:
         logging.info(f"Commands: {self.test_commands}")
         if len(self.test_commands) == 0: # no test commands
             root = ['cd', str(self.test_path)]
-            self.test_commands.append(list(map(str, root))) # TODO: test
+            self.test_commands.append(list(map(str, root)))
             self.test_commands.append(list(map(str, cmd)))
         return True
 
@@ -596,9 +596,12 @@ class CMakeProcess:
         
 
     def _individual_ctest(self, command: list[str], extra: list[str] = []) -> bool:
-        unit_map = self.unit_tests_map[" ".join(command)]
-        test_name = unit_map['name']
-        exe_path = unit_map['exe']
+        try:
+            unit_map = self.unit_tests_map[" ".join(command)]
+            test_name = unit_map['name']
+            exe_path = unit_map['exe']
+        except:
+            return False
 
         if (len(self.per_test_times[test_name]['parsed']) >= len(self.test_time['parsed']) and
             len(self.per_test_times[test_name]['time']) >= len(self.test_time['time'])):
