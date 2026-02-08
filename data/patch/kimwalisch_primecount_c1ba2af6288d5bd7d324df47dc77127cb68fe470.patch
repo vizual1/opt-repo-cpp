@@ -1,0 +1,13 @@
+diff --git a/include/Sieve.hpp b/include/Sieve.hpp
+index 4d2e945a..4a0f0e88 100644
+--- a/include/Sieve.hpp
++++ b/include/Sieve.hpp
+@@ -48,7 +48,7 @@ struct Wheel
+ class Sieve
+ {
+ public:
+-  NOINLINE Sieve(uint64_t low, uint64_t segment_size, uint64_t wheel_size);
++  Sieve(uint64_t low, uint64_t segment_size, uint64_t wheel_size);
+   NOINLINE void cross_off(uint64_t prime, uint64_t i);
+   NOINLINE void cross_off_count(uint64_t prime, uint64_t i);
+   static uint64_t get_segment_size(uint64_t size);

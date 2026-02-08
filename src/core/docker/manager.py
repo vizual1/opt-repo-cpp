@@ -48,8 +48,9 @@ class DockerManager:
                 return
 
             logging.info(f"Run docker image ({self.docker_image}) mounted on {str(self.mount)}.")
+            mount_path = str(self.mount)
             mount = Mount(
-                target="/workspace", source=str(self.mount), type="bind", read_only=False
+                target="/test_workspace/workspace/new/" if mount_path else "workspace/", source=mount_path, type="bind", read_only=False
             )
             self.container = self.client.containers.run(
                 self.docker_image,

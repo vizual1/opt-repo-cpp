@@ -1,0 +1,50 @@
+diff --git a/include/PhiTiny.hpp b/include/PhiTiny.hpp
+index 59ee926a..ae966454 100644
+--- a/include/PhiTiny.hpp
++++ b/include/PhiTiny.hpp
+@@ -65,6 +65,11 @@ public:
+     // is a simple two dimensional array.
+     if (a < phi_.size())
+       sum += phi_[a][remainder];
++    else if (a == 7)
++    {
++      // Use fast direct lookup for a == 7
++      sum += (T) phi7_table[remainder];
++    }
+     else
+     {
+       // For primes > 5 we use a compressed phi(x % pp, a) lookup
+@@ -129,6 +134,9 @@ private:
+   /// divisible by any of the first a primes.
+   std::array<std::vector<sieve_t>, 8> sieve_;
+   std::array<std::vector<uint8_t>, 4> phi_;
++  // Fast lookup table for phi(x, 7). prime_products[7] == 30030
++  // Stores phi(r, 7) for r in [0, 30029]
++  std::vector<uint32_t> phi7_table;
+ };
+ 
+ extern const PhiTiny phiTiny;
+diff --git a/src/PhiTiny.cpp b/src/PhiTiny.cpp
+index 97b31917..d9a9904b 100644
+--- a/src/PhiTiny.cpp
++++ b/src/PhiTiny.cpp
+@@ -94,6 +94,19 @@ PhiTiny::PhiTiny()
+       }
+     }
+   }
++
++      // If a == 7 build fast phi7_table for direct remainder lookup
++      if (a == 7)
++      {
++        // prime_products[7] == 30030
++        phi7_table.resize(pp);
++        for (uint64_t r = 0; r < pp; r++)
++        {
++          uint64_t v = phi(r, a - 1) - phi(r / primes[a], a - 1);
++          phi7_table[r] = (uint32_t) v;
++        }
++      }
++
+ }
+ 
+ } // namespace

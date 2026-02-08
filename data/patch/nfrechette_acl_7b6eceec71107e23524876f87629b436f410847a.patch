@@ -1,0 +1,12 @@
+diff --git a/includes/acl/decompression/impl/steps/animated_unpack_vec3.h b/includes/acl/decompression/impl/steps/animated_unpack_vec3.h
+index a1815692..5147e022 100644
+--- a/includes/acl/decompression/impl/steps/animated_unpack_vec3.h
++++ b/includes/acl/decompression/impl/steps/animated_unpack_vec3.h
+@@ -70,6 +70,7 @@ namespace acl
+ 			uint32_t animated_track_data_bit_offset = segment_sampling_context.animated_track_data_bit_offset;
+ 
+ 			const uint8_t* clip_range_data = clip_sampling_context.clip_range_data;
++	rtm::vector4f* output_ptr = output_scratch;
+ 
+ 			for (uint32_t unpack_index = 0; unpack_index < num_to_unpack; ++unpack_index)
+ 			{

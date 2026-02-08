@@ -5,14 +5,13 @@ DATA_DIR = Path("data")
 CACHE_DIR = Path("cache")
 
 STORAGE_PATHS = {
-    "performance": DATA_DIR / "performance",
-    "clones": DATA_DIR / "commits",
-
     "collect": DATA_DIR / "collect.txt",
     "testcollect": DATA_DIR / "testcollect.txt",
-    "commits": DATA_DIR / "commits.txt",
+    "commits": DATA_DIR / "filtered_commits.txt",
+    "performance": DATA_DIR / "commits",
     "repos": DATA_DIR / "repos.txt",
     "fail": DATA_DIR / "fail.txt",
+    "clones": DATA_DIR / "tmp",
 
     "cmake-dep": CACHE_DIR / "cmake-dep.json"
 }
@@ -42,13 +41,15 @@ VALID_TEST_FLAGS: dict[str, list[str]] = {
         "WITH_UNIT_TESTS",
         "BUILD_UNIT_TESTS",
         "TESTING", "TESTS", "TEST",
-        "RUN_TESTS"
+        "RUN_TESTS", "BLACKBOX_TEST",
+        "INSTALL_TEST"
     ],
     "prefix": [],
     "suffix": [
         "_BUILD_TEST", "_BUILD_TESTS", "_BUILD_TESTING",
         "_ENABLE_TEST", "_ENABLE_TESTS", "_ENABLE_TESTING",
-        "_UNIT_TESTS", "_UNITTEST", "DOC_TEST"
+        "_UNIT_TESTS", "_UNITTEST", "DOC_TEST", "_BLACKBOX_TESTS",
+        "_INSTALL_TEST"
     ],
     "in": [
         "_UNIT_TEST_", "BENCH"

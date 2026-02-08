@@ -1,0 +1,13 @@
+diff --git a/include/imath.hpp b/include/imath.hpp
+index c31b01b8..257c500b 100644
+--- a/include/imath.hpp
++++ b/include/imath.hpp
+@@ -150,6 +150,8 @@ inline T iroot(T x)
+ 
+   if (N == 3)
+     r = (T) std::cbrt((double) x);
++  else if (N == 2)
++    r = (T) std::sqrt((double) x);
+   else
+     r = (T) std::pow((double) x, 1.0 / N);
+ 

@@ -1,0 +1,36 @@
+diff --git a/src/api/include/projectM-4/parameters.h b/src/api/include/projectM-4/parameters.h
+index c462444fc..84b4f908f 100644
+--- a/src/api/include/projectM-4/parameters.h
++++ b/src/api/include/projectM-4/parameters.h
+@@ -159,7 +159,8 @@ PROJECTM_EXPORT double projectm_get_preset_duration(projectm_handle instance);
+ 
+ /**
+  * @brief Sets the per-pixel equation mesh size in units.
+- * @note This will currently remove any active presets and reload the default "idle" preset.
++ * @note The warp mesh is resized dynamically when a frame is drawn; changing the mesh size
++ *       will no longer reload or reset presets.
+  * @param instance The projectM instance handle.
+  * @param width The new width of the mesh.
+  * @param height The new height of the mesh.
+diff --git a/src/libprojectM/ProjectM.cpp b/src/libprojectM/ProjectM.cpp
+index 178346a9f..7da8f08e2 100644
+--- a/src/libprojectM/ProjectM.cpp
++++ b/src/libprojectM/ProjectM.cpp
+@@ -444,14 +444,9 @@ void ProjectM::SetMeshSize(size_t meshResolutionX, size_t meshResolutionY)
+     m_meshX = std::max(static_cast<size_t>(8), std::min(static_cast<size_t>(400), m_meshX));
+     m_meshY = std::max(static_cast<size_t>(8), std::min(static_cast<size_t>(400), m_meshY));
+ 
+-    // Update mesh size in all sorts of classes.
+-    //m_renderer->SetPerPixelMeshSize(m_meshX, m_meshY);
+-    m_presetFactoryManager->initialize();
+-
+-    // Unload all presets and reload idle preset
+-    m_activePreset.reset();
+-    m_transitioningPreset.reset();
+-    LoadIdlePreset();
++    // The warp mesh is recalculated dynamically when frames are rendered. Changing the mesh size
++    // should not unload or reload presets anymore — do not reset presets here.
++    // If synchronous renderer notification is required in future, call a renderer method here.
+ }
+ 
+ auto ProjectM::PCM() -> libprojectM::Audio::PCM&

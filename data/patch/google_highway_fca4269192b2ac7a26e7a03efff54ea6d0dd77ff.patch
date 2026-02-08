@@ -1,0 +1,40 @@
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 0b5b9704..c97ba1fb 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -1743,9 +1743,15 @@ namespace detail {
+ 
+ // For x86-compatible behaviour mandated by Highway API: TableLookupBytes
+ // offsets are implicitly relative to the start of their 128-bit block.
+-template <class D, class V>
+-HWY_INLINE V OffsetsOf128BitBlocks(const D d, const V iota0) {
++// Compute offsets directly without relying on Iota to avoid emitting an
++// additional vector generation instruction when only a per-block masking is
++// needed. Using the SVE svindex intrinsic produces the same ascending indices
++// starting at 0 with minimal codegen.
++template <class D>
++HWY_INLINE VFromD<Repartition<uint8_t, D>> OffsetsOf128BitBlocks(const D d) {
+   using T = MakeUnsigned<TFromD<D>>;
++  const Repartition<uint8_t, D> du8;
++  const VFromD<decltype(du8)> iota0 = svindex_u8(0);
+   return detail::AndNotN(static_cast<T>(LanesPerBlock(d) - 1), iota0);
+ }
+ 
+@@ -1838,7 +1844,7 @@ template <class V, class VI>
+ HWY_API VI TableLookupBytes(const V v, const VI idx) {
+   const DFromV<VI> d;
+   const Repartition<uint8_t, decltype(d)> du8;
+-  const auto offsets128 = detail::OffsetsOf128BitBlocks(du8, Iota(du8, 0));
++  const auto offsets128 = detail::OffsetsOf128BitBlocks(du8);
+   const auto idx8 = Add(BitCast(du8, idx), offsets128);
+   return BitCast(d, TableLookupLanes(BitCast(du8, v), idx8));
+ }
+@@ -1864,7 +1870,7 @@ HWY_API V Broadcast(const V v) {
+   const RebindToUnsigned<decltype(d)> du;
+   constexpr size_t kLanesPerBlock = detail::LanesPerBlock(du);
+   static_assert(0 <= kLane && kLane < kLanesPerBlock, "Invalid lane");
+-  auto idx = detail::OffsetsOf128BitBlocks(du, Iota(du, 0));
++  auto idx = detail::OffsetsOf128BitBlocks(du);
+   if (kLane != 0) {
+     idx = detail::AddN(idx, kLane);
+   }

@@ -1,0 +1,41 @@
+diff --git a/include/Sieve.hpp b/include/Sieve.hpp
+index fde78ff1..708c99d5 100644
+--- a/include/Sieve.hpp
++++ b/include/Sieve.hpp
+@@ -257,22 +257,28 @@ private:
+     {
+       uint64_t i = start_idx + 1;
+       uint64_t cnt = popcnt64(sieve64[start_idx] & m1);
+-      svbool_t pg = svwhilelt_b64(i, stop_idx);
++      /* Use a pointer-based loop and hoist full predicate to improve
++         code generation on Clang for ARM SVE. */
++      const uint64_t* p = &sieve64[i];
+       svuint64_t vcnt = svdup_u64(0);
++      const svbool_t full = svptrue_b64();
+ 
+       // Compute this for loop using ARM SVE.
+       // for (i = start_idx + 1; i < stop_idx; i++)
+       //   cnt += popcnt64(sieve64[i]);
+-      do {
+-        svuint64_t vec = svld1_u64(pg, &sieve64[i]);
++      while (true) {
++        svbool_t pg = svwhilelt_b64(i, stop_idx);
++        if (!svptest_any(full, pg))
++          break;
++        svuint64_t vec = svld1_u64(pg, p);
+         vec = svcnt_u64_z(pg, vec);
+-        vcnt = svadd_u64_z(svptrue_b64(), vcnt, vec);
+-        i += svcntd();
+-        pg = svwhilelt_b64(i, stop_idx);
++        vcnt = svadd_u64_z(full, vcnt, vec);
++        uint64_t adv = svcntd();
++        p += adv;
++        i += adv;
+       }
+-      while (svptest_any(svptrue_b64(), pg));
+ 
+-      cnt += svaddv_u64(svptrue_b64(), vcnt);
++      cnt += svaddv_u64(full, vcnt);
+       cnt += popcnt64(sieve64[stop_idx] & m2);
+       return cnt;
+     }

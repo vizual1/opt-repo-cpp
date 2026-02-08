@@ -1,0 +1,62 @@
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index a0f3cbad..7d6e710e 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -9604,9 +9604,17 @@ HWY_INLINE VFromD<D> PromoteOddTo(hwy::SignedTag /*to_type_tag*/,
+ template <class DF, HWY_IF_F32_D(DF),
+           class VBF = VFromD<Repartition<bfloat16_t, DF>>>
+ HWY_API VFromD<DF> WidenMulPairwiseAdd(DF df, VBF a, VBF b) {
+-  // TODO(janwas): _mm_dpbf16_ps when available
++#if HWY_NATIVE_DOT_BF16
++  // Use dedicated dot-product of bf16 pairs into f32 lanes for better
++  // code generation and performance when available.
++  return VFromD<DF>{_mm_dpbf16_ps(_mm_setzero_ps(),
++                                  reinterpret_cast<__m128bh>(a.raw),
++                                  reinterpret_cast<__m128bh>(b.raw))};
++#else
++  // Fallback: multiply promoted even/odd lanes and add.
+   return MulAdd(PromoteEvenTo(df, a), PromoteEvenTo(df, b),
+                 Mul(PromoteOddTo(df, a), PromoteOddTo(df, b)));
++#endif
+ }
+ 
+ // Even if N=1, the input is always at least 2 lanes, hence madd_epi16 is safe.
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index 018c1a42..cf71f201 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -6167,6 +6167,7 @@ template <class DF, HWY_IF_F32_D(DF), HWY_IF_V_SIZE_D(DF, 32),
+ HWY_API VFromD<DF> ReorderWidenMulAccumulate(DF /*df*/, VBF a, VBF b,
+                                              const VFromD<DF> sum0,
+                                              VFromD<DF>& /*sum1*/) {
++  // Use dpbf16 intrinsic when available for better codegen.
+   return VFromD<DF>{_mm256_dpbf16_ps(sum0.raw,
+                                      reinterpret_cast<__m256bh>(a.raw),
+                                      reinterpret_cast<__m256bh>(b.raw))};
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index 563ae20e..6c148a23 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -7934,6 +7934,22 @@ HWY_API Vec512<int64_t> operator>>(const Vec512<int64_t> v,
+ }
+ 
+ // ------------------------------ WidenMulPairwiseAdd
++
++// Generic for all vector lengths.
++template <class DF, HWY_IF_F32_D(DF),
++          class VBF = VFromD<Repartition<bfloat16_t, DF>>>
++HWY_API VFromD<DF> WidenMulPairwiseAdd(DF df, VBF a, VBF b) {
++#if HWY_NATIVE_DOT_BF16
++  // Use dedicated dpbf16 intrinsic when available for better codegen.
++  return VFromD<DF>{_mm512_dpbf16_ps(_mm512_setzero_ps(),
++                                     reinterpret_cast<__m512bh>(a.raw),
++                                     reinterpret_cast<__m512bh>(b.raw))};
++#else
++  return MulAdd(PromoteEvenTo(df, a), PromoteEvenTo(df, b),
++                Mul(PromoteOddTo(df, a), PromoteOddTo(df, b)));
++#endif
++}
++
+ template <class D, HWY_IF_V_SIZE_D(D, 64), HWY_IF_I32_D(D)>
+ HWY_API VFromD<D> WidenMulPairwiseAdd(D /*d32*/, Vec512<int16_t> a,
+                                       Vec512<int16_t> b) {

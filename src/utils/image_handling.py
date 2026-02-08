@@ -1,4 +1,5 @@
 import os, requests, docker, logging
+from src.config.config import Config
 
 def image(repo_id: str, sha: str) -> str:
     return ("_".join(repo_id.split("/")) + f"_{sha}").lower()
@@ -57,3 +58,27 @@ def dockerhub_containers(dockerhub_user: str, dockerhub_repo: str) -> list[str]:
         url = data["next"]  # None when no more pages
 
     return tags
+
+def config_image(config: Config, repo_id: str, new_sha: str) -> bool:
+    """Configure the docker image depending on flags (check, delete)."""
+    local_image = image(repo_id, new_sha)
+
+    # checks if the image is already uploaded to dockerhub given a DOCKERHUB_USER and DOCKERHUB_REPO
+    if not config.genforce and config.genimages and config.check_dockerhub and local_image in config.dockerhub_containers:
+        return False
+    
+    # deletes the docker image if it exists (because of genforce)
+    if config.genforce and image_exists(repo_id, new_sha):
+        logging.info("Image already exists, delete image to overwrite")
+        delete_image(repo_id, new_sha)
+        if config.check_dockerhub:
+            remote_image = f"{config.dockerhub_user}/{config.dockerhub_repo}:{local_image}"
+            delete_image(other=remote_image)
+        return False
+
+    # the docker image is already generated for repo_id and new_sha
+    if config.genimages and image_exists(repo_id, new_sha):
+        logging.info("Image already exists, no need to generate the docker image")
+        return False
+    
+    return True

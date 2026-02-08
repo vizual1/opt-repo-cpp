@@ -1,0 +1,15 @@
+diff --git a/BFS/210.Course-Schedule-II/210.Course-Schedule-II.cpp b/BFS/210.Course-Schedule-II/210.Course-Schedule-II.cpp
+index 70e24429..23de015d 100644
+--- a/BFS/210.Course-Schedule-II/210.Course-Schedule-II.cpp
++++ b/BFS/210.Course-Schedule-II/210.Course-Schedule-II.cpp
+@@ -3,8 +3,8 @@ public:
+     vector<int> findOrder(int numCourses, vector<vector<int>>& prerequisites) 
+     {
+         int n = numCourses;
+-        unordered_map<int,vector<int>>nextCourses(n);
+-        unordered_map<int,int>degree(n);
++        vector<vector<int>> nextCourses(n);
++        vector<int> degree(n, 0);
+         
+         for (auto edge: prerequisites)
+         {

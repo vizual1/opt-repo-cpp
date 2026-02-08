@@ -1,0 +1,39 @@
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index f5931bcc..c828f57b 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -334,6 +334,25 @@ HWY_API Vec256<double> Xor(Vec256<double> a, Vec256<double> b) {
+ }
+ 
+ // ------------------------------ Not
++namespace detail {
++
++template <size_t N>
++HWY_INLINE __m256i AllOnes256();
++
++template <>
++HWY_INLINE __m256i AllOnes256<1>() { return _mm256_set1_epi8(static_cast<char>(-1)); }
++
++template <>
++HWY_INLINE __m256i AllOnes256<2>() { return _mm256_set1_epi16(static_cast<short>(-1)); }
++
++template <>
++HWY_INLINE __m256i AllOnes256<4>() { return _mm256_set1_epi32(-1); }
++
++template <>
++HWY_INLINE __m256i AllOnes256<8>() { return _mm256_set1_epi64x(-1LL); }
++
++}  // namespace detail
++
+ template <typename T>
+ HWY_API Vec256<T> Not(const Vec256<T> v) {
+   const DFromV<decltype(v)> d;
+@@ -342,7 +361,7 @@ HWY_API Vec256<T> Not(const Vec256<T> v) {
+   const __m256i vu = BitCast(RebindToUnsigned<decltype(d)>(), v).raw;
+   return BitCast(d, Vec256<TU>{_mm256_ternarylogic_epi32(vu, vu, vu, 0x55)});
+ #else
+-  return Xor(v, BitCast(d, Vec256<TU>{_mm256_set1_epi32(-1)}));
++  return Xor(v, BitCast(d, Vec256<TU>{detail::AllOnes256<sizeof(TU)>()}));
+ #endif
+ }
+ 

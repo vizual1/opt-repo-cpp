@@ -1,0 +1,21 @@
+diff --git a/hwy/contrib/thread_pool/thread_pool.h b/hwy/contrib/thread_pool/thread_pool.h
+index 5c083e2a..7cc29e8b 100644
+--- a/hwy/contrib/thread_pool/thread_pool.h
++++ b/hwy/contrib/thread_pool/thread_pool.h
+@@ -636,6 +636,16 @@ class ThreadPool {
+     const size_t num_workers = NumWorkers();
+     PoolMem& mem = *owner_.Mem();
+ 
++    // Fast-path: if there is exactly one task, avoid the fork/join overhead of
++    // waking worker threads and simply execute it on the main thread. Use the
++    // same thread id as the main thread would normally use (num_workers - 1).
++    const size_t num_tasks = static_cast<size_t>(end - begin);
++    if (HWY_LIKELY(num_tasks == 1)) {
++      const size_t main_thread = (num_workers == 0) ? 0 : (num_workers - 1);
++      closure(begin, main_thread);
++      return;
++    }
++
+     if (HWY_LIKELY(ParallelFor::Plan(begin, end, num_workers, closure, mem))) {
+       // Only check if we are going to fork/join.
+       HWY_DASSERT(busy_.fetch_add(1) == 0);

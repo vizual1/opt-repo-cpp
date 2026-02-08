@@ -1,0 +1,19 @@
+diff --git a/src/snmalloc/ds_core/redblacktree.h b/src/snmalloc/ds_core/redblacktree.h
+index 0d68469..6191c3b 100644
+--- a/src/snmalloc/ds_core/redblacktree.h
++++ b/src/snmalloc/ds_core/redblacktree.h
+@@ -774,5 +774,14 @@ namespace snmalloc
+     {
+       return RBPath(H{&root});
+     }
++
++		/**
++		 * Returns true if the tree is empty.
++		 */
++		bool empty()
++		{
++			return get_root().is_null();
++		}
++
+   };
+ } // namespace snmalloc

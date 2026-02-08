@@ -1,0 +1,23 @@
+diff --git a/Dynamic_Programming/1187.Make-Array-Strictly-Increasing/1187.Make-Array-Strictly-Increasing.cpp b/Dynamic_Programming/1187.Make-Array-Strictly-Increasing/1187.Make-Array-Strictly-Increasing.cpp
+index 69556ff6..d8610bd5 100644
+--- a/Dynamic_Programming/1187.Make-Array-Strictly-Increasing/1187.Make-Array-Strictly-Increasing.cpp
++++ b/Dynamic_Programming/1187.Make-Array-Strictly-Increasing/1187.Make-Array-Strictly-Increasing.cpp
+@@ -18,13 +18,12 @@ public:
+                 {
+                     auto iter = upper_bound(arr2.begin(), arr2.end(), dp[i-1][k-1]);
+                     if (iter!=arr2.end()) dp[i][k] = min(dp[i][k], *iter);
+-                }                
+-            }
++                }
+ 
+-        int ret = INT_MAX;
+-        for (int k=0; k<=n; k++)
+-            if (dp[n][k]!=INT_MAX) ret = min(ret, k);
++                // As we fill k from 0..i, the first valid dp[n][k] when i==n is the minimal k.
++                if (i==n && dp[i][k]!=INT_MAX) return k;
++            }
+ 
+-        return ret == INT_MAX ? -1: ret;
++        return -1;
+     }
+ };

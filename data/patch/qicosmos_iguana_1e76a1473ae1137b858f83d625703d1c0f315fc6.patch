@@ -1,0 +1,132 @@
+diff --git a/iguana/pb_reader.hpp b/iguana/pb_reader.hpp
+index a91a696..2ea3d55 100644
+--- a/iguana/pb_reader.hpp
++++ b/iguana/pb_reader.hpp
+@@ -15,7 +15,7 @@ template <typename T>
+ IGUANA_INLINE void decode_pair_value(T& val, std::string_view& pb_str) {
+   size_t pos;
+   uint32_t key = detail::decode_varint(pb_str, pos);
+-  pb_str = pb_str.substr(pos);
++  pb_str.remove_prefix(pos);
+   WireType wire_type = static_cast<WireType>(key & 0b0111);
+   if (wire_type != detail::get_wire_type<std::remove_reference_t<T>>()) {
+     return;
+@@ -28,9 +28,9 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+                                 uint32_t field_no) {
+   size_t pos = 0;
+   if constexpr (ylt_refletable_v<T>) {
+-    size_t pos;
++    // reuse pos declared above
+     uint32_t size = detail::decode_varint(pb_str, pos);
+-    pb_str = pb_str.substr(pos);
++    pb_str.remove_prefix(pos);
+     if (pb_str.size() < size)
+       IGUANA_UNLIKELY {
+         throw std::invalid_argument("Invalid fixed int value: too few bytes.");
+@@ -38,8 +38,8 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+     if (size == 0) {
+       return;
+     }
+-    from_pb(val, pb_str.substr(0, size));
+-    pb_str = pb_str.substr(size);
++    from_pb(val, std::string_view(pb_str.data(), size));
++    pb_str.remove_prefix(size);
+   }
+   else if constexpr (is_sequence_container<T>::value) {
+     using item_type = typename T::value_type;
+@@ -58,7 +58,7 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+           break;
+         }
+         else {
+-          pb_str = pb_str.substr(pos);
++          pb_str.remove_prefix(pos);
+         }
+       }
+     }
+@@ -66,7 +66,7 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+       // item_type packed
+       size_t pos;
+       uint32_t size = detail::decode_varint(pb_str, pos);
+-      pb_str = pb_str.substr(pos);
++      pb_str.remove_prefix(pos);
+       if (pb_str.size() < size)
+         IGUANA_UNLIKELY {
+           throw std::invalid_argument(
+@@ -90,7 +90,7 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+     while (!pb_str.empty()) {
+       size_t pos;
+       uint32_t size = detail::decode_varint(pb_str, pos);
+-      pb_str = pb_str.substr(pos);
++      pb_str.remove_prefix(pos);
+       if (pb_str.size() < size)
+         IGUANA_UNLIKELY {
+           throw std::invalid_argument(
+@@ -109,12 +109,12 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+       if (field_number != field_no) {
+         break;
+       }
+-      pb_str = pb_str.substr(pos);
++      pb_str.remove_prefix(pos);
+     }
+   }
+   else if constexpr (std::is_integral_v<T>) {
+     val = static_cast<T>(detail::decode_varint(pb_str, pos));
+-    pb_str = pb_str.substr(pos);
++    pb_str.remove_prefix(pos);
+   }
+   else if constexpr (detail::is_signed_varint_v<T>) {
+     constexpr size_t len = sizeof(typename T::value_type);
+@@ -125,7 +125,7 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+     else {
+       val.val = detail::decode_zigzag(static_cast<uint32_t>(temp));
+     }
+-    pb_str = pb_str.substr(pos);
++    pb_str.remove_prefix(pos);
+   }
+   else if constexpr (detail::is_fixed_v<T>) {
+     constexpr size_t size = sizeof(typename T::value_type);
+@@ -134,7 +134,7 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+         throw std::invalid_argument("Invalid fixed int value: too few bytes.");
+       }
+     memcpy(&(val.val), pb_str.data(), size);
+-    pb_str = pb_str.substr(size);
++    pb_str.remove_prefix(size);
+   }
+   else if constexpr (std::is_same_v<T, double> || std::is_same_v<T, float>) {
+     constexpr size_t size = sizeof(T);
+@@ -143,7 +143,7 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+         throw std::invalid_argument("Invalid fixed int value: too few bytes.");
+       }
+     memcpy(&(val), pb_str.data(), size);
+-    pb_str = pb_str.substr(size);
++    pb_str.remove_prefix(size);
+   }
+   else if constexpr (std::is_same_v<T, std::string> ||
+                      std::is_same_v<T, std::string_view>) {
+@@ -159,7 +159,7 @@ IGUANA_INLINE void from_pb_impl(T& val, std::string_view& pb_str,
+       detail::resize(val, size);
+       memcpy(val.data(), pb_str.data() + pos, size);
+     }
+-    pb_str = pb_str.substr(size + pos);
++    pb_str.remove_prefix(size + pos);
+   }
+   else if constexpr (std::is_enum_v<T>) {
+     using U = std::underlying_type_t<T>;
+@@ -206,7 +206,7 @@ IGUANA_INLINE void from_pb(T& t, std::string_view pb_str) {
+         if (parse_done || field_number != val.field_no) {
+           return;
+         }
+-        pb_str = pb_str.substr(pos);
++        pb_str.remove_prefix(pos);
+         if (wire_type != detail::get_wire_type<sub_type>())
+           IGUANA_UNLIKELY { throw std::runtime_error("unmatched wire_type"); }
+ 
+@@ -230,7 +230,7 @@ IGUANA_INLINE void from_pb(T& t, std::string_view pb_str) {
+     IGUANA_LIKELY { return; }
+ #endif
+   while (true) {
+-    pb_str = pb_str.substr(pos);
++    pb_str.remove_prefix(pos);
+     static auto map = detail::get_members(std::forward<T>(t));
+     auto& member = map.at(field_number);
+     std::visit(

@@ -1,0 +1,107 @@
+diff --git a/sdk/src/metrics/state/temporal_metric_storage.cc b/sdk/src/metrics/state/temporal_metric_storage.cc
+index 10fabdf5..6c6d7577 100644
+--- a/sdk/src/metrics/state/temporal_metric_storage.cc
++++ b/sdk/src/metrics/state/temporal_metric_storage.cc
+@@ -51,6 +51,102 @@ bool TemporalMetricStorage::buildMetrics(CollectorHandle *collector,
+   AggregationTemporality aggregation_temporarily =
+       collector->GetAggregationTemporality(instrument_descriptor_.type_);
+ 
++  // Fast-path optimization: if there is a single collector and it's using
++  // delta temporality, avoid merging/stashing and move delta metrics directly
++  // to last_reported_metrics_ to reduce heap operations and iterations.
++  if (collectors.size() == 1 && aggregation_temporarily == AggregationTemporality::kDelta)
++  {
++    // If there are no new delta metrics and no unreported metrics for this collector,
++    // behave like the original logic and return.
++    if (!delta_metrics->Size())
++    {
++      auto present = unreported_metrics_.find(collector);
++      if (present == unreported_metrics_.end())
++      {
++        return true;
++      }
++    }
++    // Update last_collection_ts if we have a previous report.
++    auto reported = last_reported_metrics_.find(collector);
++    if (reported != last_reported_metrics_.end())
++    {
++      last_collection_ts = last_reported_metrics_[collector].collection_ts;
++    }
++
++    // Prepare a new map and merge any unreported metrics (if present).
++    std::unique_ptr<AttributesHashMap> new_map = std::make_unique<AttributesHashMap>();
++    auto present_unreported = unreported_metrics_.find(collector);
++    if (present_unreported != unreported_metrics_.end())
++    {
++      auto unreported_list = std::move(present_unreported->second);
++      unreported_metrics_.erase(present_unreported);
++      for (auto &agg_hashmap : unreported_list)
++      {
++        agg_hashmap->GetAllEnteries(
++            [&new_map, this](const MetricAttributes &attributes, Aggregation &aggregation) {
++              auto hash = opentelemetry::sdk::common::GetHashForAttributeMap(attributes);
++              auto agg  = new_map->Get(hash);
++              if (agg)
++              {
++                new_map->Set(attributes, agg->Merge(aggregation), hash);
++              }
++              else
++              {
++                new_map->Set(attributes,
++                              DefaultAggregation::CreateAggregation(
++                                  aggregation_type_, instrument_descriptor_, aggregation_config_)
++                                  ->Merge(aggregation),
++                              hash);
++              }
++              return true;
++            });
++      }
++    }
++
++    // Merge incoming delta_metrics (if any) into the new_map.
++    if (delta_metrics->Size())
++    {
++      delta_metrics->GetAllEnteries(
++          [&new_map, this](const MetricAttributes &attributes, Aggregation &aggregation) {
++            auto hash = opentelemetry::sdk::common::GetHashForAttributeMap(attributes);
++            auto agg  = new_map->Get(hash);
++            if (agg)
++            {
++              new_map->Set(attributes, agg->Merge(aggregation), hash);
++            }
++            else
++            {
++              new_map->Set(attributes,
++                            DefaultAggregation::CreateAggregation(
++                                aggregation_type_, instrument_descriptor_, aggregation_config_)
++                                ->Merge(aggregation),
++                            hash);
++            }
++            return true;
++          });
++    }
++
++    // Set the merged map as last reported metrics for the collector.
++    last_reported_metrics_[collector] = LastReportedMetrics{std::move(new_map), collection_ts};
++
++    // Build MetricData directly from last_reported_metrics_ (which now contains the latest delta)
++    AttributesHashMap *result_to_export = (last_reported_metrics_[collector]).attributes_map.get();
++    MetricData metric_data;
++    metric_data.instrument_descriptor   = instrument_descriptor_;
++    metric_data.aggregation_temporality = aggregation_temporarily;
++    metric_data.start_ts                = last_collection_ts;
++    metric_data.end_ts                  = collection_ts;
++    result_to_export->GetAllEnteries(
++        [&metric_data](const MetricAttributes &attributes, Aggregation &aggregation) {
++          PointDataAttributes point_data_attr;
++          point_data_attr.point_data = aggregation.ToPoint();
++          point_data_attr.attributes = attributes;
++          metric_data.point_data_attr_.emplace_back(std::move(point_data_attr));
++          return true;
++        });
++    return callback(metric_data);
++  }
++
+   if (delta_metrics->Size())
+   {
+     for (auto &col : collectors)

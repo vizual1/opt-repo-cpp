@@ -1,0 +1,35 @@
+diff --git a/include/bvh/single_ray_traverser.hpp b/include/bvh/single_ray_traverser.hpp
+index a718a1c..80353d7 100644
+--- a/include/bvh/single_ray_traverser.hpp
++++ b/include/bvh/single_ray_traverser.hpp
+@@ -78,13 +78,14 @@ private:
+         // This is generally beneficial for performance because intersections will likely be found which will
+         // allow to cull more subtrees with the ray-box test of the traversal loop.
+         Stack stack;
+-        const auto* node = bvh.nodes.get();
++        const auto* nodes = bvh.nodes.get();
++        const auto* node = nodes;
+         while (true) {
+             statistics.traversal_steps++;
+ 
+             auto first_child = node->first_child_or_primitive;
+-            const auto* left_child  = &bvh.nodes[first_child + 0];
+-            const auto* right_child = &bvh.nodes[first_child + 1];
++            const auto* left_child  = nodes + first_child;
++            const auto* right_child = nodes + first_child + 1;
+             auto distance_left  = node_intersector.intersect(*left_child,  ray);
+             auto distance_right = node_intersector.intersect(*right_child, ray);
+ 
+@@ -108,9 +109,9 @@ private:
+             } else
+                 right_child = nullptr;
+ 
+-            if (bvh__likely((left_child != NULL) ^ (right_child != NULL))) {
+-                node = left_child != NULL ? left_child : right_child;
+-            } else if (bvh__unlikely((left_child != NULL) & (right_child != NULL))) {
++            if (bvh__likely((left_child != nullptr) ^ (right_child != nullptr))) {
++                node = left_child != nullptr ? left_child : right_child;
++            } else if (bvh__unlikely((left_child != nullptr) && (right_child != nullptr))) {
+                 if (distance_left.first > distance_right.first)
+                     std::swap(left_child, right_child);
+                 stack.push(right_child);

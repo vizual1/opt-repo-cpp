@@ -1,0 +1,153 @@
+diff --git a/src/from_current.cpp b/src/from_current.cpp
+index 37122e0..a17c192 100644
+--- a/src/from_current.cpp
++++ b/src/from_current.cpp
+@@ -253,43 +253,118 @@ namespace detail {
+         return perms;
+     }
+     #else
++#include <vector>
++#include <mutex>
++#include <chrono>
++#include <string>
++#include <cstring>
++#include <cstdlib>
++#include <cerrno>
++
+     int get_page_protections(void* page) {
+-        auto page_addr = reinterpret_cast<uintptr_t>(page);
+-        std::ifstream stream("/proc/self/maps");
+-        stream>>std::hex;
+-        while(!stream.eof()) {
+-            uintptr_t start;
+-            uintptr_t stop;
+-            stream>>start;
+-            stream.ignore(1); // dash
+-            stream>>stop;
+-            if(stream.eof()) {
+-                break;
+-            }
+-            if(stream.fail()) {
+-                throw std::runtime_error("Failure reading /proc/self/maps");
++        // Cache /proc/self/maps parsing to avoid repeated expensive I/O and
++        // to reduce the likelihood of observing torn reads. The cache has a
++        // short TTL so changes to mappings will be picked up shortly.
++        struct map_entry { uintptr_t start; uintptr_t stop; int perms; };
++        static std::mutex maps_mutex;
++        static std::vector<map_entry> maps_cache;
++        static std::chrono::steady_clock::time_point last_load = std::chrono::steady_clock::time_point::min();
++        constexpr auto CACHE_TTL = std::chrono::milliseconds(500);
++
++        auto parse_maps = []() -> std::vector<map_entry> {
++            std::ifstream in("/proc/self/maps");
++            if(!in) {
++                throw std::runtime_error("Failed to open /proc/self/maps");
+             }
+-            if(page_addr >= start && page_addr < stop) {
+-                stream.ignore(1); // space
+-                char r, w, x; // there's a private/shared flag after these but we don't need it
+-                stream>>r>>w>>x;
+-                if(stream.fail() || stream.eof()) {
+-                    throw std::runtime_error("Failure reading /proc/self/maps");
++            std::vector<map_entry> out;
++            std::string line;
++            while(std::getline(in, line)) {
++                // Example line format:
++                // address           perms offset  dev   inode   pathname
++                // 00400000-0040b000 r-xp 00000000 fd:01 12345   /bin/cat
++                const char* s = line.c_str();
++                char* endptr = nullptr;
++                errno = 0;
++                unsigned long long a = std::strtoull(s, &endptr, 16);
++                if(endptr == s || *endptr != '-') {
++                    // malformed line, skip
++                    continue;
+                 }
+-                int perms = 0;
+-                if(r == 'r') {
+-                    perms |= PROT_READ;
++                unsigned long long b = std::strtoull(endptr + 1, &endptr, 16);
++                if(endptr == nullptr) {
++                    continue;
+                 }
+-                if(w == 'w') {
+-                    perms |= PROT_WRITE;
+-                }
+-                if(x == 'x') {
+-                    perms |= PROT_EXEC;
++                // move to permissions field (skip spaces)
++                const char* p = endptr;
++                while(*p && *p != ' ') ++p;
++                while(*p == ' ') ++p;
++                if(!*p) continue;
++                // perms are in the first 3 chars, e.g. "r-x"
++                char r = p[0];
++                char w = p[1];
++                char x = p[2];
++                int perms = 0;
++                if(r == 'r') perms |= PROT_READ;
++                if(w == 'w') perms |= PROT_WRITE;
++                if(x == 'x') perms |= PROT_EXEC;
++                out.push_back(map_entry{static_cast<uintptr_t>(a), static_cast<uintptr_t>(b), perms});
++            }
++            return out;
++        };
++
++        auto now = std::chrono::steady_clock::now();
++        uintptr_t page_addr = reinterpret_cast<uintptr_t>(page);
++
++        // Helper to search the provided map list
++        auto find_in_maps = [&](const std::vector<map_entry>& maps)->int {
++            for(const auto& m : maps) {
++                if(page_addr >= m.start && page_addr < m.stop) {
++                    return m.perms;
+                 }
+-                return perms;
+             }
+-            stream.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
++            return -1;
++        };
++
++        // Fast path: use cached maps if fresh
++        {
++            std::unique_lock<std::mutex> lock(maps_mutex);
++            if(!maps_cache.empty() && (now - last_load) <= CACHE_TTL) {
++                int perms = find_in_maps(maps_cache);
++                if(perms != -1) return perms;
++            }
+         }
++
++        // Refresh cache (may throw if /proc/self/maps cannot be read)
++        try {
++            auto new_maps = parse_maps();
++            std::unique_lock<std::mutex> lock(maps_mutex);
++            maps_cache.swap(new_maps);
++            last_load = std::chrono::steady_clock::now();
++            int perms = find_in_maps(maps_cache);
++            if(perms != -1) return perms;
++        } catch(const std::exception& e) {
++            // If we had a stale cache, fall back to it instead of failing
++            std::unique_lock<std::mutex> lock(maps_mutex);
++            if(!maps_cache.empty()) {
++                int perms = find_in_maps(maps_cache);
++                if(perms != -1) return perms;
++            }
++            throw; // rethrow the parse/open error
++        }
++
++        // As a last-ditch effort try one more immediate read to reduce races where
++        // /proc/self/maps changed during our earlier read.
++        try {
++            auto new_maps = parse_maps();
++            std::unique_lock<std::mutex> lock(maps_mutex);
++            maps_cache.swap(new_maps);
++            last_load = std::chrono::steady_clock::now();
++            int perms = find_in_maps(maps_cache);
++            if(perms != -1) return perms;
++        } catch(...) {
++            // ignore - we'll fall through to throwing below
++        }
++
+         throw std::runtime_error("Failed to find mapping with page in /proc/self/maps");
+     }
+     #endif

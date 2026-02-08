@@ -1,0 +1,54 @@
+commit 005b1b55529cb5a1c74c21f88be4553521f2782e
+Author: openhands <openhands@all-hands.dev>
+Date:   Wed Feb 4 17:16:49 2026 +0000
+
+    handle_dealloc_remote{,_slow}: use Remote's sizeclass information to avoid slab header reads
+
+diff --git a/src/mem/alloc.h b/src/mem/alloc.h
+index efaba52..fe983e3 100644
+--- a/src/mem/alloc.h
++++ b/src/mem/alloc.h
+@@ -875,11 +875,9 @@ namespace snmalloc
+ #endif
+       if (likely(super->get_kind() == Super))
+       {
+-        Slab* slab = Metaslab::get_slab(p);
+-        Metaslab& meta = super->get_meta(slab);
+         if (likely(super->get_allocator() == public_state()))
+         {
+-          small_dealloc_offseted(super, p, meta.sizeclass);
++          small_dealloc_offseted(super, p, p->sizeclass());
+           return;
+         }
+       }
+@@ -892,26 +890,24 @@ namespace snmalloc
+       if (likely(super->get_kind() == Medium))
+       {
+         Mediumslab* slab = Mediumslab::get(p);
++        sizeclass_t sizeclass = p->sizeclass();
+         if (likely(super->get_allocator() == public_state()))
+         {
+-          sizeclass_t sizeclass = slab->get_sizeclass();
+           void* start = remove_cache_friendly_offset(p, sizeclass);
+           medium_dealloc(slab, start, sizeclass);
+         }
+         else
+         {
+           // Queue for remote dealloc elsewhere.
+-          remote.dealloc(p->trunc_target_id(), p, slab->get_sizeclass());
++          remote.dealloc(p->trunc_target_id(), p, sizeclass);
+         }
+       }
+       else
+       {
+         SNMALLOC_ASSERT(likely(p->trunc_target_id() != get_trunc_id()));
+         SNMALLOC_ASSERT(likely(super->get_allocator() != public_state()));
+-        Slab* slab = Metaslab::get_slab(p);
+-        Metaslab& meta = super->get_meta(slab);
+-        // Queue for remote dealloc elsewhere.
+-        remote.dealloc(p->trunc_target_id(), p, meta.sizeclass);
++        // Queue for remote dealloc elsewhere.  Use sizeclass stored in Remote
++        remote.dealloc(p->trunc_target_id(), p, p->sizeclass());
+       }
+     }
+ 

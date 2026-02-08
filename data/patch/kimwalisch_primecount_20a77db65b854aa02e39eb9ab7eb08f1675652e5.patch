@@ -1,0 +1,27 @@
+diff --git a/include/Sieve.hpp b/include/Sieve.hpp
+index 014eb0f7..8a8170ac 100644
+--- a/include/Sieve.hpp
++++ b/include/Sieve.hpp
+@@ -212,15 +212,18 @@ private:
+       //
+       for (; i + 8 < stop_idx; i += 8)
+       {
+-        __m512i vec = _mm512_loadu_epi64(&sieve64[i]);
++        __m512i vec = _mm512_loadu_si512((const void*) &sieve64[i]);
+         vec = _mm512_popcnt_epi64(vec);
+         vcnt = _mm512_add_epi64(vcnt, vec);
+       }
+ 
+       __mmask8 mask = (__mmask8) _bzhi_u64(0xff, stop_idx - i);
+-      __m512i vec = _mm512_maskz_loadu_epi64(mask, &sieve64[i]);
+-      vec = _mm512_popcnt_epi64(vec);
+-      vcnt = _mm512_add_epi64(vcnt, vec);
++      if (mask)
++      {
++        __m512i vec = _mm512_maskz_loadu_epi64(mask, (const void*) &sieve64[i]);
++        vec = _mm512_popcnt_epi64(vec);
++        vcnt = _mm512_add_epi64(vcnt, vec);
++      }
+ 
+       cnt += _mm512_reduce_add_epi64(vcnt);
+       cnt += popcnt64(sieve64[stop_idx] & m2);

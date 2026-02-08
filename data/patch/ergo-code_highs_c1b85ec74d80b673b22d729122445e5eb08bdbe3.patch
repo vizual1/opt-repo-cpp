@@ -1,0 +1,13 @@
+diff --git a/highspy/highs_bindings.cpp b/highspy/highs_bindings.cpp
+index 5c64109ad..263db6113 100644
+--- a/highspy/highs_bindings.cpp
++++ b/highspy/highs_bindings.cpp
+@@ -835,7 +835,7 @@ PYBIND11_MODULE(highspy, m) {
+       .def("writeBasis", &Highs::writeBasis)
+       .def("postsolve", &highs_postsolve)
+       .def("postsolve", &highs_mipPostsolve)
+-      .def("run", &Highs::run)
++      .def("run", &Highs::run, py::call_guard<py::gil_scoped_release>())
+       .def("presolve", &Highs::presolve)
+       .def("writeSolution", &highs_writeSolution)
+       .def("readSolution", &Highs::readSolution)

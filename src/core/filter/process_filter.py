@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Optional
 
 class ProcessFilter:
+    """
+    The Process filters checks if the repository or commit can be build and run.
+    """
     def __init__(self, repo: Repository, config: Config, root: Optional[Path] = None, sha: str = ""):
         self.config = config
         self.repo = repo
@@ -87,9 +90,17 @@ class ProcessFilter:
         cpuset_cpus: str = ""
     ) -> Optional[StructureFilter]:
         structure = StructureFilter(self.repo, self.config, self.root, self.sha)
+
+        if not self.root:
+            logging.error(f"[{self.repo.full_name}] git project root: {self.root}")
+            return None
+
+        if not GitHandler().clone_repo(self.repo.full_name, self.root, sha=self.sha):
+            logging.error(f"[{self.repo.full_name}] git cloning failed")
+            return None
         
         logging.info(f"[{self.repo.full_name}:{self.sha}] Testing...")
-        if self.root and not structure.is_valid_commit(self.root, self.sha, docker_test_dir=self.config.testing.docker_test_dir):
+        if not structure.is_valid_commit(self.root, self.sha, docker_test_dir=self.config.testing.docker_test_dir):
             logging.error(f"[{self.repo.full_name}:{self.sha}] commit cmake and ctest failed")
             return None
 
@@ -99,12 +110,16 @@ class ProcessFilter:
             return None
         
         analyzer = process.analyzer
+        # parses all the possible testing flags defined under src/config/constants.py as VALID_TEST_FLAGS
         flags = FlagFilter(self.config.valid_test_flags, analyzer.extract_build_testing_flag()).get_valid_flags()
+        
+        # possible multiple enable_testing() defined in CMakeLists.txt
+        # here: just take enable_testing() closes to project root
         sorted_testing_path = self.sort_testing_path(analyzer.get_enable_testing_path())
         if len(sorted_testing_path) == 0:
             logging.error(f"[{self.repo.full_name}:{self.sha}] path to enable_testing() was not found in {self.root}: {sorted_testing_path}")
             return None
-
+        
         if len(sorted_testing_path) > 1:
             logging.warning(f"[{self.repo.full_name}:{self.sha}] multiple paths to enable_testing() was found in {self.root}. For testing: {sorted_testing_path[0]}")
 
@@ -117,15 +132,20 @@ class ProcessFilter:
             process.set_enable_testing(enable_testing_path)
             process.set_flags(flags)
             new = not docker_image
-            if self.config.testdocker or self.config.testdockerpatch:
+            if self.config.testdocker or self.config.testpatch:
                 process.set_docker(container_name, new)
                 process.docker.start_docker_container(container_name, cpuset_cpus)
                 process.container = process.docker.container
             else:
                 process.docker_image = self.config.docker_image
                 process.start_docker_image(container_name, new, cpuset_cpus)
+
+            if new and self.config.diff and not process.diff():
+                logging.error(f"[{self.repo.full_name}:{self.sha}] diff application to old (original) commit failed")
+                process.docker.stop_container(self.repo.full_name)
+                return None
             
-            if not process.check_build() and not process.build():
+            if not process.build():
                 logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} build failed")
                 process.docker.stop_container(self.repo.full_name)
                 return None

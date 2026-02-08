@@ -1,0 +1,30 @@
+diff --git a/hwy/profiler.cc b/hwy/profiler.cc
+index da0e2a80..e6dd9fff 100644
+--- a/hwy/profiler.cc
++++ b/hwy/profiler.cc
+@@ -113,8 +113,7 @@ Profiler::Profiler() {
+ 
+   InitThread();
+ 
+-  threads_ =
+-      MakeUniqueAlignedArray<profiler::ZoneSummarizer>(profiler::kMaxThreads);
++  // Use in-place `threads_` array from profiler.h; no allocation needed.
+   char cpu[100];
+   if (HWY_UNLIKELY(!platform::HaveTimerStop(cpu))) {
+     HWY_ABORT("CPU %s is too old for PROFILER_ENABLED=1, exiting", cpu);
+diff --git a/hwy/profiler.h b/hwy/profiler.h
+index dd540c73..10c301df 100644
+--- a/hwy/profiler.h
++++ b/hwy/profiler.h
+@@ -641,7 +641,10 @@ class Profiler {
+   // through `thread_local` pointers, but that is slow to read on x86. Because
+   // our `ThreadPool` anyway passes a `thread` argument, we can instead pass
+   // that through the `PROFILER_ZONE2/PROFILER_ZONE3` macros.
+-  hwy::AlignedUniquePtr<profiler::ZoneSummarizer[]> threads_;
++  // Allocate per-thread ZoneSummarizer in-line to avoid heap indirection and
++  // improve cache locality. Each ZoneSummarizer is 4 KB, so this totals at most
++  // kMaxThreads * 4 KB (about 1 MB) which is acceptable.
++  alignas(4096) profiler::ZoneSummarizer threads_[profiler::kMaxThreads];
+ 
+   std::atomic_flag run_active_ = ATOMIC_FLAG_INIT;
+ 

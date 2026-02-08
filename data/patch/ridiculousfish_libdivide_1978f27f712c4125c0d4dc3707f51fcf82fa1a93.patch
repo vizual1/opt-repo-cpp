@@ -1,0 +1,88 @@
+diff --git a/libdivide.h b/libdivide.h
+index 831adc9..334ec57 100644
+--- a/libdivide.h
++++ b/libdivide.h
+@@ -732,11 +732,11 @@ static LIBDIVIDE_INLINE struct libdivide_u16_t libdivide_internal_u16_gen(
+     return result;
+ }
+ 
+-struct libdivide_u16_t libdivide_u16_gen(uint16_t d) {
++static LIBDIVIDE_INLINE struct libdivide_u16_t libdivide_u16_gen(uint16_t d) {
+     return libdivide_internal_u16_gen(d, 0);
+ }
+ 
+-struct libdivide_u16_branchfree_t libdivide_u16_branchfree_gen(uint16_t d) {
++static LIBDIVIDE_INLINE struct libdivide_u16_branchfree_t libdivide_u16_branchfree_gen(uint16_t d) {
+     if (d == 1) {
+         LIBDIVIDE_ERROR("branchfree divider must be != 1");
+     }
+@@ -898,11 +898,11 @@ static LIBDIVIDE_INLINE struct libdivide_u32_t libdivide_internal_u32_gen(
+     return result;
+ }
+ 
+-struct libdivide_u32_t libdivide_u32_gen(uint32_t d) {
++static LIBDIVIDE_INLINE struct libdivide_u32_t libdivide_u32_gen(uint32_t d) {
+     return libdivide_internal_u32_gen(d, 0);
+ }
+ 
+-struct libdivide_u32_branchfree_t libdivide_u32_branchfree_gen(uint32_t d) {
++static LIBDIVIDE_INLINE struct libdivide_u32_branchfree_t libdivide_u32_branchfree_gen(uint32_t d) {
+     if (d == 1) {
+         LIBDIVIDE_ERROR("branchfree divider must be != 1");
+     }
+@@ -1058,11 +1058,11 @@ static LIBDIVIDE_INLINE struct libdivide_u64_t libdivide_internal_u64_gen(
+     return result;
+ }
+ 
+-struct libdivide_u64_t libdivide_u64_gen(uint64_t d) {
++static LIBDIVIDE_INLINE struct libdivide_u64_t libdivide_u64_gen(uint64_t d) {
+     return libdivide_internal_u64_gen(d, 0);
+ }
+ 
+-struct libdivide_u64_branchfree_t libdivide_u64_branchfree_gen(uint64_t d) {
++static LIBDIVIDE_INLINE struct libdivide_u64_branchfree_t libdivide_u64_branchfree_gen(uint64_t d) {
+     if (d == 1) {
+         LIBDIVIDE_ERROR("branchfree divider must be != 1");
+     }
+@@ -1243,11 +1243,11 @@ static LIBDIVIDE_INLINE struct libdivide_s16_t libdivide_internal_s16_gen(
+     return result;
+ }
+ 
+-struct libdivide_s16_t libdivide_s16_gen(int16_t d) {
++static LIBDIVIDE_INLINE struct libdivide_s16_t libdivide_s16_gen(int16_t d) {
+     return libdivide_internal_s16_gen(d, 0);
+ }
+ 
+-struct libdivide_s16_branchfree_t libdivide_s16_branchfree_gen(int16_t d) {
++static LIBDIVIDE_INLINE struct libdivide_s16_branchfree_t libdivide_s16_branchfree_gen(int16_t d) {
+     struct libdivide_s16_t tmp = libdivide_internal_s16_gen(d, 1);
+     struct libdivide_s16_branchfree_t result = {tmp.magic, tmp.more};
+     return result;
+@@ -1418,11 +1418,11 @@ static LIBDIVIDE_INLINE struct libdivide_s32_t libdivide_internal_s32_gen(
+     return result;
+ }
+ 
+-struct libdivide_s32_t libdivide_s32_gen(int32_t d) {
++static LIBDIVIDE_INLINE struct libdivide_s32_t libdivide_s32_gen(int32_t d) {
+     return libdivide_internal_s32_gen(d, 0);
+ }
+ 
+-struct libdivide_s32_branchfree_t libdivide_s32_branchfree_gen(int32_t d) {
++static LIBDIVIDE_INLINE struct libdivide_s32_branchfree_t libdivide_s32_branchfree_gen(int32_t d) {
+     struct libdivide_s32_t tmp = libdivide_internal_s32_gen(d, 1);
+     struct libdivide_s32_branchfree_t result = {tmp.magic, tmp.more};
+     return result;
+@@ -1587,11 +1587,11 @@ static LIBDIVIDE_INLINE struct libdivide_s64_t libdivide_internal_s64_gen(
+     return result;
+ }
+ 
+-struct libdivide_s64_t libdivide_s64_gen(int64_t d) {
++static LIBDIVIDE_INLINE struct libdivide_s64_t libdivide_s64_gen(int64_t d) {
+     return libdivide_internal_s64_gen(d, 0);
+ }
+ 
+-struct libdivide_s64_branchfree_t libdivide_s64_branchfree_gen(int64_t d) {
++static LIBDIVIDE_INLINE struct libdivide_s64_branchfree_t libdivide_s64_branchfree_gen(int64_t d) {
+     struct libdivide_s64_t tmp = libdivide_internal_s64_gen(d, 1);
+     struct libdivide_s64_branchfree_t ret = {tmp.magic, tmp.more};
+     return ret;

@@ -1,0 +1,16 @@
+diff --git a/core/src/aztec/AZDetector.cpp b/core/src/aztec/AZDetector.cpp
+index e3ac7ea4..73f483e3 100644
+--- a/core/src/aztec/AZDetector.cpp
++++ b/core/src/aztec/AZDetector.cpp
+@@ -37,9 +37,9 @@ static bool IsAztectCenterPattern(const PatternView& view)
+ 			m = v;
+ 		else if (v > M)
+ 			M = v;
+-		if (M > m * 4 / 3)
+-			return false;
+ 	}
++	if (M > m * 4 / 3)
++		return false;
+ 	return view[-1] >= view[Size(view) / 2] - 2 && view[Size(view)] >= view[Size(view) / 2] - 2;
+ };
+ 

@@ -1,0 +1,12 @@
+diff --git a/include/xsimd/arch/xsimd_avx512f.hpp b/include/xsimd/arch/xsimd_avx512f.hpp
+index c2b485a..b3e53fb 100644
+--- a/include/xsimd/arch/xsimd_avx512f.hpp
++++ b/include/xsimd/arch/xsimd_avx512f.hpp
+@@ -15,6 +15,7 @@
+ #include <complex>
+ #include <limits>
+ #include <type_traits>
++#include <immintrin.h>
+ 
+ #include "../types/xsimd_avx512f_register.hpp"
+ 

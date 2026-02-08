@@ -1,0 +1,91 @@
+diff --git a/src/presolve/HPresolve.cpp b/src/presolve/HPresolve.cpp
+index 8263f83c5..67e50fa72 100644
+--- a/src/presolve/HPresolve.cpp
++++ b/src/presolve/HPresolve.cpp
+@@ -4323,15 +4323,33 @@ HPresolve::Result HPresolve::removeDependentEquations(
+   factor.setup(matrix, colSet);
+   // Set up a time limit to prevent the redundant rows factorization
+   // taking forever.
+-  //
+-  // ToDo: This is strictly non-deterministic, but so conservative
+-  // that it'll only reap the cases when factor.build never finishes
+-  const double time_limit = std::max(10.0, options->time_limit / 1000);
++  // Use the remaining presolve time (if available) and cap the factor
++  // time so that factorization does not stall presolve. If no timer is
++  // available, fall back to a conservative cap. Treat non-positive
++  // options->time_limit as 'no limit'.
++  double remaining_time;
++  if (options->time_limit <= 0 || options->time_limit >= kHighsInf)
++    remaining_time = kHighsInf;
++  else
++    remaining_time = options->time_limit;
++  if (timer) remaining_time -= timer->readRunHighsClock();
++
++  // If no time remains, set a zero limit so build returns immediately.
++  double time_limit = 0.0;
++  if (remaining_time > 0.0) time_limit = std::min(remaining_time, 10.0);
+   factor.setTimeLimit(time_limit);
+   // Determine rank deficiency of the equations
+   HighsInt rank_deficiency = factor.build();
+-  // Must not have timed out
+-  assert(rank_deficiency >= 0);
++  // If the factorization timed out, skip removing dependent equations to
++  // avoid excessive runtime and continue presolve. The factor build returns
++  // kBuildKernelReturnTimeout (<0) in that case.
++  if (rank_deficiency == kBuildKernelReturnTimeout) {
++    highsLogDev(options->log_options, HighsLogType::kInfo,
++                "HPresolve::removeDependentEquations factorization timed out - "
++                "skipping removal of dependent equations\n");
++    if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDependentEquations);
++    return Result::kOk;
++  }
+   // Analyse what's been removed
+   HighsInt num_removed_row = 0;
+   HighsInt num_removed_nz = 0;
+@@ -4418,9 +4436,24 @@ HPresolve::Result HPresolve::removeDependentFreeCols(
+   std::iota(colSet.begin(), colSet.end(), 0);
+   HFactor factor;
+   factor.setup(matrix, colSet);
++  double remaining_time_fc;
++  if (options->time_limit <= 0 || options->time_limit >= kHighsInf)
++    remaining_time_fc = kHighsInf;
++  else
++    remaining_time_fc = options->time_limit;
++  if (timer) remaining_time_fc -= timer->readRunHighsClock();
++  double time_limit_fc = 0.0;
++  if (remaining_time_fc > 0.0) time_limit_fc = std::min(remaining_time_fc, 10.0);
++  factor.setTimeLimit(time_limit_fc);
+   HighsInt rank_deficiency = factor.build();
+-  // Must not have timed out
+-  assert(rank_deficiency >= 0);
++  // If the factorization timed out, skip removing dependent free columns
++  if (rank_deficiency == kBuildKernelReturnTimeout) {
++    highsLogDev(options->log_options, HighsLogType::kInfo,
++                "HPresolve::removeDependentFreeCols factorization timed out - "
++                "skipping removal of dependent free columns\n");
++    if (logging_on) analysis_.stopPresolveRuleLog(kPresolveRuleDependentFreeCols);
++    return Result::kOk;
++  }
+   // Analyse what's been removed
+   HighsInt num_removed_row = 0;
+   HighsInt num_removed_nz = 0;
+diff --git a/src/util/HFactor.cpp b/src/util/HFactor.cpp
+index 6f7e7a1a9..0de79f021 100644
+--- a/src/util/HFactor.cpp
++++ b/src/util/HFactor.cpp
+@@ -363,6 +363,15 @@ HighsInt HFactor::build(HighsTimerClock* factor_timer_clock_pointer) {
+   build_timer_ = &build_timer;
+   build_timer.startRunHighsClock();
+ 
++  // If a zero time limit was set we should avoid doing any heavy work and
++  // return quickly with a timeout status so callers can skip expensive
++  // factorization steps.
++  if (time_limit_ == 0.0) {
++    highsLogDev(log_options, HighsLogType::kInfo,
++                "HFactor::build time_limit_ == 0 -> immediate timeout\n");
++    return kBuildKernelReturnTimeout;
++  }
++
+   const bool report_lu = false;
+   // Ensure that the A matrix is valid for factorization
+   assert(this->a_matrix_valid);

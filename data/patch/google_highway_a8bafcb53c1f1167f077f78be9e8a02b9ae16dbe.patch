@@ -1,0 +1,119 @@
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index d909670a..7d6e7ba6 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -575,52 +575,78 @@ HWY_NOINLINE void ScanMinMax(D d, Traits st, const T* HWY_RESTRICT keys,
+ 
+ template <class D, class Traits, typename T>
+ HWY_INLINE bool ScanEqual(D d, Traits st, const T* HWY_RESTRICT keys,
+-                          size_t num) {
++                          size_t num, size_t* first_diff_out) {
+   using V = Vec<decltype(d)>;
+   const size_t N = Lanes(d);
+   HWY_DASSERT(num >= N);  // See HandleSpecialCases
+   const V reference = st.SetKey(d, keys);
+   const V zero = Zero(d);
+-  // Sticky bits registering any difference between `keys` and the first key.
+-  // We use vector XOR because it may be cheaper than comparisons, especially
+-  // for 128-bit. 2x unrolled for more ILP.
+-  V diff0 = zero;
+-  V diff1 = zero;
++
++  // Align pointer to vector boundary to allow aligned loads for the bulk loop.
++  const uintptr_t addr = reinterpret_cast<uintptr_t>(keys) / sizeof(T);
++  const size_t misalign = addr & (N - 1);
++  size_t i = 0;
++
++  if (misalign != 0) {
++    // Handle the initial unaligned vector.
++    const V v = LoadU(d, keys);
++    if (!AllTrue(d, Eq(Xor(v, reference), zero))) {
++      if (first_diff_out) *first_diff_out = 0;
++      return false;
++    }
++    i += N - misalign;
++  }
+ 
+   // We want to stop once a difference has been found, but without slowing down
+   // the loop by comparing during each iteration. The compromise is to compare
+   // after a 'group', which consists of kLoops times two vectors.
+   constexpr size_t kLoops = 4;
+   const size_t lanes_per_group = kLoops * 2 * N;
+-  size_t i = 0;
++
+   for (; i + lanes_per_group <= num; i += lanes_per_group) {
++    V diff0 = zero;
++    V diff1 = zero;
++    // Use aligned loads for the bulk of the data.
+     for (size_t loop = 0; loop < kLoops; ++loop) {
+-      const V v0 = LoadU(d, keys + i + loop * 2 * N);
+-      const V v1 = LoadU(d, keys + i + loop * 2 * N + N);
+-      // TODO(janwas): ternlog
++      const V v0 = Load(d, keys + i + loop * 2 * N);
++      const V v1 = Load(d, keys + i + loop * 2 * N + N);
+       diff0 = Or(diff0, Xor(v0, reference));
+       diff1 = Or(diff1, Xor(v1, reference));
+     }
+-    diff0 = Or(diff0, diff1);
+-    if (!AllTrue(d, Eq(diff0, zero))) {
+-      return false;
++    const V merged = Or(diff0, diff1);
++    if (!AllTrue(d, Eq(merged, zero))) {
++      // Find the first differing vector within this group.
++      for (size_t loop = 0; loop < kLoops; ++loop) {
++        const size_t idx0 = i + loop * 2 * N;
++        const V vv0 = Load(d, keys + idx0);
++        if (!AllTrue(d, Eq(Xor(vv0, reference), zero))) {
++          if (first_diff_out) *first_diff_out = idx0;
++          return false;
++        }
++        const size_t idx1 = idx0 + N;
++        const V vv1 = Load(d, keys + idx1);
++        if (!AllTrue(d, Eq(Xor(vv1, reference), zero))) {
++          if (first_diff_out) *first_diff_out = idx1;
++          return false;
++        }
++      }
+     }
+   }
++
+   // Whole vectors, no unrolling
+   for (; i + N <= num; i += N) {
+-    const V v0 = LoadU(d, keys + i);
+-    // TODO(janwas): ternlog
+-    diff0 = Or(diff0, Xor(v0, reference));
+-    if (!AllTrue(d, Eq(diff0, zero))) {
++    const V v0 = Load(d, keys + i);
++    if (!AllTrue(d, Eq(Xor(v0, reference), zero))) {
++      if (first_diff_out) *first_diff_out = i;
+       return false;
+     }
+   }
++
+   // If there are remainders, re-check the last whole vector.
+   if (HWY_LIKELY(i != num)) {
+-    const V v0 = LoadU(d, keys + num - N);
+-    // TODO(janwas): ternlog
+-    diff0 = Or(diff0, Xor(v0, reference));
+-    if (!AllTrue(d, Eq(diff0, zero))) {
++    const V v0 = Load(d, keys + num - N);
++    if (!AllTrue(d, Eq(Xor(v0, reference), zero))) {
++      if (first_diff_out) *first_diff_out = num - N;
+       return false;
+     }
+   }
+@@ -628,6 +654,14 @@ HWY_INLINE bool ScanEqual(D d, Traits st, const T* HWY_RESTRICT keys,
+   return true;
+ }
+ 
++// Backwards-compatible overload: previously ScanEqual had no output parameter.
++// Calls the new variant with a null pointer for first_diff_out.
++template <class D, class Traits, typename T>
++HWY_INLINE bool ScanEqual(D d, Traits st, const T* HWY_RESTRICT keys,
++                          size_t num) {
++  return ScanEqual(d, st, keys, num, /*first_diff_out=*/nullptr);
++}
++
+ // Returns key prior to reference in sort order.
+ template <class D, class Traits, typename T>
+ HWY_INLINE Vec<D> ScanForPrev(D d, Traits st, const T* HWY_RESTRICT keys,

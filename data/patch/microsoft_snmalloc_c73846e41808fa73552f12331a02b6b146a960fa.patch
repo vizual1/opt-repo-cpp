@@ -1,0 +1,55 @@
+diff --git a/src/override/memcpy.cc b/src/override/memcpy.cc
+index 9d96eba..f18033d 100644
+--- a/src/override/memcpy.cc
++++ b/src/override/memcpy.cc
+@@ -107,12 +107,48 @@ namespace
+       check_bounds<CheckDirection::Read>(
+         src, len, "memcpy with source out of bounds of heap allocation");
+     }
+-    // If this is a small size, do byte-by-byte copies.
++    // If this is a small size, copy using a sequence of power-of-two sized
++    // loads and stores.  This reduces the number of memory operations compared
++    // with byte-by-byte copying and lets the compiler emit wide moves for
++    // supported sizes.
+     if (len < LargestRegisterSize)
+     {
+-      block_copy<1>(dst, src, len);
++      size_t i = 0;
++#if LargestRegisterSize >= 32
++      for (; (i + 32) <= len; i += 32)
++      {
++        copy_one<32>(pointer_offset(dst, i), pointer_offset(src, i));
++      }
++#endif
++#if LargestRegisterSize >= 16
++      for (; (i + 16) <= len; i += 16)
++      {
++        copy_one<16>(pointer_offset(dst, i), pointer_offset(src, i));
++      }
++#endif
++      for (; (i + 8) <= len; i += 8)
++      {
++        copy_one<8>(pointer_offset(dst, i), pointer_offset(src, i));
++      }
++      for (; (i + 4) <= len; i += 4)
++      {
++        copy_one<4>(pointer_offset(dst, i), pointer_offset(src, i));
++      }
++      for (; (i + 2) <= len; i += 2)
++      {
++        copy_one<2>(pointer_offset(dst, i), pointer_offset(src, i));
++      }
++      for (; (i + 1) <= len; i += 1)
++      {
++        copy_one<1>(pointer_offset(dst, i), pointer_offset(src, i));
++      }
+       return dst;
+     }
++
++    // For larger sizes use the largest register size to copy wide chunks and
++    // then perform an overlapping copy for the tail.  This keeps behaviour
++    // compatible with the previous implementation while benefiting from the
++    // wide-load optimisations for the bulk of the copy.
+     block_copy<LargestRegisterSize>(dst, src, len);
+     copy_end<LargestRegisterSize>(dst, src, len);
+     return dst;

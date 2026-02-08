@@ -24,7 +24,6 @@ class DockerTester:
         self,
         new_sha: str,
         old_sha: str,
-        pr_shas: list[str],
         new_path: Path,
         old_path: Path,
         cpuset_cpus: str = ""
@@ -108,7 +107,7 @@ class DockerTester:
 
             commit = self.repo.get_commit(new_sha)
             results = test.create_test_log(
-                commit, self.repo, old_sha, new_sha, pr_shas,
+                commit, self.repo, old_sha, new_sha,
                 old_times, new_times, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd,
             )
             logging.info(f"Results: {results['performance_analysis']}")
@@ -145,15 +144,11 @@ class DockerTester:
         old_times = []
 
         try:
-            if self.config.testdocker or self.config.testdockerpatch:
-                # tests existing docker image
-                local_image = image(self.repo_id, new_sha)
-                if not image_exists(self.repo_id, new_sha):
-                    container_name = f"{self.config.dockerhub_user}/{self.config.dockerhub_repo}:{local_image}"
-                else:
-                    container_name = local_image
-            else:
-                container_name = new_sha
+            local_image = image(self.repo_id, new_sha)
+            container_name = local_image
+            if (self.config.testdocker or self.config.testpatch) and not image_exists(self.repo_id, new_sha) and self.config.check_dockerhub:
+                container_name = f"{self.config.dockerhub_user}/{self.config.dockerhub_repo}:{local_image}"
+
             new_structure = new_pf.commit_setup_and_build("New", container_name=container_name, cpuset_cpus=cpuset_cpus)
             docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
             

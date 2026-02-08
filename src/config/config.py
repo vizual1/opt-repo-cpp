@@ -18,7 +18,8 @@ class Config:
     genimages: bool = False
     pushimages: bool = False
     testdocker: bool = False
-    testdockerpatch: bool = False
+    patch: bool = False
+    testpatch: bool = False
     
     # Limits and filters
     limit: int = 10 # indicates the number of repositories collected from github before stopping
@@ -29,13 +30,14 @@ class Config:
     input: str = ""
     output: str = ""
     repo: str = ""
-    genforce: bool = True # --genimages
+    genforce: bool = False # --genimages
 
     # File paths
     repo_id: str = field(init=False)
     input_file: str = field(init=False)
     output_file: str = field(init=False)
     output_fail: str = "data/fail.txt"
+    prompt: str = ""
     
     # Commit SHAs
     sha: str = ""
@@ -43,15 +45,16 @@ class Config:
     # Docker settings
     docker: str = ""
     docker_image: str = field(init=False)
-    analyze: bool = False
+    mount: str = ""
+    diff: str = ""
     tar: bool = False
 
     # Dockerhub settings
-    check_dockerhub: bool = True # checks if the image is already uploaded to dockerhub
+    check_dockerhub: bool = False # checks if the image is already uploaded to dockerhub
     dockerhub_user: str = field(init=False) # export DOCKERHUB_USER=...
     dockerhub_repo: str = field(init=False) # export DOCKERHUB_REPO=...
     dockerhub_containers: list[str] = field(init=False)
-    dockerhub_force: bool = True # forces docker push to dockerhub via --pushimages
+    dockerhub_force: bool = False # forces docker push to dockerhub via --pushimages
     
     # Configuration sections
     llm: LLMSettings = field(default_factory=LLMSettings)
@@ -71,7 +74,6 @@ class Config:
     min_exec_time_improvement: float = 0.05
     min_p_value: float = 0.05
     overall_decline_limit: float = -0.01
-    mannwhitney_improvement: float = 0.3
     max_test_time: int = 600 # in seconds
     min_stars: int = 20
     
@@ -87,8 +89,8 @@ class Config:
         self.docker_image = self.docker
         if self.testcollect:
             self.resources = ResourceSettingsCrawl()
-        self.dockerhub_user, self.dockerhub_repo = check_dockerhub()
         if self.check_dockerhub:
+            self.dockerhub_user, self.dockerhub_repo = check_dockerhub()
             self.dockerhub_containers = dockerhub_containers(self.dockerhub_user, self.dockerhub_repo)
         self._validate()
         self._setup_github()

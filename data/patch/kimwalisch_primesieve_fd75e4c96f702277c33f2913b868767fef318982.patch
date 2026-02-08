@@ -1,0 +1,51 @@
+diff --git a/src/PrimeGenerator.cpp b/src/PrimeGenerator.cpp
+index 7e4e89d2..90e53603 100644
+--- a/src/PrimeGenerator.cpp
++++ b/src/PrimeGenerator.cpp
+@@ -25,6 +25,7 @@
+ #include <array>
+ #include <cassert>
+ #include <vector>
++#include <cstring>
+ 
+ using std::size_t;
+ 
+@@ -262,9 +263,20 @@ void PrimeGenerator::fill(std::vector<uint64_t>& primes)
+ {
+   while (sieveSegment(primes))
+   {
++    auto fast_le_cast = [](const uint8_t* p)->uint64_t {
++      static const bool little = [](){ union { int i; char c[sizeof(int)]; } x; x.i = 1; return x.c[0] == 1; }();
++      if (little)
++      {
++        uint64_t v;
++        std::memcpy(&v, p, sizeof(v));
++        return v;
++      }
++      return littleendian_cast<uint64_t>(p);
++    };
++
+     while (sieveIdx_ < sieveSize_)
+     {
+-      uint64_t bits = littleendian_cast<uint64_t>(&sieve_[sieveIdx_]);
++      uint64_t bits = fast_le_cast(&sieve_[sieveIdx_]);
+ 
+       for (; bits != 0; bits &= bits - 1)
+         primes.push_back(nextPrime(bits, low_));
+@@ -307,7 +319,15 @@ void PrimeGenerator::fill(std::vector<uint64_t>& primes,
+     // not enough space for 64 more primes.
+     do
+     {
+-      uint64_t bits = littleendian_cast<uint64_t>(&sieve[sieveIdx]);
++      uint64_t bits;
++      if (is_littleendian())
++      {
++        std::memcpy(&bits, &sieve[sieveIdx], sizeof(bits));
++      }
++      else
++      {
++        bits = littleendian_cast<uint64_t>(&sieve[sieveIdx]);
++      }
+ 
+       for (; bits != 0; bits &= bits - 1)
+         primes[i++] = nextPrime(bits, low);

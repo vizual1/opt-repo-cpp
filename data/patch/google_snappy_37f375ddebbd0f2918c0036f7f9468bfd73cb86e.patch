@@ -1,0 +1,37 @@
+diff --git a/snappy.cc b/snappy.cc
+index c830fb9..be3a05b 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -79,6 +79,14 @@
+ #include <utility>
+ #include <vector>
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#define SNAPPY_PREFETCH_READ(ptr) __builtin_prefetch((const void*)(ptr), 0, 3)
++#define SNAPPY_PREFETCH_WRITE(ptr) __builtin_prefetch((const void*)(ptr), 1, 3)
++#else
++#define SNAPPY_PREFETCH_READ(ptr) ((void)0)
++#define SNAPPY_PREFETCH_WRITE(ptr) ((void)0)
++#endif
++
+ namespace snappy {
+ 
+ namespace {
+@@ -1233,6 +1241,8 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(
+           // Due to the spurious offset in literals have this will trigger
+           // at the start of a block when op is still smaller than 256.
+           if (tag_type != 0) goto break_loop;
++          SNAPPY_PREFETCH_READ(old_ip + 64);
++          SNAPPY_PREFETCH_WRITE(op_base + op + 64);
+           MemCopy64(op_base + op, old_ip, len);
+           op += len;
+           continue;
+@@ -1242,6 +1252,8 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(
+         // we need to copy from ip instead of from the stream.
+         const void* from =
+             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;
++        SNAPPY_PREFETCH_READ(reinterpret_cast<const char*>(from) + 64);
++        SNAPPY_PREFETCH_WRITE(op_base + op + 64);
+         MemCopy64(op_base + op, from, len);
+         op += len;
+       }

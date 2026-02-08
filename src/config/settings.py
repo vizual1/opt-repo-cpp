@@ -9,11 +9,11 @@ class LLMSettings:
     api_key: str = field(default_factory=lambda: os.getenv('api_key', ''))
     base: bool = True
     base_url: str = "https://openrouter.ai/api/v1"
-    model1: str = "openai/gpt-4.1-nano"
-    model2: str = "openai/gpt-oss-20b:free"
+    model1: str = "openai/gpt-5-mini"
+    model2: str = "openai/gpt-5-mini"
     
     # Ollama settings
-    ollama_enabled: bool = True
+    ollama_enabled: bool = False
     ollama_url: str = "http://127.0.0.1:11434/api/generate"
     ollama_stage1_model: str = "qwen2.5:7b"
     ollama_diff_model: str = "qwen2.5-coder:7b"
@@ -24,6 +24,11 @@ class LLMSettings:
     commit_message_only: bool = False
     issue_only: bool = False
     with_diff: bool = True
+
+    # OpenHands settings
+    sandbox_base_container_image: str = "ghcr.io/openhands/runtime:oh_v1.3.0_odjrubqcfxjb4y1s_kxyxnblfp0d1rp6p"
+    openhands_model: str = "docker.openhands.dev/openhands/openhands:1.3" 
+    docker_socket: str = "/var/run/docker-tho/docker.sock" #"/var/run/docker.sock"
     
     cache_file: Path = field(default_factory=lambda: Path("cache/commit.json"))
 
@@ -49,7 +54,7 @@ class ResourceSettings:
     cpu_quota: int = 200000
     cpu_period: int = 100000
     jobs: int = 1
-    max_parallel_jobs: int = 1 # tests multiple test commits at the same time
+    max_parallel_jobs: int = 8 # tests multiple test commits at the same time
     
 @dataclass
 class ResourceSettingsCrawl(ResourceSettings):

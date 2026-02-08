@@ -1,0 +1,30 @@
+diff --git a/src/ds/address.h b/src/ds/address.h
+index 49c9b98..9b5c7ad 100644
+--- a/src/ds/address.h
++++ b/src/ds/address.h
+@@ -66,8 +66,12 @@ namespace snmalloc
+     static_assert(alignment > 0);
+     static_assert(bits::next_pow2_const(alignment) == alignment);
+ #if __has_builtin(__builtin_align_down)
++    if constexpr (alignment == 1)
++      return static_cast<T*>(p);
+     return static_cast<T*>(__builtin_align_down(p, alignment));
+ #else
++    if constexpr (alignment == 1)
++      return static_cast<T*>(p);
+     return pointer_cast<T>(bits::align_down(address_cast(p), alignment));
+ #endif
+   }
+diff --git a/src/mem/allocconfig.h b/src/mem/allocconfig.h
+index f9cf0e9..2e9bb6d 100644
+--- a/src/mem/allocconfig.h
++++ b/src/mem/allocconfig.h
+@@ -35,7 +35,7 @@ namespace snmalloc
+ #ifdef USE_REMOTE_BATCH
+     REMOTE_BATCH
+ #else
+-    64
++    4096
+ #endif
+     ;
+ 

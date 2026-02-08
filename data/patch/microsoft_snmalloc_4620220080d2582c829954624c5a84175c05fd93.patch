@@ -1,0 +1,167 @@
+diff --git a/src/snmalloc/backend_helpers/buddy.h b/src/snmalloc/backend_helpers/buddy.h
+index d7cfd17..f0c7e0e 100644
+--- a/src/snmalloc/backend_helpers/buddy.h
++++ b/src/snmalloc/backend_helpers/buddy.h
+@@ -63,50 +63,56 @@ namespace snmalloc
+      */
+     typename Rep::Contents add_block(typename Rep::Contents addr, size_t size)
+     {
+-      auto idx = to_index(size);
+-      empty_at_or_above = bits::max(empty_at_or_above, idx + 1);
++      // Iterative version to avoid recursive calls during consolidation which
++      // can be hot at startup.
++      for (;;)
++      {
++        auto idx = to_index(size);
++        empty_at_or_above = bits::max(empty_at_or_above, idx + 1);
+ 
+-      validate_block(addr, size);
++        validate_block(addr, size);
+ 
+-      auto buddy = Rep::buddy(addr, size);
++        auto buddy = Rep::buddy(addr, size);
+ 
+-      auto path = trees[idx].get_root_path();
+-      bool contains_buddy = trees[idx].find(path, buddy);
++        auto path = trees[idx].get_root_path();
++        bool contains_buddy = trees[idx].find(path, buddy);
+ 
+-      if (contains_buddy)
+-      {
+-        // Only check if we can consolidate after we know the buddy is in
+-        // the buddy allocator.  This is required to prevent possible segfaults
+-        // from looking at the buddies meta-data, which we only know exists
+-        // once we have found it in the red-black tree.
+-        if (Rep::can_consolidate(addr, size))
++        if (contains_buddy)
+         {
+-          trees[idx].remove_path(path);
+-
+-          // Add to next level cache
+-          size *= 2;
+-          addr = Rep::align_down(addr, size);
+-          if (size == bits::one_at_bit(MAX_SIZE_BITS))
++          // Only check if we can consolidate after we know the buddy is in
++          // the buddy allocator.  This is required to prevent possible segfaults
++          // from looking at the buddies meta-data, which we only know exists
++          // once we have found it in the red-black tree.
++          if (Rep::can_consolidate(addr, size))
+           {
+-            // Invariant should be checked on all non-tail return paths.
+-            // Holds trivially here with current design.
+-            invariant();
+-            // Too big for this buddy allocator.
+-            return addr;
++            trees[idx].remove_path(path);
++
++            // Add to next level cache
++            size *= 2;
++            addr = Rep::align_down(addr, size);
++            if (size == bits::one_at_bit(MAX_SIZE_BITS))
++            {
++              // Invariant should be checked on all non-tail return paths.
++              // Holds trivially here with current design.
++              invariant();
++              // Too big for this buddy allocator.
++              return addr;
++            }
++
++            // Continue consolidating at the next level without recursion.
++            continue;
+           }
+-          return add_block(addr, size);
++
++          // Re-traverse as the path was to the buddy,
++          // but the representation says we cannot combine.
++          // We must find the correct place for this element.
++          trees[idx].find(path, addr);
+         }
+ 
+-        // Re-traverse as the path was to the buddy,
+-        // but the representation says we cannot combine.
+-        // We must find the correct place for this element.
+-        // Something clever could be done here, but it's not worth it.
+-        //        path = trees[idx].get_root_path();
+-        trees[idx].find(path, addr);
++        trees[idx].insert_path(path, addr);
++        invariant();
++        return Rep::null;
+       }
+-      trees[idx].insert_path(path, addr);
+-      invariant();
+-      return Rep::null;
+     }
+ 
+     /**
+diff --git a/src/snmalloc/ds/pagemap.h b/src/snmalloc/ds/pagemap.h
+index abfc539..8f584ca 100644
+--- a/src/snmalloc/ds/pagemap.h
++++ b/src/snmalloc/ds/pagemap.h
+@@ -55,7 +55,7 @@ namespace snmalloc
+     /**
+      * Ensure this range of pagemap is accessible
+      */
+-    void register_range(address_t p, size_t length)
++    inline void register_range(address_t p, size_t length)
+     {
+       SNMALLOC_ASSERT(is_initialised());
+ 
+@@ -63,11 +63,15 @@ namespace snmalloc
+       auto first = &body[p >> SHIFT];
+       auto last = &body[(p + length + bits::one_at_bit(SHIFT) - 1) >> SHIFT];
+ 
+-      // Commit OS pages associated to the range.
++      // Commit OS pages associated to the range.  Avoid making the OS call if
++      // the computed range covers no pages.
+       auto page_start = pointer_align_down<OS_PAGE_SIZE, char>(first);
+       auto page_end = pointer_align_up<OS_PAGE_SIZE, char>(last);
+       size_t using_size = pointer_diff(page_start, page_end);
+-      PAL::template notify_using<NoZero>(page_start, using_size);
++      if (using_size != 0)
++      {
++        PAL::template notify_using<NoZero>(page_start, using_size);
++      }
+     }
+ 
+     constexpr FlatPagemap() = default;
+diff --git a/src/snmalloc/pal/pal_consts.h b/src/snmalloc/pal/pal_consts.h
+index 83aa52e..6ed87f5 100644
+--- a/src/snmalloc/pal/pal_consts.h
++++ b/src/snmalloc/pal/pal_consts.h
+@@ -83,5 +83,5 @@ namespace snmalloc
+    * Query whether the PAL supports a specific feature.
+    */
+   template<PalFeatures F, typename PAL>
+-  static constexpr bool pal_supports = (PAL::pal_features & F) == F;
++  inline constexpr bool pal_supports = (PAL::pal_features & F) == F;
+ } // namespace snmalloc
+diff --git a/src/snmalloc/pal/pal_freebsd.h b/src/snmalloc/pal/pal_freebsd.h
+index 86a6576..846cf39 100644
+--- a/src/snmalloc/pal/pal_freebsd.h
++++ b/src/snmalloc/pal/pal_freebsd.h
+@@ -98,7 +98,9 @@ namespace snmalloc
+     static void notify_using_readonly(void* p, size_t size) noexcept
+     {
+       PALBSD_Aligned<PALFreeBSD>::notify_using_readonly(p, size);
+-      madvise(p, size, MADV_NOCORE);
++      /* Avoid calling madvise(MADV_NOCORE) during bulk reserve operations;
++       * only pagemap-related code should manage dumpability during startup. */
++      (void)p; (void)size;
+     }
+ 
+     /**
+diff --git a/src/snmalloc/pal/pal_linux.h b/src/snmalloc/pal/pal_linux.h
+index 6f131b0..83399ae 100644
+--- a/src/snmalloc/pal/pal_linux.h
++++ b/src/snmalloc/pal/pal_linux.h
+@@ -58,7 +58,9 @@ namespace snmalloc
+       void* p = PALPOSIX<PALLinux>::reserve(size);
+       if (p)
+       {
+-        madvise(p, size, MADV_DONTDUMP);
++        /* Avoid changing dumpability here; only pagemap should most use
++         * MADV_DONTDUMP. */
++        (void)0;
+ #  ifdef SNMALLOC_PAGEID
+ #    ifndef PR_SET_VMA
+ #      define PR_SET_VMA 0x53564d41

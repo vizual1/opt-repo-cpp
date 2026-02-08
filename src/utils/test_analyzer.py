@@ -121,7 +121,7 @@ class TestAnalyzer:
     ) -> bool:
         p_mwu = self.get_mannwhitney_pvalue(old_times, new_times)
         delta  = self.relative_improvement(old_times, new_times)
-        return bool(p_mwu < self.min_p_value) and bool(delta > self.config.mannwhitney_improvement) #min_exec_time_improvement)
+        return bool(p_mwu < self.min_p_value) and bool(delta > self.config.min_exec_time_improvement)
     
     def get_binom_improvement_p_value(
         self,
@@ -180,7 +180,7 @@ class TestAnalyzer:
         logging.debug(significant_test_time_changes)
         return significant_test_time_changes
         
-    def create_test_log(self, commit: Commit, repo: Repository, old_sha: str, new_sha: str, pr_shas: list[str],
+    def create_test_log(self, commit: Commit, repo: Repository, old_sha: str, new_sha: str,
                         old_full_times: list[float], new_full_times: list[float],
                         new_build_cmd: list[str], old_build_cmd: list[str], 
                         new_test_cmd: list[str], old_test_cmd: list[str],) -> dict:
@@ -188,29 +188,17 @@ class TestAnalyzer:
         gh_refs: list[tuple[str, int, str, str, Issue]] = []
         messages: list[str] = []
         patches: list[str] = []
-        for sha in pr_shas:
-            commit = repo.get_commit(sha)
-            messages.append(commit.commit.message)
-            patches.append(self.get_diff(commit))
-            commit_filter = CommitFilter(commit, self.config, repo)
-            extracted_refs = commit_filter.extract_fixed_issues()
-            gh_refs += [
-                (ref_type, number, issue.title, issue.body, issue) 
-                for number, ref_type in extracted_refs.items()
-                if (issue := repo.get_issue(number))
-            ]
 
-        if not pr_shas:
-            messages = [commit.commit.message]
-            patches = [self.get_diff(commit)]
-            
-            commit_filter = CommitFilter(commit, self.config, repo)
-            extracted_refs = commit_filter.extract_fixed_issues()
-            gh_refs = [
-                (ref_type, number, issue.title, issue.body, issue) 
-                for number, ref_type in extracted_refs.items()
-                if (issue := repo.get_issue(number))
-            ]
+        messages = [commit.commit.message]
+        patches = [self.get_diff(commit)]
+        
+        commit_filter = CommitFilter(commit, self.config, repo)
+        extracted_refs = commit_filter.extract_fixed_issues()
+        gh_refs = [
+            (ref_type, number, issue.title, issue.body, issue) 
+            for number, ref_type in extracted_refs.items()
+            if (issue := repo.get_issue(number))
+        ]
 
         metadata = {
             "collection_date": datetime.now().isoformat(),

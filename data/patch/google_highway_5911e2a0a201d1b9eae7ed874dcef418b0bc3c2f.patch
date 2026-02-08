@@ -1,0 +1,54 @@
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index 6cddc553..902395f8 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -4301,9 +4301,13 @@ HWY_API Vec128<uint8_t, N> RotateRight(const Vec128<uint8_t, N> v) {
+ template <int kBits, size_t N>
+ HWY_API Vec128<uint16_t, N> RotateRight(const Vec128<uint16_t, N> v) {
+   static_assert(0 <= kBits && kBits < 16, "Invalid shift count");
++#if HWY_TARGET <= HWY_AVX3_DL
++  return Vec128<uint16_t, N>{_mm_ror_epi16(v.raw, kBits)};
++#else
+   if (kBits == 0) return v;
+   // AVX3 does not support 16-bit.
+   return Or(ShiftRight<kBits>(v), ShiftLeft<HWY_MIN(15, 16 - kBits)>(v));
++#endif
+ }
+ 
+ template <int kBits, size_t N>
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index bf4679d5..9fd1493b 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -2299,9 +2299,13 @@ HWY_API Vec256<uint8_t> RotateRight(const Vec256<uint8_t> v) {
+ template <int kBits>
+ HWY_API Vec256<uint16_t> RotateRight(const Vec256<uint16_t> v) {
+   static_assert(0 <= kBits && kBits < 16, "Invalid shift count");
++#if HWY_TARGET <= HWY_AVX3_DL
++  return Vec256<uint16_t>{_mm256_ror_epi16(v.raw, kBits)};
++#else
+   if (kBits == 0) return v;
+   // AVX3 does not support 16-bit.
+   return Or(ShiftRight<kBits>(v), ShiftLeft<HWY_MIN(15, 16 - kBits)>(v));
++#endif
+ }
+ 
+ template <int kBits>
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index d189fdc3..dfc9aa8a 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -1478,9 +1478,13 @@ HWY_API Vec512<uint8_t> RotateRight(const Vec512<uint8_t> v) {
+ template <int kBits>
+ HWY_API Vec512<uint16_t> RotateRight(const Vec512<uint16_t> v) {
+   static_assert(0 <= kBits && kBits < 16, "Invalid shift count");
++#if HWY_TARGET <= HWY_AVX3_DL
++  return Vec512<uint16_t>{_mm512_ror_epi16(v.raw, kBits)};
++#else
+   if (kBits == 0) return v;
+   // AVX3 does not support 16-bit.
+   return Or(ShiftRight<kBits>(v), ShiftLeft<HWY_MIN(15, 16 - kBits)>(v));
++#endif
+ }
+ 
+ template <int kBits>

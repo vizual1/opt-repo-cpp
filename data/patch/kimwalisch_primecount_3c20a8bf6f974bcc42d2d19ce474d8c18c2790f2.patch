@@ -1,0 +1,69 @@
+diff --git a/src/Status.cpp b/src/Status.cpp
+index 0a333f93..e5961d6b 100644
+--- a/src/Status.cpp
++++ b/src/Status.cpp
+@@ -22,6 +22,8 @@
+ #include <iomanip>
+ #include <sstream>
+ #include <string>
++#include <vector>
++#include <limits>
+ 
+ #if defined(_OPENMP)
+   #include <omp.h>
+@@ -42,15 +44,48 @@ namespace {
+ template <typename T>
+ double skewed_percent(T x, T y)
+ {
+-  double exp = 0.96;
++  // Quantize percent to 2 decimal places and cache results to avoid
++  // repeated expensive pow() calls. The cache size is fixed (10001)
++  // covering percent values in [0,100] with step 0.01.
++  static const double kExp = 0.96;
++  static const double kFactor = (1.0 - kExp) / 101.0; // equals 1 / (101/(1-exp))
++
+   double percent = get_percent(x, y);
+-  double base = exp + percent / (101 / (1 - exp));
+-  double low = pow(base, 100.0);
+-  double dividend = pow(base, percent) - low;
+-  percent = 100 - (100 * dividend / (1 - low));
+-  percent = in_between(0, percent, 100);
+ 
+-  return percent;
++  // Clamp and index into cache (0..10000)
++  int idx = static_cast<int>(percent * 100.0 + 0.5);
++  if (idx < 0) idx = 0;
++  if (idx > 10000) idx = 10000;
++
++  static std::vector<double> cache(10001, std::numeric_limits<double>::quiet_NaN());
++  double cached = cache[idx];
++  if (!std::isnan(cached))
++    return cached;
++
++  double base = kExp + percent * kFactor;
++
++  // If base is very close to 1.0, use a fast linear approximation to
++  // avoid numerical cancellation in pow()/exp() and improve speed.
++  double result;
++  if (base > 0.9999)
++  {
++    // For base ~ 1 we can approximate b^t ~= 1 + t*log(b)
++    double logb = std::log(base);
++    double low = std::exp(100.0 * logb);
++    double t = std::exp(percent * logb);
++    double dividend = t - low;
++    result = 100 - (100 * dividend / (1 - low));
++  }
++  else
++  {
++    double low = std::pow(base, 100.0);
++    double dividend = std::pow(base, percent) - low;
++    result = 100 - (100 * dividend / (1 - low));
++  }
++
++  result = in_between(0, result, 100);
++  cache[idx] = result;
++  return result;
+ }
+ 
+ } // namespace

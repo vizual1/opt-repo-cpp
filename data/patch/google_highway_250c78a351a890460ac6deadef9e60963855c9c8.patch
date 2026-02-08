@@ -1,0 +1,13 @@
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 6dd4250b..f90e6103 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -2242,7 +2242,7 @@ HWY_API V CompressNot(V v, svbool_t mask) {
+ 
+ // ------------------------------ CompressBlocksNot
+ HWY_API svuint64_t CompressBlocksNot(svuint64_t v, svbool_t mask) {
+-#if HWY_TARGET == HWY_SVE2_128
++#if HWY_TARGET == HWY_SVE2_128 || HWY_TARGET == HWY_SVE_256
+   (void)mask;
+   return v;
+ #endif

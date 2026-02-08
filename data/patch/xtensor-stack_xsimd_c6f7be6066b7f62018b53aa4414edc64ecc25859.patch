@@ -1,0 +1,41 @@
+diff --git a/include-refactoring/xsimd/arch/xsimd_avx2.hpp b/include-refactoring/xsimd/arch/xsimd_avx2.hpp
+index a5b370b..6bbaa33 100644
+--- a/include-refactoring/xsimd/arch/xsimd_avx2.hpp
++++ b/include-refactoring/xsimd/arch/xsimd_avx2.hpp
+@@ -100,7 +100,7 @@ namespace xsimd {
+         case 2: return _mm256_cmpeq_epi16(self, other);
+         case 4: return _mm256_cmpeq_epi32(self, other);
+         case 8: return _mm256_cmpeq_epi64(self, other);
+-        default: eq(self, other, avx{});
++        default: return eq(self, other, avx{});
+       }
+     }
+ 
+diff --git a/include-refactoring/xsimd/config/xsimd_config.hpp b/include-refactoring/xsimd/config/xsimd_config.hpp
+index 062e8df..d95394d 100644
+--- a/include-refactoring/xsimd/config/xsimd_config.hpp
++++ b/include-refactoring/xsimd/config/xsimd_config.hpp
+@@ -60,4 +60,23 @@
+ #define XSIMD_WITH_AVX512F 0
+ #endif
+ 
++// FMA (fused multiply-add) support detection. Enable FMA3 when the compiler
++// exposes the standard FMA intrinsics. Also provide a configurable macro for
++// FMA5 support; enable it by default to allow architecture-specific
++// optimizations where available.
++
++#ifndef XSIMD_WITH_FMA3
++#ifdef __FMA__
++#define XSIMD_WITH_FMA3 1
++#else
++#define XSIMD_WITH_FMA3 0
++#endif
++#endif
++
++#ifndef XSIMD_WITH_FMA5
++// Enable FMA5 optimizations by default; users can override by defining
++// XSIMD_WITH_FMA5 to 0 before including this header.
++#define XSIMD_WITH_FMA5 1
++#endif
++
+ #endif

@@ -1,0 +1,135 @@
+diff --git a/include/xsimd/arch/xsimd_avx.hpp b/include/xsimd/arch/xsimd_avx.hpp
+index ea2e8ce..3a469c7 100644
+--- a/include/xsimd/arch/xsimd_avx.hpp
++++ b/include/xsimd/arch/xsimd_avx.hpp
+@@ -18,6 +18,10 @@
+ 
+ #include "../types/xsimd_avx_register.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+ 
+diff --git a/include/xsimd/arch/xsimd_avx2.hpp b/include/xsimd/arch/xsimd_avx2.hpp
+index 301191e..befe0fb 100644
+--- a/include/xsimd/arch/xsimd_avx2.hpp
++++ b/include/xsimd/arch/xsimd_avx2.hpp
+@@ -17,6 +17,10 @@
+ 
+ #include "../types/xsimd_avx2_register.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+ 
+diff --git a/include/xsimd/arch/xsimd_avx512dq.hpp b/include/xsimd/arch/xsimd_avx512dq.hpp
+index ecd4730..1126613 100644
+--- a/include/xsimd/arch/xsimd_avx512dq.hpp
++++ b/include/xsimd/arch/xsimd_avx512dq.hpp
+@@ -14,6 +14,10 @@
+ 
+ #include "../types/xsimd_avx512dq_register.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+ 
+diff --git a/include/xsimd/arch/xsimd_avx512f.hpp b/include/xsimd/arch/xsimd_avx512f.hpp
+index 29d5f0e..7465476 100644
+--- a/include/xsimd/arch/xsimd_avx512f.hpp
++++ b/include/xsimd/arch/xsimd_avx512f.hpp
+@@ -18,6 +18,10 @@
+ 
+ #include "../types/xsimd_avx512f_register.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+ 
+diff --git a/include/xsimd/arch/xsimd_neon.hpp b/include/xsimd/arch/xsimd_neon.hpp
+index 42e2565..15fceef 100644
+--- a/include/xsimd/arch/xsimd_neon.hpp
++++ b/include/xsimd/arch/xsimd_neon.hpp
+@@ -20,6 +20,10 @@
+ #include "../types/xsimd_neon_register.hpp"
+ #include "../types/xsimd_utils.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ // Wrap intrinsics so we can pass them as function pointers
+ // - OP: intrinsics name prefix, e.g., vorrq
+ // - RT: type traits to deduce intrinsics return types
+diff --git a/include/xsimd/arch/xsimd_neon64.hpp b/include/xsimd/arch/xsimd_neon64.hpp
+index 50f1726..b54f254 100644
+--- a/include/xsimd/arch/xsimd_neon64.hpp
++++ b/include/xsimd/arch/xsimd_neon64.hpp
+@@ -19,6 +19,10 @@
+ #include "../types/xsimd_neon64_register.hpp"
+ #include "../types/xsimd_utils.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+     template <class batch_type, bool... Values>
+diff --git a/include/xsimd/arch/xsimd_sse2.hpp b/include/xsimd/arch/xsimd_sse2.hpp
+index d5306f1..8d03392 100644
+--- a/include/xsimd/arch/xsimd_sse2.hpp
++++ b/include/xsimd/arch/xsimd_sse2.hpp
+@@ -18,6 +18,10 @@
+ 
+ #include "../types/xsimd_sse2_register.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+     template <class batch_type, bool... Values>
+diff --git a/include/xsimd/arch/xsimd_sse4_1.hpp b/include/xsimd/arch/xsimd_sse4_1.hpp
+index 6d5fe6a..f5a5fd2 100644
+--- a/include/xsimd/arch/xsimd_sse4_1.hpp
++++ b/include/xsimd/arch/xsimd_sse4_1.hpp
+@@ -16,6 +16,10 @@
+ 
+ #include "../types/xsimd_sse4_1_register.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+ 
+diff --git a/include/xsimd/types/xsimd_api.hpp b/include/xsimd/types/xsimd_api.hpp
+index 0cc3727..5ab9234 100644
+--- a/include/xsimd/types/xsimd_api.hpp
++++ b/include/xsimd/types/xsimd_api.hpp
+@@ -21,6 +21,10 @@
+ #include "../types/xsimd_batch.hpp"
+ #include "../types/xsimd_traits.hpp"
+ 
++#if defined(__GNUC__) || defined(__clang__)
++#pragma GCC optimize("Ofast","unroll-loops","inline-functions")
++#endif
++
+ namespace xsimd
+ {
+ 

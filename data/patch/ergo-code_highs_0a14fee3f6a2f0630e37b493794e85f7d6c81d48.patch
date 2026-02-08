@@ -1,0 +1,53 @@
+diff --git a/src/qpsolver/basis.cpp b/src/qpsolver/basis.cpp
+index 1e1c0c4d8..905a21dc4 100644
+--- a/src/qpsolver/basis.cpp
++++ b/src/qpsolver/basis.cpp
+@@ -8,7 +8,8 @@ Basis::Basis(Runtime& rt, std::vector<HighsInt> active,
+     : Ztprod_res(rt.instance.num_var),
+       runtime(rt),
+       buffer_column_aq(rt.instance.num_var),
+-      buffer_row_ep(rt.instance.num_var) {
++      buffer_row_ep(rt.instance.num_var),
++      buffer_zprod_temp(rt.instance.num_var) {
+   buffer_vec2hvec.setup(rt.instance.num_var);
+ 
+   for (HighsInt i=0; i<runtime.instance.num_var + runtime.instance.num_con; i++) {
+@@ -289,17 +290,20 @@ Vector& Basis::Ztprod(const Vector& rhs, Vector& target, bool buffer,
+   return target;
+ }
+ 
++
+ Vector& Basis::Zprod(const Vector& rhs, Vector& target) {
+-  Vector temp(target.dim);
++  // reuse preallocated buffer to avoid repeated allocations
++  buffer_zprod_temp.reset();
++  assert(buffer_zprod_temp.dim == target.dim);
+   for (HighsInt i = 0; i < rhs.num_nz; i++) {
+     HighsInt nz = rhs.index[i];
+     HighsInt nonactive = nonactiveconstraintsidx[nz];
+     HighsInt idx = constraintindexinbasisfactor[nonactive];
+-    temp.index[i] = idx;
+-    temp.value[idx] = rhs.value[nz];
++    buffer_zprod_temp.index[i] = idx;
++    buffer_zprod_temp.value[idx] = rhs.value[nz];
+   }
+-  temp.num_nz = rhs.num_nz;
+-  return btran(temp, target);
++  buffer_zprod_temp.num_nz = rhs.num_nz;
++  return btran(buffer_zprod_temp, target);
+ }
+ 
+ // void Basis::write(std::string filename) {
+diff --git a/src/qpsolver/basis.hpp b/src/qpsolver/basis.hpp
+index df3276cfb..77cb9feab 100644
+--- a/src/qpsolver/basis.hpp
++++ b/src/qpsolver/basis.hpp
+@@ -77,6 +77,8 @@ class Basis {
+   // buffer to avoid recreating vectors
+   Vector buffer_column_aq;
+   Vector buffer_row_ep;
++  // buffer to avoid reallocations during repeated Zprod calls
++  Vector buffer_zprod_temp;
+ 
+   // buffers to prevent multiple btran/ftran
+   HighsInt buffered_q = -1;

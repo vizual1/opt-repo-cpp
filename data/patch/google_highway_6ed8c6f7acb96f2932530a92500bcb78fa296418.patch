@@ -1,0 +1,27 @@
+diff --git a/hwy/contrib/sort/traits128-inl.h b/hwy/contrib/sort/traits128-inl.h
+index 2e73f1d7..f68e8813 100644
+--- a/hwy/contrib/sort/traits128-inl.h
++++ b/hwy/contrib/sort/traits128-inl.h
+@@ -297,7 +297,8 @@ class Traits128 : public Base {
+     const Vec<D> eqHL = VecFromMask(d, Eq(a, b));
+     const Vec<D> ltHL = VecFromMask(d, base->CompareLanes(a, b));
+     const Vec<D> ltLX = ShiftLeftLanes<1>(ltHL);
+-    return OrAnd(ltHL, eqHL, ltLX);
++    // Use OR of ltHL and eqHL instead of OrAnd to avoid extra instructions on some targets.
++    return Or(ltHL, And(eqHL, ltLX));
+   }
+ 
+   // We want to swap 2 u128, i.e. 4 u64 lanes, based on the 0 or FF..FF mask in
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index a6ab1d4d..aa88fd6d 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -256,7 +256,7 @@ HWY_SVE_FOREACH(HWY_SVE_FIRSTN, FirstN, whilelt)
+ namespace detail {
+ 
+ // All-true mask from a macro
+-#define HWY_SVE_PTRUE(BITS) svptrue_pat_b##BITS(SV_POW2)
++#define HWY_SVE_PTRUE(BITS) svptrue_pat_b##BITS(SV_ALL)
+ #define HWY_SVE_ALL_PTRUE(BITS) svptrue_pat_b##BITS(SV_ALL)
+ 
+ #define HWY_SVE_WRAP_PTRUE(BASE, CHAR, BITS, HALF, NAME, OP)            \

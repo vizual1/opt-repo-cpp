@@ -1,0 +1,21 @@
+diff --git a/hwy/ops/arm_neon-inl.h b/hwy/ops/arm_neon-inl.h
+index 563794e8..386e9cce 100644
+--- a/hwy/ops/arm_neon-inl.h
++++ b/hwy/ops/arm_neon-inl.h
+@@ -2993,6 +2993,16 @@ HWY_API void BlendedStore(VFromD<D> v, MFromD<D> m, D d,
+ 
+ template <class D>
+ HWY_API void Stream(const VFromD<D> v, D d, TFromD<D>* HWY_RESTRICT aligned) {
++#if HWY_ARCH_ARM_A64
++  // Issue a non-temporal prefetch for store (prfm PSTL1STRM) where supported.
++  // For GCC/Clang this compiles to the appropriate prfm instruction; for other
++  // compilers we fall back to a no-op to remain portable.
++  #if HWY_COMPILER_GCC || HWY_COMPILER_CLANG
++    __builtin_prefetch(aligned, 1, 0);
++  #else
++    (void)aligned;
++  #endif
++#endif
+   Store(v, d, aligned);
+ }
+ 

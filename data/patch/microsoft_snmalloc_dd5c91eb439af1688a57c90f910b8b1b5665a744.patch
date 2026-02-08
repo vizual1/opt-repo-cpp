@@ -1,0 +1,13 @@
+diff --git a/src/mem/allocconfig.h b/src/mem/allocconfig.h
+index ce294e8..dff0d0a 100644
+--- a/src/mem/allocconfig.h
++++ b/src/mem/allocconfig.h
+@@ -21,7 +21,7 @@ namespace snmalloc
+ #ifdef USE_REMOTE_CACHE
+     USE_REMOTE_CACHE
+ #else
+-    1 << 20
++    1 << 18
+ #endif
+     ;
+   enum DecommitStrategy

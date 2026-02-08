@@ -1,0 +1,57 @@
+diff --git a/src/PiTable.cpp b/src/PiTable.cpp
+index 076dd4d4..07bd378d 100644
+--- a/src/PiTable.cpp
++++ b/src/PiTable.cpp
+@@ -86,7 +86,7 @@ PiTable::PiTable(uint64_t limit, int threads) :
+ 
+   #pragma omp parallel num_threads(threads)
+   {
+-    #pragma omp for
++    #pragma omp for schedule(dynamic)
+     for (int t = 0; t < threads; t++)
+     {
+       uint64_t start = thread_size * t;
+@@ -97,7 +97,7 @@ PiTable::PiTable(uint64_t limit, int threads) :
+         init_bits(start, stop, t);
+     }
+ 
+-    #pragma omp for
++    #pragma omp for schedule(dynamic)
+     for (int t = 0; t < threads; t++)
+     {
+       uint64_t start = thread_size * t;
+diff --git a/src/deleglise-rivat/S2_easy_libdivide.cpp b/src/deleglise-rivat/S2_easy_libdivide.cpp
+index 8be68c37..ba39621c 100644
+--- a/src/deleglise-rivat/S2_easy_libdivide.cpp
++++ b/src/deleglise-rivat/S2_easy_libdivide.cpp
+@@ -170,7 +170,7 @@ T S2_easy_OpenMP(T x,
+   int64_t pi_x13 = pi[x13];
+   Status status(x);
+ 
+-  #pragma omp parallel for schedule(dynamic) num_threads(threads) reduction(+: s2_easy)
++  #pragma omp parallel for schedule(dynamic, 1) num_threads(threads) reduction(+: s2_easy)
+   for (int64_t b = max(c, pi_sqrty) + 1; b <= pi_x13; b++)
+   {
+     int64_t prime = primes[b];
+diff --git a/src/gourdon/SegmentedPiTable.cpp b/src/gourdon/SegmentedPiTable.cpp
+index 8f2a987e..dda0ecff 100644
+--- a/src/gourdon/SegmentedPiTable.cpp
++++ b/src/gourdon/SegmentedPiTable.cpp
+@@ -118,7 +118,7 @@ void SegmentedPiTable::init()
+   thread_size = max(min_thread_size, thread_size);
+   thread_size += 128 - thread_size % 128;
+ 
+-  #pragma omp for
++  #pragma omp for schedule(dynamic)
+   for (int t = 0; t < threads_; t++)
+   {
+     uint64_t start = low_ + thread_size * t;
+@@ -129,7 +129,7 @@ void SegmentedPiTable::init()
+       init_bits(start, stop, t);
+   }
+ 
+-  #pragma omp for
++  #pragma omp for schedule(dynamic)
+   for (int t = 0; t < threads_; t++)
+   {
+     uint64_t start = low_ + thread_size * t;

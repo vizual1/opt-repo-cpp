@@ -1,0 +1,27 @@
+diff --git a/src/api.cpp b/src/api.cpp
+index 00eaeeb4..17977c03 100644
+--- a/src/api.cpp
++++ b/src/api.cpp
+@@ -42,15 +42,16 @@ int64_t pi(int64_t x)
+ 
+ int64_t pi(int64_t x, int threads)
+ {
+-  // For [0, 10^3] Legendre's algorithm runs fastest
+-  if (x <= (int64_t) 1e3)
++  // For small x Legendre's algorithm is very efficient
++  if (x <= (int64_t) 1e4)
+     return pi_legendre(x, threads);
+ 
+-  // For ]10^3, 10^7] the Lagarias-Miller-Odlyzko algorithm runs fastest
+-  if (x <= (int64_t) 1e7)
+-    return pi_lmo5(x);
++  // Use the (parallel) Deleglise-Rivat algorithm for medium sized x
++  // which typically outperforms LMO and scales with threads
++  if (x <= (int64_t) 1e8)
++    return pi_deleglise_rivat_64(x, threads);
+ 
+-  // Above 10^7 Xavier Gourdon's algorithm runs fastest
++  // For very large x Xavier Gourdon's algorithm remains the best choice
+   return pi_gourdon_64(x, threads);
+ }
+ 

@@ -1,0 +1,56 @@
+diff --git a/src/gourdon/AC.cpp b/src/gourdon/AC.cpp
+index 337a53d7..420a326d 100644
+--- a/src/gourdon/AC.cpp
++++ b/src/gourdon/AC.cpp
+@@ -219,7 +219,8 @@ T AC_OpenMP(T x,
+   // sizes such as x^(1/3) which improves the cache efficiency.
+   // However using a segment size < y deteriorates the algorithm's
+   // runtime complexity by a factor of log(x).
+-  SegmentedPiTable segmentedPi(sqrtx, y, threads);
++  // Use a segment size of x^(1/3) (x13) to improve cache locality.
++  SegmentedPiTable segmentedPi(sqrtx, x13, threads);
+ 
+   int64_t pi_y = pi[y];
+   int64_t pi_sqrtz = pi[isqrt(z)];
+diff --git a/src/gourdon/AC_libdivide.cpp b/src/gourdon/AC_libdivide.cpp
+index bd39c8fe..d793aaa7 100644
+--- a/src/gourdon/AC_libdivide.cpp
++++ b/src/gourdon/AC_libdivide.cpp
+@@ -326,7 +326,8 @@ T AC_OpenMP(T x,
+   // sizes such as x^(1/3) which improves the cache efficiency.
+   // However using a segment size < y deteriorates the algorithm's
+   // runtime complexity by a factor of log(x).
+-  SegmentedPiTable segmentedPi(sqrtx, y, threads);
++  // Use a segment size of x^(1/3) (x13) to improve cache locality.
++  SegmentedPiTable segmentedPi(sqrtx, x13, threads);
+ 
+   int64_t pi_y = pi[y];
+   int64_t pi_sqrtz = pi[isqrt(z)];
+diff --git a/src/mpi/AC_mpi.cpp b/src/mpi/AC_mpi.cpp
+index 9ac06d29..728b2d86 100644
+--- a/src/mpi/AC_mpi.cpp
++++ b/src/mpi/AC_mpi.cpp
+@@ -208,7 +208,8 @@ T AC_OpenMP(T x,
+   // sizes such as x^(1/3) which improves the cache efficiency.
+   // However using a segment size < y deteriorates the algorithm's
+   // runtime complexity by a factor of log(x).
+-  SegmentedPiTable segmentedPi(sqrtx, y, threads);
++  // Use a segment size of x^(1/3) (x13) to improve cache locality.
++  SegmentedPiTable segmentedPi(sqrtx, x13, threads);
+ 
+   int64_t pi_y = pi[y];
+   int64_t pi_sqrtz = pi[isqrt(z)];
+diff --git a/src/mpi/AC_mpi_libdivide.cpp b/src/mpi/AC_mpi_libdivide.cpp
+index ea972572..7c7fdb13 100644
+--- a/src/mpi/AC_mpi_libdivide.cpp
++++ b/src/mpi/AC_mpi_libdivide.cpp
+@@ -309,7 +309,8 @@ T AC_OpenMP(T x,
+   // sizes such as x^(1/3) which improves the cache efficiency.
+   // However using a segment size < y deteriorates the algorithm's
+   // runtime complexity by a factor of log(x).
+-  SegmentedPiTable segmentedPi(sqrtx, y, threads);
++  // Use a segment size of x^(1/3) (x13) to improve cache locality.
++  SegmentedPiTable segmentedPi(sqrtx, x13, threads);
+ 
+   int64_t pi_y = pi[y];
+   int64_t pi_sqrtz = pi[isqrt(z)];

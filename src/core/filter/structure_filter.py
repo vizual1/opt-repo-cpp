@@ -78,10 +78,6 @@ class StructureFilter:
         logging.info(f"[{self.repo.full_name}] CMakeLists.txt at root found")
         analyzer = CMakeAnalyzer(root)
         self.process = CMakeProcess(self.repo.full_name, self.config, root, None, [], analyzer, "", jobs=self.config.resources.jobs, docker_test_dir=docker_test_dir)
-        
-        if not GitHandler().clone_repo(self.repo.full_name, root, sha=sha):
-            logging.error(f"[{self.repo.full_name}] git cloning failed")
-            return False
 
         self.process.analyzer.reset()
         if not self.process.analyzer.has_testing(nolist=self.config.testing.no_list_testing):

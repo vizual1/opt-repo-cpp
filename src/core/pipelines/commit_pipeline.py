@@ -26,7 +26,7 @@ class CommitPipeline:
             except Exception as e:
                 logging.exception(f"[{repo.full_name}] Error fetching commits: {e}")
                 self.commits = []
-            self._filter_commits(repo)
+            self.filter_commits_from_repo(repo)
             return
         
         for repo_id in self.repo_ids:
@@ -39,9 +39,9 @@ class CommitPipeline:
             except Exception as e:
                 logging.exception(f"[{repo.full_name}] Error fetching commits: {e}")
                 self.commits = []
-            self._filter_commits(repo)
+            self.filter_commits_from_repo(repo)
 
-    def _filter_commits(self, repo: Repository) -> None:
+    def filter_commits_from_repo(self, repo: Repository) -> None:
         if not self.commits:
             logging.warning(f"[{repo.full_name}] No commits found")
             return
@@ -55,6 +55,28 @@ class CommitPipeline:
                 continue
             
             self.filtered_commits.append(commit)
+            writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths['commits'])
+            filtered_commits.append(writer.file or "")
+            stats.perf_commits += 1
+            stats += writer.write_pr_commit(repo, commit, perf_improv_filter.is_issue)
+
+        self._rewrite_commits()
+        stats.write_final_log()
+
+    def filter_commits(self, commits: list[Commit], repo: Repository) -> None:
+        if not commits:
+            logging.warning(f"[{repo.full_name}] No commits found")
+            return
+        
+        stats = CommitStats()
+        filtered_commits: list[str] = []
+        for commit in tqdm(commits, desc=f"{repo.full_name} commits", position=1, leave=False, mininterval=5):
+            stats.num_commits += 1
+            perf_improv_filter = CommitFilter(commit, self.config, repo)
+            if not perf_improv_filter.accept():
+                continue
+            
+            self.filtered_commits.append(commit)
             writer = Writer(repo.full_name, self.config.output_file or self.config.storage_paths['clones'])
             filtered_commits.append(writer.file or "")
             stats.perf_commits += 1
@@ -62,6 +84,7 @@ class CommitPipeline:
 
         self._rewrite_commits()
         stats.write_final_log()
+
 
     def _read_commits(self) -> list[str]:
         """

@@ -1,0 +1,94 @@
+diff --git a/Template/Binary_Index_Tree/BIT.cpp b/Template/Binary_Index_Tree/BIT.cpp
+index 576d0398..091a3bcd 100644
+--- a/Template/Binary_Index_Tree/BIT.cpp
++++ b/Template/Binary_Index_Tree/BIT.cpp
+@@ -1,55 +1,55 @@
+-class BIT{
+-    public:
+-    int N;    
+-    vector<long long>bitArr; // Note: all arrays are 1-index
+-    vector<long long>nums;
+-    long long M = 1e9+7;
+-
+-    void init(int N)
+-    {
+-        this->N = N;
+-        bitArr.resize(N+1);
+-        nums.resize(N+1);        
++#include <bits/stdc++.h>
++using namespace std;
++
++class BIT {
++public:
++    int N;
++    long long *bitArr;
++    static constexpr long long M = 1000000007LL;
++
++    BIT() : N(0), bitArr(nullptr) {}
++    ~BIT() { delete[] bitArr; }
++
++    void init(int n) {
++        N = n;
++        bitArr = new long long[N + 1];
++        std::fill(bitArr, bitArr + (N + 1), 0LL);
+     }
+ 
+     // increase nums[i] by delta
+-    void updateDelta(int i, long long delta) {
+-        int idx = i;
+-        while (idx <= N)
+-        {
+-            bitArr[idx]+=delta;
+-            // bitArr[idx] %= M;
+-            idx+=idx&(-idx);
+-        }
++    inline void updateDelta(int i, long long delta) {
++        for (int idx = i; idx <= N; idx += idx & -idx)
++            bitArr[idx] += delta;
+     }
+ 
+     // sum of a range nums[1:j] inclusively
+-    long long queryPreSum(int idx){
++    inline long long queryPreSum(int idx) const {
+         long long result = 0;
+-        while (idx){
+-            result += bitArr[idx];
+-            // result %= M;
+-            idx-=idx&(-idx);
+-        }
++        for (int i = idx; i > 0; i -= i & -i)
++            result += bitArr[i];
+         return result;
+     }
+ 
+     // sum of a range nums[i:j] inclusively
+-    long long sumRange(int i, int j) {    
+-        return queryPreSum(j)-queryPreSum(i-1);
+-    } 
++    inline long long sumRange(int i, int j) const {
++        return queryPreSum(j) - queryPreSum(i - 1);
++    }
+ };
+ 
+-int main()
+-    {
++int main() {
++    ios::sync_with_stdio(false);
++    cin.tie(nullptr);
++
+     int N = 100000;
+     BIT bit;
+     bit.init(N);
+-    vector<int>nums(N);
++    vector<int> nums(N);
+     // cin>> nums ....
+ 
+-    for (int i=1; i<nums.size(); i++) {
++    for (int i = 1; i < static_cast<int>(nums.size()); ++i) {
+         bit.updateDelta(i, nums[i]);
+-        cout << bit.sumRange(1,i);
++        cout << bit.sumRange(1, i);
+     }
++
++    return 0;
+ }

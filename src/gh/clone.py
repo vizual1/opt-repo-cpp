@@ -52,6 +52,12 @@ class GitHandler:
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
+
+                subprocess.run(
+                    ["git", "config", "core.fileMode", "false"], 
+                    cwd=repo_path, 
+                    check=True
+                )
                 self.set_permission(str(repo_path))
                 logging.info(f"Repository checked out to commit {sha} successfully")
                 return True

@@ -1,0 +1,347 @@
+diff --git a/src/backend/backend.h b/src/backend/backend.h
+index 4c169d6..815f71f 100644
+--- a/src/backend/backend.h
++++ b/src/backend/backend.h
+@@ -277,8 +277,7 @@ namespace snmalloc
+       auto p = local_state.object_range->alloc_range(size);
+ 
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "Alloc chunk: " << p.unsafe_ptr() << " (" << size << ")"
+-                << std::endl;
++      trace_print("Alloc chunk: %p (%zu)", p.unsafe_ptr(), size);
+ #endif
+       if (p == nullptr)
+       {
+@@ -286,7 +285,7 @@ namespace snmalloc
+           meta_cap, PAGEMAP_METADATA_STRUCT_SIZE);
+         errno = ENOMEM;
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "Out of memory" << std::endl;
++        trace_print("Out of memory");
+ #endif
+         return {p, nullptr};
+       }
+diff --git a/src/backend/globalconfig.h b/src/backend/globalconfig.h
+index a496aa3..486ebe8 100644
+--- a/src/backend/globalconfig.h
++++ b/src/backend/globalconfig.h
+@@ -6,7 +6,7 @@
+ #include "commonconfig.h"
+ 
+ #ifdef SNMALLOC_TRACING
+-#  include <iostream>
++/* tracing enabled - use trace_print to avoid iostream */
+ #endif
+ namespace snmalloc
+ {
+@@ -60,7 +60,7 @@ namespace snmalloc
+     {
+       FlagLock lock{initialisation_lock};
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "Run init_impl" << std::endl;
++      trace_print("Run init_impl");
+ #endif
+ 
+       if (initialised)
+diff --git a/src/ds/defines.h b/src/ds/defines.h
+index 0503a85..223b582 100644
+--- a/src/ds/defines.h
++++ b/src/ds/defines.h
+@@ -1,5 +1,7 @@
+ #pragma once
+ #include <cstddef>
++#include <cstdarg>
++#include <cstdio>
+ 
+ #if defined(_MSC_VER) && !defined(__clang__)
+ // 28 is FAST_FAIL_INVALID_BUFFER_ACCESS.  Not using the symbolic constant to
+@@ -104,6 +106,28 @@ namespace snmalloc
+ 
+   // Forwards reference so that the platform can define how to handle errors.
+   [[noreturn]] SNMALLOC_COLD void error(const char* const str);
++
++  /*
++   * Lightweight tracing helper that avoids using iostreams which may cause
++   * allocations or other runtime overhead.  When SNMALLOC_TRACING is enabled
++   * this formats to stderr, otherwise it is a no-op.
++   */
++  #include <cstdarg>
++#include <cstdio>
++
++  inline void trace_print(const char* fmt, ...)
++  {
++  #ifdef SNMALLOC_TRACING
++    va_list ap;
++    va_start(ap, fmt);
++    vfprintf(stderr, fmt, ap);
++    va_end(ap);
++    fputc('\n', stderr);
++  #else
++    (void)fmt;
++  #endif
++  }
++
+ } // namespace snmalloc
+ 
+ #define TOSTRING(expr) TOSTRING2(expr)
+diff --git a/src/mem/corealloc.h b/src/mem/corealloc.h
+index bd42b4e..2ea3a30 100644
+--- a/src/mem/corealloc.h
++++ b/src/mem/corealloc.h
+@@ -342,8 +342,7 @@ namespace snmalloc
+ #endif
+ 
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "Slab " << start_of_slab.unsafe_ptr()
+-                << " is unused, Object sizeclass " << sizeclass << std::endl;
++      trace_print("Slab %p is unused, Object sizeclass %u", start_of_slab.unsafe_ptr(), (unsigned)sizeclass);
+ #else
+       UNUSED(start_of_slab);
+ #endif
+@@ -412,7 +411,7 @@ namespace snmalloc
+         size_t size = bits::one_at_bit(entry_sizeclass);
+ 
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "Large deallocation: " << size << std::endl;
++        trace_print("Large deallocation: %zu", size);
+ #else
+         UNUSED(size);
+ #endif
+@@ -437,7 +436,7 @@ namespace snmalloc
+         alloc_classes[sizeclass].length++;
+ 
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "Slab is woken up" << std::endl;
++        trace_print("Slab is woken up");
+ #endif
+ 
+         ticker.check_tick();
+@@ -483,7 +482,7 @@ namespace snmalloc
+       auto cb = [this,
+                  &need_post](freelist::HeadPtr msg) SNMALLOC_FAST_PATH_LAMBDA {
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "Handling remote" << std::endl;
++        trace_print("Handling remote");
+ #endif
+ 
+         auto& entry =
+@@ -562,7 +561,7 @@ namespace snmalloc
+     void init()
+     {
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "Making an allocator." << std::endl;
++      trace_print("Making an allocator.");
+ #endif
+       // Entropy must be first, so that all data-structures can use the key
+       // it generates.
+@@ -776,8 +775,8 @@ namespace snmalloc
+       size_t slab_size = sizeclass_to_slab_size(sizeclass);
+ 
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "rsize " << rsize << std::endl;
+-      std::cout << "slab size " << slab_size << std::endl;
++      trace_print("rsize %zu", rsize);
++      trace_print("slab size %zu", slab_size);
+ #endif
+ 
+       auto [slab, meta] = SharedStateHandle::alloc_chunk(
+@@ -872,7 +871,7 @@ namespace snmalloc
+     void attach(LocalCache* c)
+     {
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "Attach cache to " << this << std::endl;
++      trace_print("Attach cache to %p", this);
+ #endif
+       attached_cache = c;
+ 
+@@ -916,7 +915,7 @@ namespace snmalloc
+       init_message_queue();
+ 
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "debug_is_empty - done" << std::endl;
++      trace_print("debug_is_empty - done");
+ #endif
+       return sent_something;
+     }
+@@ -934,7 +933,7 @@ namespace snmalloc
+     bool debug_is_empty(bool* result)
+     {
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "debug_is_empty" << std::endl;
++      trace_print("debug_is_empty");
+ #endif
+       if (attached_cache == nullptr)
+       {
+@@ -943,7 +942,7 @@ namespace snmalloc
+         LocalCache temp(public_state());
+         attach(&temp);
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "debug_is_empty - attach a cache" << std::endl;
++        trace_print("debug_is_empty - attach a cache");
+ #endif
+         auto sent_something = debug_is_empty_impl(result);
+ 
+diff --git a/src/mem/globalalloc.h b/src/mem/globalalloc.h
+index f32413e..0a3788e 100644
+--- a/src/mem/globalalloc.h
++++ b/src/mem/globalalloc.h
+@@ -94,7 +94,7 @@ namespace snmalloc
+     auto* alloc = AllocPool<SharedStateHandle>::iterate();
+ 
+ #  ifdef SNMALLOC_TRACING
+-    std::cout << "debug check empty: first " << alloc << std::endl;
++    trace_print("debug check empty: first %p", alloc);
+ #  endif
+     bool done = false;
+     bool okay = true;
+@@ -102,7 +102,7 @@ namespace snmalloc
+     while (!done)
+     {
+ #  ifdef SNMALLOC_TRACING
+-      std::cout << "debug_check_empty: Check all allocators!" << std::endl;
++      trace_print("debug_check_empty: Check all allocators!");
+ #  endif
+       done = true;
+       alloc = AllocPool<SharedStateHandle>::iterate();
+@@ -111,7 +111,7 @@ namespace snmalloc
+       while (alloc != nullptr)
+       {
+ #  ifdef SNMALLOC_TRACING
+-        std::cout << "debug check empty: " << alloc << std::endl;
++        trace_print("debug check empty: %p", alloc);
+ #  endif
+         // Check that the allocator has freed all memory.
+         // repeat the loop if empty caused message sends.
+@@ -119,13 +119,12 @@ namespace snmalloc
+         {
+           done = false;
+ #  ifdef SNMALLOC_TRACING
+-          std::cout << "debug check empty: sent messages " << alloc
+-                    << std::endl;
++          trace_print("debug check empty: sent messages %p", alloc);
+ #  endif
+         }
+ 
+ #  ifdef SNMALLOC_TRACING
+-        std::cout << "debug check empty: okay = " << okay << std::endl;
++        trace_print("debug check empty: okay = %d", (int)okay);
+ #  endif
+         alloc = AllocPool<SharedStateHandle>::iterate(alloc);
+       }
+diff --git a/src/mem/localalloc.h b/src/mem/localalloc.h
+index db32d61..69559e8 100644
+--- a/src/mem/localalloc.h
++++ b/src/mem/localalloc.h
+@@ -151,7 +151,7 @@ namespace snmalloc
+         if (post_teardown)
+         {
+ #ifdef SNMALLOC_TRACING
+-          std::cout << "post_teardown flush()" << std::endl;
++          trace_print("post_teardown flush()");
+ #endif
+           // We didn't have an allocator because the thread is being torndown.
+           // We need to return any local state, so we don't leak it.
+@@ -188,8 +188,7 @@ namespace snmalloc
+         // set up meta data so sizeclass is correct, and hence alloc size, and
+         // external pointer.
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "size " << size << " pow2 size "
+-                  << bits::next_pow2_bits(size) << std::endl;
++        trace_print("size %zu pow2 size %u", size, bits::next_pow2_bits(size));
+ #endif
+ 
+         // Initialise meta data for a successful large allocation.
+@@ -263,8 +262,7 @@ namespace snmalloc
+       if (core_alloc != nullptr)
+       {
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "Remote dealloc post" << p.unsafe_ptr() << " size "
+-                  << alloc_size(p.unsafe_ptr()) << std::endl;
++        trace_print("Remote dealloc post %p size %zu", p.unsafe_ptr(), alloc_size(p.unsafe_ptr()));
+ #endif
+         const MetaslabMetaEntry& entry =
+           SharedStateHandle::Pagemap::template get_metaentry<MetaslabMetaEntry>(
+@@ -364,8 +362,7 @@ namespace snmalloc
+       c->attach(&local_cache);
+       core_alloc = c;
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "init(): core_alloc=" << core_alloc << "@" << &local_cache
+-                << std::endl;
++      trace_print("init(): core_alloc=%p@%p", core_alloc, &local_cache);
+ #endif
+       // local_cache.stats.sta rt();
+     }
+@@ -407,7 +404,7 @@ namespace snmalloc
+         // it is new to hit slow paths.
+         core_alloc = nullptr;
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "flush(): core_alloc=" << core_alloc << std::endl;
++        trace_print("flush(): core_alloc=%p", core_alloc);
+ #endif
+         local_cache.remote_allocator = &SharedStateHandle::unused_remote;
+         local_cache.remote_dealloc_cache.capacity = 0;
+@@ -651,8 +648,7 @@ namespace snmalloc
+           local_cache.remote_dealloc_cache.template dealloc<sizeof(CoreAlloc)>(
+             entry.get_remote()->trunc_id(), p_tame, key_global);
+ #  ifdef SNMALLOC_TRACING
+-          std::cout << "Remote dealloc fast" << p_raw << " size "
+-                    << alloc_size(p_raw) << std::endl;
++          trace_print("Remote dealloc fast %p size %zu", p_raw, alloc_size(p_raw));
+ #  endif
+           return;
+         }
+@@ -667,7 +663,7 @@ namespace snmalloc
+       snmalloc_check_client(p_tame == nullptr, "Not allocated by snmalloc.");
+ 
+ #  ifdef SNMALLOC_TRACING
+-      std::cout << "nullptr deallocation" << std::endl;
++      trace_print("nullptr deallocation");
+ #  endif
+       return;
+ #endif
+@@ -689,8 +685,7 @@ namespace snmalloc
+     void teardown()
+     {
+ #ifdef SNMALLOC_TRACING
+-      std::cout << "Teardown: core_alloc=" << core_alloc << "@" << &local_cache
+-                << std::endl;
++      trace_print("Teardown: core_alloc=%p@%p", core_alloc, &local_cache);
+ #endif
+       post_teardown = true;
+       if (core_alloc != nullptr)
+diff --git a/src/mem/threadalloc.h b/src/mem/threadalloc.h
+index 1ab5892..4d52506 100644
+--- a/src/mem/threadalloc.h
++++ b/src/mem/threadalloc.h
+@@ -139,7 +139,7 @@ namespace snmalloc
+     static char p_teardown_val = 1;
+     pthread_setspecific(p_key.get(), &p_teardown_val);
+ #    ifdef SNMALLOC_TRACING
+-    std::cout << "Using pthread clean up" << std::endl;
++    trace_print("Using pthread clean up");
+ #    endif
+   }
+ #  elif defined(SNMALLOC_USE_CXX_THREAD_DESTRUCTORS)
+@@ -157,7 +157,7 @@ namespace snmalloc
+       []() { ThreadAlloc::get().teardown(); });
+     UNUSED(dummy);
+ #    ifdef SNMALLOC_TRACING
+-    std::cout << "Using C++ destructor clean up" << std::endl;
++    trace_print("Using C++ destructor clean up");
+ #    endif
+   }
+ #  endif
+diff --git a/src/pal/pal_posix.h b/src/pal/pal_posix.h
+index 242125f..9b27216 100644
+--- a/src/pal/pal_posix.h
++++ b/src/pal/pal_posix.h
+@@ -336,8 +336,7 @@ namespace snmalloc
+       if (p != MAP_FAILED)
+       {
+ #ifdef SNMALLOC_TRACING
+-        std::cout << "Pal_posix reserved: " << p << " (" << size << ")"
+-                  << std::endl;
++        trace_print("Pal_posix reserved: %p (%zu)", p, size);
+ #endif
+         return p;
+       }

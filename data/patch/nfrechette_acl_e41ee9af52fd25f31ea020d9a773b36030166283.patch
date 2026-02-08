@@ -1,0 +1,52 @@
+diff --git a/includes/acl/math/vector4_packing.h b/includes/acl/math/vector4_packing.h
+index 750e2b9d..6450b1e6 100644
+--- a/includes/acl/math/vector4_packing.h
++++ b/includes/acl/math/vector4_packing.h
+@@ -286,8 +286,15 @@ namespace acl
+ 
+ #if defined(RTM_SSE2_INTRINSICS)
+ 		const uint32_t bit_shift = 32 - num_bits;
++	#if defined(RTM_SSE4_INTRINSICS)
++			// Use SSE4.1 intrinsics to set uniform registers directly which is faster
++			// than loading via a float pointer and casting.
++			const __m128i mask = _mm_set1_epi32(static_cast<int32_t>(k_packed_constants[num_bits].mask));
++			const __m128 inv_max_value = _mm_set1_ps(k_packed_constants[num_bits].max_value);
++	#else
+ 		const __m128i mask = _mm_castps_si128(_mm_load_ps1((const float*)&k_packed_constants[num_bits].mask));
+ 		const __m128 inv_max_value = _mm_load_ps1(&k_packed_constants[num_bits].max_value);
++	#endif
+ 
+ 		uint32_t byte_offset = bit_offset / 8;
+ 		uint32_t vector_u32 = unaligned_load<uint32_t>(vector_data + byte_offset);
+@@ -950,8 +957,15 @@ namespace acl
+ 		};
+ 
+ 		const uint32_t bit_shift = 32 - num_bits;
++	#if defined(RTM_SSE4_INTRINSICS)
++			// Use SSE4.1 intrinsics to set uniform registers directly which is faster
++			// than loading via a float pointer and casting.
++			const __m128i mask = _mm_set1_epi32(static_cast<int32_t>(k_packed_constants[num_bits].mask));
++			const __m128 inv_max_value = _mm_set1_ps(k_packed_constants[num_bits].max_value);
++	#else
+ 		const __m128i mask = _mm_castps_si128(_mm_load_ps1((const float*)&k_packed_constants[num_bits].mask));
+ 		const __m128 inv_max_value = _mm_load_ps1(&k_packed_constants[num_bits].max_value);
++	#endif
+ 
+ 		uint32_t byte_offset = bit_offset / 8;
+ 		uint32_t vector_u32 = unaligned_load<uint32_t>(vector_data + byte_offset);
+@@ -1274,8 +1288,15 @@ namespace acl
+ 
+ #if defined(RTM_SSE2_INTRINSICS)
+ 		const uint32_t bit_shift = 32 - num_bits;
++	#if defined(RTM_SSE4_INTRINSICS)
++			// Use SSE4.1 intrinsics to set uniform registers directly which is faster
++			// than loading via a float pointer and casting.
++			const __m128i mask = _mm_set1_epi32(static_cast<int32_t>(k_packed_constants[num_bits].mask));
++			const __m128 inv_max_value = _mm_set1_ps(k_packed_constants[num_bits].max_value);
++	#else
+ 		const __m128i mask = _mm_castps_si128(_mm_load_ps1((const float*)&k_packed_constants[num_bits].mask));
+ 		const __m128 inv_max_value = _mm_load_ps1(&k_packed_constants[num_bits].max_value);
++	#endif
+ 
+ 		uint32_t byte_offset = bit_offset / 8;
+ 		uint32_t vector_u32 = unaligned_load<uint32_t>(vector_data + byte_offset);

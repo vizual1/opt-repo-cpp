@@ -8,13 +8,10 @@ from typing import Optional
 from src.config.config import Config
 from github.GithubException import UnknownObjectException
 
-
 class CommitFilter:
     def __init__(self, commit: Commit, config: Config, repo: Repository):
         self.commit = commit
         self.config = config
-        self.llm1 = OpenRouterLLM(self.config, self.config.llm.model1)
-        self.llm2 = OpenRouterLLM(self.config, self.config.llm.model2)
         self.repo = repo
         self.cache: dict[str, dict[str, dict[str, bool]]] = self._load_cache()
         self.is_issue: bool = False
@@ -71,9 +68,11 @@ class CommitFilter:
         ])
 
         if self.config.llm.ollama_enabled:
-            self.llm = OllamaLLM(self.config, self.config.llm.ollama_stage1_model)
+            self.llm1 = OllamaLLM(self.config, self.config.llm.ollama_stage1_model)
+        else:
+            self.llm1 = OpenRouterLLM(self.config, self.config.llm.model1)
         logging.info(f"[{self.repo.full_name}] First LLM prompt: {p.messages[1].content}")
-        res = self.llm.generate(p)
+        res = self.llm1.generate(p)
         logging.info(f"[{self.repo.full_name}] First LLM returned: {res}")
 
         res_lower = res.lower()
@@ -129,10 +128,11 @@ class CommitFilter:
                 ])
                 
                 if self.config.llm.ollama_enabled:
-                    self.llm = OllamaLLM(self.config, self.config.llm.ollama_diff_model)
-                
+                    self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_diff_model)
+                else:
+                    self.llm2 = OpenRouterLLM(self.config, self.config.llm.model2)
                 logging.info(f"[{self.repo.full_name}] Checking file {f.filename}:\n{p.messages[1].content}")
-                res = self.llm.generate(p)
+                res = self.llm2.generate(p)
                 logging.info(f"[{self.repo.full_name}] File {f.filename} response: {res}")
                 
                 if "yes" in res.lower() and "no" not in res.lower():
@@ -170,9 +170,11 @@ class CommitFilter:
         ])
         
         if self.config.llm.ollama_enabled:
-            self.llm = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
+            self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
+        else:
+            self.llm2 = OpenRouterLLM(self.config, self.config.llm.model2)
         logging.info(f"[{self.repo.full_name}] Second LLM prompt: {p.messages[1].content}")
-        res = self.llm.generate(p)
+        res = self.llm2.generate(p)
         logging.info(f"[{self.repo.full_name}] Second LLM returned: {res}")
         if 'yes' in res.lower() and "no" not in res.lower():
             return True
@@ -308,7 +310,8 @@ class CommitFilter:
             # First LLM check
             if self.config.llm.ollama_enabled:
                 self.llm1 = OllamaLLM(self.config, self.config.llm.ollama_stage1_model)
-            
+            else:
+                self.llm1 = OpenRouterLLM(self.config, self.config.llm.model1)
             logging.info(f"First LLM check for #{number}")
             res = self.llm1.generate(p)
             logging.info(f"First LLM response: {res}")
@@ -319,7 +322,8 @@ class CommitFilter:
             # Second LLM check for confirmation
             if self.config.llm.ollama_enabled:
                 self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
-            
+            else:
+                self.llm2 = OpenRouterLLM(self.config, self.config.llm.model2)
             logging.info(f"Second LLM check for #{number}")
             res = self.llm2.generate(p)
             logging.info(f"Second LLM response: {res}")

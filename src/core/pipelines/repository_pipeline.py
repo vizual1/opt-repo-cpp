@@ -27,6 +27,7 @@ class RepositoryPipeline:
         else:
             collector = RepositoryCollector(self.config)
             repo_ids = collector.get_repos()
+
         if not repo_ids:
             logging.warning("No repositories found.")
             return
@@ -38,7 +39,7 @@ class RepositoryPipeline:
             process = ProcessFilter(repo, self.config)
 
             try:
-                if structure.is_valid() and (not self.config.test or process.valid_run("_".join(repo.full_name.split("/")))):
+                if structure.is_valid() and process.valid_run("_".join(repo.full_name.split("/"))):
                     self.valid_repos.append(repo)
                     if self.config.collect or self.config.output_file:
                         Writer(repo_id, self.config.output_file or self.config.storage_paths['testcollect']).write_repo()

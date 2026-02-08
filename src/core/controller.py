@@ -5,7 +5,8 @@ from src.core.pipelines.pipeline import (
     RepositoryPipeline, 
     CommitPipeline, 
     CommitTesterPipeline,
-    PushPipeline
+    PushPipeline,
+    PatchPipeline
 )
 from src.config.config import Config
 
@@ -50,17 +51,20 @@ class Controller:
                 self.config.genimages = False
                 self._testdocker()
 
-            if self.config.testdockerpatch:
+            if self.config.patch:
+                self._patch()
+
+            if self.config.testpatch:
                 self.config.genimages = False
-                self._testdockerpatch()
+                self._testpatch()
 
             if not any([
                 self.config.collect, self.config.testcollect, 
                 self.config.commits, self.config.testcommits, 
                 self.config.genimages, self.config.testdocker, 
-                self.config.testdockerpatch
+                self.config.patch, self.config.testpatch
             ]):
-                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --genimages, --testdocker or --testdockerpatch")
+                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --genimages, --testdocker, --patch or --testpatch")
                 
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
@@ -74,11 +78,12 @@ class Controller:
         repos = pipeline.query_popular_repos()
         logging.info(f"Collected {len(repos)} repositories.")
 
-        logging.info("Testing and validating GitHub repositories...")
-        repo_pipeline = RepositoryPipeline(self.config)
-        repo_pipeline.test_repos(repos)
-        valid_count = len(repo_pipeline.valid_repos)
-        logging.info(f"Collected {valid_count} valid repositories.")
+        if self.config.test:
+            logging.info("Testing and validating GitHub repositories...")
+            repo_pipeline = RepositoryPipeline(self.config)
+            repo_pipeline.test_repos(repos)
+            valid_count = len(repo_pipeline.valid_repos)
+            logging.info(f"Collected {valid_count} valid repositories.")
 
     def _testcollect(self) -> None:
         logging.info("Testing and validating GitHub repositories...")
@@ -95,11 +100,11 @@ class Controller:
             logging.warning("No repositories found for commit filtering.")
             return
         
+        commit_pipeline = CommitPipeline(repo_ids, self.config)
+        commit_pipeline.filter_all_commits()
+        
         if self.config.test:
-            commit_pipeline = CommitPipeline(repo_ids, self.config)
-            commit_pipeline.filter_all_commits()
             filtered_commits = commit_pipeline.filtered_commits
-
             logging.info("Testing commits...")
             tester_pipeline = CommitTesterPipeline(self.config)
             tester_pipeline.test_commit(filtered_commits)
@@ -129,7 +134,13 @@ class Controller:
         tester_pipeline.test_commit()
         logging.info("Testing docker images completed.")
 
-    def _testdockerpatch(self) -> None:
+    def _patch(self) -> None:
+        logging.info("Patching commit...")
+        patch_pipeline = PatchPipeline(self.config)
+        patch_pipeline.patch()
+        logging.info("Commit patched.")
+
+    def _testpatch(self) -> None:
         logging.info("Testing patched docker images...")
         image_pipeline = CommitTesterPipeline(self.config)
         image_pipeline.test_commit()

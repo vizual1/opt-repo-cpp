@@ -1,0 +1,205 @@
+diff --git a/src/ds/address.h b/src/ds/address.h
+index cc73e49..0d829f2 100644
+--- a/src/ds/address.h
++++ b/src/ds/address.h
+@@ -49,7 +49,7 @@ namespace snmalloc
+   template<size_t alignment>
+   static inline bool is_aligned_block(void* p, size_t size)
+   {
+-    static_assert(bits::next_pow2_const(alignment) == alignment);
++    static_assert(bits::is_pow2(alignment));
+ 
+     return ((address_cast(p) | size) & (alignment - 1)) == 0;
+   }
+@@ -62,7 +62,7 @@ namespace snmalloc
+   SNMALLOC_FAST_PATH T* pointer_align_down(void* p)
+   {
+     static_assert(alignment > 0);
+-    static_assert(bits::next_pow2_const(alignment) == alignment);
++    static_assert(bits::is_pow2(alignment));
+     if constexpr (alignment == 1)
+       return static_cast<T*>(p);
+     else
+@@ -84,7 +84,7 @@ namespace snmalloc
+   inline T* pointer_align_up(void* p)
+   {
+     static_assert(alignment > 0);
+-    static_assert(bits::next_pow2_const(alignment) == alignment);
++    static_assert(bits::is_pow2(alignment));
+     if constexpr (alignment == 1)
+       return static_cast<T*>(p);
+     else
+@@ -106,7 +106,7 @@ namespace snmalloc
+   SNMALLOC_FAST_PATH T* pointer_align_down(void* p, size_t alignment)
+   {
+     SNMALLOC_ASSERT(alignment > 0);
+-    SNMALLOC_ASSERT(bits::next_pow2(alignment) == alignment);
++    SNMALLOC_ASSERT(bits::is_pow2(alignment));
+ #if __has_builtin(__builtin_align_down)
+     return static_cast<T*>(__builtin_align_down(p, alignment));
+ #else
+@@ -123,7 +123,7 @@ namespace snmalloc
+   inline T* pointer_align_up(void* p, size_t alignment)
+   {
+     SNMALLOC_ASSERT(alignment > 0);
+-    SNMALLOC_ASSERT(bits::next_pow2(alignment) == alignment);
++    SNMALLOC_ASSERT(bits::is_pow2(alignment));
+ #if __has_builtin(__builtin_align_up)
+     return static_cast<T*>(__builtin_align_up(p, alignment));
+ #else
+diff --git a/src/ds/bits.h b/src/ds/bits.h
+index b59773c..cc6eb8a 100644
+--- a/src/ds/bits.h
++++ b/src/ds/bits.h
+@@ -241,10 +241,19 @@ namespace snmalloc
+       return BITS - clz_const(x - 1);
+     }
+ 
++    /**
++     * Efficient power-of-two test usable at compile-time and runtime.
++     * Returns true iff x is a non-zero power of two.
++     */
++    constexpr inline bool is_pow2(size_t x)
++    {
++      return x != 0 && ((x & (x - 1)) == 0);
++    }
++
+     constexpr SNMALLOC_FAST_PATH size_t
+     align_down(size_t value, size_t alignment)
+     {
+-      SNMALLOC_ASSERT(next_pow2_const(alignment) == alignment);
++      SNMALLOC_ASSERT(is_pow2(alignment));
+ 
+       size_t align_1 = alignment - 1;
+       value &= ~align_1;
+@@ -253,7 +262,7 @@ namespace snmalloc
+ 
+     constexpr SNMALLOC_FAST_PATH size_t align_up(size_t value, size_t alignment)
+     {
+-      SNMALLOC_ASSERT(next_pow2_const(alignment) == alignment);
++      SNMALLOC_ASSERT(is_pow2(alignment));
+ 
+       size_t align_1 = alignment - 1;
+       value += align_1;
+diff --git a/src/ds/helpers.h b/src/ds/helpers.h
+index a042981..03d00a3 100644
+--- a/src/ds/helpers.h
++++ b/src/ds/helpers.h
+@@ -53,7 +53,7 @@ namespace snmalloc
+   class Mod
+   {
+     static_assert(
+-      length == bits::next_pow2_const(length), "Must be a power of two.");
++      bits::is_pow2(length), "Must be a power of two.");
+ 
+   private:
+     T value = 0;
+@@ -74,7 +74,7 @@ namespace snmalloc
+   template<size_t length, typename T>
+   class ModArray
+   {
+-    static constexpr size_t rlength = bits::next_pow2_const(length);
++    static constexpr size_t rlength = (bits::is_pow2(length) ? length : bits::next_pow2_const(length));
+     T array[rlength];
+ 
+   public:
+diff --git a/src/mem/address_space.h b/src/mem/address_space.h
+index 051830b..9ebfbe3 100644
+--- a/src/mem/address_space.h
++++ b/src/mem/address_space.h
+@@ -175,7 +175,7 @@ namespace snmalloc
+     template<bool committed>
+     void* reserve(size_t size)
+     {
+-      SNMALLOC_ASSERT(bits::next_pow2(size) == size);
++      SNMALLOC_ASSERT(bits::is_pow2(size));
+       SNMALLOC_ASSERT(size >= sizeof(void*));
+ 
+       if constexpr (pal_supports<AlignedAllocation, PAL>)
+diff --git a/src/mem/sizeclass.h b/src/mem/sizeclass.h
+index 0d39db3..f9c996f 100644
+--- a/src/mem/sizeclass.h
++++ b/src/mem/sizeclass.h
+@@ -183,7 +183,7 @@ namespace snmalloc
+     // Client responsible for checking alignment is not zero
+     SNMALLOC_ASSERT(alignment != 0);
+     // Client responsible for checking alignment is a power of two
+-    SNMALLOC_ASSERT(bits::next_pow2(alignment) == alignment);
++    SNMALLOC_ASSERT(bits::is_pow2(alignment));
+ 
+     return ((alignment - 1) | (size - 1)) + 1;
+   }
+diff --git a/src/pal/pal.h b/src/pal/pal.h
+index 7a99e42..86afb2a 100644
+--- a/src/pal/pal.h
++++ b/src/pal/pal.h
+@@ -76,7 +76,7 @@ namespace snmalloc
+   static constexpr size_t OS_PAGE_SIZE = Pal::page_size;
+ 
+   static_assert(
+-    bits::next_pow2_const(OS_PAGE_SIZE) == OS_PAGE_SIZE,
++    bits::is_pow2(OS_PAGE_SIZE),
+     "OS_PAGE_SIZE must be a power of two");
+   static_assert(
+     OS_PAGE_SIZE % Aal::smallest_page_size == 0,
+diff --git a/src/pal/pal_bsd_aligned.h b/src/pal/pal_bsd_aligned.h
+index 1d2c515..bb26b07 100644
+--- a/src/pal/pal_bsd_aligned.h
++++ b/src/pal/pal_bsd_aligned.h
+@@ -32,7 +32,7 @@ namespace snmalloc
+     static void* reserve_aligned(size_t size) noexcept
+     {
+       // Alignment must be a power of 2.
+-      SNMALLOC_ASSERT(size == bits::next_pow2(size));
++      SNMALLOC_ASSERT(bits::is_pow2(size));
+       SNMALLOC_ASSERT(size >= minimum_alloc_size);
+ 
+       size_t log2align = bits::next_pow2_bits(size);
+diff --git a/src/pal/pal_freebsd_kernel.h b/src/pal/pal_freebsd_kernel.h
+index 7bab485..084b38b 100644
+--- a/src/pal/pal_freebsd_kernel.h
++++ b/src/pal/pal_freebsd_kernel.h
+@@ -62,7 +62,7 @@ namespace snmalloc
+     template<bool committed>
+     static void* reserve_aligned(size_t size) noexcept
+     {
+-      SNMALLOC_ASSERT(size == bits::next_pow2(size));
++      SNMALLOC_ASSERT(bits::is_pow2(size));
+       SNMALLOC_ASSERT(size >= minimum_alloc_size);
+       size_t align = size;
+ 
+diff --git a/src/pal/pal_posix.h b/src/pal/pal_posix.h
+index db9981f..cca67a6 100644
+--- a/src/pal/pal_posix.h
++++ b/src/pal/pal_posix.h
+@@ -212,7 +212,7 @@ namespace snmalloc
+      */
+     static std::pair<void*, size_t> reserve_at_least(size_t size) noexcept
+     {
+-      SNMALLOC_ASSERT(size == bits::next_pow2(size));
++      SNMALLOC_ASSERT(bits::is_pow2(size));
+ 
+       // Magic number for over-allocating chosen by the Pal
+       // These should be further refined based on experiments.
+diff --git a/src/pal/pal_windows.h b/src/pal/pal_windows.h
+index 39e0556..bd53d10 100644
+--- a/src/pal/pal_windows.h
++++ b/src/pal/pal_windows.h
+@@ -185,7 +185,7 @@ namespace snmalloc
+     template<bool committed>
+     static void* reserve_aligned(size_t size) noexcept
+     {
+-      SNMALLOC_ASSERT(size == bits::next_pow2(size));
++      SNMALLOC_ASSERT(bits::is_pow2(size));
+       SNMALLOC_ASSERT(size >= minimum_alloc_size);
+ 
+       DWORD flags = MEM_RESERVE;
+@@ -215,7 +215,7 @@ namespace snmalloc
+ #  else
+     static std::pair<void*, size_t> reserve_at_least(size_t size) noexcept
+     {
+-      SNMALLOC_ASSERT(size == bits::next_pow2(size));
++      SNMALLOC_ASSERT(bits::is_pow2(size));
+ 
+       // Magic number for over-allocating chosen by the Pal
+       // These should be further refined based on experiments.

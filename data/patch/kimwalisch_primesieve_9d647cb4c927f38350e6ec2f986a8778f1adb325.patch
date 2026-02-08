@@ -1,0 +1,158 @@
+diff --git a/include/primesieve/PreSieve.hpp b/include/primesieve/PreSieve.hpp
+index 5aa3a5a6..531a94e7 100644
+--- a/include/primesieve/PreSieve.hpp
++++ b/include/primesieve/PreSieve.hpp
+@@ -12,6 +12,7 @@
+ 
+ #include <stdint.h>
+ #include <vector>
++#include <cstring>
+ 
+ namespace primesieve {
+ 
+diff --git a/src/Erat.cpp b/src/Erat.cpp
+index a2f6a016..3c355d94 100644
+--- a/src/Erat.cpp
++++ b/src/Erat.cpp
+@@ -23,6 +23,7 @@
+ #include <algorithm>
+ #include <cassert>
+ #include <memory>
++#include <cstring>
+ 
+ using namespace std;
+ 
+@@ -45,7 +46,7 @@ const array<uint8_t, 37> unsetLarger =
+   0x01, 0x01, 0x01, 0x03, 0x03, 0x07, 0x07, 0x07,
+   0x07, 0x0f, 0x0f, 0x1f, 0x1f, 0x1f, 0x1f, 0x3f,
+   0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x7f, 0x7f, 0xff,
+-  0xff, 0xff, 0xff, 0xff, 0xff
++  0xff, 0xff, 0xff, 0xff
+ };
+ 
+ } // namespace
+@@ -209,7 +210,8 @@ void Erat::sieveLastSegment()
+   // unset bytes > stop
+   uint64_t bytes = sieveSize_ % 8;
+   bytes = (8 - bytes) % 8;
+-  fill_n(&sieve_[sieveSize_], bytes, (uint8_t) 0);
++  if (bytes)
++    memset(&sieve_[sieveSize_], 0, (size_t)bytes);
+ 
+   segmentLow_ = stop_;
+ }
+diff --git a/src/PreSieve.cpp b/src/PreSieve.cpp
+index eb47bb5b..9c3e6c67 100644
+--- a/src/PreSieve.cpp
++++ b/src/PreSieve.cpp
+@@ -37,6 +37,7 @@
+ #include <array>
+ #include <iterator>
+ #include <vector>
++#include <cstring>
+ 
+ using namespace std;
+ 
+@@ -78,16 +79,20 @@ void PreSieve::initBuffer(uint64_t maxPrime,
+   primeProduct_ = primeProduct;
+   size_ = primeProduct_ / 30;
+ 
+-  buffer_.clear();
+-  buffer_.resize(size_, 0xff);
++  // Allocate and set buffer bytes directly (faster than resize + fill)
++  buffer_.resize((size_t)size_);
++  memset(buffer_.data(), 0xff, (size_t)size_);
+ 
+   EratSmall eratSmall;
+   uint64_t stop = primeProduct_ * 2;
+   eratSmall.init(stop, size_, maxPrime_);
+ 
+-  for (uint64_t prime : primes)
++  for (size_t k = 0; k < primes.size(); ++k)
++  {
++    uint64_t prime = primes[k];
+     if (prime <= maxPrime_)
+       eratSmall.addSievingPrime(prime, primeProduct_);
++  }
+ 
+   auto buffer = buffer_.data();
+   eratSmall.crossOff(buffer, size_);
+@@ -100,24 +105,30 @@ void PreSieve::copy(uint8_t* sieve,
+ {
+   // Find segmentLow index
+   uint64_t remainder = segmentLow % primeProduct_;
+-  uint64_t i = remainder / 30;
+-  uint64_t sizeLeft = size_ - i;
+-  auto buffer = buffer_.data();
++  size_t i = (size_t)(remainder / 30);
++  size_t sizeLeft = (size_t)size_ - i;
++  const uint8_t* buffer = buffer_.data();
+ 
+-  if (sieveSize <= sizeLeft)
+-    copy_n(&buffer[i], sieveSize, sieve);
++  if ((size_t)sieveSize <= sizeLeft)
++  {
++    memcpy(sieve, buffer + i, (size_t)sieveSize);
++  }
+   else
+   {
+     // Copy the last remaining bytes of buffer
+     // to the beginning of the sieve array
+-    copy_n(&buffer[i], sizeLeft, sieve);
++    memcpy(sieve, buffer + i, sizeLeft);
+ 
+     // Restart copying at the beginning of buffer
+-    for (i = sizeLeft; i + size_ < sieveSize; i += size_)
+-      copy_n(buffer, size_, &sieve[i]);
++    size_t pos = sizeLeft;
++    while (pos + (size_t)size_ <= (size_t)sieveSize)
++    {
++      memcpy(sieve + pos, buffer, (size_t)size_);
++      pos += (size_t)size_;
++    }
+ 
+     // Copy the last remaining bytes
+-    copy_n(buffer, sieveSize - i, &sieve[i]);
++    memcpy(sieve + pos, buffer, (size_t)(sieveSize - pos));
+   }
+ }
+ 
+diff --git a/src/SievingPrimes.cpp b/src/SievingPrimes.cpp
+index 81879019..199d57b2 100644
+--- a/src/SievingPrimes.cpp
++++ b/src/SievingPrimes.cpp
+@@ -39,12 +39,13 @@ void SievingPrimes::init(Erat* erat, PreSieve& preSieve)
+ void SievingPrimes::tinySieve()
+ {
+   uint64_t n = isqrt(stop_);
+-  tinySieve_.resize(n + 1, true);
++  tinySieve_.resize((size_t)n + 1, true);
+ 
++  auto ts = tinySieve_.data();
+   for (uint64_t i = 3; i * i <= n; i += 2)
+-    if (tinySieve_[i])
++    if (ts[(size_t)i])
+       for (uint64_t j = i * i; j <= n; j += i * 2)
+-        tinySieve_[j] = false;
++        ts[(size_t)j] = false;
+ 
+   tinyIdx_ = start_;
+   tinyIdx_ += ~tinyIdx_ & 1;
+@@ -69,7 +70,7 @@ void SievingPrimes::fill()
+     uint64_t bits = littleendian_cast<uint64_t>(&sieve_[sieveIdx_]);
+ 
+     for (; bits != 0; bits &= bits - 1)
+-      primes_[num++] = nextPrime(bits, low_);
++      primes_[(size_t)num++] = nextPrime(bits, low_);
+ 
+     low_ += 8 * 30;
+     sieveIdx_ += 8;
+@@ -89,7 +90,7 @@ bool SievingPrimes::sieveSegment()
+     uint64_t high = segmentHigh_;
+ 
+     for (uint64_t& i = tinyIdx_; i * i <= high; i += 2)
+-      if (tinySieve_[i])
++      if (tinySieve_[(size_t)i])
+         addSievingPrime(i);
+ 
+     Erat::sieveSegment();

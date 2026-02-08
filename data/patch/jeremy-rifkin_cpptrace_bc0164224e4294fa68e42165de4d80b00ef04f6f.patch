@@ -1,0 +1,14 @@
+diff --git a/src/symbols/dwarf/dwarf_resolver.cpp b/src/symbols/dwarf/dwarf_resolver.cpp
+index 1b02c1c..07267e7 100644
+--- a/src/symbols/dwarf/dwarf_resolver.cpp
++++ b/src/symbols/dwarf/dwarf_resolver.cpp
+@@ -190,6 +190,9 @@ namespace libdwarf {
+             if(skeleton) {
+                 VERIFY(wrap(dwarf_set_tied_dbg, dbg, skeleton.unwrap().resolver.dbg) == DW_DLV_OK);
+             }
++            // Improve performance and memory usage by disabling libdwarf's automatic deallocation.
++            // We perform necessary deallocations manually in the destructor.
++            (void)dwarf_set_de_alloc_flag(dbg, 0);
+ 
+             if(ok) {
+                 // Check for .debug_aranges for fast lookup

@@ -1,0 +1,75 @@
+diff --git a/src/core/FileRecompressor.cpp b/src/core/FileRecompressor.cpp
+index 03818b01..08786027 100644
+--- a/src/core/FileRecompressor.cpp
++++ b/src/core/FileRecompressor.cpp
+@@ -29,7 +29,8 @@ namespace core {
+ 
+ int64_t
+ FileRecompressor::recompress(const std::string& cache_file,
+-                             const std::optional<int8_t> level)
++                             const std::optional<int8_t> level,
++                             bool always_reset_timestamps)
+ {
+   core::CacheEntry::Header header(cache_file);
+ 
+@@ -58,8 +59,16 @@ FileRecompressor::recompress(const std::string& cache_file,
+     new_stat = Stat::lstat(cache_file, Stat::OnError::log);
+   }
+ 
+-  // Restore mtime/atime to keep cache LRU cleanup working as expected:
+-  util::set_timestamps(cache_file, old_stat.mtime(), old_stat.atime());
++  // Restore mtime/atime according to caller's intent:
++  // - For regular --recompress, only reset timestamps if mtime changed since
++  //   local cache LRU cleanup uses mtime.
++  // - For --trim-dir/--trim-recompress, always reset timestamps since atime may
++  //   be used for LRU cleanup.
++  if (always_reset_timestamps) {
++    util::set_timestamps(cache_file, old_stat.mtime(), old_stat.atime());
++  } else if (new_stat.mtime() != old_stat.mtime()) {
++    util::set_timestamps(cache_file, old_stat.mtime(), old_stat.atime());
++  }
+ 
+   m_content_size += header.entry_size;
+   m_old_size += old_stat.size_on_disk();
+diff --git a/src/core/FileRecompressor.hpp b/src/core/FileRecompressor.hpp
+index 289b0d75..f3f3e3ff 100644
+--- a/src/core/FileRecompressor.hpp
++++ b/src/core/FileRecompressor.hpp
+@@ -33,7 +33,8 @@ public:
+ 
+   // Returns on-disk size change in KiB.
+   int64_t recompress(const std::string& cache_file,
+-                     const std::optional<int8_t> level);
++                     const std::optional<int8_t> level,
++                     bool always_reset_timestamps = false);
+ 
+   uint64_t content_size() const;
+   uint64_t old_size() const;
+diff --git a/src/core/mainoptions.cpp b/src/core/mainoptions.cpp
+index a1866b5c..4e8eca2c 100644
+--- a/src/core/mainoptions.cpp
++++ b/src/core/mainoptions.cpp
+@@ -316,7 +316,9 @@ trim_dir(const std::string& dir,
+     for (const auto& file : files) {
+       thread_pool.enqueue([&] {
+         try {
+-          recompressor.recompress(file.path, *recompress_level);
++          // For trim-dir/trim-recompress, always reset timestamps because atime
++          // may be used for LRU cleanup.
++          recompressor.recompress(file.path, *recompress_level, true);
+         } catch (core::Error&) {
+           // Ignore for now.
+           incompressible_size += file.stat.size_on_disk();
+diff --git a/src/storage/local/LocalStorage_compress.cpp b/src/storage/local/LocalStorage_compress.cpp
+index 4aa587ad..7f8bd689 100644
+--- a/src/storage/local/LocalStorage_compress.cpp
++++ b/src/storage/local/LocalStorage_compress.cpp
+@@ -111,7 +111,7 @@ LocalStorage::recompress(const std::optional<int8_t> level,
+             [&recompressor, &incompressible_size, level, stats_file, file] {
+               try {
+                 int64_t size_change_kibibyte =
+-                  recompressor.recompress(file.path(), level);
++                  recompressor.recompress(file.path(), level, false);
+                 StatsFile(stats_file).update([=](auto& cs) {
+                   cs.increment(core::Statistic::cache_size_kibibyte,
+                                size_change_kibibyte);

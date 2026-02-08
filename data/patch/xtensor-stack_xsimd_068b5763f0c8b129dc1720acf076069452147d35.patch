@@ -1,0 +1,62 @@
+diff --git a/include-refactoring/xsimd/arch/xsimd_sse.hpp b/include-refactoring/xsimd/arch/xsimd_sse.hpp
+index aae1c1d..0849f9e 100644
+--- a/include-refactoring/xsimd/arch/xsimd_sse.hpp
++++ b/include-refactoring/xsimd/arch/xsimd_sse.hpp
+@@ -2,6 +2,7 @@
+ #define XSIMD_SSE_HPP
+ 
+ #include "../types/xsimd_sse_register.hpp"
++#include <cstring>
+ 
+ 
+ namespace xsimd {
+diff --git a/include-refactoring/xsimd/arch/xsimd_sse2.hpp b/include-refactoring/xsimd/arch/xsimd_sse2.hpp
+index 657b1c2..9c71cd7 100644
+--- a/include-refactoring/xsimd/arch/xsimd_sse2.hpp
++++ b/include-refactoring/xsimd/arch/xsimd_sse2.hpp
+@@ -270,10 +270,13 @@ namespace xsimd {
+     }
+     template<class A>
+     batch<double, A> to_float(batch<int64_t, A> const& self, requires<sse2>) {
+-      // FIXME: call _mm_cvtepi64_pd
+-      alignas(A::alignment()) int64_t buffer[batch<int64_t, A>::size];
+-      self.store_aligned(&buffer[0]);
+-      return {(double)buffer[0], (double)buffer[1]};
++      // Implement without memory store: extract 64-bit lanes and convert to double
++      // low 64 bits
++      int64_t low = _mm_cvtsi128_si64(self);
++      // high 64 bits: shift right by 8 bytes then extract
++      __m128i tmp = _mm_srli_si128(self, 8);
++      int64_t high = _mm_cvtsi128_si64(tmp);
++      return _mm_set_pd(static_cast<double>(high), static_cast<double>(low));
+     }
+ 
+     // to_int
+diff --git a/include-refactoring/xsimd/types/xsimd_batch.hpp b/include-refactoring/xsimd/types/xsimd_batch.hpp
+index ea5fc98..f5afab6 100644
+--- a/include-refactoring/xsimd/types/xsimd_batch.hpp
++++ b/include-refactoring/xsimd/types/xsimd_batch.hpp
+@@ -5,6 +5,7 @@
+ #include "../memory/xsimd_alignment.hpp"
+ 
+ #include <cassert>
++#include <cstring>
+ 
+ namespace xsimd {
+ 
+@@ -322,8 +323,13 @@ template<class T, class A>
+ batch_bool<T, A> batch_bool<T, A>::load_aligned(bool const* mem) {
+   batch<T, A> ref(0);
+   alignas(A::alignment()) T buffer[size];
+-  for(std::size_t i = 0; i < size; ++i)
+-    buffer[i] = mem[i] ? 1 : 0;
++  // Faster copy from bools to the integer buffer using memcpy when possible
++  // We copy the raw bytes into a temporary and then widen to T to avoid branching per element
++  unsigned char tmp[size];
++  std::memcpy(tmp, mem, size);
++  for(std::size_t i = 0; i < size; ++i) {
++    buffer[i] = static_cast<T>(tmp[i]);
++  }
+   return ref != batch<T, A>::load_aligned(&buffer[0]);
+ }
+ 

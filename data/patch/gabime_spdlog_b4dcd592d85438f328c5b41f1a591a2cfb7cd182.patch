@@ -1,0 +1,16 @@
+diff --git a/include/spdlog/details/pattern_formatter.h b/include/spdlog/details/pattern_formatter.h
+index d372a337..2d321afb 100644
+--- a/include/spdlog/details/pattern_formatter.h
++++ b/include/spdlog/details/pattern_formatter.h
+@@ -460,9 +460,9 @@ class full_formatter SPDLOG_FINAL : public flag_formatter
+         // each second cache the header
+         auto duration = msg.time.time_since_epoch();
+         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+-        if (true || cached_header_.size() == 0 || cached_seconds_ts_ != seconds)
++        if (cached_header_.empty() || cached_seconds_ts_ != seconds)
+         {
+-            cached_header_.resize(0);
++            cached_header_.clear();
+             cached_header_.push_back('[');
+             fmt_helper::append_int(tm_time.tm_year + 1900, cached_header_);
+             cached_header_.push_back('-');

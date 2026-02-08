@@ -1,0 +1,21 @@
+diff --git a/include/xsimd/arch/xsimd_sse3.hpp b/include/xsimd/arch/xsimd_sse3.hpp
+index 199189a..2688b11 100644
+--- a/include/xsimd/arch/xsimd_sse3.hpp
++++ b/include/xsimd/arch/xsimd_sse3.hpp
+@@ -29,6 +29,16 @@ namespace xsimd {
+     batch<double, A> haddp(batch<double, A> const *row, requires_arch<sse3>) {
+       return _mm_hadd_pd(row[0], row[1]);
+     }
++    // load_unaligned - use _mm_lddqu_si128 on sse3 for potentially faster unaligned loads
++    template<class A, class T, class=typename std::enable_if<std::is_integral<T>::value, void>::type>
++    batch<T, A> load_unaligned(T const* mem, convert<T>, requires_arch<sse3>) {
++#if XSIMD_WITH_SSE3
++      return _mm_lddqu_si128((__m128i const*)mem);
++#else
++      return _mm_loadu_si128((__m128i const*)mem);
++#endif
++    }
++
+ 
+   }
+ 

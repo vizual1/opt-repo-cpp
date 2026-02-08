@@ -1,0 +1,387 @@
+diff --git a/include/xsimd/arch/generic/xsimd_generic_arithmetic.hpp b/include/xsimd/arch/generic/xsimd_generic_arithmetic.hpp
+index c72e416..9488ee4 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_arithmetic.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_arithmetic.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/generic/xsimd_generic_complex.hpp b/include/xsimd/arch/generic/xsimd_generic_complex.hpp
+index 960e4c1..058c397 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_complex.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_complex.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/generic/xsimd_generic_details.hpp b/include/xsimd/arch/generic/xsimd_generic_details.hpp
+index 14c62a0..8f165cd 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_details.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_details.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/generic/xsimd_generic_logical.hpp b/include/xsimd/arch/generic/xsimd_generic_logical.hpp
+index dd446e8..fd51e8f 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_logical.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_logical.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/generic/xsimd_generic_math.hpp b/include/xsimd/arch/generic/xsimd_generic_math.hpp
+index a7b8e2f..a069520 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_math.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_math.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/generic/xsimd_generic_memory.hpp b/include/xsimd/arch/generic/xsimd_generic_memory.hpp
+index f92f6b4..57967bc 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_memory.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_memory.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/generic/xsimd_generic_rounding.hpp b/include/xsimd/arch/generic/xsimd_generic_rounding.hpp
+index b6a79a4..80e1ae4 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_rounding.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_rounding.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/generic/xsimd_generic_trigo.hpp b/include/xsimd/arch/generic/xsimd_generic_trigo.hpp
+index 2568a72..d8b34d3 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_trigo.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_trigo.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_avx.hpp b/include/xsimd/arch/xsimd_avx.hpp
+index 66bcb45..41c8447 100644
+--- a/include/xsimd/arch/xsimd_avx.hpp
++++ b/include/xsimd/arch/xsimd_avx.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_avx2.hpp b/include/xsimd/arch/xsimd_avx2.hpp
+index c052e0f..2c0e478 100644
+--- a/include/xsimd/arch/xsimd_avx2.hpp
++++ b/include/xsimd/arch/xsimd_avx2.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_avx512bw.hpp b/include/xsimd/arch/xsimd_avx512bw.hpp
+index db72b73..4156a0c 100644
+--- a/include/xsimd/arch/xsimd_avx512bw.hpp
++++ b/include/xsimd/arch/xsimd_avx512bw.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_avx512dq.hpp b/include/xsimd/arch/xsimd_avx512dq.hpp
+index 7840ea8..22d10a4 100644
+--- a/include/xsimd/arch/xsimd_avx512dq.hpp
++++ b/include/xsimd/arch/xsimd_avx512dq.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_avx512f.hpp b/include/xsimd/arch/xsimd_avx512f.hpp
+index d94c681..b1706cf 100644
+--- a/include/xsimd/arch/xsimd_avx512f.hpp
++++ b/include/xsimd/arch/xsimd_avx512f.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_constants.hpp b/include/xsimd/arch/xsimd_constants.hpp
+index 22dd5d3..d663c84 100644
+--- a/include/xsimd/arch/xsimd_constants.hpp
++++ b/include/xsimd/arch/xsimd_constants.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_emulated.hpp b/include/xsimd/arch/xsimd_emulated.hpp
+index ac3dd4f..a659ce0 100644
+--- a/include/xsimd/arch/xsimd_emulated.hpp
++++ b/include/xsimd/arch/xsimd_emulated.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_fma3_avx.hpp b/include/xsimd/arch/xsimd_fma3_avx.hpp
+index 64e9ed6..516a112 100644
+--- a/include/xsimd/arch/xsimd_fma3_avx.hpp
++++ b/include/xsimd/arch/xsimd_fma3_avx.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_fma3_sse.hpp b/include/xsimd/arch/xsimd_fma3_sse.hpp
+index 55c38f1..dae765a 100644
+--- a/include/xsimd/arch/xsimd_fma3_sse.hpp
++++ b/include/xsimd/arch/xsimd_fma3_sse.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_fma4.hpp b/include/xsimd/arch/xsimd_fma4.hpp
+index 6a97d71..f6ed492 100644
+--- a/include/xsimd/arch/xsimd_fma4.hpp
++++ b/include/xsimd/arch/xsimd_fma4.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_generic_fwd.hpp b/include/xsimd/arch/xsimd_generic_fwd.hpp
+index 87dcaa8..c3c930f 100644
+--- a/include/xsimd/arch/xsimd_generic_fwd.hpp
++++ b/include/xsimd/arch/xsimd_generic_fwd.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_neon.hpp b/include/xsimd/arch/xsimd_neon.hpp
+index b0edae8..11e9d88 100644
+--- a/include/xsimd/arch/xsimd_neon.hpp
++++ b/include/xsimd/arch/xsimd_neon.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_neon64.hpp b/include/xsimd/arch/xsimd_neon64.hpp
+index 2469b14..c273505 100644
+--- a/include/xsimd/arch/xsimd_neon64.hpp
++++ b/include/xsimd/arch/xsimd_neon64.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_rvv.hpp b/include/xsimd/arch/xsimd_rvv.hpp
+index 2b8cebe..b056188 100644
+--- a/include/xsimd/arch/xsimd_rvv.hpp
++++ b/include/xsimd/arch/xsimd_rvv.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+ 
+  * Copyright (c) Rivos Inc.                                                 *
+diff --git a/include/xsimd/arch/xsimd_scalar.hpp b/include/xsimd/arch/xsimd_scalar.hpp
+index 38b9f84..e85d0ea 100644
+--- a/include/xsimd/arch/xsimd_scalar.hpp
++++ b/include/xsimd/arch/xsimd_scalar.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_sse2.hpp b/include/xsimd/arch/xsimd_sse2.hpp
+index d733a8c..fbe2854 100644
+--- a/include/xsimd/arch/xsimd_sse2.hpp
++++ b/include/xsimd/arch/xsimd_sse2.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_sse3.hpp b/include/xsimd/arch/xsimd_sse3.hpp
+index ccc0497..caaf616 100644
+--- a/include/xsimd/arch/xsimd_sse3.hpp
++++ b/include/xsimd/arch/xsimd_sse3.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_sse4_1.hpp b/include/xsimd/arch/xsimd_sse4_1.hpp
+index 18cfe38..6ff4ecd 100644
+--- a/include/xsimd/arch/xsimd_sse4_1.hpp
++++ b/include/xsimd/arch/xsimd_sse4_1.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_sse4_2.hpp b/include/xsimd/arch/xsimd_sse4_2.hpp
+index 8f9b7a7..8a20180 100644
+--- a/include/xsimd/arch/xsimd_sse4_2.hpp
++++ b/include/xsimd/arch/xsimd_sse4_2.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_ssse3.hpp b/include/xsimd/arch/xsimd_ssse3.hpp
+index d4c0b17..2f3f05c 100644
+--- a/include/xsimd/arch/xsimd_ssse3.hpp
++++ b/include/xsimd/arch/xsimd_ssse3.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_sve.hpp b/include/xsimd/arch/xsimd_sve.hpp
+index 553f026..aa6ab4b 100644
+--- a/include/xsimd/arch/xsimd_sve.hpp
++++ b/include/xsimd/arch/xsimd_sve.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/arch/xsimd_wasm.hpp b/include/xsimd/arch/xsimd_wasm.hpp
+index 050b1a0..fcc4a3e 100644
+--- a/include/xsimd/arch/xsimd_wasm.hpp
++++ b/include/xsimd/arch/xsimd_wasm.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/config/xsimd_arch.hpp b/include/xsimd/config/xsimd_arch.hpp
+index ac51dac..a85a82e 100644
+--- a/include/xsimd/config/xsimd_arch.hpp
++++ b/include/xsimd/config/xsimd_arch.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/config/xsimd_cpuid.hpp b/include/xsimd/config/xsimd_cpuid.hpp
+index 89b883a..9f4eaac 100644
+--- a/include/xsimd/config/xsimd_cpuid.hpp
++++ b/include/xsimd/config/xsimd_cpuid.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/math/xsimd_rem_pio2.hpp b/include/xsimd/math/xsimd_rem_pio2.hpp
+index 05371ee..86b6b42 100644
+--- a/include/xsimd/math/xsimd_rem_pio2.hpp
++++ b/include/xsimd/math/xsimd_rem_pio2.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/memory/xsimd_aligned_allocator.hpp b/include/xsimd/memory/xsimd_aligned_allocator.hpp
+index 3918d68..6b779ac 100644
+--- a/include/xsimd/memory/xsimd_aligned_allocator.hpp
++++ b/include/xsimd/memory/xsimd_aligned_allocator.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/memory/xsimd_alignment.hpp b/include/xsimd/memory/xsimd_alignment.hpp
+index 2b3b350..68fae0c 100644
+--- a/include/xsimd/memory/xsimd_alignment.hpp
++++ b/include/xsimd/memory/xsimd_alignment.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/types/xsimd_api.hpp b/include/xsimd/types/xsimd_api.hpp
+index 138c964..a66e967 100644
+--- a/include/xsimd/types/xsimd_api.hpp
++++ b/include/xsimd/types/xsimd_api.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/types/xsimd_batch.hpp b/include/xsimd/types/xsimd_batch.hpp
+index d910882..cece012 100644
+--- a/include/xsimd/types/xsimd_batch.hpp
++++ b/include/xsimd/types/xsimd_batch.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/types/xsimd_batch_constant.hpp b/include/xsimd/types/xsimd_batch_constant.hpp
+index cb28220..5b49304 100644
+--- a/include/xsimd/types/xsimd_batch_constant.hpp
++++ b/include/xsimd/types/xsimd_batch_constant.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/types/xsimd_emulated_register.hpp b/include/xsimd/types/xsimd_emulated_register.hpp
+index b05d718..22c0bb8 100644
+--- a/include/xsimd/types/xsimd_emulated_register.hpp
++++ b/include/xsimd/types/xsimd_emulated_register.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/types/xsimd_register.hpp b/include/xsimd/types/xsimd_register.hpp
+index 4fe4f3f..2db6471 100644
+--- a/include/xsimd/types/xsimd_register.hpp
++++ b/include/xsimd/types/xsimd_register.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/types/xsimd_rvv_register.hpp b/include/xsimd/types/xsimd_rvv_register.hpp
+index ff03b65..c561e61 100644
+--- a/include/xsimd/types/xsimd_rvv_register.hpp
++++ b/include/xsimd/types/xsimd_rvv_register.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/types/xsimd_traits.hpp b/include/xsimd/types/xsimd_traits.hpp
+index f848aab..49ba88d 100644
+--- a/include/xsimd/types/xsimd_traits.hpp
++++ b/include/xsimd/types/xsimd_traits.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *
+diff --git a/include/xsimd/xsimd.hpp b/include/xsimd/xsimd.hpp
+index 8d76a5f..4cfa795 100644
+--- a/include/xsimd/xsimd.hpp
++++ b/include/xsimd/xsimd.hpp
+@@ -1,3 +1,4 @@
++#include "xsimd/config/xsimd_inline.hpp"
+ /***************************************************************************
+  * Copyright (c) Johan Mabille, Sylvain Corlay, Wolf Vollprecht and         *
+  * Martin Renou                                                             *

@@ -1,0 +1,41 @@
+diff --git a/src/lsp-server.cpp b/src/lsp-server.cpp
+index e60e55d7..2b4c68ae 100644
+--- a/src/lsp-server.cpp
++++ b/src/lsp-server.cpp
+@@ -501,21 +501,30 @@ void linting_lsp_server_handler::apply_document_changes(
+       // Ignore invalid change.
+       continue;
+     }
++
+     ::simdjson::ondemand::object raw_range;
+     bool is_incremental =
+         change["range"].get(raw_range) == ::simdjson::error_code::SUCCESS;
+     if (is_incremental) {
+-      std::optional<int> start_line = maybe_get_int(raw_range["start"]["line"]);
+-      std::optional<int> start_character =
+-          maybe_get_int(raw_range["start"]["character"]);
+-      std::optional<int> end_line = maybe_get_int(raw_range["end"]["line"]);
+-      std::optional<int> end_character =
+-          maybe_get_int(raw_range["end"]["character"]);
++      // Avoid repeated lookups of `start` and `end` by retrieving them once.
++      ::simdjson::ondemand::object start_obj;
++      ::simdjson::ondemand::object end_obj;
++      if (raw_range["start"].get(start_obj) != ::simdjson::error_code::SUCCESS ||
++          raw_range["end"].get(end_obj) != ::simdjson::error_code::SUCCESS) {
++        // Ignore invalid change.
++        continue;
++      }
++
++      std::optional<int> start_line = maybe_get_int(start_obj["line"]);
++      std::optional<int> start_character = maybe_get_int(start_obj["character"]);
++      std::optional<int> end_line = maybe_get_int(end_obj["line"]);
++      std::optional<int> end_character = maybe_get_int(end_obj["character"]);
+       if (!(start_line.has_value() && start_character.has_value() &&
+             end_line.has_value() && end_character.has_value())) {
+         // Ignore invalid change.
+         continue;
+       }
++
+       lsp_range range = {
+           .start =
+               {

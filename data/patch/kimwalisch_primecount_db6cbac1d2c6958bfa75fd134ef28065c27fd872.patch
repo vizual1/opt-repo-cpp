@@ -1,0 +1,23 @@
+diff --git a/src/util.cpp b/src/util.cpp
+index 3d76090f..d6c8c3f0 100644
+--- a/src/util.cpp
++++ b/src/util.cpp
+@@ -340,13 +340,11 @@ std::pair<double, double> get_alpha_gourdon(maxint_t x)
+   // Use default alpha_z
+   if (alpha_z < 1)
+   {
+-    // In primecount when alpha_z is increased alpha_y is automatically
+-    // decreased because alpha_y = alpha_yz / alpha_z. When alpha_z
+-    // is increased this increases the runtime of the B formula but at
+-    // the same time reduces the runtime of the C and D formulas.
+-    // Increasing alpha_z also slightly reduces memory usage.
+-    alpha_z = 1.5;
+-    alpha_z = in_between(1, alpha_yz / 5, alpha_z);
++    // Increase default alpha_z slightly to improve overall runtime.
++    // A larger alpha_z reduces the runtime of the B formula while
++    // keeping the C/D formulas reasonable. Compute a sensible default
++    // from alpha_yz and clamp it to the interval [1.0, 2.0].
++    alpha_z = in_between(1.0, alpha_yz / 4.0, 2.0);
+   }
+ 
+   // Use default alpha_y

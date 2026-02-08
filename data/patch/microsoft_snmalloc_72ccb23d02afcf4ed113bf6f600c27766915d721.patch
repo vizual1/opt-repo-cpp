@@ -1,0 +1,31 @@
+diff --git a/src/mem/allocconfig.h b/src/mem/allocconfig.h
+index 45937da..3e7e7db 100644
+--- a/src/mem/allocconfig.h
++++ b/src/mem/allocconfig.h
+@@ -97,6 +97,10 @@ namespace snmalloc
+   static constexpr size_t REMOTE_SLOTS = 1 << REMOTE_SLOT_BITS;
+   static constexpr size_t REMOTE_MASK = REMOTE_SLOTS - 1;
+ 
++  // Local cache slots for recently freed chunks retained per CoreAllocator.
++  // A small per-thread cache reduces contention on the global chunk stack.
++  static constexpr size_t LOCAL_CHUNK_CACHE_SLOTS = 1;
++
+   static_assert(
+     INTERMEDIATE_BITS < MIN_ALLOC_BITS,
+     "INTERMEDIATE_BITS must be less than MIN_ALLOC_BITS");
+diff --git a/src/mem/chunkallocator.h b/src/mem/chunkallocator.h
+index 03b95b2..9784c31 100644
+--- a/src/mem/chunkallocator.h
++++ b/src/mem/chunkallocator.h
+@@ -30,6 +30,11 @@ namespace snmalloc
+    */
+   constexpr size_t NUM_SLAB_SIZES = Pal::address_bits - MIN_CHUNK_BITS;
+ 
++
++  // Ensure local chunk cache slots is sane.
++  static_assert(LOCAL_CHUNK_CACHE_SLOTS >= 1, "LOCAL_CHUNK_CACHE_SLOTS must be at least 1");
++
++
+   /**
+    * Used to ensure the per slab meta data is large enough for both use cases.
+    */

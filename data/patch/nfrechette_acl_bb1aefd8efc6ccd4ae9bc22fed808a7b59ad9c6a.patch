@@ -1,0 +1,29 @@
+diff --git a/includes/acl/compression/transform_error_metrics.h b/includes/acl/compression/transform_error_metrics.h
+index 167d295b..73f5103e 100644
+--- a/includes/acl/compression/transform_error_metrics.h
++++ b/includes/acl/compression/transform_error_metrics.h
+@@ -188,6 +188,24 @@ namespace acl
+ 			out_result_zzzz = rtm::vector_add(result_zzzz, rtm::vector_dup_z(qvv.translation));
+ 		}
+ 
++		// SOA version of qvv_mul_point3 when no scale is present. This avoids the per-component
++		// scale multiplications and is faster on some architectures (e.g., ARM64).
++		RTM_DISABLE_SECURITY_COOKIE_CHECK RTM_FORCE_INLINE void RTM_SIMD_CALL qvv_mul_point3_no_scale_soa(
++			rtm::vector4f_arg0 point_xxxx, rtm::vector4f_arg1 point_yyyy, rtm::vector4f_arg2 point_zzzz,
++			rtm::qvvf_argn qvv,
++			rtm::vector4f& out_result_xxxx, rtm::vector4f& out_result_yyyy, rtm::vector4f& out_result_zzzz) RTM_NO_EXCEPT
++		{
++			// No scale: directly rotate the input point and add the translation.
++			quat_mul_vector3_soa(
++				point_xxxx, point_yyyy, point_zzzz,
++				qvv.rotation,
++				out_result_xxxx, out_result_yyyy, out_result_zzzz);
++
++			out_result_xxxx = rtm::vector_add(out_result_xxxx, rtm::vector_dup_x(qvv.translation));
++			out_result_yyyy = rtm::vector_add(out_result_yyyy, rtm::vector_dup_y(qvv.translation));
++			out_result_zzzz = rtm::vector_add(out_result_zzzz, rtm::vector_dup_z(qvv.translation));
++		}
++
+ 		RTM_DISABLE_SECURITY_COOKIE_CHECK RTM_FORCE_INLINE rtm::vector4f RTM_SIMD_CALL vector_dot3_soa(
+ 			rtm::vector4f_arg0 lhs_xxxx, rtm::vector4f_arg1 lhs_yyyy, rtm::vector4f_arg2 lhs_zzzz,
+ 			rtm::vector4f_arg3 rhs_xxxx, rtm::vector4f_arg4 rhs_yyyy, rtm::vector4f_arg5 rhs_zzzz) RTM_NO_EXCEPT

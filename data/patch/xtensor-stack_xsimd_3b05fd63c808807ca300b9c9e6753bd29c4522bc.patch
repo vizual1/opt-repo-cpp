@@ -1,0 +1,14 @@
+diff --git a/include/xsimd/arch/generic/xsimd_generic_math.hpp b/include/xsimd/arch/generic/xsimd_generic_math.hpp
+index 461fed2..4650882 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_math.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_math.hpp
+@@ -2026,7 +2026,8 @@ namespace xsimd
+             auto cond = (y == ze);
+             r = select(cond, r, r * exp(-y * arga));
+             theta = select(cond, theta, theta + y * log(absa));
+-            return select(absa == ze, cplx_batch(ze), cplx_batch(r * cos(theta), r * sin(theta)));
++            auto sincosTheta = sincos(theta);
++            return select(absa == ze, cplx_batch(ze), cplx_batch(r * sincosTheta.second, r * sincosTheta.first));
+         }
+ 
+         // reciprocal

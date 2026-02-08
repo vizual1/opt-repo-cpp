@@ -1,0 +1,16 @@
+diff --git a/src/quick-lint-js/vector.h b/src/quick-lint-js/vector.h
+index 420c8ba2..8046d124 100644
+--- a/src/quick-lint-js/vector.h
++++ b/src/quick-lint-js/vector.h
+@@ -316,8 +316,9 @@ class bump_vector {
+   template <class... Args>
+   QLJS_FORCE_INLINE T &emplace_back(Args &&... args) {
+     if (this->capacity_end_ == this->data_end_) {
+-      this->reserve_grow(
+-          (std::max)(this->capacity() + 1, this->capacity() * 2));
++      const std::size_t old_capacity = this->capacity();
++      const std::size_t grown_capacity = old_capacity + (old_capacity >> 1);
++      this->reserve_grow((std::max)(old_capacity + 1, grown_capacity));
+     }
+     this->data_end_ = new (this->data_end_) T(std::forward<Args>(args)...);
+     T &result = *this->data_end_++;

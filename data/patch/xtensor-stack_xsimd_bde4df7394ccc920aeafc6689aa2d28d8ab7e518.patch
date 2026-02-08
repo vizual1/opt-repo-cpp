@@ -1,0 +1,51 @@
+diff --git a/include/xsimd/arch/xsimd_neon.hpp b/include/xsimd/arch/xsimd_neon.hpp
+index dfbc235..991d264 100644
+--- a/include/xsimd/arch/xsimd_neon.hpp
++++ b/include/xsimd/arch/xsimd_neon.hpp
+@@ -923,16 +923,45 @@ namespace xsimd
+             return dispatcher.apply(register_type(lhs), register_type(rhs));
+         }
+ 
+-        template <class A, class T, detail::enable_sized_integral_t<T, 8> = 0>
++        template <class A, class T, detail::enable_sized_integral_t<T, 8> = 0,
++                  class = typename std::enable_if<std::is_signed<T>::value, void>::type>
+         XSIMD_INLINE batch_bool<T, A> eq(batch<T, A> const& lhs, batch<T, A> const& rhs, requires_arch<neon>) noexcept
+         {
++#if defined(__aarch64__)
++            using register_type = typename batch<T, A>::register_type;
++            const register_type a = register_type(lhs);
++            const register_type b = register_type(rhs);
++            const int64x2_t cmp = vceqq_s64(a, b);
++            return batch_bool<T, A>(vreinterpretq_u64_s64(cmp));
++#else
+             return batch_bool<T, A>({ lhs.get(0) == rhs.get(0), lhs.get(1) == rhs.get(1) });
++#endif
++        }
++
++        template <class A, class T, detail::enable_sized_integral_t<T, 8> = 0,
++                  class = typename std::enable_if<std::is_unsigned<T>::value, void>::type>
++        XSIMD_INLINE batch_bool<T, A> eq(batch<T, A> const& lhs, batch<T, A> const& rhs, requires_arch<neon>) noexcept
++        {
++#if defined(__aarch64__)
++            using register_type = typename batch<T, A>::register_type;
++            const register_type a = register_type(lhs);
++            const register_type b = register_type(rhs);
++            const uint64x2_t cmp = vceqq_u64(a, b);
++            return batch_bool<T, A>(cmp);
++#else
++            return batch_bool<T, A>({ lhs.get(0) == rhs.get(0), lhs.get(1) == rhs.get(1) });
++#endif
+         }
+ 
+         template <class A, class T, detail::enable_sized_integral_t<T, 8> = 0>
+         XSIMD_INLINE batch_bool<T, A> eq(batch_bool<T, A> const& lhs, batch_bool<T, A> const& rhs, requires_arch<neon>) noexcept
+         {
++#if defined(__aarch64__)
++            using register_type = typename batch_bool<T, A>::register_type;
++            return batch_bool<T, A>(vceqq_u64(register_type(lhs), register_type(rhs)));
++#else
+             return batch_bool<T, A>({ lhs.get(0) == rhs.get(0), lhs.get(1) == rhs.get(1) });
++#endif
+         }
+ 
+         /*************

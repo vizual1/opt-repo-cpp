@@ -1,0 +1,54 @@
+diff --git a/src/P2.cpp b/src/P2.cpp
+index 419aacf0..62a6e730 100644
+--- a/src/P2.cpp
++++ b/src/P2.cpp
+@@ -69,11 +69,19 @@ T P2_thread(T x,
+   for (; prime > start; prime = it1.prev_prime())
+   {
+     xp = (int64_t)(x / prime);
++    uint64_t xp_u = (uint64_t) xp;
+ 
+-    for (; it2.primes_[it2.last_idx_] <= (uint64_t) xp; it2.generate_next_primes())
++    // Extend the sieve buffer until the last prime in the buffer > xp
++    while (it2.primes_[it2.last_idx_] <= xp_u)
++    {
+       pi_xp += (it2.last_idx_ - it2.i_) + 1;
+-    for (int64_t p = it2.primes_[it2.i_]; p <= xp; p = it2.next_prime())
+-      pi_xp += 1;
++      it2.generate_next_primes();
++    }
++
++    // Count remaining primes in the current buffer up to xp without
++    // calling next_prime() repeatedly (faster local loop).
++    for (size_t idx = it2.i_; idx <= it2.last_idx_ && it2.primes_[idx] <= xp_u; ++idx)
++      ++pi_xp;
+ 
+     sum += pi_xp;
+   }
+diff --git a/src/gourdon/B.cpp b/src/gourdon/B.cpp
+index c79c3e15..25cd47c0 100644
+--- a/src/gourdon/B.cpp
++++ b/src/gourdon/B.cpp
+@@ -68,11 +68,19 @@ T B_thread(T x,
+   for (; prime > start; prime = it1.prev_prime())
+   {
+     xp = (int64_t)(x / prime);
++    uint64_t xp_u = (uint64_t) xp;
+ 
+-    for (; it2.primes_[it2.last_idx_] <= (uint64_t) xp; it2.generate_next_primes())
++    // Extend the sieve buffer until the last prime in the buffer > xp
++    while (it2.primes_[it2.last_idx_] <= xp_u)
++    {
+       pi_xp += (it2.last_idx_ - it2.i_) + 1;
+-    for (int64_t p = it2.primes_[it2.i_]; p <= xp; p = it2.next_prime())
+-      pi_xp += 1;
++      it2.generate_next_primes();
++    }
++
++    // Count remaining primes in the current buffer up to xp without
++    // calling next_prime() repeatedly (faster local loop).
++    for (size_t idx = it2.i_; idx <= it2.last_idx_ && it2.primes_[idx] <= xp_u; ++idx)
++      ++pi_xp;
+ 
+     sum += pi_xp;
+   }

@@ -1,0 +1,64 @@
+diff --git a/srtcore/buffer_rcv.cpp b/srtcore/buffer_rcv.cpp
+index 3098407a..87feba4d 100644
+--- a/srtcore/buffer_rcv.cpp
++++ b/srtcore/buffer_rcv.cpp
+@@ -712,7 +712,7 @@ bool CRcvBuffer::isRcvDataReady(time_point time_now) const
+ 
+ CRcvBuffer::PacketInfo CRcvBuffer::getFirstReadablePacketInfo(time_point time_now) const
+ {
+-    const PacketInfo unreadableInfo    = {SRT_SEQNO_NONE, false, time_point()};
++    static const PacketInfo unreadableInfo    = {SRT_SEQNO_NONE, false, time_point()};
+     const bool       hasInorderPackets = hasReadableInorderPkts();
+ 
+     if (!m_tsbpd.isEnabled())
+diff --git a/srtcore/core.cpp b/srtcore/core.cpp
+index a5d32d9e..3870c641 100644
+--- a/srtcore/core.cpp
++++ b/srtcore/core.cpp
+@@ -6804,6 +6804,12 @@ bool srt::CUDT::isRcvBufferReady() const
+     return m_pRcvBuffer->isRcvDataReady(steady_clock::now());
+ }
+ 
++bool srt::CUDT::isRcvBufferReady(const time_point& t) const
++{
++    ScopedLock lck(m_RcvBufferLock);
++    return m_pRcvBuffer->isRcvDataReady(t);
++}
++
+ // int by_exception: accepts values of CUDTUnited::ErrorHandling:
+ // - 0 - by return value
+ // - 1 - by exception
+diff --git a/srtcore/core.h b/srtcore/core.h
+index e7ca57c5..4334c5d8 100644
+--- a/srtcore/core.h
++++ b/srtcore/core.h
+@@ -719,6 +719,7 @@ private:
+ 
+     SRT_ATTR_EXCLUDES(m_RcvBufferLock)
+     bool isRcvBufferReady() const;
++    bool isRcvBufferReady(const time_point& t) const;
+ 
+     // TSBPD thread main function.
+     static void* tsbpd(void* param);
+diff --git a/srtcore/group.cpp b/srtcore/group.cpp
+index fedfdcf7..d7c1911e 100644
+--- a/srtcore/group.cpp
++++ b/srtcore/group.cpp
+@@ -2201,6 +2201,7 @@ int CUDTGroup::recv(char* buf, int len, SRT_MSGCTRL& w_mc)
+         // Find the first readable packet among all member sockets.
+         CUDTSocket*               socketToRead = NULL;
+         CRcvBuffer::PacketInfo infoToRead   = {-1, false, time_point()};
++        const steady_clock::time_point chk_time = steady_clock::now();
+         for (vector<CUDTSocket*>::const_iterator si = readySockets.begin(); si != readySockets.end(); ++si)
+         {
+             CUDTSocket* ps = *si;
+@@ -2218,8 +2219,7 @@ int CUDTGroup::recv(char* buf, int len, SRT_MSGCTRL& w_mc)
+                 }
+             }
+ 
+-            const CRcvBuffer::PacketInfo info =
+-                ps->core().m_pRcvBuffer->getFirstReadablePacketInfo(steady_clock::now());
++            const CRcvBuffer::PacketInfo info = ps->core().m_pRcvBuffer->getFirstReadablePacketInfo(chk_time);
+             if (info.seqno == SRT_SEQNO_NONE)
+             {
+                 HLOGC(grlog.Debug, log << "grp/recv: $" << id() << ": @" << ps->m_SocketID << ": Nothing to read.");

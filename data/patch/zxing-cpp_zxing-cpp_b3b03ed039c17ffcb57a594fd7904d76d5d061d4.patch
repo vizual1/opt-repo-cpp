@@ -1,0 +1,54 @@
+diff --git a/core/src/qrcode/QRDetector.cpp b/core/src/qrcode/QRDetector.cpp
+index dbb67b2c..ec2a8569 100644
+--- a/core/src/qrcode/QRDetector.cpp
++++ b/core/src/qrcode/QRDetector.cpp
+@@ -37,6 +37,49 @@ namespace ZXing::QRCode {
+ 
+ constexpr auto PATTERN = FixedPattern<5, 7>{1, 1, 3, 1, 1};
+ 
++
++static bool FastPlausibleFinderPattern(const BitMatrix& image, const PatternView& view, int y)
++{
++	// Quick, cheap plausibility test for the 1:1:3:1:1 finder pattern along the scan row.
++	// Sample a few pixels and reject obvious false positives before the expensive
++	// LocateConcentricPattern call. Conservative heuristic to avoid false negatives.
++	double cx_d = view.pixelsInFront() + view[0] + view[1] + view[2] / 2.0;
++	int cx = static_cast<int>(std::lround(cx_d));
++	int total = view[0] + view[1] + view[2] + view[3] + view[4];
++	int m = std::max(1, total / 7); // estimate module size in pixels
++
++	auto safeGet = [&](int x, int yy) -> int {
++		PointI p{x, yy};
++		if (!image.isIn(p))
++			return -1;
++		return image.get(p) ? 1 : 0;
++	};
++
++	// center should be black
++	if (safeGet(cx, y) != 1)
++		return false;
++
++	// expect white roughly 2 modules away and black roughly 4 modules away
++	int offs1 = std::max(1, 2 * m);
++	int offs2 = std::max(1, 4 * m);
++
++	int l1 = safeGet(cx - offs1, y);
++	int r1 = safeGet(cx + offs1, y);
++	if (l1 <= -1 || r1 <= -1)
++		return false;
++	if (l1 != 0 || r1 != 0)
++		return false;
++
++	int l2 = safeGet(cx - offs2, y);
++	int r2 = safeGet(cx + offs2, y);
++	if (l2 <= -1 || r2 <= -1)
++		return false;
++	if (l2 != 1 || r2 != 1)
++		return false;
++
++	return true;
++}
++
+ std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image, bool tryHarder)
+ {
+ 	constexpr int MIN_SKIP         = 3;           // 1 pixel/module times 3 modules/center

@@ -1,0 +1,108 @@
+diff --git a/src/gourdon/AC.cpp b/src/gourdon/AC.cpp
+index ff5d2d76..a9c622b5 100644
+--- a/src/gourdon/AC.cpp
++++ b/src/gourdon/AC.cpp
+@@ -305,8 +305,20 @@ T AC_OpenMP(T x,
+         status.print(b, max_b);
+       }
+ 
+-      // Wait until all threads have finished
+-      // computing the current segment.
++      // If this is the last segment we can avoid the two
++      // expensive OpenMP barriers and master update because
++      // no further segments will be processed. All threads
++      // have finished processing the current segment at this
++      // point so it's safe for them to break out of the loop.
++      bool last_segment = (high >= sqrtx);
++      if (last_segment)
++      {
++        break;
++      }
++
++      // Wait until all threads have finished computing the
++      // current segment before the master thread updates the
++      // segmented table and resets atomics for the next segment.
+       #pragma omp barrier
+       #pragma omp master
+       {
+diff --git a/src/gourdon/AC_libdivide.cpp b/src/gourdon/AC_libdivide.cpp
+index 4e0fa1bf..05527f50 100644
+--- a/src/gourdon/AC_libdivide.cpp
++++ b/src/gourdon/AC_libdivide.cpp
+@@ -426,8 +426,20 @@ T AC_OpenMP(T x,
+         status.print(b, max_b);
+       }
+ 
+-      // Wait until all threads have finished
+-      // computing the current segment.
++      // If this is the last segment we can avoid the two
++      // expensive OpenMP barriers and master update because
++      // no further segments will be processed. All threads
++      // have finished processing the current segment at this
++      // point so it's safe for them to break out of the loop.
++      bool last_segment = (high >= sqrtx);
++      if (last_segment)
++      {
++        break;
++      }
++
++      // Wait until all threads have finished computing the
++      // current segment before the master thread updates the
++      // segmented table and resets atomics for the next segment.
+       #pragma omp barrier
+       #pragma omp master
+       {
+diff --git a/src/mpi/AC_mpi.cpp b/src/mpi/AC_mpi.cpp
+index 3b4eb533..98315e9f 100644
+--- a/src/mpi/AC_mpi.cpp
++++ b/src/mpi/AC_mpi.cpp
+@@ -296,8 +296,20 @@ T AC_OpenMP(T x,
+         status.print(b, max_b);
+       }
+ 
+-      // Wait until all threads have finished
+-      // computing the current segment.
++      // If this is the last segment we can avoid the two
++      // expensive OpenMP barriers and master update because
++      // no further segments will be processed. All threads
++      // have finished processing the current segment at this
++      // point so it's safe for them to break out of the loop.
++      bool last_segment = (high >= sqrtx);
++      if (last_segment)
++      {
++        break;
++      }
++
++      // Wait until all threads have finished computing the
++      // current segment before the master thread updates the
++      // segmented table and resets atomics for the next segment.
+       #pragma omp barrier
+       #pragma omp master
+       {
+diff --git a/src/mpi/AC_mpi_libdivide.cpp b/src/mpi/AC_mpi_libdivide.cpp
+index c1513935..6bdc97c6 100644
+--- a/src/mpi/AC_mpi_libdivide.cpp
++++ b/src/mpi/AC_mpi_libdivide.cpp
+@@ -411,8 +411,20 @@ T AC_OpenMP(T x,
+         status.print(b, max_b);
+       }
+ 
+-      // Wait until all threads have finished
+-      // computing the current segment.
++      // If this is the last segment we can avoid the two
++      // expensive OpenMP barriers and master update because
++      // no further segments will be processed. All threads
++      // have finished processing the current segment at this
++      // point so it's safe for them to break out of the loop.
++      bool last_segment = (high >= sqrtx);
++      if (last_segment)
++      {
++        break;
++      }
++
++      // Wait until all threads have finished computing the
++      // current segment before the master thread updates the
++      // segmented table and resets atomics for the next segment.
+       #pragma omp barrier
+       #pragma omp master
+       {

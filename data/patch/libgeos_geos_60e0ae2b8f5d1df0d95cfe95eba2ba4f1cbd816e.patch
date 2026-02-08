@@ -1,0 +1,130 @@
+diff --git a/include/geos/operation/distance/ConnectedElementLocationFilter.h b/include/geos/operation/distance/ConnectedElementLocationFilter.h
+index 0c6ab18e2..82e4261ea 100644
+--- a/include/geos/operation/distance/ConnectedElementLocationFilter.h
++++ b/include/geos/operation/distance/ConnectedElementLocationFilter.h
+@@ -50,7 +50,7 @@ namespace distance { // geos::operation::distance
+ class GEOS_DLL ConnectedElementLocationFilter: public geom::GeometryFilter {
+ private:
+ 
+-    std::vector<std::unique_ptr<GeometryLocation>> locations;
++    std::vector<GeometryLocation> locations;
+     ConnectedElementLocationFilter() = default;
+     ConnectedElementLocationFilter(const ConnectedElementLocationFilter&) = delete;
+     ConnectedElementLocationFilter& operator=(const ConnectedElementLocationFilter&) = delete;
+@@ -63,7 +63,7 @@ public:
+      * an empty list will be returned. The elements of the list
+      * are [GeometryLocations](@ref operation::distance::GeometryLocation).
+      */
+-    static std::vector<std::unique_ptr<GeometryLocation>> getLocations(const geom::Geometry* geom);
++    static std::vector<GeometryLocation> getLocations(const geom::Geometry* geom);
+ 
+     void filter_ro(const geom::Geometry* geom) override;
+     void filter_rw(geom::Geometry* geom) override;
+diff --git a/include/geos/operation/distance/DistanceOp.h b/include/geos/operation/distance/DistanceOp.h
+index da13ab130..5005d6c11 100644
+--- a/include/geos/operation/distance/DistanceOp.h
++++ b/include/geos/operation/distance/DistanceOp.h
+@@ -182,7 +182,7 @@ private:
+ 
+     void computeContainmentDistance();
+ 
+-    void computeInside(std::vector<std::unique_ptr<GeometryLocation>> & locs,
++    void computeInside(std::vector<GeometryLocation> & locs,
+                        const std::vector<const geom::Polygon*>& polys,
+                        std::array<std::unique_ptr<GeometryLocation>, 2> & locPtPoly);
+ 
+diff --git a/include/geos/operation/distance/GeometryLocation.h b/include/geos/operation/distance/GeometryLocation.h
+index 764c6e7b0..e201ec1b2 100644
+--- a/include/geos/operation/distance/GeometryLocation.h
++++ b/include/geos/operation/distance/GeometryLocation.h
+@@ -62,6 +62,11 @@ public:
+      */
+     static const int INSIDE_AREA = -1;
+ 
++    /** \brief
++     * Default constructor for stack-allocated/empty locations
++     */
++    GeometryLocation();
++
+     /** \brief
+      * Constructs a GeometryLocation specifying a point on a geometry,
+      * as well as the segment that the point is on (or INSIDE_AREA if
+diff --git a/src/operation/distance/ConnectedElementLocationFilter.cpp b/src/operation/distance/ConnectedElementLocationFilter.cpp
+index 71feb2801..b117627b1 100644
+--- a/src/operation/distance/ConnectedElementLocationFilter.cpp
++++ b/src/operation/distance/ConnectedElementLocationFilter.cpp
+@@ -35,7 +35,7 @@ namespace operation { // geos.operation
+ namespace distance { // geos.operation.distance
+ 
+ /*public*/
+-std::vector<std::unique_ptr<GeometryLocation>>
++std::vector<GeometryLocation>
+ ConnectedElementLocationFilter::getLocations(const Geometry* geom)
+ {
+     ConnectedElementLocationFilter c;
+@@ -51,7 +51,7 @@ ConnectedElementLocationFilter::filter_ro(const Geometry* geom)
+             (typeid(*geom) == typeid(LineString)) ||
+             (typeid(*geom) == typeid(LinearRing)) ||
+             (typeid(*geom) == typeid(Polygon))) {
+-        locations.emplace_back(new GeometryLocation(geom, 0, *(geom->getCoordinate())));
++        locations.emplace_back(geom, 0, *(geom->getCoordinate()));
+     }
+ }
+ 
+@@ -64,7 +64,7 @@ ConnectedElementLocationFilter::filter_rw(Geometry* geom)
+             (typeid(*geom) == typeid(LineString)) ||
+             (typeid(*geom) == typeid(LinearRing)) ||
+             (typeid(*geom) == typeid(Polygon))) {
+-        locations.emplace_back(new GeometryLocation(geom, 0, *(geom->getCoordinate())));
++        locations.emplace_back(geom, 0, *(geom->getCoordinate()));
+     }
+ }
+ 
+diff --git a/src/operation/distance/DistanceOp.cpp b/src/operation/distance/DistanceOp.cpp
+index fc19c31f7..3fc3407c3 100644
+--- a/src/operation/distance/DistanceOp.cpp
++++ b/src/operation/distance/DistanceOp.cpp
+@@ -254,20 +254,21 @@ DistanceOp::computeContainmentDistance()
+ 
+ /*private*/
+ void
+-DistanceOp::computeInside(std::vector<std::unique_ptr<GeometryLocation>> & locs,
++DistanceOp::computeInside(std::vector<GeometryLocation> & locs,
+                           const Polygon::ConstVect& polys,
+                           std::array<std::unique_ptr<GeometryLocation>, 2> & locPtPoly)
+ {
+     for(auto& loc : locs) {
+         for(const auto& poly : polys) {
+-            const auto& pt = loc->getCoordinate();
+-
+-			if (Location::EXTERIOR != ptLocator.locate(pt, static_cast<const Geometry*>(poly))) {
+-				minDistance = 0.0;
+-				locPtPoly[0] = std::move(loc);
+-				locPtPoly[1].reset(new GeometryLocation(poly, pt));
+-				return;
+-			}
++            const auto& pt = loc.getCoordinate();
++
++            if (Location::EXTERIOR != ptLocator.locate(pt, static_cast<const Geometry*>(poly))) {
++                minDistance = 0.0;
++                // copy the stack-allocated location into the unique_ptr slots
++                locPtPoly[0].reset(new GeometryLocation(loc));
++                locPtPoly[1].reset(new GeometryLocation(poly, pt));
++                return;
++            }
+         }
+     }
+ }
+diff --git a/src/operation/distance/GeometryLocation.cpp b/src/operation/distance/GeometryLocation.cpp
+index 6c46b5e0e..5eb92cb87 100644
+--- a/src/operation/distance/GeometryLocation.cpp
++++ b/src/operation/distance/GeometryLocation.cpp
+@@ -31,6 +31,8 @@ namespace distance { // geos.operation.distance
+  * Constructs a GeometryLocation specifying a point on a geometry, as well as the
+  * segment that the point is on (or INSIDE_AREA if the point is not on a segment).
+  */
++GeometryLocation::GeometryLocation(): component(nullptr), segIndex((std::size_t)INSIDE_AREA), inside_area(false), pt(0.0, 0.0) {}
++
+ GeometryLocation::GeometryLocation(const Geometry* newComponent, std::size_t newSegIndex, const CoordinateXY& newPt)
+ {
+     component = newComponent;

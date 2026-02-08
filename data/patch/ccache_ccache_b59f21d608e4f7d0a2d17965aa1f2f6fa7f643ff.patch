@@ -1,0 +1,13 @@
+diff --git a/src/storage/local/LocalStorage.cpp b/src/storage/local/LocalStorage.cpp
+index 5134c0b7..df356612 100644
+--- a/src/storage/local/LocalStorage.cpp
++++ b/src/storage/local/LocalStorage.cpp
+@@ -343,6 +343,8 @@ LocalStorage::finalize()
+   if (m_config.stats()) {
+     // Pseudo-randomly choose one of the stats files in the 256 level 2
+     // directories.
++    if (!m_counter_updates.all_zero()) {
++
+     const auto bucket = getpid() % 256;
+     const auto stats_file =
+       FMT("{}/{:x}/{:x}/stats", m_config.cache_dir(), bucket / 16, bucket % 16);

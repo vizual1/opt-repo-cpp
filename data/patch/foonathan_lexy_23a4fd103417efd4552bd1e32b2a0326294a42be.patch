@@ -1,0 +1,26 @@
+diff --git a/include/lexy/dsl/delimited.hpp b/include/lexy/dsl/delimited.hpp
+index 3cd8b1bd..f840d515 100644
+--- a/include/lexy/dsl/delimited.hpp
++++ b/include/lexy/dsl/delimited.hpp
+@@ -205,7 +205,7 @@ struct _del : rule_base
+                                       _del_limit<Limit>, Limit>;
+ 
+     template <typename CloseParser, typename Context, typename Reader, typename Sink>
+-    static constexpr bool _loop(CloseParser& close, Context& context, Reader& reader, Sink& sink)
++    LEXY_PARSER_FUNC static bool _loop(CloseParser& close, Context& context, Reader& reader, Sink& sink)
+     {
+         auto                     del_begin = reader.position();
+         _del_chars<Char, Reader> cur_chars(reader);
+diff --git a/include/lexy/dsl/list.hpp b/include/lexy/dsl/list.hpp
+index 5b9f0c4c..9ab123a5 100644
+--- a/include/lexy/dsl/list.hpp
++++ b/include/lexy/dsl/list.hpp
+@@ -15,7 +15,7 @@ template <typename Item, typename Sep>
+ struct _lst : _copy_base<Item>
+ {
+     template <typename Context, typename Reader, typename Sink>
+-    static constexpr bool _loop(Context& context, Reader& reader, Sink& sink)
++    LEXY_PARSER_FUNC static bool _loop(Context& context, Reader& reader, Sink& sink)
+     {
+         while (true)
+         {

@@ -1,0 +1,136 @@
+diff --git a/include/xsimd/arch/xsimd_avx.hpp b/include/xsimd/arch/xsimd_avx.hpp
+index 004dc63..c7a8609 100644
+--- a/include/xsimd/arch/xsimd_avx.hpp
++++ b/include/xsimd/arch/xsimd_avx.hpp
+@@ -539,7 +539,20 @@ namespace xsimd
+             }
+         }
+ 
+-        // div
++        // gather double -> float/int32 (fallback)
++		template <class A, class U, detail::enable_sized_integral_t<U, 4> = 0>
++		inline batch<float, A> gather(batch<float, A> const&, double const* src, batch<U, A> const& index, requires_arch<avx>) noexcept
++		{
++			return kernel::gather(batch<float, A>{}, src, index, generic {});
++		}
++
++		template <class A, class U, detail::enable_sized_integral_t<U, 4> = 0>
++		inline batch<int32_t, A> gather(batch<int32_t, A> const&, double const* src, batch<U, A> const& index, requires_arch<avx>) noexcept
++		{
++			return kernel::gather(batch<int32_t, A>{}, src, index, generic {});
++		}
++
++		// div
+         template <class A>
+         inline batch<float, A> div(batch<float, A> const& self, batch<float, A> const& other, requires_arch<avx>) noexcept
+         {
+diff --git a/include/xsimd/arch/xsimd_avx2.hpp b/include/xsimd/arch/xsimd_avx2.hpp
+index 65a41f9..9b92399 100644
+--- a/include/xsimd/arch/xsimd_avx2.hpp
++++ b/include/xsimd/arch/xsimd_avx2.hpp
+@@ -348,7 +348,47 @@ namespace xsimd
+             return _mm256_i64gather_pd(src, index, sizeof(double));
+         }
+ 
+-        // lt
++        // gather double -> float/int32 (accelerated)
++		template <class A, class U, detail::enable_sized_integral_t<U, 4> = 0>
++		inline batch<float, A> gather(batch<float, A> const&, double const* src,
++		                              batch<U, A> const& index,
++		                              kernel::requires_arch<avx2>) noexcept
++		{
++			// index are 8 32-bit integers; build two 4-wide 64-bit index vectors
++			__m256i idx = index;
++			__m128i idx_lo = _mm256_castsi256_si128(idx);
++			__m128i idx_hi = _mm256_extractf128_si256(idx, 1);
++			__m256i idx64_lo = _mm256_cvtepi32_epi64(idx_lo);
++			__m256i idx64_hi = _mm256_cvtepi32_epi64(idx_hi);
++			__m256d dlo = _mm256_i64gather_pd(src, idx64_lo, sizeof(double));
++			__m256d dhi = _mm256_i64gather_pd(src, idx64_hi, sizeof(double));
++			__m128 flo = _mm256_cvtpd_ps(dlo);
++			__m128 fhi = _mm256_cvtpd_ps(dhi);
++			__m256 res = _mm256_castps128_ps256(flo);
++			res = _mm256_insertf128_ps(res, fhi, 1);
++			return res;
++		}
++
++		template <class A, class U, detail::enable_sized_integral_t<U, 4> = 0>
++		inline batch<int32_t, A> gather(batch<int32_t, A> const&, double const* src,
++		                                batch<U, A> const& index,
++		                                kernel::requires_arch<avx2>) noexcept
++		{
++			__m256i idx = index;
++			__m128i idx_lo = _mm256_castsi256_si128(idx);
++			__m128i idx_hi = _mm256_extractf128_si256(idx, 1);
++			__m256i idx64_lo = _mm256_cvtepi32_epi64(idx_lo);
++			__m256i idx64_hi = _mm256_cvtepi32_epi64(idx_hi);
++			__m256d dlo = _mm256_i64gather_pd(src, idx64_lo, sizeof(double));
++			__m256d dhi = _mm256_i64gather_pd(src, idx64_hi, sizeof(double));
++			__m128i ilow = _mm256_cvttpd_epi32(dlo);
++			__m128i ihigh = _mm256_cvttpd_epi32(dhi);
++			__m256i res = _mm256_castsi128_si256(ilow);
++			res = _mm256_insertf128_si256(res, ihigh, 1);
++			return res;
++		}
++
++		// lt
+         template <class A, class T, class = typename std::enable_if<std::is_integral<T>::value, void>::type>
+         inline batch_bool<T, A> lt(batch<T, A> const& self, batch<T, A> const& other, requires_arch<avx2>) noexcept
+         {
+diff --git a/include/xsimd/arch/xsimd_avx512f.hpp b/include/xsimd/arch/xsimd_avx512f.hpp
+index aaeb8f5..5fe3311 100644
+--- a/include/xsimd/arch/xsimd_avx512f.hpp
++++ b/include/xsimd/arch/xsimd_avx512f.hpp
+@@ -755,19 +755,44 @@ namespace xsimd
+         }
+ 
+         template <class A, class U, detail::enable_sized_integral_t<U, 4> = 0>
+-        inline batch<float, A> gather(batch<float, A> const&, float const* src,
++        inline batch<float, A> gather(batch<float, A> const&, double const* src,
+                                       batch<U, A> const& index,
+                                       kernel::requires_arch<avx512f>) noexcept
+         {
+-            return _mm512_i32gather_ps(index, src, sizeof(float));
++            // gather doubles then convert to float
++            __m512i idx = index;
++            // split into two groups of 8 32-bit indices
++            __m256i idx32_lo = _mm512_castsi512_si256(idx);
++            __m256i idx32_hi = _mm512_extracti64x4_epi64(idx, 1);
++            // extend to 64-bit indices
++            __m512i idx64_lo = _mm512_cvtepi32_epi64(idx32_lo);
++            __m512i idx64_hi = _mm512_cvtepi32_epi64(idx32_hi);
++            // gather 8 doubles each
++            __m512d dlo = _mm512_i64gather_pd(idx64_lo, src, sizeof(double));
++            __m512d dhi = _mm512_i64gather_pd(idx64_hi, src, sizeof(double));
++            // convert 8 doubles -> 8 floats (in __m256)
++            __m256 flo = _mm512_cvtpd_ps(dlo);
++            __m256 fhi = _mm512_cvtpd_ps(dhi);
++            // merge into __m512 of 16 floats
++            __m512 res = _mm512_castps256_ps512(flo);
++            res = _mm512_insertf32x8(res, fhi, 1);
++            return res;
+         }
+ 
+-        template <class A, class U, detail::enable_sized_integral_t<U, 8> = 0>
+-        inline batch<double, A>
+-        gather(batch<double, A> const&, double const* src, batch<U, A> const& index,
+-               kernel::requires_arch<avx512f>) noexcept
+-        {
+-            return _mm512_i64gather_pd(index, src, sizeof(double));
++        template <class A, class U, detail::enable_sized_integral_t<U, 4> = 0>
++        inline batch<int32_t, A> gather(batch<int32_t, A> const&, double const* src,
++                                        batch<U, A> const& index,
++                                        kernel::requires_arch<avx512f>) noexcept
++        {
++            // gather doubles then convert to int32
++            __m512i idx = index;
++            __m256i idx_lo = _mm512_castsi512_si256(idx);
++            __m256i idx_hi = _mm512_extracti64x4_epi64(idx, 1);
++            __m512d dlo = _mm512_i64gather_pd(idx_lo, src, sizeof(double));
++            __m512d dhi = _mm512_i64gather_pd(idx_hi, src, sizeof(double));
++            __m256i ilow = _mm512_cvttpd_epi32(dlo);
++            __m256i ihigh = _mm512_cvttpd_epi32(dhi);
++            return _mm512_inserti64x4(_mm512_castsi256_si512(ilow), ihigh, 1);
+         }
+ 
+         // ge

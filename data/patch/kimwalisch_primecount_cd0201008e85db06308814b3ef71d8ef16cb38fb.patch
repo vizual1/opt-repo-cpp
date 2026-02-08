@@ -1,0 +1,26 @@
+diff --git a/src/Sieve.cpp b/src/Sieve.cpp
+index 323bf89c..dbd6ba1b 100644
+--- a/src/Sieve.cpp
++++ b/src/Sieve.cpp
+@@ -33,13 +33,16 @@
+ #include <vector>
+ 
+ #define unset_bit(bit_index, i) \
+-  sieve[i] &= ~(1 << bit_index);
++  do { sieve[i] &= (uint8_t)~(uint8_t)(1u << (bit_index)); } while (0)
+ 
+ #define count_and_unset_bit(bit_index, i) \
+-  is_bit = (sieve[i] >> bit_index) & 1; \
+-  count_removed += is_bit; \
+-  counters[(i) >> counters_shift] -= is_bit; \
+-  sieve[i] &= ~(1 << bit_index);
++  do { \
++    uint8_t _mask = (uint8_t)(1u << (bit_index)); \
++    uint64_t _is_set = (sieve[i] & _mask) ? 1ull : 0ull; \
++    count_removed += _is_set; \
++    counters[(i) >> counters_shift] -= _is_set; \
++    if (_is_set) sieve[i] &= (uint8_t)~_mask; \
++  } while (0)
+ 
+ using namespace std;
+ using namespace primecount;

@@ -1,0 +1,14 @@
+diff --git a/hwy/ops/arm_neon-inl.h b/hwy/ops/arm_neon-inl.h
+index 89e23da9..064a9241 100644
+--- a/hwy/ops/arm_neon-inl.h
++++ b/hwy/ops/arm_neon-inl.h
+@@ -5260,7 +5260,8 @@ HWY_INLINE size_t CountTrue(hwy::SizeTag<8> /*tag*/, const Mask128<T> mask) {
+ // Full
+ template <typename T>
+ HWY_API size_t CountTrue(Full128<T> /* tag */, const Mask128<T> mask) {
+-  return detail::CountTrue(hwy::SizeTag<sizeof(T)>(), mask);
++  // Use scalar bit mask + popcount which is faster than multiple NEON reductions.
++  return PopCount(detail::BitsFromMask(mask));
+ }
+ 
+ // Partial

@@ -1,0 +1,216 @@
+diff --git a/include/MultTab.hpp b/include/MultTab.hpp
+index c9a0380..07e00b3 100644
+--- a/include/MultTab.hpp
++++ b/include/MultTab.hpp
+@@ -4,6 +4,17 @@
+ #include "types.hpp"
+ 
+ /// Lookup tables for multiplication related computations
++
++// Lightweight view type to iterate over a contiguous array of bytes without
++// allocating dynamically. Providing begin()/end() makes it usable in range-based for.
++struct ByteVecView
++{
++    const std::uint8_t* data;
++    std::size_t         size;
++    const std::uint8_t* begin() const { return data; }
++    const std::uint8_t* end() const { return data + size; }
++};
++
+ class MultTab
+ {
+ public:
+@@ -19,18 +30,18 @@ public:
+         return instance.multinvtab[x];
+     }
+ 
+-    /// \return a vector of bytes x such that
++    /// \return a small view of bytes x such that
+     /// msb(x*mult^-1) is equal to msbprod or msbprod-1
+-    static auto getMsbProdFiber2(std::uint8_t msbprodinv) -> const std::vector<std::uint8_t>&
++    static auto getMsbProdFiber2(std::uint8_t msbprodinv) -> ByteVecView
+     {
+-        return instance.msbprodfiber2[msbprodinv];
++        return {instance.msbprodfiber2[msbprodinv].data(), instance.msbprodfiber2_size[msbprodinv]};
+     }
+ 
+-    /// \return a vector of bytes x such that
++    /// \return a small view of bytes x such that
+     /// msb(x*mult^-1) is equal to msbprod, msbprod-1 or msbprod+1
+-    static auto getMsbProdFiber3(std::uint8_t msbprodinv) -> const std::vector<std::uint8_t>&
++    static auto getMsbProdFiber3(std::uint8_t msbprodinv) -> ByteVecView
+     {
+-        return instance.msbprodfiber3[msbprodinv];
++        return {instance.msbprodfiber3[msbprodinv].data(), instance.msbprodfiber3_size[msbprodinv]};
+     }
+ 
+     /// Multiplicative constant used in traditional PKWARE encryption
+@@ -45,10 +56,14 @@ private:
+     MultTab();
+ 
+     // lookup tables
+-    std::array<std::uint32_t, 256>             multtab;
+-    std::array<std::uint32_t, 256>             multinvtab;
+-    std::array<std::vector<std::uint8_t>, 256> msbprodfiber2;
+-    std::array<std::vector<std::uint8_t>, 256> msbprodfiber3;
++    std::array<std::uint32_t, 256> multtab;
++    std::array<std::uint32_t, 256> multinvtab;
++
++    // replace dynamically-allocated vectors with fixed-size arrays and sizes
++    std::array<std::array<std::uint8_t, 256>, 256> msbprodfiber2;
++    std::array<std::array<std::uint8_t, 256>, 256> msbprodfiber3;
++    std::array<std::uint16_t, 256>                 msbprodfiber2_size{};
++    std::array<std::uint16_t, 256>                 msbprodfiber3_size{};
+ 
+     static const MultTab instance;
+ };
+diff --git a/src/Attack.cpp b/src/Attack.cpp
+index 5a4fe69..c4a6efc 100644
+--- a/src/Attack.cpp
++++ b/src/Attack.cpp
+@@ -56,12 +56,18 @@ void Attack::exploreZlists(int i)
+         for (auto y7_8_24 = std::uint32_t{}, prod = (MultTab::getMultinv(msb(ylist[7])) << 24) - MultTab::multInv;
+              y7_8_24 < 1 << 24; y7_8_24 += 1 << 8, prod += MultTab::multInv << 8)
+             // get possible Y7[0,8) values
+-            for (const auto y7_0_8 : MultTab::getMsbProdFiber3(msb(ylist[6]) - msb(prod)))
+-                // filter Y7[0,8) using Y6[24,32)
+-                if (prod + MultTab::getMultinv(y7_0_8) - (ylist[6] & mask<24, 32>) <= maxdiff<24>)
+-                {
+-                    ylist[7] = y7_0_8 | y7_8_24 | (ylist[7] & mask<24, 32>);
+-                    exploreYlists(7);
++            {
++                    auto view = MultTab::getMsbProdFiber3(msb(ylist[6]) - msb(prod));
++                    for (auto it = view.begin(); it != view.end(); ++it)
++                    {
++                        const auto y7_0_8 = *it;
++                        // filter Y7[0,8) using Y6[24,32)
++                        if (prod + MultTab::getMultinv(y7_0_8) - (ylist[6] & mask<24, 32>) <= maxdiff<24>)
++                        {
++                            ylist[7] = y7_0_8 | y7_8_24 | (ylist[7] & mask<24, 32>);
++                            exploreYlists(7);
++                        }
++                    }
+                 }
+     }
+ }
+@@ -74,22 +80,26 @@ void Attack::exploreYlists(int i)
+         const auto ffy = (fy - 1) * MultTab::multInv;
+ 
+         // get possible LSB(Xi)
+-        for (const auto xi_0_8 : MultTab::getMsbProdFiber2(msb(ffy - (ylist[i - 2] & mask<24, 32>))))
+         {
+-            // compute corresponding Y{i-1}
+-            const auto yim1 = fy - xi_0_8;
+-
+-            // filter values with Y{i-2}[24,32)
+-            if (ffy - MultTab::getMultinv(xi_0_8) - (ylist[i - 2] & mask<24, 32>) <= maxdiff<24> &&
+-                msb(yim1) == msb(ylist[i - 1]))
++            auto view = MultTab::getMsbProdFiber2(msb(ffy - (ylist[i - 2] & mask<24, 32>)));
++            for (auto it = view.begin(); it != view.end(); ++it)
+             {
+-                // add Y{i-1} to the Y-list
+-                ylist[i - 1] = yim1;
++                const auto xi_0_8 = *it;
++                // compute corresponding Y{i-1}
++                const auto yim1 = fy - xi_0_8;
+ 
+-                // set Xi value
+-                xlist[i] = xi_0_8;
++                // filter values with Y{i-2}[24,32)
++                if (ffy - MultTab::getMultinv(xi_0_8) - (ylist[i - 2] & mask<24, 32>) <= maxdiff<24> &&
++                    msb(yim1) == msb(ylist[i - 1]))
++                {
++                    // add Y{i-1} to the Y-list
++                    ylist[i - 1] = yim1;
++
++                    // set Xi value
++                    xlist[i] = xi_0_8;
+ 
+-                exploreYlists(i - 1);
++                    exploreYlists(i - 1);
++                }
+             }
+         }
+     }
+diff --git a/src/MultTab.cpp b/src/MultTab.cpp
+index 1f5ee34..a74b548 100644
+--- a/src/MultTab.cpp
++++ b/src/MultTab.cpp
+@@ -4,6 +4,10 @@ const MultTab MultTab::instance;
+ 
+ MultTab::MultTab()
+ {
++    // ensure sizes start at zero
++    msbprodfiber2_size.fill(0);
++    msbprodfiber3_size.fill(0);
++
+     auto prod    = std::uint32_t{}; // x * mult
+     auto prodinv = std::uint32_t{}; // x * mult^-1
+     for (auto x = 0; x < 256; x++, prod += mult, prodinv += multInv)
+@@ -11,11 +15,17 @@ MultTab::MultTab()
+         multtab[x]    = prod;
+         multinvtab[x] = prodinv;
+ 
+-        msbprodfiber2[msb(prodinv)].push_back(x);
+-        msbprodfiber2[(msb(prodinv) + 1) % 256].push_back(x);
++        const auto idx = msb(prodinv);
++        const auto idxm1 = static_cast<std::uint8_t>(idx - 1);
++        const auto idxp1 = static_cast<std::uint8_t>(idx + 1);
++
++        // add x to msbprodfiber2[idx] and msbprodfiber2[idxp1]
++        msbprodfiber2[idx][msbprodfiber2_size[idx]++] = static_cast<std::uint8_t>(x);
++        msbprodfiber2[idxp1][msbprodfiber2_size[idxp1]++] = static_cast<std::uint8_t>(x);
+ 
+-        msbprodfiber3[(msb(prodinv) + 255) % 256].push_back(x);
+-        msbprodfiber3[msb(prodinv)].push_back(x);
+-        msbprodfiber3[(msb(prodinv) + 1) % 256].push_back(x);
++        // add x to msbprodfiber3[idxm1], msbprodfiber3[idx] and msbprodfiber3[idxp1]
++        msbprodfiber3[idxm1][msbprodfiber3_size[idxm1]++] = static_cast<std::uint8_t>(x);
++        msbprodfiber3[idx][msbprodfiber3_size[idx]++] = static_cast<std::uint8_t>(x);
++        msbprodfiber3[idxp1][msbprodfiber3_size[idxp1]++] = static_cast<std::uint8_t>(x);
+     }
+ }
+diff --git a/src/password.cpp b/src/password.cpp
+index 6c08a7e..0768f9a 100644
+--- a/src/password.cpp
++++ b/src/password.cpp
+@@ -82,22 +82,27 @@ protected:
+             const auto ffy = (fy - 1) * MultTab::multInv;
+ 
+             // get possible LSB(Xi)
+-            for (const auto xi_0_8 : MultTab::getMsbProdFiber2(msb(ffy - (y[i - 2] & mask<24, 32>))))
+             {
+-                // compute corresponding Y{i-1}
+-                const auto yim1 = fy - xi_0_8;
+-
+-                // filter values with Y{i-2}[24,32)
+-                if (ffy - MultTab::getMultinv(xi_0_8) - (y[i - 2] & mask<24, 32>) <= maxdiff<24> &&
+-                    msb(yim1) == msb(y[i - 1]))
++                auto view = MultTab::getMsbProdFiber2(msb(ffy - (y[i - 2] & mask<24, 32>)));
++                for (auto it = view.begin(); it != view.end(); ++it)
+                 {
+-                    // add Y{i-1} to the Y-list
+-                    y[i - 1] = yim1;
++                    const auto xi_0_8 = *it;
++
++                    // compute corresponding Y{i-1}
++                    const auto yim1 = fy - xi_0_8;
++
++                    // filter values with Y{i-2}[24,32)
++                    if (ffy - MultTab::getMultinv(xi_0_8) - (y[i - 2] & mask<24, 32>) <= maxdiff<24> &&
++                        msb(yim1) == msb(y[i - 1]))
++                    {
++                        // add Y{i-1} to the Y-list
++                        y[i - 1] = yim1;
+ 
+-                    // set Xi value
+-                    x[i] = xi_0_8;
++                        // set Xi value
++                        x[i] = xi_0_8;
+ 
+-                    searchRecursive(i - 1);
++                        searchRecursive(i - 1);
++                    }
+                 }
+             }
+         }

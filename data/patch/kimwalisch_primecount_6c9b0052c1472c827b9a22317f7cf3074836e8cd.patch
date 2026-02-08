@@ -1,0 +1,30 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index a02ecb74..f29db86f 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -64,7 +64,9 @@ public:
+     // same a). This trick allows us to double the capacity of our cache
+     // without increasing its memory usage.
+     cache_limit_ = numeric_limits<uint16_t>::max();
+-    cache_limit_ = min(cache_limit_, isqrt(limit));
++    // Store indices for ceil(x/2); halve the cache_limit to avoid
++    // large allocations while keeping the same effective cache range.
++    cache_limit_ = min<uint64_t>(cache_limit_, (uint64_t) ((isqrt(limit) + 1) / 2));
+   }
+ 
+   /// Calculate phi(x, a) using the recursive formula:
+diff --git a/src/phi.cpp b/src/phi.cpp
+index e04e83e7..3eecaae2 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -63,7 +63,9 @@ public:
+     // same a). This trick allows us to double the capacity of our cache
+     // without increasing its memory usage.
+     cache_limit_ = numeric_limits<uint16_t>::max();
+-    cache_limit_ = min(cache_limit_, isqrt(limit));
++    // Store indices for ceil(x/2); halve the cache_limit to avoid
++    // large allocations while keeping the same effective cache range.
++    cache_limit_ = min<uint64_t>(cache_limit_, (uint64_t) ((isqrt(limit) + 1) / 2));
+   }
+ 
+   /// Calculate phi(x, a) using the recursive formula:

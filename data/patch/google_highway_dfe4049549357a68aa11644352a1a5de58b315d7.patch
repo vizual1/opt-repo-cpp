@@ -1,0 +1,37 @@
+diff --git a/hwy/contrib/thread_pool/thread_pool.h b/hwy/contrib/thread_pool/thread_pool.h
+index 5a77a4f4..de508c54 100644
+--- a/hwy/contrib/thread_pool/thread_pool.h
++++ b/hwy/contrib/thread_pool/thread_pool.h
+@@ -181,7 +181,6 @@ static inline const char* ToString(WaitType type) {
+ }
+ 
+ // We want predictable struct/class sizes so we can reason about cache lines.
+-#pragma pack(push, 1)
+ 
+ // Parameters governing the main and worker thread behavior. Can be updated at
+ // runtime via `SetWaitMode`. Both have copies which are carefully synchronized
+@@ -352,8 +351,6 @@ class alignas(HWY_ALIGNMENT) Worker {  // HWY_ALIGNMENT bytes
+ };
+ static_assert(sizeof(Worker) == HWY_ALIGNMENT, "");
+ 
+-#pragma pack(pop)
+-
+ // Creates/destroys `Worker` using preallocated storage. See comment at
+ // `ThreadPool::worker_bytes_` for why we do not dynamically allocate.
+ class WorkerLifecycle {  // 0 bytes
+@@ -388,7 +385,6 @@ class WorkerLifecycle {  // 0 bytes
+   }
+ };
+ 
+-#pragma pack(push, 1)
+ // Stores arguments to `Run`: the function and range of task indices. Set by
+ // the main thread, read by workers including the main thread.
+ class alignas(8) Tasks {
+@@ -524,7 +520,6 @@ class alignas(8) Tasks {
+   std::atomic<const void*> opaque_;
+ };
+ static_assert(sizeof(Tasks) == 16 + 2 * sizeof(void*), "");
+-#pragma pack(pop)
+ 
+ // ------------------------------ Threads wait, main wakes them
+ 

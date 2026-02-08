@@ -1,0 +1,94 @@
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index 3a282010..5fa559c3 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -10004,6 +10004,27 @@ HWY_API VW RearrangeToOddPlusEven(const VW sum0, const VW sum1) {
+   return Add(sum0, sum1);
+ }
+ 
++// Define native SumOfMulQuadAccumulate macros for x86 AVX10.2-enabled targets
++#if HWY_X86_HAVE_AVX10_2_OPS
++#ifdef HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#endif
++
++#ifdef HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#endif
++
++#ifdef HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#endif
++#endif
++
+ // ------------------------------ SumOfMulQuadAccumulate
+ #if HWY_TARGET <= HWY_AVX3_DL
+ 
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index 4f92c7e7..da503ea9 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -6413,6 +6413,27 @@ HWY_API Vec256<uint32_t> RearrangeToOddPlusEven(const Vec256<uint32_t> sum0,
+   return sum0;  // invariant already holds
+ }
+ 
++// Define native SumOfMulQuadAccumulate macros for x86 AVX10.2-enabled targets
++#if HWY_X86_HAVE_AVX10_2_OPS
++#ifdef HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#endif
++
++#ifdef HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#endif
++
++#ifdef HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#endif
++#endif
++
+ // ------------------------------ SumOfMulQuadAccumulate
+ 
+ #if HWY_TARGET <= HWY_AVX3_DL
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index fc1f6110..fa67bc7e 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -7625,6 +7625,25 @@ HWY_API Vec512<uint32_t> RearrangeToOddPlusEven(const Vec512<uint32_t> sum0,
+   return sum0;  // invariant already holds
+ }
+ 
++// Define native SumOfMulQuadAccumulate macros for x86 AVX10.2-enabled targets
++#ifdef HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
++#endif
++
++#ifdef HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_I8_I8_SUMOFMULQUADACCUMULATE
++#endif
++
++#ifdef HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#undef HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#else
++#define HWY_NATIVE_U8_U8_SUMOFMULQUADACCUMULATE
++#endif
++
+ // ------------------------------ SumOfMulQuadAccumulate
+ 
+ #if HWY_TARGET <= HWY_AVX3_DL

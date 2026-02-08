@@ -1,0 +1,53 @@
+diff --git a/include/Sieve.hpp b/include/Sieve.hpp
+index bead4586..716df108 100644
+--- a/include/Sieve.hpp
++++ b/include/Sieve.hpp
+@@ -263,22 +263,38 @@ private:
+       uint64_t stop_bits = sieve64[stop_idx] & m2;
+       uint64_t cnt = popcnt64(start_bits);
+       cnt += popcnt64(stop_bits);
+-      svbool_t pg = svwhilelt_b64(i, stop_idx);
++
++      // Use pointer arithmetic and process most of the data with full
++      // (all-true) predicates to avoid recomputing predicates every loop
++      // iteration. Handle remaining tail with a predicate.
++      const uint64_t* p = &sieve64[i];
++      uint64_t remaining = stop_idx - i;
++      uint64_t vec_len = svcntd();
++
+       svuint64_t vcnt = svdup_u64(0);
+ 
+-      // Compute this for loop using ARM SVE.
+-      // for (i = start_idx + 1; i < stop_idx; i++)
+-      //   cnt += popcnt64(sieve64[i]);
+-      do {
+-        svuint64_t vec = svld1_u64(pg, &sieve64[i]);
++      // Number of full vectors we can process with an all-true predicate
++      uint64_t nfull = (vec_len > 0) ? remaining / vec_len : 0;
++
++      for (uint64_t k = 0; k < nfull; ++k)
++      {
++        svuint64_t vec = svld1_u64(svptrue_b64(), p);
++        vec = svcnt_u64_z(svptrue_b64(), vec);
++        vcnt = svadd_u64_x(svptrue_b64(), vcnt, vec);
++        p += vec_len;
++      }
++
++      // Handle the tail (if any) using a predicate
++      i += nfull * vec_len;
++      svbool_t pg = svwhilelt_b64(i, stop_idx);
++      if (svptest_any(svptrue_b64(), pg))
++      {
++        svuint64_t vec = svld1_u64(pg, p);
+         vec = svcnt_u64_z(pg, vec);
+         vcnt = svadd_u64_x(svptrue_b64(), vcnt, vec);
+-        i += svcntd();
+-        pg = svwhilelt_b64(i, stop_idx);
+       }
+-      while (svptest_any(svptrue_b64(), pg));
+-      cnt += svaddv_u64(svptrue_b64(), vcnt);
+ 
++      cnt += svaddv_u64(svptrue_b64(), vcnt);
+       return cnt;
+     }
+   }

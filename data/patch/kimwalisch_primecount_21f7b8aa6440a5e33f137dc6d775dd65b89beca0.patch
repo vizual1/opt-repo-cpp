@@ -1,0 +1,100 @@
+diff --git a/include/DFactorTable.hpp b/include/DFactorTable.hpp
+index f714944f..f34aae64 100644
+--- a/include/DFactorTable.hpp
++++ b/include/DFactorTable.hpp
+@@ -58,6 +58,7 @@
+ #include <cassert>
+ #include <limits>
+ #include <stdint.h>
++#include <cstring>
+ 
+ namespace {
+ 
+@@ -106,7 +107,9 @@ public:
+         // Default initialize memory to all bits set
+         int64_t low_idx = to_index(low);
+         int64_t size = (to_index(high) + 1) - low_idx;
+-        std::fill_n(&factor_[low_idx], size, T_MAX);
++        // Use memset to initialize underlying POD memory faster than element-wise assignment
++        std::memset(factor_.data() + low_idx, 0xFF, size * sizeof(T));
++        T* factor = factor_.data();
+ 
+         int64_t start = first_coprime() - 1;
+         primesieve::iterator it(start);
+@@ -126,13 +129,13 @@ public:
+           {
+             int64_t mi = to_index(multiple);
+             // prime is the smallest factor of multiple
+-            if (factor_[mi] == T_MAX)
+-              factor_[mi] = (T) prime;
++            if (factor[mi] == T_MAX)
++              factor[mi] = (T) prime;
+             // the least significant bit indicates
+             // whether multiple has an even (0) or odd (1)
+             // number of prime factors
+-            else if (factor_[mi] != 0)
+-              factor_[mi] ^= 1;
++            else if (factor[mi] != 0)
++              factor[mi] ^= 1;
+           }
+ 
+           if (prime <= sqrtz)
+@@ -144,7 +147,7 @@ public:
+             // Sieve out numbers that are not square free
+             // i.e. numbers for which moebius(n) = 0.
+             for (; multiple <= high; multiple = square * to_number(j++))
+-              factor_[to_index(multiple)] = 0;
++              factor[to_index(multiple)] = 0;
+           }
+         }
+ 
+diff --git a/include/FactorTable.hpp b/include/FactorTable.hpp
+index a458b061..6bfe4b8b 100644
+--- a/include/FactorTable.hpp
++++ b/include/FactorTable.hpp
+@@ -56,6 +56,7 @@
+ #include <cassert>
+ #include <limits>
+ #include <stdint.h>
++#include <cstring>
+ 
+ namespace {
+ 
+@@ -102,7 +103,9 @@ public:
+         // Default initialize memory to all bits set
+         int64_t low_idx = to_index(low);
+         int64_t size = (to_index(high) + 1) - low_idx;
+-        std::fill_n(&factor_[low_idx], size, T_MAX);
++        // Use memset to initialize underlying POD memory faster than element-wise assignment
++        std::memset(factor_.data() + low_idx, 0xFF, size * sizeof(T));
++        T* factor = factor_.data();
+ 
+         int64_t start = first_coprime() - 1;
+         primesieve::iterator it(start);
+@@ -121,13 +124,13 @@ public:
+           {
+             int64_t mi = to_index(multiple);
+             // prime is smallest factor of multiple
+-            if (factor_[mi] == T_MAX)
+-              factor_[mi] = (T) prime;
++            if (factor[mi] == T_MAX)
++              factor[mi] = (T) prime;
+             // the least significant bit indicates
+             // whether multiple has an even (0) or odd (1)
+             // number of prime factors
+-            else if (factor_[mi] != 0)
+-              factor_[mi] ^= 1;
++            else if (factor[mi] != 0)
++              factor[mi] ^= 1;
+           }
+ 
+           if (prime <= sqrty)
+@@ -138,7 +141,7 @@ public:
+ 
+             // moebius(n) = 0
+             for (; multiple <= high; multiple = square * to_number(j++))
+-              factor_[to_index(multiple)] = 0;
++              factor[to_index(multiple)] = 0;
+           }
+         }
+       }

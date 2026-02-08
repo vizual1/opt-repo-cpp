@@ -1,0 +1,84 @@
+diff --git a/Divide_Conquer/315.Count-of-Smaller-Numbers-After-Self/315.Count-of-Smaller-Numbers-After-Self.cpp b/Divide_Conquer/315.Count-of-Smaller-Numbers-After-Self/315.Count-of-Smaller-Numbers-After-Self.cpp
+index bbeebc6a..35490214 100644
+--- a/Divide_Conquer/315.Count-of-Smaller-Numbers-After-Self/315.Count-of-Smaller-Numbers-After-Self.cpp
++++ b/Divide_Conquer/315.Count-of-Smaller-Numbers-After-Self/315.Count-of-Smaller-Numbers-After-Self.cpp
+@@ -1,36 +1,49 @@
+-class Solution {    
++#include <vector>
++#include <utility>
++using namespace std;
++
++class Solution {
+ public:
+-    vector<int> countSmaller(vector<int>& nums) 
+-    {        
+-        int N = nums.size();
+-        if (N==0) return {};
+-        
+-        vector<int>sortedNums = nums;        
+-        vector<int>counts(N,0);
+-        DivideConque(nums,sortedNums, counts, 0, nums.size()-1);  // 0表示起点，N-1表示终点
++    vector<int> countSmaller(vector<int>& nums) {
++        int n = (int)nums.size();
++        vector<int> counts(n, 0);
++        if (n == 0) return counts;
++
++        // pair of (value, original_index)
++        vector<pair<int,int>> arr(n);
++        for (int i = 0; i < n; ++i) arr[i] = {nums[i], i};
++
++        mergeCount(arr, counts, 0, n - 1);
+         return counts;
+     }
+-    
+-    void DivideConque(vector<int>&nums, vector<int>&sortedNums, vector<int>&counts, int start, int end)
+-    {
+-        if (start==end) return;
+-        
+-        // 如果需要处理的元素有多个，则折半分治处理。注意：分治处理后的sortedNums前后两部分元素都是有序的。
+-        int mid = start+(end-start)/2;
+-        DivideConque(nums, sortedNums, counts, start,mid);
+-        DivideConque(nums, sortedNums, counts, mid+1, end);
+-        
+-        // OK，既然现在start~mid和mid+1~end这两段都分别有序，
+-        // 那么对于start~mid中的任何一个元素，我们都可以轻易地知道在mid+1~end中有多少小于它的数
+-        for (int i=start; i<=mid; i++)
+-        {
+-            int val = nums[i];
+-            auto pos = lower_bound(sortedNums.begin()+mid+1, sortedNums.begin()+end+1,val);            
+-            counts[i] += pos-(sortedNums.begin()+mid+1);
++
++private:
++    void mergeCount(vector<pair<int,int>>& arr, vector<int>& counts, int l, int r) {
++        if (l >= r) return;
++        int m = l + (r - l) / 2;
++        mergeCount(arr, counts, l, m);
++        mergeCount(arr, counts, m + 1, r);
++
++        vector<pair<int,int>> tmp;
++        tmp.reserve(r - l + 1);
++
++        int i = l, j = m + 1;
++        int rightCount = 0; // number of elements taken from right that are strictly smaller than current left
++        while (i <= m && j <= r) {
++            if (arr[j].first < arr[i].first) {
++                tmp.push_back(arr[j++]);
++                ++rightCount;
++            } else {
++                counts[arr[i].second] += rightCount;
++                tmp.push_back(arr[i++]);
++            }
+         }
+-        
+-        // 将两段已经有序的数组段start~mid,mid+1~end合起来排序。
+-        // 如果写归并排序的code会更快一些。这里就偷懒了，直接用sort函数。        
+-        sort(sortedNums.begin()+start,sortedNums.begin()+end+1);        
++        while (i <= m) {
++            counts[arr[i].second] += rightCount;
++            tmp.push_back(arr[i++]);
++        }
++        while (j <= r) tmp.push_back(arr[j++]);
++
++        for (int k = 0; k < (int)tmp.size(); ++k) arr[l + k] = tmp[k];
+     }
+ };

@@ -1,0 +1,24 @@
+diff --git a/lib/primesieve/include/primesieve/iterator.h b/lib/primesieve/include/primesieve/iterator.h
+index cb855dc7..4bb020e3 100644
+--- a/lib/primesieve/include/primesieve/iterator.h
++++ b/lib/primesieve/include/primesieve/iterator.h
+@@ -27,6 +27,19 @@
+ #include <stddef.h>
+ 
+ #ifdef __cplusplus
++/* Local branch prediction and always-inline helpers for C */
++#if defined(__GNUC__) || defined(__clang__)
++  #define PRIMESIEVE_ALWAYS_INLINE __attribute__((always_inline)) inline
++  #define PRIMESIEVE_IF_UNLIKELY(x) if (__builtin_expect(!!(x), 0))
++#elif defined(_MSC_VER)
++  #define PRIMESIEVE_ALWAYS_INLINE __forceinline
++  #define PRIMESIEVE_IF_UNLIKELY(x) if (x)
++#else
++  #define PRIMESIEVE_ALWAYS_INLINE inline
++  #define PRIMESIEVE_IF_UNLIKELY(x) if (x)
++#endif
++
++
+ extern "C" {
+ #endif
+ 

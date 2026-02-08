@@ -1,0 +1,31 @@
+diff --git a/src/ccache/util/bytes.cpp b/src/ccache/util/bytes.cpp
+index 4856d184..23ea3704 100644
+--- a/src/ccache/util/bytes.cpp
++++ b/src/ccache/util/bytes.cpp
+@@ -36,7 +36,7 @@ assign_from_data(Bytes* bytes, const void* data, size_t size) noexcept
+ } // namespace
+ 
+ Bytes::Bytes(const Bytes& other) noexcept
+-  : m_data(std::make_unique<uint8_t[]>(other.m_size)),
++  : m_data(std::unique_ptr<uint8_t[]>(new uint8_t[other.m_size])),
+     m_size(other.m_size),
+     m_capacity(other.m_size)
+ {
+@@ -98,7 +98,7 @@ void
+ Bytes::reserve(size_t size) noexcept
+ {
+   if (size > m_capacity) {
+-    auto bytes = std::make_unique<uint8_t[]>(size);
++    auto bytes = std::unique_ptr<uint8_t[]>(new uint8_t[size]);
+     if (m_size > 0) {
+       std::memcpy(bytes.get(), m_data.get(), m_size);
+     }
+@@ -119,7 +119,7 @@ Bytes::insert(const uint8_t* pos,
+   const size_t offset = pos - m_data.get();
+   if (m_size + inserted_size > m_capacity) {
+     m_capacity = std::max(2 * m_capacity, m_size + inserted_size);
+-    auto new_data = std::make_unique<uint8_t[]>(m_capacity);
++    auto new_data = std::unique_ptr<uint8_t[]>(new uint8_t[m_capacity]);
+     if (offset > 0) {
+       std::memcpy(new_data.get(), m_data.get(), offset);
+     }

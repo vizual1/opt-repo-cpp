@@ -1,0 +1,24 @@
+diff --git a/quill/include/quill/detail/record/LogRecord.h b/quill/include/quill/detail/record/LogRecord.h
+index 9b484be..1aafb27 100644
+--- a/quill/include/quill/detail/record/LogRecord.h
++++ b/quill/include/quill/detail/record/LogRecord.h
+@@ -11,6 +11,7 @@
+ #include "quill/detail/record/RecordBase.h"
+ #include "quill/detail/record/StaticLogRecordInfo.h"
+ #include <tuple>
++#include <utility>
+ 
+ namespace quill
+ {
+@@ -71,9 +72,9 @@ public:
+     {
+       // lambda to unpack the tuple args stored in the LogRecord (the arguments that were passed by
+       // the user) We also capture all additional information we need to create the log message
+-      auto forward_tuple_args_to_formatter = [this, log_record_timestamp, thread_id, handler](auto... tuple_args) {
++      auto forward_tuple_args_to_formatter = [this, log_record_timestamp, thread_id, handler](auto&&... tuple_args) {
+         handler->formatter().format(log_record_timestamp, thread_id, _logger_details->name(),
+-                                    *_log_line_info, tuple_args...);
++                                    *_log_line_info, std::forward<decltype(tuple_args)>(tuple_args)...);
+       };
+ 
+       // formatted record by the formatter

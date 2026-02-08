@@ -5,15 +5,7 @@ from src.config.config import Config
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="GitHub automation tool: crawl repos, gather commits, and run tests.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-        Examples:
-        python main.py --collect --stars=1000 --limit=10 --output=data/crawl.txt
-        python main.py --testcollect --input=data/crawl.txt --output=data/test.txt
-        python main.py --commits --repo=gabime/spdlog
-        python main.py --testcommits --input=data/test.txt
-        python main.py --test --mount data/repo --docker cpp-base
-        """
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     # === Mode selection ===
@@ -39,7 +31,10 @@ def setup_parser() -> argparse.ArgumentParser:
                       "Given a file of docker images 'owner_repo_newsha' with commits in " \
                       "'/test_workspace/workspace/new' and '/test_workspace/workspace/old' " \
                       "Docker images should be named 'owner_repo_newsha' or 'dockerhub_user/dockerhub_repo:owner_repo_newsha'")
-    mode.add_argument("--testdockerpatch", action="store_true",
+    mode.add_argument("--patch", action="store_true",
+                      help="Given owner/repo (repo_id), a commit SHA value and a prompt " \
+                      "use OpenHands to generate a patch. Generates a diff file.")
+    mode.add_argument("--testpatch", action="store_true",
                       help="Build and test docker images." \
                       "Given a file of docker images (or a docker image tar files) with a " \
                       "commit at '/test_workspace/workspace/old' and its patch in '/test_workspace/workspace/patch'. " \
@@ -55,6 +50,8 @@ def setup_parser() -> argparse.ArgumentParser:
                           help="Output file path (default: data/results.txt).")
     io_group.add_argument("--repo", type=str,
                           help="Repository URL or repo full name (e.g., owner/repo).")
+    io_group.add_argument("--prompt", type=str,
+                          help="Prompt for OpenHands")
 
     # === Commit options ===
     commit_group = parser.add_argument_group("Commit Options")
@@ -77,8 +74,11 @@ def setup_parser() -> argparse.ArgumentParser:
     docker_group.add_argument("--tar", type=str,
                               help="Saves the docker image as a tar file.")
     docker_group.add_argument("--docker", type=str,
-                              help="Docker image to build and test repositories or commits.")
-
+                              help="Docker image to create a docker container that builds and tests the commits.")
+    docker_group.add_argument("--mount", type=str,
+                              help="Mounts a folder to the docker container.")
+    docker_group.add_argument("--diff", type=str,
+                              help="Applies the diff patch to the old (original) commit in the docker container.")
     return parser
 
 

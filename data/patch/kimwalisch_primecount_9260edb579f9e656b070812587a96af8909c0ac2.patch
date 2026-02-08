@@ -1,0 +1,52 @@
+diff --git a/include/LoadBalancerS2.hpp b/include/LoadBalancerS2.hpp
+index 8f5e02ec..dce14557 100644
+--- a/include/LoadBalancerS2.hpp
++++ b/include/LoadBalancerS2.hpp
+@@ -69,6 +69,11 @@ private:
+   int64_t sieve_limit_ = 0;
+   int64_t segments_ = 0;
+   int64_t segment_size_ = 0;
++  // max_size_ controls the upper bound for segment_size_. Instead
++  // of using sqrt(sieve_limit_) we set max_size_ based on the
++  // currently processed segment high (approx sqrt(segment_high)) to
++  // keep the sieve array cache-friendly and allow it to grow
++  // dynamically as segments are processed.
+   int64_t max_size_ = 0;
+   maxint_t sum_ = 0;
+   maxint_t sum_approx_ = 0;
+diff --git a/src/LoadBalancerS2.cpp b/src/LoadBalancerS2.cpp
+index 9e7f18e9..34b418ed 100644
+--- a/src/LoadBalancerS2.cpp
++++ b/src/LoadBalancerS2.cpp
+@@ -62,12 +62,11 @@ LoadBalancerS2::LoadBalancerS2(maxint_t x,
+   int64_t numbers_per_byte = 30;
+   int64_t cache_bytes = L1D_CACHE_SIZE * 2;
+   int64_t cache_segment_size = cache_bytes * numbers_per_byte;
+-  max_size_ = isqrt(sieve_limit);
+-  max_size_ = max(max_size_, cache_segment_size);
+ 
+   if (threads == 1 &&
+       !is_print)
+   {
++    // For single-threaded runs prefer a cache-friendly segment size
+     segment_size_ = cache_segment_size;
+     segment_size_ = min(segment_size_, sieve_limit);
+     segment_size_ = Sieve::align_segment_size(segment_size_);
+@@ -91,6 +90,17 @@ LoadBalancerS2::LoadBalancerS2(maxint_t x,
+     segment_size_ = Sieve::align_segment_size(segment_size_);
+     segments_ = 1;
+   }
++
++  // Set max_size_ to approximately sqrt(segment_high) instead of
++  // sqrt(sieve_limit) so the sieve array size is cache-friendly and
++  // grows dynamically as segments are processed. segment_high is the
++  // high value of the next sieving interval (exclusive).
++  {
++    int64_t segment_high = min(sieve_limit_, low_ + segment_size_ * segments_);
++    max_size_ = isqrt(segment_high);
++    // Ensure at least a small positive value
++    max_size_ = max<int64_t>(max_size_, 1);
++  }
+ }
+ 
+ maxint_t LoadBalancerS2::get_sum() const

@@ -1,0 +1,22 @@
+diff --git a/includes/acl/core/memory_utils.h b/includes/acl/core/memory_utils.h
+index c47231a2..c1519c8c 100644
+--- a/includes/acl/core/memory_utils.h
++++ b/includes/acl/core/memory_utils.h
+@@ -89,7 +89,16 @@ namespace acl
+ 	RTM_FORCE_INLINE bool is_aligned_to(IntegralType value, size_t alignment)
+ 	{
+ 		ACL_ASSERT(is_power_of_two(alignment), "Alignment value must be a power of two");
+-		return (static_cast<size_t>(value) & (alignment - 1)) == 0;
++		// Promote smaller arithmetic types to uint32_t for faster and well-defined integer operations
++			if (static_condition<(std::is_arithmetic<IntegralType>::value && (sizeof(IntegralType) <= 4))>::test())
++			{
++				const uint32_t value32 = static_cast<uint32_t>(value);
++				return (static_cast<size_t>(value32) & (alignment - 1)) == 0;
++			}
++			else
++			{
++				return (static_cast<size_t>(value) & (alignment - 1)) == 0;
++			}
+ 	}
+ 
+ 	template<typename PtrType>
