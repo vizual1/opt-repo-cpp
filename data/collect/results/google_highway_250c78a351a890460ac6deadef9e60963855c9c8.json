@@ -5,7 +5,7 @@
         "repository_name": "google/highway"
     },
     "commit_info": {
-        "old_sha": "250c78a351a890460ac6deadef9e60963855c9c8",
+        "old_sha": "70d2be7b8ae2ad1d8f895b8094e1a67370084318",
         "new_sha": "250c78a351a890460ac6deadef9e60963855c9c8",
         "commit_message": [
             "SVE_256 codegen improvement for CompressBlocksNot\n\nPiperOrigin-RevId: 459775614"

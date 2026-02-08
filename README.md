@@ -44,11 +44,13 @@ python3 main.py --testdocker --docker=<docker_image>
 ```
 The output will be at ```data/commits/```, where each file ```owner_repo_newsha.json``` (newsha is the SHA hash of the new (patched) commit) is saved with the results of the ```old``` (original) and ```new``` (patched) test runs (commands run, test times, statistical analysis). 
 
-4. ```testpatch``` takes in a docker image (name should be ```owner_repo_newsha```) and a mount path to the folder of the patched code, or a diff file that will be applied to the ```old``` (original) commit.
+4. ```testpatch``` takes in a docker image (name should be ```owner_repo_newsha```) and a mount path to the folder of the patched code, or a diff file (generated with ```git diff```) that will be applied to the ```old``` (original) commit.
 ```bash
 python3 main.py --testpatch --docker=<docker_image> --mount=/path/to/patched/folder
 python3 main.py --testpatch --docker=<docker_image> --diff=/path/to/diff/file
 ```
+The output will be at ```data/commits/```, where each file ```owner_repo_newsha.json``` (newsha is the SHA hash of the new (patched) commit) is saved with the results of the ```old``` (original) and ```new``` (patched) test runs (commands run, test times, statistical analysis). 
+
 
 # Other Flags
 1. ```genimages```

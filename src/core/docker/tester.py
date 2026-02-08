@@ -2,6 +2,7 @@ import logging, os, stat, shutil, random, json
 from tqdm import tqdm
 from src.core.filter.structure_filter import StructureFilter
 from src.core.filter.process_filter import ProcessFilter
+from src.cmake.process import CMakeProcess
 from src.config.config import Config
 from src.utils.test_analyzer import TestAnalyzer
 from pathlib import Path
@@ -31,17 +32,16 @@ class DockerTester:
         
         with self._commit_pair_test(
             self.config, new_path, old_path, new_sha, old_sha, cpuset_cpus
-        ) as (new_times, old_times, new_struct, old_struct):
+        ) as (new_times, old_times, new_process, old_process):
             logging.info(f"Times Old: {old_times}, New: {new_times}")
             
-            if (not new_struct or not old_struct or 
-                not new_struct.process or not old_struct.process):
+            if not new_process or not old_process:
                 return
             
-            new_build_cmd = [" ".join(s) for s in new_struct.process.build_commands]
-            old_build_cmd = [" ".join(s) for s in old_struct.process.build_commands]
-            new_test_cmd = [" ".join(s) for s in new_struct.process.test_commands]
-            old_test_cmd = [" ".join(s) for s in old_struct.process.test_commands]
+            new_build_cmd = [" ".join(s) for s in new_process.build_commands]
+            old_build_cmd = [" ".join(s) for s in old_process.build_commands]
+            new_test_cmd = [" ".join(s) for s in new_process.test_commands]
+            old_test_cmd = [" ".join(s) for s in old_process.test_commands]
 
             # --genimages just generates the docker image from an existing json results file
             if self.config.genimages and not self.config.test:
@@ -59,14 +59,14 @@ class DockerTester:
                 with open(json_file, 'w', errors='ignore') as f:
                     json.dump(results, f, indent=4)
 
-                old_struct.process.save_docker_image(self.repo_id, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
+                old_process.save_docker_image(self.repo_id, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
                 logging.info(f"[{self.repo_id}:{new_sha}] Docker image saved.")
                 return
 
             warmup = self.config.testing.warmup
 
-            new_single_tests_d = new_struct.process.per_test_times 
-            old_single_tests_d = old_struct.process.per_test_times
+            new_single_tests_d = new_process.per_test_times 
+            old_single_tests_d = old_process.per_test_times
 
             new_single_tests = {
                 test: (
@@ -114,7 +114,7 @@ class DockerTester:
             writer = Writer(self.repo_id, self.config.storage_paths["performance"])
             writer.write_results(results)
 
-            old_struct.process.save_docker_image(self.repo_id, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
+            old_process.save_docker_image(self.repo_id, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
                 
             if total_improvement < self.config.min_p_value or overall_change_with_new_outperforms_old:
                 logging.info(f"[{self.repo_id}:{new_sha}] significantly improves execution time.")
@@ -130,7 +130,7 @@ class DockerTester:
         new_sha: str, 
         old_sha: str,
         cpuset_cpus: str = ""
-    ) -> Generator[tuple[list[float], list[float], Optional[StructureFilter], Optional[StructureFilter]], Any, Any]:
+    ) -> Generator[tuple[list[float], list[float], Optional[CMakeProcess], Optional[CMakeProcess]], Any, Any]:
         """
         Start a container for new/old commits and stop container automatically after both runs.
         """
@@ -138,8 +138,6 @@ class DockerTester:
         old_pf = ProcessFilter(self.repo, config, old_path, old_sha)
         docker_image = ""
 
-        new_structure = None
-        old_structure = None
         new_times = []
         old_times = []
 
@@ -149,28 +147,28 @@ class DockerTester:
             if (self.config.testdocker or self.config.testpatch) and not image_exists(self.repo_id, new_sha) and self.config.check_dockerhub:
                 container_name = f"{self.config.dockerhub_user}/{self.config.dockerhub_repo}:{local_image}"
 
-            new_structure = new_pf.commit_setup_and_build("New", container_name=container_name, cpuset_cpus=cpuset_cpus)
-            docker_image = new_structure.process.docker_image if new_structure and new_structure.process else ""
+            new_process = new_pf.commit_setup_and_build("New", container_name=container_name, cpuset_cpus=cpuset_cpus)
+            docker_image = new_process.docker_image if new_process else ""
             
-            if not new_structure or not new_structure.process:
-                raise UndefinedStructureFilter("New commit StructureFilter or its CMakeProcess is None")
+            if not new_process:
+                raise UndefinedStructureFilter("New commit CMakeProcess is None")
 
-            old_structure = old_pf.commit_setup_and_build("Old", container_name=container_name, docker_image=docker_image)
+            old_process = old_pf.commit_setup_and_build("Old", container_name=container_name, docker_image=docker_image)
             
-            if not old_structure or not old_structure.process:
-                raise UndefinedStructureFilter("Old commit StructureFilter or its CMakeProcess is None")
+            if not old_process:
+                raise UndefinedStructureFilter("Old commit CMakeProcess is None")
             
             # --genimages just generates the docker image from an existing json results file
             if (not self.config.genimages or self.config.test):
-                self._run_tests(new_structure, old_structure, new_pf, old_pf)
+                self._run_tests(new_process, old_process, new_pf, old_pf)
 
-            new_cmd_times = new_structure.process.test_time
-            old_cmd_times = old_structure.process.test_time
+            new_cmd_times = new_process.test_time
+            old_cmd_times = old_process.test_time
 
             new_times = new_cmd_times['time'] if 0.0 in new_cmd_times['parsed'] else new_cmd_times['parsed']
             old_times = old_cmd_times['time'] if 0.0 in old_cmd_times['parsed'] else old_cmd_times['parsed']
 
-            yield new_times, old_times, new_structure, old_structure
+            yield new_times, old_times, new_process, old_process
 
         except TestFailed as e:
             logging.error("Test failed early, stopping the test loops.")
@@ -183,22 +181,22 @@ class DockerTester:
 
         finally:
             self._remove_cloned_repo_folders(self.repo_id, new_path, old_path)
-            if new_structure and new_structure.process:
-                new_structure.process.docker.stop_container(self.repo_id)
-            elif old_structure and old_structure.process:
-                old_structure.process.docker.stop_container(self.repo_id)
+            if new_process:
+                new_process.docker.stop_container(self.repo_id)
+            elif old_process:
+                old_process.docker.stop_container(self.repo_id)
 
-    def _run_tests(self, new_structure: StructureFilter, old_structure: StructureFilter, new_pf: ProcessFilter, old_pf: ProcessFilter) -> None:
-        if not new_structure.process:
-            raise UndefinedStructureFilter("The CMakeProcess in the new commit StructureFilter is None")
+    def _run_tests(self, new_process: CMakeProcess, old_process: CMakeProcess, new_pf: ProcessFilter, old_pf: ProcessFilter) -> None:
+        if not new_process:
+            raise UndefinedStructureFilter("The CMakeProcess for the new commit is None")
         
-        if not old_structure.process:
-            raise UndefinedStructureFilter("The CMakeProcess in the old commit StructureFilter is None")
+        if not old_process:
+            raise UndefinedStructureFilter("The CMakeProcess for the old commit is None")
             
-        new_test_cmd = new_structure.process.test_commands
-        old_test_cmd = old_structure.process.test_commands
-        logging.debug(f"New cmd: {new_structure.process.test_commands}")
-        logging.debug(f"Old cmd: {old_structure.process.test_commands}")
+        new_test_cmd = new_process.test_commands
+        old_test_cmd = old_process.test_commands
+        logging.debug(f"New cmd: {new_process.test_commands}")
+        logging.debug(f"Old cmd: {old_process.test_commands}")
         assert len(new_test_cmd) == len(old_test_cmd)
 
         warmup = self.config.testing.warmup
@@ -209,15 +207,15 @@ class DockerTester:
             for new_cmd, old_cmd in tqdm(zip(new_test_cmd, old_test_cmd), total=len(new_test_cmd), position=1, leave=False, mininterval=5): 
                 for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=2, leave=False, mininterval=5):
                     order = [
-                        ("New", new_cmd, new_structure, new_pf),
-                        ("Old", old_cmd, old_structure, old_pf),
+                        ("New", new_cmd, new_process, new_pf),
+                        ("Old", old_cmd, old_process, old_pf),
                     ]
                     random.shuffle(order)
 
-                    for label, cmd, structure, pf in order:
+                    for label, cmd, process, pf in order:
                         if cmd and cmd[0] == "cd":
                             continue
-                        if not pf.test_run(label, cmd, structure, has_list_args):
+                        if not pf.test_run(label, cmd, process, has_list_args):
                             raise TestFailed(f"Test run '{cmd}' failed")
         except TestFailed:
             has_list_args = False
@@ -225,13 +223,13 @@ class DockerTester:
             for new_cmd, old_cmd in tqdm(zip(new_test_cmd, old_test_cmd), total=len(new_test_cmd), position=1, leave=False, mininterval=5): 
                 for _ in tqdm(range(warmup+test_repeat), total=warmup+test_repeat, desc="Commit pair test", position=2, leave=False, mininterval=5):
                     order = [
-                        ("New", new_cmd, new_structure, new_pf),
-                        ("Old", old_cmd, old_structure, old_pf),
+                        ("New", new_cmd, new_process, new_pf),
+                        ("Old", old_cmd, old_process, old_pf),
                     ]
                     random.shuffle(order)
 
-                    for label, cmd, structure, pf in order:
-                        if not pf.test_run(label, cmd, structure, has_list_args):
+                    for label, cmd, process, pf in order:
+                        if not pf.test_run(label, cmd, process, has_list_args):
                             raise TestFailed(f"Test run '{cmd}' with test framework '{label}' failed")
             
 

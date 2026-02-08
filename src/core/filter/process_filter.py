@@ -88,9 +88,8 @@ class ProcessFilter:
         container_name: str, 
         docker_image: str = "",
         cpuset_cpus: str = ""
-    ) -> Optional[StructureFilter]:
-        structure = StructureFilter(self.repo, self.config, self.root, self.sha)
-
+    ) -> Optional[CMakeProcess]:
+        
         if not self.root:
             logging.error(f"[{self.repo.full_name}] git project root: {self.root}")
             return None
@@ -99,17 +98,18 @@ class ProcessFilter:
             logging.error(f"[{self.repo.full_name}] git cloning failed")
             return None
         
+        structure = StructureFilter(self.repo, self.config, self.root, self.sha)
         logging.info(f"[{self.repo.full_name}:{self.sha}] Testing...")
-        if not structure.is_valid_commit(self.root, self.sha, docker_test_dir=self.config.testing.docker_test_dir):
+        if not structure.is_valid_commit(self.root):
             logging.error(f"[{self.repo.full_name}:{self.sha}] commit cmake and ctest failed")
             return None
 
-        process = structure.process
+        analyzer = structure.analyzer
+        process = CMakeProcess(self.repo.full_name, self.config, self.root, None, [], analyzer, "", jobs=self.config.resources.jobs, docker_test_dir=self.config.testing.docker_test_dir)
         if not process:
             logging.error(f"[{self.repo.full_name}:{self.sha}] CMakeProcess couldn't be found")
             return None
         
-        analyzer = process.analyzer
         # parses all the possible testing flags defined under src/config/constants.py as VALID_TEST_FLAGS
         flags = FlagFilter(self.config.valid_test_flags, analyzer.extract_build_testing_flag()).get_valid_flags()
         
@@ -129,55 +129,62 @@ class ProcessFilter:
         enable_testing_path = test_path.relative_to(self.root) if self.root else Path()
         logging.info(f"[{self.repo.full_name}:{self.sha}] path to enable_testing(): '{enable_testing_path}'")
         try:
-            process.set_enable_testing(enable_testing_path)
-            process.set_flags(flags)
-            new = not docker_image
-            if self.config.testdocker or self.config.testpatch:
-                process.set_docker(container_name, new)
-                process.docker.start_docker_container(container_name, cpuset_cpus)
-                process.container = process.docker.container
-            else:
-                process.docker_image = self.config.docker_image
-                process.start_docker_image(container_name, new, cpuset_cpus)
-
-            if new and self.config.diff and not process.diff():
-                logging.error(f"[{self.repo.full_name}:{self.sha}] diff application to old (original) commit failed")
-                process.docker.stop_container(self.repo.full_name)
-                return None
-            
-            if not process.build():
-                logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} build failed")
-                process.docker.stop_container(self.repo.full_name)
-                return None
-            
-            if not process.collect_tests():
-                logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} generating test commands failed")
-                process.docker.stop_container(self.repo.full_name)
-                return None
-            
-            logging.info(f"[{self.repo.full_name}:{self.sha}] {msg} build successful")
-            return structure
-        
+            return self.build_collect_test(process, enable_testing_path, flags, container_name, docker_image, cpuset_cpus, msg)
         except Exception as e:
             logging.exception(f"[{self.repo.full_name}:{self.sha}] Unexpected error during process run: {e}")
             return None
         
-    def test_run(self, msg: str, command: list[str], structure: StructureFilter, has_list_args: bool) -> bool:
-        if structure.process:
-            process = structure.process
-            try:
-                if not process.test(command, has_list_args):
-                    logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} test failed")
-                    process.docker.stop_container(self.repo.full_name)
-                    return False
-                
-                logging.debug(f"[{self.repo.full_name}:{self.sha}] {msg} build and test successful")
-                return True
-            except Exception as e:
-                logging.exception(f"[{self.repo.full_name}:{self.sha}] Unexpected error during process run: {e}")
-                return False
+    def build_collect_test(
+        self, 
+        process: CMakeProcess, 
+        enable_testing_path: Path, 
+        flags: list[str],
+        container_name: str,
+        docker_image: str,
+        cpuset_cpus: str,
+        msg: str
+    ) -> Optional[CMakeProcess]:
+        
+        process.set_enable_testing(enable_testing_path)
+        process.set_flags(flags)
+        new = not docker_image
+        if self.config.testdocker or self.config.testpatch:
+            process.set_docker(container_name, new)
+            process.docker.start_docker_container(container_name, cpuset_cpus)
+            process.container = process.docker.container
         else:
-            logging.error(f"[{self.repo.full_name}:{self.sha}] CMakeProcess is not defined")
+            process.docker_image = self.config.docker_image
+            process.start_docker_image(container_name, new, cpuset_cpus)
+
+        if new and self.config.diff and not process.diff():
+            logging.error(f"[{self.repo.full_name}:{self.sha}] diff application to old (original) commit failed")
+            process.docker.stop_container(self.repo.full_name)
+            return None
+        
+        if not process.build():
+            logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} build failed")
+            process.docker.stop_container(self.repo.full_name)
+            return None
+        
+        if not process.collect_tests():
+            logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} generating test commands failed")
+            process.docker.stop_container(self.repo.full_name)
+            return None
+        
+        logging.info(f"[{self.repo.full_name}:{self.sha}] {msg} build successful")
+        return process
+        
+    def test_run(self, msg: str, command: list[str], process: CMakeProcess, has_list_args: bool) -> bool:
+        try:
+            if not process.test(command, has_list_args):
+                logging.error(f"[{self.repo.full_name}:{self.sha}] {msg} test failed")
+                process.docker.stop_container(self.repo.full_name)
+                return False
+            
+            logging.debug(f"[{self.repo.full_name}:{self.sha}] {msg} build and test successful")
+            return True
+        except Exception as e:
+            logging.exception(f"[{self.repo.full_name}:{self.sha}] Unexpected error during process run: {e}")
             return False
 
     def _sort_key(self, y: Path) -> tuple[int, int]:

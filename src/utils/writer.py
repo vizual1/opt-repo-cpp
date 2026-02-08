@@ -53,9 +53,8 @@ class Writer:
         stats.lines_added += total_add
         stats.lines_deleted += total_del
 
-        self.file = "filtered.txt"
         msg = get_pr_chain_msg(repo, commit, is_issue)
-        path = Path(self.output_path) / self.file
+        path = Path(self.output_path)
         self._write(path, msg)
 
         return stats

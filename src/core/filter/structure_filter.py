@@ -22,9 +22,11 @@ class StructureFilter:
         self.root = root
         self.sha = sha if sha else self.repo.get_commits()[0].sha
 
+        if root:
+            self.analyzer = CMakeAnalyzer(root)
+
         self.stats = RepoStats()
         self.testing_flags: dict = {}
-        self.process: Optional[CMakeProcess] = None
 
     def is_valid(self, without_pkg_manager: bool = True) -> bool:
         self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
@@ -64,7 +66,7 @@ class StructureFilter:
             logging.info(f"[{self.repo.full_name}] ctest is defined")
             return True
                 
-    def is_valid_commit(self, root: Path, sha: str, docker_test_dir: str) -> bool:
+    def is_valid_commit(self, root: Path) -> bool:
         self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
         self.root_files = {item.path for item in self.tree if item.type == "blob"}
 
@@ -76,11 +78,10 @@ class StructureFilter:
             return False
         
         logging.info(f"[{self.repo.full_name}] CMakeLists.txt at root found")
-        analyzer = CMakeAnalyzer(root)
-        self.process = CMakeProcess(self.repo.full_name, self.config, root, None, [], analyzer, "", jobs=self.config.resources.jobs, docker_test_dir=docker_test_dir)
-
-        self.process.analyzer.reset()
-        if not self.process.analyzer.has_testing(nolist=self.config.testing.no_list_testing):
+        
+        
+        self.analyzer.reset()
+        if not self.analyzer.has_testing(nolist=self.config.testing.no_list_testing):
             logging.error(f"[{self.repo.full_name}] invalid ctest")
             return False
 

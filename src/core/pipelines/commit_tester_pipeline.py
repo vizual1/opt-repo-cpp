@@ -95,5 +95,4 @@ class CommitTesterPipeline:
             for future in tqdm(as_completed(futures), total=len(futures)):
                 future.result()
 
-    def test(self) -> None:
         
