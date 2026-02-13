@@ -1,0 +1,82 @@
+diff --git a/src/quick-lint-js/expression.h b/src/quick-lint-js/expression.h
+index 1fe78f23..8282156d 100644
+--- a/src/quick-lint-js/expression.h
++++ b/src/quick-lint-js/expression.h
+@@ -304,8 +304,22 @@ expression *expression_arena::make_expression(Args &&... args) {
+ template <class T>
+ inline expression_arena::array_ptr<T> expression_arena::make_array(
+     bump_vector<T, monotonic_allocator> &&elements) {
+-  // TODO(strager): Adopt the pointer if the elements.allocator_ is our
+-  // allocator.
++  // If the bump_vector's allocator is the same as this arena's allocator,
++  // adopt the underlying buffer instead of copying it. This optimization is
++  // only valid when vector profiling is disabled because the instrumented
++  // vector wrapper doesn't expose allocator/release_data accessors.
++#if !QLJS_FEATURE_VECTOR_PROFILING
++  if (elements.empty()) {
++    return array_ptr<T>();
++  }
++  monotonic_allocator *vec_alloc = elements.allocator();
++  int size = narrow_cast<int>(elements.size());
++  if (vec_alloc == this->allocator()) {
++    T *data = elements.release_data();
++    return array_ptr<T>(data, size);
++  }
++#endif
++  // Fall back to copying elements into this arena.
+   array_ptr<T> result =
+       this->make_array(elements.data(), elements.data() + elements.size());
+   elements.clear();
+diff --git a/src/quick-lint-js/vector-profiler.h b/src/quick-lint-js/vector-profiler.h
+index ad91377d..921df798 100644
+--- a/src/quick-lint-js/vector-profiler.h
++++ b/src/quick-lint-js/vector-profiler.h
+@@ -184,6 +184,13 @@ class instrumented_vector {
+     return this->begin() + this->size();
+   }
+ 
++  // Return the allocator used by the underlying vector implementation.
++  QLJS_FORCE_INLINE allocator_type allocator() const noexcept { return this->data_.allocator(); }
++
++  // Release ownership of the underlying buffer without deallocating it.
++  // Only valid when the underlying Vector implements release_data().
++  QLJS_FORCE_INLINE value_type *release_data() noexcept { return this->data_.release_data(); }
++
+   template <class... Args>
+   QLJS_FORCE_INLINE value_type &emplace_back(Args &&... args) {
+     value_type &result = this->data_.emplace_back(std::forward<Args>(args)...);
+diff --git a/src/quick-lint-js/vector.h b/src/quick-lint-js/vector.h
+index 3c189e18..2d676fc1 100644
+--- a/src/quick-lint-js/vector.h
++++ b/src/quick-lint-js/vector.h
+@@ -69,6 +69,10 @@ class uninstrumented_vector : private Vector {
+   using Vector::front;
+   using Vector::reserve;
+   using Vector::size;
++  // Expose allocator access and buffer release for bump vectors so callers can
++  // adopt the underlying buffer when it's allocated from the same arena.
++  using Vector::allocator;
++  using Vector::release_data;
+ };
+ 
+ template <class T, class BumpAllocator>
+@@ -108,6 +112,19 @@ class raw_bump_vector {
+   QLJS_FORCE_INLINE const T *begin() const noexcept { return this->data_; }
+   QLJS_FORCE_INLINE const T *end() const noexcept { return this->data_end_; }
+ 
++  // Return the allocator used by this vector.
++  QLJS_FORCE_INLINE BumpAllocator *allocator() const noexcept { return this->allocator_; }
++
++  // Release ownership of the underlying buffer without deallocating it.
++  // After this call the vector is empty and will not attempt to free the memory.
++  QLJS_FORCE_INLINE T *release_data() noexcept {
++    T *result = this->data_;
++    this->data_ = nullptr;
++    this->data_end_ = nullptr;
++    this->capacity_end_ = nullptr;
++    return result;
++  }
++
+   T &front() noexcept {
+     QLJS_ASSERT(!this->empty());
+     return this->data_[0];

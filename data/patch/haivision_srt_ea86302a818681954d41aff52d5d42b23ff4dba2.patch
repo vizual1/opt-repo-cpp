@@ -1,0 +1,26 @@
+diff --git a/srtcore/core.cpp b/srtcore/core.cpp
+index 39571cef..8f4e9b10 100644
+--- a/srtcore/core.cpp
++++ b/srtcore/core.cpp
+@@ -880,17 +880,18 @@ void srt::CUDT::clearData()
+     m_iDeliveryRate     = 16;
+     m_iByteDeliveryRate = 16 * m_iMaxSRTPayloadSize;
+     m_iAckSeqNo         = 0;
+-    m_tsLastAckTime     = steady_clock::now();
++    const steady_clock::time_point now = steady_clock::now();
++    m_tsLastAckTime     = now;
+ 
+     // trace information
+     {
+         ScopedLock stat_lock(m_StatsLock);
+ 
+-        m_stats.tsStartTime = steady_clock::now();
++        m_stats.tsStartTime = now;
+         m_stats.sndr.reset();
+         m_stats.rcvr.reset();
+ 
+-        m_stats.tsLastSampleTime = steady_clock::now();
++        m_stats.tsLastSampleTime = now;
+         m_stats.traceReorderDistance = 0;
+         m_stats.sndDuration = m_stats.m_sndDurationTotal = 0;
+     }

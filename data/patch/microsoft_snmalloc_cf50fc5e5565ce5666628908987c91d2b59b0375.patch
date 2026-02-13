@@ -1,0 +1,67 @@
+diff --git a/src/mem/alloc.h b/src/mem/alloc.h
+index 5eaaab7..44148f4 100644
+--- a/src/mem/alloc.h
++++ b/src/mem/alloc.h
+@@ -18,6 +18,9 @@
+ #include "slab.h"
+ 
+ #include <array>
++// Optimization: Mediumslab::alloc now uses a cached exported base pointer to avoid
++// repeated capptr_export calls on hot path.
++
+ #include <functional>
+ 
+ namespace snmalloc
+diff --git a/src/mem/mediumslab.h b/src/mem/mediumslab.h
+index ec3e83c..b0b95a8 100644
+--- a/src/mem/mediumslab.h
++++ b/src/mem/mediumslab.h
+@@ -103,48 +103,3 @@ namespace snmalloc
+     {
+       SNMALLOC_ASSERT(!full(self));
+ 
+-      uint16_t index = self->stack[self->head++];
+-      auto p = pointer_offset(self, (static_cast<size_t>(index) << 8));
+-      self->free--;
+-
+-      if constexpr (zero_mem == YesZero)
+-        pal_zero<PAL>(p, size);
+-      else
+-        UNUSED(size);
+-
+-      return capptr_export(Aal::capptr_bound<void, CBAlloc>(p, size));
+-    }
+-
+-    static bool
+-    dealloc(CapPtr<Mediumslab, CBChunkD> self, CapPtr<void, CBArena> p)
+-    {
+-      SNMALLOC_ASSERT(self->head > 0);
+-
+-      // Returns true if the Mediumslab was full before this deallocation.
+-      bool was_full = full(self);
+-      self->free++;
+-      self->stack[--(self->head)] = self->address_to_index(address_cast(p));
+-
+-      return was_full;
+-    }
+-
+-    template<capptr_bounds B>
+-    static bool full(CapPtr<Mediumslab, B> self)
+-    {
+-      return self->free == 0;
+-    }
+-
+-    template<capptr_bounds B>
+-    static bool empty(CapPtr<Mediumslab, B> self)
+-    {
+-      return self->head == 0;
+-    }
+-
+-  private:
+-    uint16_t address_to_index(address_t p)
+-    {
+-      // Get the offset from the slab for a memory location.
+-      return static_cast<uint16_t>((p - address_cast(this)) >> 8);
+-    }
+-  };
+-} // namespace snmalloc

@@ -1,0 +1,96 @@
+diff --git a/src/mip/HighsMipSolver.cpp b/src/mip/HighsMipSolver.cpp
+index cb88c8e5d..2d8d47802 100644
+--- a/src/mip/HighsMipSolver.cpp
++++ b/src/mip/HighsMipSolver.cpp
+@@ -248,28 +248,36 @@ restart:
+           ++mipdata_->num_leaves;
+           search.flushStatistics();
+         } else {
+-          analysis_.mipTimerStart(kMipClockPrimalHeuristics);
+-          if (mipdata_->incumbent.empty()) {
+-            analysis_.mipTimerStart(kMipClockRandomizedRounding0);
+-            mipdata_->heuristics.randomizedRounding(
+-                mipdata_->lp.getLpSolver().getSolution().col_value);
+-            analysis_.mipTimerStop(kMipClockRandomizedRounding0);
+-          }
+-
+-          if (mipdata_->incumbent.empty()) {
+-            analysis_.mipTimerStart(kMipClockRens);
+-            mipdata_->heuristics.RENS(
+-                mipdata_->lp.getLpSolver().getSolution().col_value);
+-            analysis_.mipTimerStop(kMipClockRens);
++          // If the global domain is already infeasible, skip costly primal
++          // heuristics (randomized rounding, RENS, RINS) entirely to save
++          // runtime. The domain infeasible check here avoids unnecessary work
++          // when global propagation has already detected infeasibility.
++          if (!mipdata_->domain.infeasible()) {
++            analysis_.mipTimerStart(kMipClockPrimalHeuristics);
++            if (mipdata_->incumbent.empty()) {
++              analysis_.mipTimerStart(kMipClockRandomizedRounding0);
++              mipdata_->heuristics.randomizedRounding(
++                  mipdata_->lp.getLpSolver().getSolution().col_value);
++              analysis_.mipTimerStop(kMipClockRandomizedRounding0);
++            }
++
++            if (mipdata_->incumbent.empty()) {
++              analysis_.mipTimerStart(kMipClockRens);
++              mipdata_->heuristics.RENS(
++                  mipdata_->lp.getLpSolver().getSolution().col_value);
++              analysis_.mipTimerStop(kMipClockRens);
++            } else {
++              analysis_.mipTimerStart(kMipClockRins);
++              mipdata_->heuristics.RINS(
++                  mipdata_->lp.getLpSolver().getSolution().col_value);
++              analysis_.mipTimerStop(kMipClockRins);
++            }
++
++            mipdata_->heuristics.flushStatistics();
++            analysis_.mipTimerStop(kMipClockPrimalHeuristics);
+           } else {
+-            analysis_.mipTimerStart(kMipClockRins);
+-            mipdata_->heuristics.RINS(
+-                mipdata_->lp.getLpSolver().getSolution().col_value);
+-            analysis_.mipTimerStop(kMipClockRins);
++            // Domain already infeasible -- skip primal heuristics to save time.
+           }
+-
+-          mipdata_->heuristics.flushStatistics();
+-          analysis_.mipTimerStop(kMipClockPrimalHeuristics);
+         }
+       }
+ 
+diff --git a/src/mip/HighsSearch.cpp b/src/mip/HighsSearch.cpp
+index 4c6f1f0fd..c9a9e5e69 100644
+--- a/src/mip/HighsSearch.cpp
++++ b/src/mip/HighsSearch.cpp
+@@ -78,20 +78,28 @@ double HighsSearch::getCutoffBound() const {
+ 
+ void HighsSearch::setRINSNeighbourhood(const std::vector<double>& basesol,
+                                        const std::vector<double>& relaxsol) {
++  // If the global domain is already infeasible, there is no point in
++  // constructing a RINS neighbourhood.
++  if (mipsolver.mipdata_ && mipsolver.mipdata_->domain.infeasible()) return;
++
+   for (HighsInt i = 0; i != mipsolver.numCol(); ++i) {
+     if (mipsolver.variableType(i) != HighsVarType::kInteger) continue;
+     if (localdom.col_lower_[i] == localdom.col_upper_[i]) continue;
+ 
+     double intval = std::floor(basesol[i] + 0.5);
+     if (std::abs(relaxsol[i] - intval) < mipsolver.mipdata_->feastol) {
+-      if (localdom.col_lower_[i] < intval)
++      if (localdom.col_lower_[i] < intval) {
+         localdom.changeBound(HighsBoundType::kLower, i,
+                              std::min(intval, localdom.col_upper_[i]),
+                              HighsDomain::Reason::unspecified());
+-      if (localdom.col_upper_[i] > intval)
++        if (localdom.infeasible()) return;
++      }
++      if (localdom.col_upper_[i] > intval) {
+         localdom.changeBound(HighsBoundType::kUpper, i,
+                              std::max(intval, localdom.col_lower_[i]),
+                              HighsDomain::Reason::unspecified());
++        if (localdom.infeasible()) return;
++      }
+     }
+   }
+ }

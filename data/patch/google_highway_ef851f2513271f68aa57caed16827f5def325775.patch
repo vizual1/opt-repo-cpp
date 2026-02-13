@@ -1,0 +1,13 @@
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index c2a012cb..6394f360 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -2006,7 +2006,7 @@ HWY_API VFromD<D> Reverse2(D d, const VFromD<D> v) {
+ }
+ 
+ template <class D, HWY_IF_LANE_SIZE_D(D, 8)>
+-HWY_API VFromD<D> Reverse2(D d, const VFromD<D> v) {  // 3210
++HWY_INLINE VFromD<D> Reverse2(D d, const VFromD<D> v) {  // 3210
+ #if HWY_TARGET == HWY_SVE2_128
+   if (detail::IsFull(d)) {
+     return detail::Ext<1>(v, v);

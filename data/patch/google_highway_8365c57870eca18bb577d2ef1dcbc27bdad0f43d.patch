@@ -1,0 +1,28 @@
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 67f64990..c1351982 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -1833,9 +1833,8 @@ HWY_API V Compress(V v, svbool_t mask) {
+   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked
+   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for
+   // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.
+-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,
+-                                                                  4 * 4, 8 * 4};
+-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);
++  const svuint64_t bits_full = Shl(Set(du64, 4), Iota(du64, 0));
++  const svuint64_t bits = IfThenElse(mask, bits_full, Zero(du64));
+   const size_t offset = detail::SumOfLanes(mask, bits);
+ 
+   // See CompressIsPartition.
+@@ -1900,9 +1899,8 @@ HWY_API V CompressNot(V v, svbool_t mask) {
+   // Convert mask into bitfield via horizontal sum (faster than ORV) of masked
+   // bits 1, 2, 4, 8. Pre-multiply by N so we can use it as an offset for
+   // SetTableIndices. Could use svindex + svadr, but loading might be cheaper.
+-  alignas(16) static constexpr uint64_t bits_times_vec_size[4] = {1 * 4, 2 * 4,
+-                                                                  4 * 4, 8 * 4};
+-  const svuint64_t bits = MaskedLoad(mask, du64, bits_times_vec_size);
++  const svuint64_t bits_full = Shl(Set(du64, 4), Iota(du64, 0));
++  const svuint64_t bits = IfThenElse(mask, bits_full, Zero(du64));
+   const size_t offset = detail::SumOfLanes(mask, bits);
+ 
+   // See CompressIsPartition.

@@ -1,0 +1,78 @@
+diff --git a/include/pod_vector.hpp b/include/pod_vector.hpp
+index aaaa0ff6..e7180c37 100644
+--- a/include/pod_vector.hpp
++++ b/include/pod_vector.hpp
+@@ -17,6 +17,7 @@
+ #include <memory>
+ #include <type_traits>
+ #include <utility>
++#include <cstring>
+ 
+ namespace primecount {
+ 
+@@ -325,10 +326,13 @@ private:
+   ALWAYS_INLINE typename std::enable_if<std::is_trivially_copyable<U>::value, void>::type
+   uninitialized_move(U* first, U* last, U* d_first)
+   {
+-    // We can use memcpy to move trivially copyable types.
+-    // https://en.cppreference.com/w/cpp/language/classes#Trivially_copyable_class
+-    // https://stackoverflow.com/questions/17625635/moving-an-object-in-memory-using-stdmemcpy
+-    std::copy(first, last, d_first);
++    // Use memcpy to move trivially copyable types into uninitialized memory.
++    // Destination and source never overlap here because we always move
++    // into freshly allocated memory, so memcpy is safe and usually faster
++    // than element-wise copy.
++    auto n = (std::size_t)(last - first);
++    if (n > 0)
++      std::memcpy(d_first, first, n * sizeof(U));
+   }
+ 
+   // Same as std::uninitialized_move() from C++17.
+@@ -338,7 +342,7 @@ private:
+   uninitialized_move(U* first, U* last, U* d_first)
+   {
+     for (; first != last; first++)
+-      new (d_first++) T(std::move(*first));
++      new (d_first++) U(std::move(*first));
+   }
+ 
+   // Same as std::uninitialized_default_construct() from C++17.
+diff --git a/lib/primesieve/include/primesieve/pod_vector.hpp b/lib/primesieve/include/primesieve/pod_vector.hpp
+index fc71b295..4a83fd2c 100644
+--- a/lib/primesieve/include/primesieve/pod_vector.hpp
++++ b/lib/primesieve/include/primesieve/pod_vector.hpp
+@@ -17,6 +17,7 @@
+ #include <memory>
+ #include <type_traits>
+ #include <utility>
++#include <cstring>
+ 
+ namespace primesieve {
+ 
+@@ -325,10 +326,13 @@ private:
+   ALWAYS_INLINE typename std::enable_if<std::is_trivially_copyable<U>::value, void>::type
+   uninitialized_move(U* first, U* last, U* d_first)
+   {
+-    // We can use memcpy to move trivially copyable types.
+-    // https://en.cppreference.com/w/cpp/language/classes#Trivially_copyable_class
+-    // https://stackoverflow.com/questions/17625635/moving-an-object-in-memory-using-stdmemcpy
+-    std::copy(first, last, d_first);
++    // Use memcpy to move trivially copyable types into uninitialized memory.
++    // Destination and source never overlap here because we always move
++    // into freshly allocated memory, so memcpy is safe and usually faster
++    // than element-wise copy.
++    auto n = (std::size_t)(last - first);
++    if (n > 0)
++      std::memcpy(d_first, first, n * sizeof(U));
+   }
+ 
+   // Same as std::uninitialized_move() from C++17.
+@@ -338,7 +342,7 @@ private:
+   uninitialized_move(U* first, U* last, U* d_first)
+   {
+     for (; first != last; first++)
+-      new (d_first++) T(std::move(*first));
++      new (d_first++) U(std::move(*first));
+   }
+ 
+   // Same as std::uninitialized_default_construct() from C++17.

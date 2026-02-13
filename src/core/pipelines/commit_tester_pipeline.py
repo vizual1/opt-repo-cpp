@@ -70,6 +70,8 @@ class CommitTesterPipeline:
             commits = [(repo_id, new_sha, old_sha)]
         else:
             commits = self.commit.get_commits(commits_list)
+        if len(commits) > 0:
+            logging.info(f"Commits found {len(commits)}")
         tasks: list[tuple[str, str, str, str]] = []
         available_cpus = get_available_cpus()
 

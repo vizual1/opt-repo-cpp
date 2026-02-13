@@ -1,0 +1,127 @@
+diff --git a/src/oatpp/core/data/mapping/ObjectMapper.cpp b/src/oatpp/core/data/mapping/ObjectMapper.cpp
+index acf0c1f4..03f52594 100644
+--- a/src/oatpp/core/data/mapping/ObjectMapper.cpp
++++ b/src/oatpp/core/data/mapping/ObjectMapper.cpp
+@@ -24,7 +24,7 @@
+ 
+ #include "ObjectMapper.hpp"
+ 
+-#include "oatpp/core/data/stream/BufferStream.hpp"
++#include "oatpp/core/data/stream/ChunkedBuffer.hpp"
+ 
+ namespace oatpp { namespace data { namespace mapping {
+ 
+@@ -37,7 +37,7 @@ const ObjectMapper::Info& ObjectMapper::getInfo() const {
+ }
+ 
+ oatpp::String ObjectMapper::writeToString(const type::AbstractObjectWrapper& variant) const {
+-  stream::BufferOutputStream stream;
++  stream::ChunkedBuffer stream;
+   write(&stream, variant);
+   return stream.toString();
+ }
+diff --git a/src/oatpp/parser/json/Beautifier.cpp b/src/oatpp/parser/json/Beautifier.cpp
+index cbd30103..1ea204ae 100644
+--- a/src/oatpp/parser/json/Beautifier.cpp
++++ b/src/oatpp/parser/json/Beautifier.cpp
+@@ -24,7 +24,7 @@
+ 
+ #include "Beautifier.hpp"
+ 
+-#include "oatpp/core/data/stream/BufferStream.hpp"
++#include "oatpp/core/data/stream/ChunkedBuffer.hpp"
+ 
+ namespace oatpp { namespace parser { namespace json {
+ 
+@@ -47,7 +47,7 @@ void Beautifier::writeIndent(ConsistentOutputStream* outputStream) {
+ 
+ v_io_size Beautifier::write(const void *data, v_buff_size count, async::Action& action) {
+ 
+-  oatpp::data::stream::BufferOutputStream buffer;
++  oatpp::data::stream::ChunkedBuffer buffer;
+ 
+   for(v_buff_size i = 0; i < count; i ++) {
+ 
+@@ -139,7 +139,8 @@ v_io_size Beautifier::write(const void *data, v_buff_size count, async::Action&
+ 
+   }
+ 
+-  return m_outputStream->writeSimple(buffer.getData(), buffer.getCurrentPosition());
++  buffer.flushToStream(m_outputStream);
++  return buffer.getSize();
+ 
+ }
+ 
+diff --git a/src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp b/src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp
+index e823f680..2ebd0c37 100644
+--- a/src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp
++++ b/src/oatpp/web/protocol/http/incoming/BodyDecoder.cpp
+@@ -37,7 +37,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d
+     const BodyDecoder* m_decoder;
+     Headers m_headers;
+     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;
+-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;
++    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;
+   public:
+ 
+     ToStringDecoder(const BodyDecoder* decoder,
+@@ -46,7 +46,7 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d
+       : m_decoder(decoder)
+       , m_headers(headers)
+       , m_bodyStream(bodyStream)
+-      , m_outputStream(std::make_shared<data::stream::BufferOutputStream>())
++      , m_outputStream(oatpp::data::stream::ChunkedBuffer::createShared())
+     {}
+ 
+     Action act() override {
+@@ -54,7 +54,9 @@ BodyDecoder::decodeToStringAsync(const Headers& headers, const std::shared_ptr<d
+     }
+ 
+     Action onDecoded() {
+-      return _return(m_outputStream->toString());
++      auto out = m_outputStream;
++      // Return string by creating it from chunks to avoid extra copy if possible
++      return _return(out->toString());
+     }
+ 
+   };
+diff --git a/src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp b/src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp
+index 0a302bef..5d0023d6 100644
+--- a/src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp
++++ b/src/oatpp/web/protocol/http/incoming/BodyDecoder.hpp
+@@ -27,7 +27,7 @@
+ 
+ #include "oatpp/web/protocol/http/Http.hpp"
+ #include "oatpp/core/data/mapping/ObjectMapper.hpp"
+-#include "oatpp/core/data/stream/BufferStream.hpp"
++#include "oatpp/core/data/stream/ChunkedBuffer.hpp"
+ #include "oatpp/core/async/Coroutine.hpp"
+ 
+ namespace oatpp { namespace web { namespace protocol { namespace http { namespace incoming {
+@@ -48,7 +48,7 @@ private:
+     Headers m_headers;
+     std::shared_ptr<oatpp::data::stream::InputStream> m_bodyStream;
+     std::shared_ptr<oatpp::data::mapping::ObjectMapper> m_objectMapper;
+-    std::shared_ptr<oatpp::data::stream::BufferOutputStream> m_outputStream;
++    std::shared_ptr<oatpp::data::stream::ChunkedBuffer> m_outputStream;
+   public:
+     
+     ToDtoDecoder(const BodyDecoder* decoder,
+@@ -59,7 +59,7 @@ private:
+       , m_headers(headers)
+       , m_bodyStream(bodyStream)
+       , m_objectMapper(objectMapper)
+-      , m_outputStream(std::make_shared<oatpp::data::stream::BufferOutputStream>())
++      , m_outputStream(oatpp::data::stream::ChunkedBuffer::createShared())
+     {}
+     
+     oatpp::async::Action act() override {
+@@ -111,7 +111,7 @@ public:
+    * @return - &oatpp::String;.
+    */
+   oatpp::String decodeToString(const Headers& headers, data::stream::InputStream* bodyStream) const {
+-    oatpp::data::stream::BufferOutputStream stream;
++    oatpp::data::stream::ChunkedBuffer stream;
+     decode(headers, bodyStream, &stream);
+     return stream.toString();
+   }

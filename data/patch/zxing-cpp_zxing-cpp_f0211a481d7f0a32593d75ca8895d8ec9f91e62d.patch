@@ -1,0 +1,248 @@
+diff --git a/core/src/RegressionLine.h b/core/src/RegressionLine.h
+index eb7ecd1d..11dc89d9 100644
+--- a/core/src/RegressionLine.h
++++ b/core/src/RegressionLine.h
+@@ -29,31 +29,45 @@ protected:
+ 	friend PointF intersect(const RegressionLine& l1, const RegressionLine& l2);
+ 
+ 	template<typename T> bool evaluate(const PointT<T>* begin, const PointT<T>* end)
+-	{
+-		auto mean = std::accumulate(begin, end, PointF()) / std::distance(begin, end);
+-		PointF::value_t sumXX = 0, sumYY = 0, sumXY = 0;
+-		for (auto p = begin; p != end; ++p) {
+-			auto d = *p - mean;
+-			sumXX += d.x * d.x;
+-			sumYY += d.y * d.y;
+-			sumXY += d.x * d.y;
+-		}
+-		if (sumYY >= sumXX) {
+-			auto l = std::sqrt(sumYY * sumYY + sumXY * sumXY);
+-			a = +sumYY / l;
+-			b = -sumXY / l;
+-		} else {
+-			auto l = std::sqrt(sumXX * sumXX + sumXY * sumXY);
+-			a = +sumXY / l;
+-			b = -sumXX / l;
+-		}
+-		if (dot(_directionInward, normal()) < 0) {
+-			a = -a;
+-			b = -b;
+-		}
+-		c = dot(normal(), mean); // (a*mean.x + b*mean.y);
+-		return dot(_directionInward, normal()) > 0.5f; // angle between original and new direction is at most 60 degree
+-	}
++{
++// compute counts and raw sums in a single pass to avoid multiple iterations over the points
++auto n = static_cast<PointF::value_t>(end - begin);
++if (n <= 0)
++return false;
++PointF::value_t sumX = 0, sumY = 0, sumXX = 0, sumYY = 0, sumXY = 0;
++for (auto p = begin; p != end; ++p) {
++auto x = static_cast<PointF::value_t>(p->x);
++auto y = static_cast<PointF::value_t>(p->y);
++sumX += x;
++sumY += y;
++sumXX += x * x;
++sumYY += y * y;
++sumXY += x * y;
++}
++// central moments
++auto meanX = sumX / n;
++auto meanY = sumY / n;
++auto mXX = sumXX - n * meanX * meanX;
++auto mYY = sumYY - n * meanY * meanY;
++auto mXY = sumXY - n * meanX * meanY;
++PointF::value_t sumSqX = mXX, sumSqY = mYY, sumXYc = mXY;
++if (sumSqY >= sumSqX) {
++auto l = std::sqrt(sumSqY * sumSqY + sumXYc * sumXYc);
++a = +sumSqY / l;
++b = -sumXYc / l;
++} else {
++auto l = std::sqrt(sumSqX * sumSqX + sumXYc * sumXYc);
++a = +sumXYc / l;
++b = -sumSqX / l;
++}
++if (dot(_directionInward, normal()) < 0) {
++a = -a;
++b = -b;
++}
++c = a * meanX + b * meanY;
++return dot(_directionInward, normal()) > 0.5f; // angle between original and new direction is at most 60 degree
++}
++
+ 
+ 	template <typename T> bool evaluate(const std::vector<PointT<T>>& points) { return evaluate(&points.front(), &points.back() + 1); }
+ 
+diff --git a/core/src/datamatrix/DMDetector.cpp b/core/src/datamatrix/DMDetector.cpp
+index 0dcde39a..5af567dc 100644
+--- a/core/src/datamatrix/DMDetector.cpp
++++ b/core/src/datamatrix/DMDetector.cpp
+@@ -120,45 +120,58 @@ static float RoundToNearestF(T x)
+ * for a rectangular matrix
+ */
+ static bool CorrectTopRightRectangular(const BitMatrix& image, const ResultPoint& bottomLeft,
+-									   const ResultPoint& bottomRight, const ResultPoint& topLeft,
+-									   const ResultPoint& topRight, int dimensionTop, int dimensionRight,
+-									   ResultPoint& result)
++                                           const ResultPoint& bottomRight, const ResultPoint& topLeft,
++                                           const ResultPoint& topRight, int dimensionTop, int dimensionRight,
++                                           ResultPoint& result)
+ {
+-	float corr = RoundToNearestF(distance(bottomLeft, bottomRight)) / static_cast<float>(dimensionTop);
+-	float norm = RoundToNearestF(distance(topLeft, topRight));
+-	float cos = (topRight.x() - topLeft.x()) / norm;
+-	float sin = (topRight.y() - topLeft.y()) / norm;
+-
+-	ResultPoint c1(topRight.x() + corr*cos, topRight.y() + corr*sin);
+-
+-	corr = RoundToNearestF(distance(bottomLeft, topLeft)) / (float)dimensionRight;
+-	norm = RoundToNearestF(distance(bottomRight, topRight));
+-	cos = (topRight.x() - bottomRight.x()) / norm;
+-	sin = (topRight.y() - bottomRight.y()) / norm;
+-
+-	ResultPoint c2(topRight.x() + corr*cos, topRight.y() + corr*sin);
+-
+-	if (!IsValidPoint(c1, image.width(), image.height())) {
+-		if (IsValidPoint(c2, image.width(), image.height())) {
+-			result = c2;
+-			return true;
+-		}
+-		return false;
+-	}
+-	if (!IsValidPoint(c2, image.width(), image.height())) {
+-		result = c1;
+-		return true;
+-	}
+-
+-	int l1 = std::abs(dimensionTop - TransitionsBetween(image, topLeft, c1).transitions) +
+-			 std::abs(dimensionRight - TransitionsBetween(image, bottomRight, c1).transitions);
+-	int l2 = std::abs(dimensionTop - TransitionsBetween(image, topLeft, c2).transitions) +
+-			 std::abs(dimensionRight - TransitionsBetween(image, bottomRight, c2).transitions);
+-
+-	result = l1 <= l2 ? c1 : c2;
+-	return true;
++    // cache image dimensions and precompute distances used multiple times
++    int imgW = image.width();
++    int imgH = image.height();
++    float distBLBR = RoundToNearestF(distance(bottomLeft, bottomRight));
++    float distTLTR = RoundToNearestF(distance(topLeft, topRight));
++
++    float corr = distBLBR / static_cast<float>(dimensionTop);
++    float norm = distTLTR;
++    float cos = (topRight.x() - topLeft.x()) / norm;
++    float sin = (topRight.y() - topLeft.y()) / norm;
++
++    ResultPoint c1(topRight.x() + corr * cos, topRight.y() + corr * sin);
++
++    float distBLTL = RoundToNearestF(distance(bottomLeft, topLeft));
++    float distBRTR = RoundToNearestF(distance(bottomRight, topRight));
++    corr = distBLTL / static_cast<float>(dimensionRight);
++    norm = distBRTR;
++    cos = (topRight.x() - bottomRight.x()) / norm;
++    sin = (topRight.y() - bottomRight.y()) / norm;
++
++    ResultPoint c2(topRight.x() + corr * cos, topRight.y() + corr * sin);
++
++    if (!IsValidPoint(c1, imgW, imgH)) {
++        if (IsValidPoint(c2, imgW, imgH)) {
++            result = c2;
++            return true;
++        }
++        return false;
++    }
++    if (!IsValidPoint(c2, imgW, imgH)) {
++        result = c1;
++        return true;
++    }
++
++    // compute transition counts once each
++    auto t1 = TransitionsBetween(image, topLeft, c1).transitions;
++    auto t2 = TransitionsBetween(image, bottomRight, c1).transitions;
++    auto t3 = TransitionsBetween(image, topLeft, c2).transitions;
++    auto t4 = TransitionsBetween(image, bottomRight, c2).transitions;
++
++    int l1 = std::abs(dimensionTop - t1) + std::abs(dimensionRight - t2);
++    int l2 = std::abs(dimensionTop - t3) + std::abs(dimensionRight - t4);
++
++    result = l1 <= l2 ? c1 : c2;
++    return true;
+ }
+ 
++
+ /**
+ * Calculates the position of the white top right module using the output of the rectangle detector
+ * for a square matrix
+@@ -166,35 +179,46 @@ static bool CorrectTopRightRectangular(const BitMatrix& image, const ResultPoint
+ static ResultPoint CorrectTopRight(const BitMatrix& image, const ResultPoint& bottomLeft, const ResultPoint& bottomRight,
+                                    const ResultPoint& topLeft, const ResultPoint& topRight, int dimension)
+ {
+-	float corr = RoundToNearestF(distance(bottomLeft, bottomRight)) / (float)dimension;
+-	float norm = RoundToNearestF(distance(topLeft, topRight));
+-	float cos = (topRight.x() - topLeft.x()) / norm;
+-	float sin = (topRight.y() - topLeft.y()) / norm;
+-
+-	ResultPoint c1(topRight.x() + corr * cos, topRight.y() + corr * sin);
+-
+-	corr = RoundToNearestF(distance(bottomLeft, topLeft)) / (float)dimension;
+-	norm = RoundToNearestF(distance(bottomRight, topRight));
+-	cos = (topRight.x() - bottomRight.x()) / norm;
+-	sin = (topRight.y() - bottomRight.y()) / norm;
+-
+-	ResultPoint c2(topRight.x() + corr * cos, topRight.y() + corr * sin);
+-
+-	if (!IsValidPoint(c1, image.width(), image.height())) {
+-		if (!IsValidPoint(c2, image.width(), image.height()))
+-			return topRight;
+-		return c2;
+-	}
+-	if (!IsValidPoint(c2, image.width(), image.height()))
+-		return c1;
+-
+-	int l1 = std::abs(TransitionsBetween(image, topLeft, c1).transitions -
+-					  TransitionsBetween(image, bottomRight, c1).transitions);
+-	int l2 = std::abs(TransitionsBetween(image, topLeft, c2).transitions -
+-					  TransitionsBetween(image, bottomRight, c2).transitions);
+-	return l1 <= l2 ? c1 : c2;
++    int imgW = image.width();
++    int imgH = image.height();
++    float distBLBR = RoundToNearestF(distance(bottomLeft, bottomRight));
++    float distTLTR = RoundToNearestF(distance(topLeft, topRight));
++
++    float corr = distBLBR / (float)dimension;
++    float norm = distTLTR;
++    float cos = (topRight.x() - topLeft.x()) / norm;
++    float sin = (topRight.y() - topLeft.y()) / norm;
++
++    ResultPoint c1(topRight.x() + corr * cos, topRight.y() + corr * sin);
++
++    float distBLTL = RoundToNearestF(distance(bottomLeft, topLeft));
++    float distBRTR = RoundToNearestF(distance(bottomRight, topRight));
++    corr = distBLTL / (float)dimension;
++    norm = distBRTR;
++    cos = (topRight.x() - bottomRight.x()) / norm;
++    sin = (topRight.y() - bottomRight.y()) / norm;
++
++    ResultPoint c2(topRight.x() + corr * cos, topRight.y() + corr * sin);
++
++    if (!IsValidPoint(c1, imgW, imgH)) {
++        if (!IsValidPoint(c2, imgW, imgH))
++            return topRight;
++        return c2;
++    }
++    if (!IsValidPoint(c2, imgW, imgH))
++        return c1;
++
++    auto t1 = TransitionsBetween(image, topLeft, c1).transitions;
++    auto t2 = TransitionsBetween(image, bottomRight, c1).transitions;
++    auto t3 = TransitionsBetween(image, topLeft, c2).transitions;
++    auto t4 = TransitionsBetween(image, bottomRight, c2).transitions;
++
++    int l1 = std::abs(t1 - t2);
++    int l2 = std::abs(t3 - t4);
++    return l1 <= l2 ? c1 : c2;
+ }
+ 
++
+ static DetectorResult SampleGrid(const BitMatrix& image, const ResultPoint& topLeft, const ResultPoint& bottomLeft,
+ 								 const ResultPoint& bottomRight, const ResultPoint& topRight, int width, int height)
+ {

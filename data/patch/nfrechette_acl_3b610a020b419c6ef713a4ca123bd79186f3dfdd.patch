@@ -1,0 +1,78 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686
++Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6
++Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6-dirty
+diff --git a/includes/acl/decompression/impl/animated_track_cache.transform.h b/includes/acl/decompression/impl/animated_track_cache.transform.h
+index 237baec6..e14eea5f 100644
+--- a/includes/acl/decompression/impl/animated_track_cache.transform.h
++++ b/includes/acl/decompression/impl/animated_track_cache.transform.h
+@@ -635,7 +635,10 @@ namespace acl
+ 			// of this cache line will fetch it. For safety, we prefetch 63 bytes ahead.
+ 			// Prefetch 4 samples ahead in all levels of the CPU cache
+ #if defined(ACL_IMPL_PREFETCH_EARLY)
+-			ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_track_data_bit_offset / 8) + 63);
++			{
++                                const uint8_t* animated_prefetch_base = animated_track_data + (animated_track_data_bit_offset >> 3);
++                                ACL_IMPL_ANIMATED_PREFETCH(animated_prefetch_base + 63);
++                        }
+ #endif
+ 
+ 			// Update our pointers
+@@ -985,7 +988,10 @@ namespace acl
+ 			// of this cache line will fetch it. For safety, we prefetch 63 bytes ahead.
+ 			// Prefetch 4 samples ahead in all levels of the CPU cache
+ 			ACL_IMPL_ANIMATED_PREFETCH(format_per_track_data + 60);
+-			ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_track_data_bit_offset / 8) + 63);
++			{
++                                const uint8_t* animated_prefetch_base = animated_track_data + (animated_track_data_bit_offset >> 3);
++                                ACL_IMPL_ANIMATED_PREFETCH(animated_prefetch_base + 63);
++                        }
+ 			ACL_IMPL_ANIMATED_PREFETCH(segment_range_data + 48);
+ 		}
+ 
+@@ -1574,8 +1580,10 @@ namespace acl
+ 								const uint8_t* animated_track_data = segment_sampling_context_rotations[0].animated_track_data + 64;	// One cache line ahead
+ 								const uint32_t animated_bit_offset0 = segment_sampling_context_rotations[0].animated_track_data_bit_offset;
+ 								const uint32_t animated_bit_offset1 = segment_sampling_context_rotations[1].animated_track_data_bit_offset;
+-								ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset0 / 8));
+-								ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset1 / 8));
++								const uint8_t* animated_prefetch_base0 = animated_track_data + (animated_bit_offset0 >> 3);
++                                                                ACL_IMPL_ANIMATED_PREFETCH(animated_prefetch_base0);
++								const uint8_t* animated_prefetch_base1 = animated_track_data + (animated_bit_offset1 >> 3);
++                                                                ACL_IMPL_ANIMATED_PREFETCH(animated_prefetch_base1);
+ 							}
+ #endif
+ 
+@@ -1638,8 +1646,10 @@ namespace acl
+ 							const uint8_t* animated_track_data = segment_sampling_context_rotations[0].animated_track_data + 64;	// One cache line ahead
+ 							const uint32_t animated_bit_offset0 = segment_sampling_context_rotations[0].animated_track_data_bit_offset;
+ 							const uint32_t animated_bit_offset1 = segment_sampling_context_rotations[1].animated_track_data_bit_offset;
+-							ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset0 / 8));
+-							ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset1 / 8));
++							const uint8_t* animated_prefetch_base0 = animated_track_data + (animated_bit_offset0 >> 3);
++                                                                ACL_IMPL_ANIMATED_PREFETCH(animated_prefetch_base0);
++							const uint8_t* animated_prefetch_base1 = animated_track_data + (animated_bit_offset1 >> 3);
++                                                                ACL_IMPL_ANIMATED_PREFETCH(animated_prefetch_base1);
+ 						}
+ #endif
+ 

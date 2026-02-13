@@ -1,0 +1,56 @@
+diff --git a/src/gourdon/AC.cpp b/src/gourdon/AC.cpp
+index 14cb2551..6c5068bd 100644
+--- a/src/gourdon/AC.cpp
++++ b/src/gourdon/AC.cpp
+@@ -208,7 +208,8 @@ T AC_OpenMP(T x,
+ 
+   StatusAC status(x);
+   PiTable pi(max(z, max_a_prime), threads);
+-  SegmentedPiTable segmentedPi(sqrtx, z, threads);
++  int64_t seg_size = min(sqrtx, z);
++  SegmentedPiTable segmentedPi(sqrtx, seg_size, threads);
+ 
+   int64_t pi_y = pi[y];
+   int64_t pi_sqrtz = pi[isqrt(z)];
+diff --git a/src/gourdon/AC_libdivide.cpp b/src/gourdon/AC_libdivide.cpp
+index ca0deb06..f0b89fdd 100644
+--- a/src/gourdon/AC_libdivide.cpp
++++ b/src/gourdon/AC_libdivide.cpp
+@@ -311,7 +311,8 @@ T AC_OpenMP(T x,
+ 
+   StatusAC status(x);
+   PiTable pi(max(z, max_a_prime), threads);
+-  SegmentedPiTable segmentedPi(sqrtx, z, threads);
++  int64_t seg_size = min(sqrtx, z);
++  SegmentedPiTable segmentedPi(sqrtx, seg_size, threads);
+ 
+   // Initialize libdivide vector using primes
+   using libdivide_t = libdivide::branchfree_divider<uint64_t>;
+diff --git a/src/mpi/AC_mpi.cpp b/src/mpi/AC_mpi.cpp
+index 97a55801..bedebae6 100644
+--- a/src/mpi/AC_mpi.cpp
++++ b/src/mpi/AC_mpi.cpp
+@@ -197,7 +197,8 @@ T AC_OpenMP(T x,
+ 
+   StatusAC status(x);
+   PiTable pi(max(z, max_a_prime), threads);
+-  SegmentedPiTable segmentedPi(sqrtx, z, threads);
++  int64_t seg_size = min(sqrtx, z);
++  SegmentedPiTable segmentedPi(sqrtx, seg_size, threads);
+ 
+   int64_t pi_y = pi[y];
+   int64_t pi_sqrtz = pi[isqrt(z)];
+diff --git a/src/mpi/AC_mpi_libdivide.cpp b/src/mpi/AC_mpi_libdivide.cpp
+index 009ffbd5..92967e32 100644
+--- a/src/mpi/AC_mpi_libdivide.cpp
++++ b/src/mpi/AC_mpi_libdivide.cpp
+@@ -294,7 +294,8 @@ T AC_OpenMP(T x,
+ 
+   StatusAC status(x);
+   PiTable pi(max(z, max_a_prime), threads);
+-  SegmentedPiTable segmentedPi(sqrtx, z, threads);
++  int64_t seg_size = min(sqrtx, z);
++  SegmentedPiTable segmentedPi(sqrtx, seg_size, threads);
+ 
+   // Initialize libdivide vector using primes
+   using libdivide_t = libdivide::branchfree_divider<uint64_t>;

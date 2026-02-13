@@ -1,0 +1,21 @@
+diff --git a/include/xsimd/types/xsimd_batch.hpp b/include/xsimd/types/xsimd_batch.hpp
+index b4989fc..fb17cae 100644
+--- a/include/xsimd/types/xsimd_batch.hpp
++++ b/include/xsimd/types/xsimd_batch.hpp
+@@ -1347,8 +1347,14 @@ namespace xsimd
+     template <class T, class A>
+     inline batch<std::complex<T>, A>& batch<std::complex<T>, A>::operator*=(batch const& other) noexcept
+     {
+-        real_batch new_real = real() * other.real() - imag() * other.imag();
+-        real_batch new_imag = real() * other.imag() + imag() * other.real();
++        // Use fused multiply-add/subtract (fma/fms) when available. The kernel provides
++        // architecture-specific fma/fms implementations; fallbacks resolve to mul/add.
++        // Compute new_real = real * other.real - imag * other.imag  => fms(real, other.real, imag*other.imag)
++        // Compute new_imag = real * other.imag + imag * other.real  => fma(real, other.imag, imag*other.real)
++        real_batch t1 = imag() * other.imag();
++        real_batch new_real = kernel::fms<A>(real(), other.real(), t1, A {});
++        real_batch t2 = imag() * other.real();
++        real_batch new_imag = kernel::fma<A>(real(), other.imag(), t2, A {});
+         m_real = new_real;
+         m_imag = new_imag;
+         return *this;

@@ -1,0 +1,14 @@
+diff --git a/src/qpsolver/factor.hpp b/src/qpsolver/factor.hpp
+index 40ef603c4..a66e3628f 100644
+--- a/src/qpsolver/factor.hpp
++++ b/src/qpsolver/factor.hpp
+@@ -204,7 +204,8 @@ class CholeskyFactor {
+   }
+ 
+   void solve(Vector& rhs) {
+-    if (!uptodate || (numberofreduces >= runtime.instance.num_con / 2 &&
++    if (!uptodate || (runtime.instance.num_con > 0 &&
++                      numberofreduces >= runtime.instance.num_con / 2 &&
+                       !has_negative_eigenvalue)) {
+       recompute();
+     }

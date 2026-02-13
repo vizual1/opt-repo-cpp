@@ -1,0 +1,95 @@
+diff --git a/include/LoadBalancer.hpp b/include/LoadBalancer.hpp
+index fccd88a9..cb1b0726 100644
+--- a/include/LoadBalancer.hpp
++++ b/include/LoadBalancer.hpp
+@@ -58,6 +58,8 @@ private:
+   OmpLock lock_;
+ };
+ 
++  static constexpr int openhands_lto_hint = 0;
++
+ } // namespace
+ 
+ #endif
+diff --git a/include/LoadBalancerP2.hpp b/include/LoadBalancerP2.hpp
+index 9e955ed8..0fefc8b6 100644
+--- a/include/LoadBalancerP2.hpp
++++ b/include/LoadBalancerP2.hpp
+@@ -32,6 +32,8 @@ private:
+   int64_t z_;
+ };
+ 
++  static constexpr int openhands_lto_hint = 0;
++
+ } // namespace
+ 
+ #endif
+diff --git a/include/Sieve.hpp b/include/Sieve.hpp
+index 7a959414..e2eade24 100644
+--- a/include/Sieve.hpp
++++ b/include/Sieve.hpp
+@@ -73,6 +73,8 @@ public:
+   }
+ 
+ private:
++  static inline const uint32_t openhands_sieve_padding = 64;
++
+   void add(uint64_t prime);
+   void allocate_counters(uint64_t low);
+   void reset_counters();
+diff --git a/include/Status.hpp b/include/Status.hpp
+index b180de25..8eb2d644 100644
+--- a/include/Status.hpp
++++ b/include/Status.hpp
+@@ -22,6 +22,7 @@ public:
+   NOINLINE void print(int64_t b, int64_t max_b);
+   NOINLINE void print(int64_t low, int64_t limit, maxint_t sum, maxint_t sum_approx);
+   static double getPercent(int64_t low, int64_t limit, maxint_t sum, maxint_t sum_approx);
++
+ private:
+   bool isPrint(double time);
+   void print(double percent);
+diff --git a/include/StatusAC.hpp b/include/StatusAC.hpp
+index c5eaa5e0..e8a92478 100644
+--- a/include/StatusAC.hpp
++++ b/include/StatusAC.hpp
+@@ -21,6 +21,7 @@ public:
+   StatusAC(maxint_t x);
+   NOINLINE void print(int64_t b, int64_t max_b);
+   NOINLINE void next();
++  static inline double getPercent(int64_t b, int64_t max_b) { return get_percent(b, max_b); }
+ private:
+   bool isPrint(double time);
+   void print(double percent);
+diff --git a/include/primecount-internal.hpp b/include/primecount-internal.hpp
+index 6d98c37e..1c8c4cf4 100644
+--- a/include/primecount-internal.hpp
++++ b/include/primecount-internal.hpp
+@@ -103,6 +103,13 @@ double get_percent(T low, T limit)
+   return in_between(0, percent, 100);
+ }
+ 
++// Fast non-templated get_percent overload for hot paths to reduce code bloat
++static inline double get_percent(int64_t low, int64_t limit)
++{
++  double percent = (100.0 * low) / std::max<int64_t>(1, limit);
++  return (percent < 0.0) ? 0.0 : (percent > 100.0 ? 100.0 : percent);
++}
++
+ template <typename T>
+ T S2_approx(T x, int64_t pi_y, T p2, T s1)
+ {
+diff --git a/include/print.hpp b/include/print.hpp
+index 28694e86..4be3c5c9 100644
+--- a/include/print.hpp
++++ b/include/print.hpp
+@@ -31,6 +31,9 @@ void print_vars(maxint_t x, int64_t y, int threads);
+ void print_vars(maxint_t x, int64_t y, int64_t c, int threads);
+ void print_seconds(double seconds);
+ 
++// Provide inline no-op print functions when printing is disabled to help LTO
++static inline bool is_print_noop() { return false; }
++
+ void print_gourdon(maxint_t x, int64_t y, int64_t z, int64_t k, int threads);
+ void print_gourdon_vars(maxint_t x, int64_t y, int threads);
+ void print_gourdon_vars(maxint_t x, int64_t y, int64_t z, int64_t k,  int threads);

@@ -1,0 +1,67 @@
+diff --git a/snappy.cc b/snappy.cc
+index 31f1575..6bc7055 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -1025,25 +1025,32 @@ size_t AdvanceToNextTag(const uint8_t** ip_p, size_t* tag) {
+   tag_type &= 3;
+   is_literal = (tag_type == 0);
+ #endif
+-  // TODO
+-  // This is code is subtle. Loading the values first and then cmov has less
+-  // latency then cmov ip and then load. However clang would move the loads
+-  // in an optimization phase, volatile prevents this transformation.
+-  // Note that we have enough slop bytes (64) that the loads are always valid.
+-  size_t tag_literal =
+-      static_cast<const volatile uint8_t*>(ip)[1 + literal_len];
+-  size_t tag_copy = static_cast<const volatile uint8_t*>(ip)[tag_type];
+-  *tag = is_literal ? tag_literal : tag_copy;
+-  const uint8_t* ip_copy = ip + 1 + tag_type;
+-  const uint8_t* ip_literal = ip + 2 + literal_len;
+-  ip = is_literal ? ip_literal : ip_copy;
++  // Avoid branches when selecting between literal and copy metadata. Use a
++  // branchless selection so that compilers for architectures like ARM can
++  // emit conditional increment (csinc) or conditional select instructions.
++  const volatile uint8_t* ipv = static_cast<const volatile uint8_t*>(ip);
++
++  size_t lit_index = 1 + literal_len;            // index of tag byte for literal
++  size_t copy_index = tag_type;                  // index of tag byte for copy
++  size_t lit_ip_offset = 2 + literal_len;       // ip increment for literal
++  size_t copy_ip_offset = 1 + tag_type;         // ip increment for copy
++
++  // Create mask: all-ones if is_literal, all-zeros otherwise.
++  const size_t mask = static_cast<size_t>(0) - static_cast<size_t>(is_literal);
++
++  // Select indices and offsets branchlessly.
++  size_t selected_index = (lit_index & mask) | (copy_index & ~mask);
++  size_t selected_ip_offset = (lit_ip_offset & mask) | (copy_ip_offset & ~mask);
++
++  size_t selected_tag = ipv[selected_index];
++  *tag = selected_tag;
++  ip += selected_ip_offset;
++
+ #if defined(__GNUC__) && defined(__x86_64__)
+-  // TODO Clang is "optimizing" zero-extension (a totally free
+-  // operation) this means that after the cmov of tag, it emits another movzb
+-  // tag, byte(tag). It really matters as it's on the core chain. This dummy
+-  // asm, persuades clang to do the zero-extension at the load (it's automatic)
+-  // removing the expensive movzb.
+-  asm("" ::"r"(tag_copy));
++  // Keep the dummy asm used on x86 to avoid an extra movzb as in the original
++  // implementation. Reference the selected tag value so the compiler performs
++  // zero-extension early as in the original implementation.
++  asm("" ::"r"(selected_tag));
+ #endif
+   return tag_type;
+ }
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

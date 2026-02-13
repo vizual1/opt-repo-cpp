@@ -1,0 +1,47 @@
+diff --git a/include/crow/http_connection.h b/include/crow/http_connection.h
+index 8e43e6e19..a59f81412 100644
+--- a/include/crow/http_connection.h
++++ b/include/crow/http_connection.h
+@@ -436,26 +436,29 @@ namespace crow
+                 cancel_deadline_timer();
+                 if (res.body.length() > 0)
+                 {
+-                    std::string buf;
++                    const std::string& body = res.body;
++                    size_t total = body.size();
++                    size_t sent = 0;
+                     std::vector<asio::const_buffer> buffers;
+ 
+-                    while (res.body.length() > 16384)
++                    // Send 16KB chunks without copying or reallocating the response string
++                    while (sent + 16384 < total)
+                     {
+-                        //buf.reserve(16385);
+-                        buf = res.body.substr(0, 16384);
+-                        res.body = res.body.substr(16384);
+                         buffers.clear();
+-                        buffers.push_back(asio::buffer(buf));
++                        buffers.push_back(asio::buffer(body.data() + sent, 16384));
+                         do_write_sync(buffers);
++                        sent += 16384;
+                     }
+-                    // Collect whatever is left (less than 16KB) and send it down the socket
+-                    // buf.reserve(is.length());
+-                    buf = res.body;
+-                    res.body.clear();
+ 
+-                    buffers.clear();
+-                    buffers.push_back(asio::buffer(buf));
+-                    do_write_sync(buffers);
++                    if (sent < total)
++                    {
++                        buffers.clear();
++                        buffers.push_back(asio::buffer(body.data() + sent, total - sent));
++                        do_write_sync(buffers);
++                    }
++
++                    // Clear the response body now that it's been written
++                    res.body.clear();
+                 }
+                 if (close_connection_)
+                 {

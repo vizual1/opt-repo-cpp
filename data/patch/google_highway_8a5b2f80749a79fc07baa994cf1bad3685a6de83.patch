@@ -1,0 +1,31 @@
+diff --git a/hwy/contrib/sort/sorting_networks-inl.h b/hwy/contrib/sort/sorting_networks-inl.h
+index 5a28a843..f09793f8 100644
+--- a/hwy/contrib/sort/sorting_networks-inl.h
++++ b/hwy/contrib/sort/sorting_networks-inl.h
+@@ -73,6 +73,14 @@ struct SharedTraits : public Base {
+ // ------------------------------ Sorting network
+ 
+ // Sorting network for independent columns in 8 vectors.
++// Small helper to sort 2 vectors using the trait's Sort2. Added to allow
++// specialized, minimal sorting for <=2 keys.
++template <class D, class Traits, class V = Vec<D>>
++HWY_INLINE void Sort2(D d, Traits st, V& a, V& b) {
++  st.Sort2(d, a, b);
++}
++
++
+ // https://bertdobbelaere.github.io/sorting_networks.html
+ template <class D, class Traits, class V = Vec<D>>
+ HWY_INLINE void Sort8(D d, Traits st, V& v0, V& v1, V& v2, V& v3, V& v4, V& v5,
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index 7c8f8ad2..d55337cb 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -220,6 +220,7 @@ HWY_INLINE void Sort0To8(Traits st, T* HWY_RESTRICT keys, size_t num_lanes,
+   }
+ }
+ 
++
+ template <size_t kVectors, size_t kLPK, size_t kLanesPerRow, class D,
+           class Traits, typename T = TFromD<D>>
+ HWY_INLINE void CopyHalfToPaddedBuf(D d, Traits st, T* HWY_RESTRICT keys,

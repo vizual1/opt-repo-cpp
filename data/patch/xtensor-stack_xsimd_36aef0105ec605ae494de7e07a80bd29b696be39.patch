@@ -1,0 +1,130 @@
+diff --git a/include/xsimd/config/xsimd_config.hpp b/include/xsimd/config/xsimd_config.hpp
+index f25bece..02f60a8 100644
+--- a/include/xsimd/config/xsimd_config.hpp
++++ b/include/xsimd/config/xsimd_config.hpp
+@@ -104,42 +104,102 @@
+  *
+  * Set to 1 if FMA3 for SSE is available at compile-time, to 0 otherwise.
+  */
++/* Determine FMA3 support for SSE, but allow user overrides.
++   If the user sets XSIMD_WITH_FMA3_SSE to 1 while the compiler does not
++   actually support FMA3 for SSE, produce a preprocessor error. */
++
+ #ifdef __FMA__
+ 
+ #if defined(__SSE__) && !defined(__AVX__)
+-#define XSIMD_WITH_FMA3_SSE 1
++#define XSIMD_FMA3_SSE_DETECT 1
+ #else
+-#define XSIMD_WITH_FMA3_SSE 0
++#define XSIMD_FMA3_SSE_DETECT 0
+ #endif
+ 
++#else
++#define XSIMD_FMA3_SSE_DETECT 0
++#endif
++
++#ifndef XSIMD_WITH_FMA3_SSE
++#if XSIMD_FMA3_SSE_DETECT
++#define XSIMD_WITH_FMA3_SSE 1
+ #else
+ #define XSIMD_WITH_FMA3_SSE 0
+ #endif
++#else
++/* user provided a value; ensure it's compatible with actual compiler support */
++#if XSIMD_WITH_FMA3_SSE && !XSIMD_FMA3_SSE_DETECT
++#error "XSIMD_WITH_FMA3_SSE set to 1 but compiler does not support FMA3 for SSE"
++#endif
++#endif
++
++/* cleanup temporary detection macro */
++#ifdef XSIMD_FMA3_SSE_DETECT
++#undef XSIMD_FMA3_SSE_DETECT
++#endif
+ 
+ /**
+  * @ingroup xsimd_config_macro
+  *
+  * Set to 1 if FMA3 for AVX is available at compile-time, to 0 otherwise.
+  */
++/* Determine FMA3 support for AVX and AVX2, but allow user overrides.
++   If the user sets XSIMD_WITH_FMA3_AVX[_2] to 1 while the compiler does not
++   actually support FMA3 for that arch, produce a preprocessor error. */
++
+ #ifdef __FMA__
+ 
+ #if defined(__AVX__)
+-#define XSIMD_WITH_FMA3_AVX 1
++#define XSIMD_FMA3_AVX_DETECT 1
+ #else
+-#define XSIMD_WITH_FMA3_AVX 0
++#define XSIMD_FMA3_AVX_DETECT 0
+ #endif
+ 
+ #if defined(__AVX2__)
+-#define XSIMD_WITH_FMA3_AVX2 1
++#define XSIMD_FMA3_AVX2_DETECT 1
+ #else
+-#define XSIMD_WITH_FMA3_AVX2 0
++#define XSIMD_FMA3_AVX2_DETECT 0
+ #endif
+ 
+ #else
+ 
++#define XSIMD_FMA3_AVX_DETECT 0
++#define XSIMD_FMA3_AVX2_DETECT 0
++
++#endif
++
++#ifndef XSIMD_WITH_FMA3_AVX
++#if XSIMD_FMA3_AVX_DETECT
++#define XSIMD_WITH_FMA3_AVX 1
++#else
+ #define XSIMD_WITH_FMA3_AVX 0
++#endif
++#else
++/* user provided a value; ensure it's compatible with actual compiler support */
++#if XSIMD_WITH_FMA3_AVX && !XSIMD_FMA3_AVX_DETECT
++#error "XSIMD_WITH_FMA3_AVX set to 1 but compiler does not support FMA3 for AVX"
++#endif
++#endif
++
++#ifndef XSIMD_WITH_FMA3_AVX2
++#if XSIMD_FMA3_AVX2_DETECT
++#define XSIMD_WITH_FMA3_AVX2 1
++#else
+ #define XSIMD_WITH_FMA3_AVX2 0
++#endif
++#else
++/* user provided a value; ensure it's compatible with actual compiler support */
++#if XSIMD_WITH_FMA3_AVX2 && !XSIMD_FMA3_AVX2_DETECT
++#error "XSIMD_WITH_FMA3_AVX2 set to 1 but compiler does not support FMA3 for AVX2"
++#endif
++#endif
+ 
++/* cleanup temporary detection macros */
++#ifdef XSIMD_FMA3_AVX_DETECT
++#undef XSIMD_FMA3_AVX_DETECT
++#endif
++#ifdef XSIMD_FMA3_AVX2_DETECT
++#undef XSIMD_FMA3_AVX2_DETECT
+ #endif
+ 
+ /**
+@@ -249,11 +309,16 @@
+ #if XSIMD_WITH_AVX2
+ #undef XSIMD_WITH_AVX
+ #define XSIMD_WITH_AVX 1
++/* Respect user override: only define FMA3 macros if not already provided */
++#ifndef XSIMD_WITH_FMA3_AVX
+ #undef XSIMD_WITH_FMA3_AVX
+ #define XSIMD_WITH_FMA3_AVX 1
++#endif
++#ifndef XSIMD_WITH_FMA3_AVX2
+ #undef XSIMD_WITH_FMA3_AVX2
+ #define XSIMD_WITH_FMA3_AVX2 1
+ #endif
++#endif
+ 
+ #if XSIMD_WITH_AVX
+ #undef XSIMD_WITH_SSE4_2

@@ -1,0 +1,64 @@
+diff --git a/core/src/datamatrix/DMDetector.cpp b/core/src/datamatrix/DMDetector.cpp
+index 5ce14fa4..abb53b0b 100644
+--- a/core/src/datamatrix/DMDetector.cpp
++++ b/core/src/datamatrix/DMDetector.cpp
+@@ -285,32 +285,34 @@ static DetectorResult DetectOld(const BitMatrix& image)
+ 
+ 	// Figure out which point is their intersection by tallying up the number of times we see the
+ 	// endpoints in the four endpoints. One will show up twice.
+-	std::map<const ResultPoint*, int> pointCount;
+-	pointCount[lSideOne.from] += 1;
+-	pointCount[lSideOne.to] += 1;
+-	pointCount[lSideTwo.from] += 1;
+-	pointCount[lSideTwo.to] += 1;
+-
+-	const ResultPoint* bottomRight = nullptr;
+-	const ResultPoint* bottomLeft = nullptr;
+-	const ResultPoint* topLeft = nullptr;
+-	for (const auto& [point, count] : pointCount) {
+-		if (count == 2) {
+-			bottomLeft = point; // this is definitely the bottom left, then -- end of two L sides
+-		}
+-		else {
+-			// Otherwise it's either top left or bottom right -- just assign the two arbitrarily now
+-			if (bottomRight == nullptr) {
+-				bottomRight = point;
+-			}
+-			else {
+-				topLeft = point;
+-			}
+-		}
+-	}
++	// Figure out which point is their intersection by checking the four endpoints.
++// Avoid allocating a small std::map on the hot path; use a tiny fixed array instead.
++const ResultPoint* pts[4] = { lSideOne.from, lSideOne.to, lSideTwo.from, lSideTwo.to };
++const ResultPoint* bottomRight = nullptr;
++const ResultPoint* bottomLeft = nullptr;
++const ResultPoint* topLeft = nullptr;
++// find the repeated pointer (appears twice) -> bottomLeft
++for (int i = 0; i < 4 && bottomLeft == nullptr; ++i)
++for (int j = i + 1; j < 4; ++j)
++if (pts[i] == pts[j]) {
++bottomLeft = pts[i];
++break;
++}
++if (!bottomLeft)
++return {};
++// collect the two remaining distinct points
++const ResultPoint* rem[2] = { nullptr, nullptr };
++int ri = 0;
++for (int i = 0; i < 4 && ri < 2; ++i) {
++if (pts[i] == bottomLeft) continue;
++if (ri == 0 || pts[i] != rem[0])
++rem[ri++] = pts[i];
++}
++if (ri < 2)
++return {};
++bottomRight = rem[0];
++topLeft = rem[1];
+ 
+-	if (bottomRight == nullptr || bottomLeft == nullptr || topLeft == nullptr)
+-		return {};
+ 
+ 	// Bottom left is correct but top left and bottom right might be switched
+ 	// Use the dot product trick to sort them out

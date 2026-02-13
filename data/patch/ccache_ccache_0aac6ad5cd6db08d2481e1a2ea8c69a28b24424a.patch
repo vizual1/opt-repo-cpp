@@ -1,0 +1,29 @@
+diff --git a/src/ccache/util/bytes.hpp b/src/ccache/util/bytes.hpp
+index 327e0c6e..430219e8 100644
+--- a/src/ccache/util/bytes.hpp
++++ b/src/ccache/util/bytes.hpp
+@@ -96,18 +96,17 @@ private:
+ };
+ 
+ inline Bytes::Bytes(size_t size) noexcept
+-  : m_data(std::make_unique<uint8_t[]>(size)),
+-    m_size(size),
+-    m_capacity(size)
+ {
++  // Use resize() which allocates without zero-filling (see bytes.cpp::resize).
++  resize(size);
+ }
+ 
+ inline Bytes::Bytes(const void* data, size_t size) noexcept
+-  : m_data(std::make_unique<uint8_t[]>(size)),
+-    m_size(size),
+-    m_capacity(size)
+ {
+-  std::memcpy(m_data.get(), data, size);
++  resize(size);
++  if (m_size > 0) {
++    std::memcpy(m_data.get(), data, m_size);
++  }
+ }
+ 
+ inline Bytes::Bytes(nonstd::span<const uint8_t> data) noexcept

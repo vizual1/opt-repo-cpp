@@ -1,0 +1,58 @@
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index dac4de94..f8353382 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -446,41 +446,19 @@ HWY_NOINLINE void Sort16Rows(Traits st, T* HWY_RESTRICT keys, size_t num_lanes,
+     // If we do not have eight keys per vector, this code will not be reached,
+     // but we have to expand vectors to that size for Merge16x8 to compile.
+     const CappedTag<T, HWY_MAX(kLanesPerRow, 8 * kLPK)> dw;
+-    Vec<decltype(dw)> w0 = ResizeBitCast(dw, v0);
+-    Vec<decltype(dw)> w1 = ResizeBitCast(dw, v1);
+-    Vec<decltype(dw)> w2 = ResizeBitCast(dw, v2);
+-    Vec<decltype(dw)> w3 = ResizeBitCast(dw, v3);
+-    Vec<decltype(dw)> w4 = ResizeBitCast(dw, v4);
+-    Vec<decltype(dw)> w5 = ResizeBitCast(dw, v5);
+-    Vec<decltype(dw)> w6 = ResizeBitCast(dw, v6);
+-    Vec<decltype(dw)> w7 = ResizeBitCast(dw, v7);
+-    Vec<decltype(dw)> w8 = ResizeBitCast(dw, v8);
+-    Vec<decltype(dw)> w9 = ResizeBitCast(dw, v9);
+-    Vec<decltype(dw)> wa = ResizeBitCast(dw, va);
+-    Vec<decltype(dw)> wb = ResizeBitCast(dw, vb);
+-    Vec<decltype(dw)> wc = ResizeBitCast(dw, vc);
+-    Vec<decltype(dw)> wd = ResizeBitCast(dw, vd);
+-    Vec<decltype(dw)> we = ResizeBitCast(dw, ve);
+-    Vec<decltype(dw)> wf = ResizeBitCast(dw, vf);
+-    Merge16x8(dw, st, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, wa, wb, wc, wd,
+-              we, wf);
++    // Use arrays to reduce repetitive code and enable the compiler to optimize
++    // the ResizeBitCast/merge sequence more effectively.
++    Vec<decltype(d)> vs[16] = {v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc,
++                               vd, ve, vf};
++    Vec<decltype(dw)> w[16];
++    for (size_t i = 0; i < 16; ++i) w[i] = ResizeBitCast(dw, vs[i]);
++    Merge16x8(dw, st, w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9],
++              w[10], w[11], w[12], w[13], w[14], w[15]);
+     // Truncate back.
+-    v0 = ResizeBitCast(d, w0);
+-    v1 = ResizeBitCast(d, w1);
+-    v2 = ResizeBitCast(d, w2);
+-    v3 = ResizeBitCast(d, w3);
+-    v4 = ResizeBitCast(d, w4);
+-    v5 = ResizeBitCast(d, w5);
+-    v6 = ResizeBitCast(d, w6);
+-    v7 = ResizeBitCast(d, w7);
+-    v8 = ResizeBitCast(d, w8);
+-    v9 = ResizeBitCast(d, w9);
+-    va = ResizeBitCast(d, wa);
+-    vb = ResizeBitCast(d, wb);
+-    vc = ResizeBitCast(d, wc);
+-    vd = ResizeBitCast(d, wd);
+-    ve = ResizeBitCast(d, we);
+-    vf = ResizeBitCast(d, wf);
++    for (size_t i = 0; i < 16; ++i) vs[i] = ResizeBitCast(d, w[i]);
++    v0 = vs[0]; v1 = vs[1]; v2 = vs[2]; v3 = vs[3]; v4 = vs[4]; v5 = vs[5];
++    v6 = vs[6]; v7 = vs[7]; v8 = vs[8]; v9 = vs[9]; va = vs[10]; vb = vs[11];
++    vc = vs[12]; vd = vs[13]; ve = vs[14]; vf = vs[15];
+   }
+ #if !HWY_COMPILER_MSVC && !HWY_IS_DEBUG_BUILD
+   if (kKeysPerRow >= 16 && kMaxKeysPerVector >= 16) {

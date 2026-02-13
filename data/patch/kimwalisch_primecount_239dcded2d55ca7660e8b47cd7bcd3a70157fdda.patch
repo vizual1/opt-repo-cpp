@@ -1,0 +1,21 @@
+diff --git a/src/api.cpp b/src/api.cpp
+index f5f03bca..74230dc8 100644
+--- a/src/api.cpp
++++ b/src/api.cpp
+@@ -46,11 +46,13 @@ int64_t pi(int64_t x, int threads)
+   if (x <= (int64_t) 1e5)
+     return pi_legendre(x, threads);
+ 
+-  // For ]10^5, 10^7] Meissel's algorithm runs fastest
+-  if (x <= (int64_t) 1e7)
++  // For ]10^5, 5*10^6] Meissel's algorithm runs fastest (tuned threshold)
++  // Reduce the Meissel threshold because Gourdon's algorithm becomes
++  // faster than Meissel for larger x in typical builds.
++  if (x <= (int64_t) 5e6)
+     return pi_meissel(x, threads);
+ 
+-  // Above 10^7 Xavier Gourdon's algorithm runs fastest
++  // Above 5*10^6 Xavier Gourdon's algorithm runs fastest
+   return pi_gourdon_64(x, threads);
+ }
+ 

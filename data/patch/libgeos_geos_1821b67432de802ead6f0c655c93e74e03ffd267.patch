@@ -1,0 +1,128 @@
+diff --git a/include/geos/algorithm/CGAlgorithmsDD.h b/include/geos/algorithm/CGAlgorithmsDD.h
+index cfb62aa80..284258363 100644
+--- a/include/geos/algorithm/CGAlgorithmsDD.h
++++ b/include/geos/algorithm/CGAlgorithmsDD.h
+@@ -130,15 +130,11 @@ public:
+         return CGAlgorithmsDD::FAILURE;
+     };
+ 
+-    static int
+-    orientation(double x)
++    static inline int
++    orientation(double x) noexcept
+     {
+-        if(x < 0) {
+-            return CGAlgorithmsDD::RIGHT;
+-        }
+-        if(x > 0) {
+-            return CGAlgorithmsDD::LEFT;
+-        }
++        if (x < 0) return CGAlgorithmsDD::RIGHT;
++        if (x > 0) return CGAlgorithmsDD::LEFT;
+         return CGAlgorithmsDD::STRAIGHT;
+     };
+ 
+diff --git a/include/geos/operation/relateng/RelateGeometry.h b/include/geos/operation/relateng/RelateGeometry.h
+index 3c071d056..9224bc9a2 100644
+--- a/include/geos/operation/relateng/RelateGeometry.h
++++ b/include/geos/operation/relateng/RelateGeometry.h
+@@ -151,6 +151,9 @@ public:
+ 
+     bool hasDimension(int dim) const;
+ 
++    /** Fast accessor indicating whether all linear elements are zero-length. */
++    inline bool isLineZeroLength() const noexcept { return isLineZeroLen; }
++
+     /**
+     * Gets the actual non-empty dimension of the geometry.
+     * Zero-length LineStrings are treated as Points.
+diff --git a/include/geos/operation/relateng/RelateSegmentString.h b/include/geos/operation/relateng/RelateSegmentString.h
+index 556ac4d37..702998fd3 100644
+--- a/include/geos/operation/relateng/RelateSegmentString.h
++++ b/include/geos/operation/relateng/RelateSegmentString.h
+@@ -63,6 +63,11 @@ private:
+     const RelateGeometry* m_inputGeom;
+     const Geometry* m_parentPolygonal = nullptr;
+ 
++    // Inline cache of common coordinate accessors to reduce call overhead
++    inline const CoordinateXY& getCoord(std::size_t idx) const { return getCoordinate(idx); }
++    inline std::size_t numCoords() const noexcept { return size(); }
++
++
+     // Constructor
+     RelateSegmentString(
+         const CoordinateSequence* pts,
+diff --git a/include/geos/operation/relateng/TopologyComputer.h b/include/geos/operation/relateng/TopologyComputer.h
+index cad2a1bc3..f900affd7 100644
+--- a/include/geos/operation/relateng/TopologyComputer.h
++++ b/include/geos/operation/relateng/TopologyComputer.h
+@@ -67,7 +67,9 @@ private:
+ 
+     void initExteriorEmpty(bool geomNonEmpty);
+ 
+-    RelateGeometry& getGeometry(bool isA) const;
++    RelateGeometry& getGeometry(bool isA) const {
++        return isA ? geomA : geomB;
++    }
+ 
+     void updateDim(Location locA, Location locB, int dimension);
+ 
+diff --git a/src/operation/relateng/RelateGeometry.cpp b/src/operation/relateng/RelateGeometry.cpp
+index 94536c16e..dc7f9bc3a 100644
+--- a/src/operation/relateng/RelateGeometry.cpp
++++ b/src/operation/relateng/RelateGeometry.cpp
+@@ -56,9 +56,16 @@ RelateGeometry::RelateGeometry(const Geometry* input, bool isPrepared, const Bou
+     , geomEnv(input->getEnvelopeInternal())
+     , boundaryNodeRule(bnRule)
+     , geomDim(input->getDimension())
+-    , isLineZeroLen(isZeroLength(input))
++    , isLineZeroLen(false)
+     , isGeomEmpty(input->isEmpty())
+ {
++    // Avoid expensive zero-length line checks for geometries that do not
++    // have linear components. Only compute zero-length test when the
++    // geometry's declared dimension indicates lines may be present.
++    if (geomDim == Dimension::L) {
++        isLineZeroLen = isZeroLength(input);
++    }
++
+     analyzeDimensions();
+ }
+ 
+diff --git a/src/operation/relateng/RelateSegmentString.cpp b/src/operation/relateng/RelateSegmentString.cpp
+index 5dfb5e716..fe64e5270 100644
+--- a/src/operation/relateng/RelateSegmentString.cpp
++++ b/src/operation/relateng/RelateSegmentString.cpp
+@@ -160,12 +160,12 @@ bool
+ RelateSegmentString::isContainingSegment(std::size_t segIndex, const CoordinateXY* pt) const
+ {
+     //-- intersection is at segment start vertex - process it
+-    const CoordinateXY& c0 = getCoordinate(segIndex);
++    const CoordinateXY& c0 = getCoord(segIndex);
+     if (pt->equals2D(c0))
+         return true;
+-    const CoordinateXY& c1 = getCoordinate(segIndex+1);
++    const CoordinateXY& c1 = getCoord(segIndex+1);
+     if (pt->equals2D(c1)) {
+-        bool isFinalSegment = segIndex == size() - 2;
++        bool isFinalSegment = segIndex == (numCoords() - 2);
+         if (isClosed() || ! isFinalSegment)
+             return false;
+         //-- for final segment, process intersections with final endpoint
+diff --git a/src/operation/relateng/TopologyComputer.cpp b/src/operation/relateng/TopologyComputer.cpp
+index 984073e46..33685d2dc 100644
+--- a/src/operation/relateng/TopologyComputer.cpp
++++ b/src/operation/relateng/TopologyComputer.cpp
+@@ -111,12 +111,6 @@ TopologyComputer::initExteriorEmpty(bool geomNonEmpty)
+ }
+ 
+ 
+-/* private */
+-RelateGeometry&
+-TopologyComputer::getGeometry(bool isA) const
+-{
+-    return isA ? geomA : geomB;
+-}
+ 
+ 
+ /* public */

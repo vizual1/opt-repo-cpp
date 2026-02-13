@@ -1,0 +1,133 @@
+diff --git a/src/ccache/execute.cpp b/src/ccache/execute.cpp
+index 198fbe5e..ff7c5307 100644
+--- a/src/ccache/execute.cpp
++++ b/src/ccache/execute.cpp
+@@ -45,6 +45,10 @@
+ #  include <unistd.h>
+ #endif
+ 
++#ifdef HAVE_SPAWN_H
++#  include <spawn.h>
++#endif
++
+ #ifdef HAVE_SYS_WAIT_H
+ #  include <sys/wait.h>
+ #endif
+@@ -299,6 +303,75 @@ execute(Context& ctx,
+ {
+   LOG("Executing {}", util::format_argv_for_logging(argv));
+ 
++#ifdef HAVE_SPAWN_H
++  {
++    // Use posix_spawn to avoid the overhead of fork()+execv(). Block signal
++    // handlers while we set ctx.compiler_pid to avoid races with signal
++    // handling.
++    SignalHandlerBlocker signal_handler_blocker;
++
++    posix_spawn_file_actions_t file_actions;
++    int result = posix_spawn_file_actions_init(&file_actions);
++    if (result) {
++      throw core::Fatal(FMT("posix_spawn_file_actions_init failed: {}", strerror(result)));
++    }
++
++    // Duplicate provided fds to stdout and stderr in the child.
++    if ((result = posix_spawn_file_actions_adddup2(&file_actions, *fd_out, STDOUT_FILENO))
++        || (result = posix_spawn_file_actions_adddup2(&file_actions, *fd_err, STDERR_FILENO))) {
++      posix_spawn_file_actions_destroy(&file_actions);
++      throw core::Fatal(FMT("posix_spawn_file_actions_adddup2 failed: {}", strerror(result)));
++    }
++
++    // Close the original fds in the child after dup2.
++    if ((result = posix_spawn_file_actions_addclose(&file_actions, *fd_out))
++        || (result = posix_spawn_file_actions_addclose(&file_actions, *fd_err))) {
++      posix_spawn_file_actions_destroy(&file_actions);
++      throw core::Fatal(FMT("posix_spawn_file_actions_addclose failed: {}", strerror(result)));
++    }
++
++    pid_t pid;
++    extern char** environ;
++    result = posix_spawnp(&pid,
++                          argv[0],
++                          &file_actions,
++                          nullptr,
++                          const_cast<char* const*>(argv),
++                          environ);
++
++    posix_spawn_file_actions_destroy(&file_actions);
++
++    if (result) {
++      throw core::Fatal(FMT("posix_spawnp failed: {}", strerror(result)));
++    }
++
++    ctx.compiler_pid = pid;
++  }
++
++  fd_out.close();
++  fd_err.close();
++
++  int status;
++  int result;
++
++  while ((result = waitpid(ctx.compiler_pid, &status, 0)) != ctx.compiler_pid) {
++    if (result == -1 && errno == EINTR) {
++      continue;
++    }
++    throw core::Fatal(FMT("waitpid failed: {}", strerror(errno)));
++  }
++
++  {
++    SignalHandlerBlocker signal_handler_blocker;
++    ctx.compiler_pid = 0;
++  }
++
++  if (WEXITSTATUS(status) == 0 && WIFSIGNALED(status)) {
++    return -1;
++  }
++
++  return WEXITSTATUS(status);
++#else
+   {
+     SignalHandlerBlocker signal_handler_blocker;
+     ctx.compiler_pid = fork();
+@@ -340,12 +413,41 @@ execute(Context& ctx,
+   }
+ 
+   return WEXITSTATUS(status);
++#endif
+ }
+ 
+ void
+ execute_noreturn(const char* const* argv, const std::string& /*temp_dir*/)
+ {
++#ifdef HAVE_SPAWN_H
++  // Best-effort: try exec with posix_spawn; if it fails, fall back to execv.
++  posix_spawn_file_actions_t file_actions;
++  int result = posix_spawn_file_actions_init(&file_actions);
++  if (result == 0) {
++    posix_spawn_file_actions_destroy(&file_actions);
++    // posix_spawnp with no actions is equivalent to execve in the child; use it
++    // to get potential performance benefits on some systems.
++    pid_t pid;
++    extern char** environ;
++    result = posix_spawnp(&pid, argv[0], nullptr, nullptr, const_cast<char* const*>(argv), environ);
++    if (result == 0) {
++      // Wait for the spawned process and then exit with its status.
++      int status;
++      waitpid(pid, &status, 0);
++      if (WIFEXITED(status)) {
++        exit(WEXITSTATUS(status));
++      }
++      if (WIFSIGNALED(status)) {
++        // Terminate with non-zero.
++        exit(128 + WTERMSIG(status));
++      }
++    }
++  }
++  // Fall back.
+   execv(argv[0], const_cast<char* const*>(argv));
++#else
++  execv(argv[0], const_cast<char* const*>(argv));
++#endif
+ }
+ #endif
+ 

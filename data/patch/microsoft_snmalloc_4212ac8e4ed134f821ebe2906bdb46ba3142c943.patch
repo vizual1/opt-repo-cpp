@@ -1,0 +1,13 @@
+diff --git a/src/mem/alloc.h b/src/mem/alloc.h
+index ea70b15..43966c6 100644
+--- a/src/mem/alloc.h
++++ b/src/mem/alloc.h
+@@ -299,7 +299,7 @@ namespace snmalloc
+         // pointer.
+         sizeclass_t sizeclass = meta.sizeclass;
+ 
+-        if (likely(super->get_allocator() == public_state()))
++        if (likely(target == public_state()))
+           small_dealloc(super, p, sizeclass);
+         else
+           remote_dealloc(target, p, sizeclass);

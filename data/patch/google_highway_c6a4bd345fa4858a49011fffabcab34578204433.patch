@@ -1,0 +1,13 @@
+diff --git a/hwy/ops/rvv-inl.h b/hwy/ops/rvv-inl.h
+index fecc8bc1..afb0f866 100644
+--- a/hwy/ops/rvv-inl.h
++++ b/hwy/ops/rvv-inl.h
+@@ -5654,7 +5654,7 @@ HWY_API V64 BitShuffle(V64 values, VI idx) {
+ 
+ template <class V, HWY_IF_T_SIZE_ONE_OF_V(V, (1 << 1) | (1 << 2) | (1 << 4)),
+           class D = DFromV<V>, class DW = RepartitionToWide<D>>
+-HWY_API VFromD<DW> MulEven(const V a, const V b) {
++HWY_INLINE VFromD<DW> MulEven(const V a, const V b) {
+   const auto lo = Mul(a, b);
+   const auto hi = MulHigh(a, b);
+   return BitCast(DW(), OddEven(detail::Slide1Up(hi), lo));

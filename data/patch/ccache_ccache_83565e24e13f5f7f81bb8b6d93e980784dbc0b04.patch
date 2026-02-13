@@ -1,0 +1,98 @@
+diff --git a/src/ccache/core/mainoptions.cpp b/src/ccache/core/mainoptions.cpp
+index ef3f4cc9..b5d30930 100644
+--- a/src/ccache/core/mainoptions.cpp
++++ b/src/ccache/core/mainoptions.cpp
+@@ -824,7 +824,7 @@ process_main_options(int argc, const char* const* argv)
+       ProgressBar progress_bar("Scanning...");
+       const auto compression_statistics =
+         storage::local::LocalStorage(config).get_compression_statistics(
+-          [&](double progress) { progress_bar.update(progress); });
++          [&](double progress) { progress_bar.update(progress); }, threads);
+       if (isatty(STDOUT_FILENO)) {
+         PRINT_RAW(stdout, "\n\n");
+       }
+diff --git a/src/ccache/storage/local/localstorage.cpp b/src/ccache/storage/local/localstorage.cpp
+index 99b18c51..fa9d0ecc 100644
+--- a/src/ccache/storage/local/localstorage.cpp
++++ b/src/ccache/storage/local/localstorage.cpp
+@@ -837,10 +837,15 @@ LocalStorage::wipe_all(const ProgressReceiver& progress_receiver)
+ 
+ CompressionStatistics
+ LocalStorage::get_compression_statistics(
+-  const ProgressReceiver& progress_receiver) const
++  const ProgressReceiver& progress_receiver, uint32_t threads) const
+ {
+   CompressionStatistics cs{};
+ 
++  const size_t read_ahead = std::max(static_cast<size_t>(10), 2 * static_cast<size_t>(threads));
++  std::atomic<uint64_t> actual_size{0};
++  std::atomic<uint64_t> content_size{0};
++  std::atomic<uint64_t> incompressible_size{0};
++
+   for_each_cache_subdir(
+     progress_receiver,
+     [&](const auto& l1_index, const auto& l1_progress_receiver) {
+@@ -851,20 +856,41 @@ LocalStorage::get_compression_statistics(
+           const auto files = get_cache_dir_files(l2_dir);
+           l2_progress_receiver(0.2);
+ 
++          if (files.empty()) {
++            l2_progress_receiver(1.0);
++            return;
++          }
++
++          std::atomic<size_t> processed{0};
++          const size_t total = files.size();
++
++          const size_t pool_threads = std::min<size_t>(static_cast<size_t>(threads), std::max<size_t>(1, total));
++          util::ThreadPool local_pool(static_cast<uint32_t>(pool_threads), read_ahead);
++
+           for (size_t i = 0; i < files.size(); ++i) {
+-            const auto& cache_file = files[i];
+-            try {
+-              core::CacheEntry::Header header(cache_file.path());
+-              cs.actual_size += cache_file.size_on_disk();
+-              cs.content_size += util::likely_size_on_disk(header.entry_size);
+-            } catch (core::Error&) {
+-              cs.incompressible_size += cache_file.size_on_disk();
+-            }
+-            l2_progress_receiver(0.2 + 0.8 * ratio(i, files.size()));
++            const auto file = files[i];
++            local_pool.enqueue_detach([=, &actual_size, &content_size, &incompressible_size, &processed, &l2_progress_receiver, total] {
++              try {
++                core::CacheEntry::Header header(file.path());
++                actual_size += file.size_on_disk();
++                content_size += util::likely_size_on_disk(header.entry_size);
++              } catch (core::Error&) {
++                incompressible_size += file.size_on_disk();
++              }
++              const size_t p = ++processed;
++              l2_progress_receiver(0.2 + 0.8 * static_cast<double>(p) / static_cast<double>(total));
++            });
+           }
++
++          // Wait for all tasks for this l2 dir to complete before moving on so that
++          // progress reporting for the parent callers remains reasonable.
++          local_pool.shut_down();
+         });
+     });
+ 
++  cs.actual_size = actual_size.load();
++  cs.content_size = content_size.load();
++  cs.incompressible_size = incompressible_size.load();
+   return cs;
+ }
+ 
+diff --git a/src/ccache/storage/local/localstorage.hpp b/src/ccache/storage/local/localstorage.hpp
+index 5ce7c793..76d7ad96 100644
+--- a/src/ccache/storage/local/localstorage.hpp
++++ b/src/ccache/storage/local/localstorage.hpp
+@@ -126,7 +126,7 @@ public:
+   // --- Compression ---
+ 
+   CompressionStatistics
+-  get_compression_statistics(const ProgressReceiver& progress_receiver) const;
++  get_compression_statistics(const ProgressReceiver& progress_receiver, uint32_t threads) const;
+ 
+   void recompress(std::optional<int8_t> level,
+                   uint32_t threads,

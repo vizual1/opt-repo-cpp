@@ -1,0 +1,112 @@
+diff --git a/hwy/contrib/thread_pool/thread_pool.h b/hwy/contrib/thread_pool/thread_pool.h
+index bc483bd4..a5609949 100644
+--- a/hwy/contrib/thread_pool/thread_pool.h
++++ b/hwy/contrib/thread_pool/thread_pool.h
+@@ -89,29 +89,29 @@ HWY_INLINE_VAR constexpr size_t kAllClusters = kMaxClusters - 1;
+ class PoolWorkerMapping {
+  public:
+   // Backward-compatible mode: returns local worker index.
+-  PoolWorkerMapping() : cluster_idx_(0), workers_per_cluster_(0) {}
+-  PoolWorkerMapping(size_t cluster_idx, size_t workers_per_cluster)
+-      : cluster_idx_(cluster_idx), workers_per_cluster_(workers_per_cluster) {
++  PoolWorkerMapping() : cluster_idx(0), workers_per_cluster(0) {}
++  PoolWorkerMapping(size_t cluster_idx_in, size_t workers_per_cluster_in)
++      : cluster_idx(cluster_idx_in), workers_per_cluster(workers_per_cluster_in) {
+     HWY_DASSERT(cluster_idx <= kAllClusters);
+     // Only use this ctor for the new global worker index mode. If this were
+     // zero, we would still return local indices.
+     HWY_DASSERT(workers_per_cluster != 0);
+   }
+ 
+-  size_t ClusterIdx() const { return cluster_idx_; }
++  size_t ClusterIdx() const { return cluster_idx; }
+ 
+   // Returns global_idx, or unchanged local worker_idx if default-constructed.
+   size_t operator()(size_t worker_idx) const {
+-    if (cluster_idx_ == kAllClusters) {
++    if (cluster_idx == kAllClusters) {
+       // Main thread, plus the first core of each subsequent cluster.
+-      return worker_idx * workers_per_cluster_ + 0;
++      return worker_idx * workers_per_cluster + 0;
+     }
+-    return cluster_idx_ * workers_per_cluster_ + worker_idx;
++    return cluster_idx * workers_per_cluster + worker_idx;
+   }
+ 
+  private:
+-  size_t cluster_idx_;
+-  size_t workers_per_cluster_;
++  size_t cluster_idx;
++  size_t workers_per_cluster;
+ };
+ 
+ namespace pool {
+@@ -1246,14 +1246,42 @@ class alignas(HWY_ALIGNMENT) ThreadPool {
+   // `HWY_POOL_PROFILE` makes it easier to inspect the generated code.
+   class ThreadFunc {
+     // Functor called by `CallWithConfig`.
+-    // TODO: loop until config changes.
++    // Loops on the worker until its `NextConfig` changes, which avoids
++    // re-dispatching `CallWithConfig` on every wake which was previously a
++    // common-case branch.
+     struct WorkerWait {
++      WorkerWait(pool::Tasks& tasks, pool::Shared& shared) : tasks_(tasks), shared_(shared) {}
++
+       template <class Spin, class Wait>
+       void operator()(const Spin& spin, const Wait& wait,
+                       pool::Worker& worker) const {
+-        // TODO: log number of spin-wait iterations.
+-        (void)wait.UntilWoken(worker, spin);
++        // Use the config the worker currently has; loop until it changes.
++        const pool::Config current = worker.NextConfig();
++        for (;;) {
++          // Advance epoch for this wake cycle and wait using the current config.
++          const uint32_t epoch = worker.AdvanceWorkerEpoch();
++          (void)wait.UntilWoken(worker, spin);
++
++          // Perform work and notify stats.
++          Stopwatch stopwatch = worker.MakeStopwatch();
++          tasks_.WorkerRun(&worker);
++          shared_.stats.NotifyThreadRun(worker.Index(), stopwatch);
++
++          // Notify barrier after `WorkerRun`.
++          pool::Barrier().WorkerReached(worker, epoch);
++
++          // Stop looping if exit requested or config changed.
++          if (worker.GetExit()) break;
++          const pool::Config next = worker.NextConfig();
++          if (next.spin_type != current.spin_type || next.wait_type != current.wait_type) {
++            break;
++          }
++        }
+       }
++
++     private:
++      pool::Tasks& tasks_;
++      pool::Shared& shared_;
+     };
+ 
+    public:
+@@ -1276,19 +1304,9 @@ class alignas(HWY_ALIGNMENT) ThreadPool {
+ 
+       // Loop termination via `GetExit` is triggered by `~ThreadPool`.
+       do {
+-        // Main worker also calls this, so their epochs match.
+-        const uint32_t epoch = worker_.AdvanceWorkerEpoch();
+-        // Uses the initial config, or the last one set during WorkerRun.
+-        CallWithConfig(worker_.NextConfig(), WorkerWait(), worker_);
+-
+-        Stopwatch stopwatch = worker_.MakeStopwatch();
+-        tasks_.WorkerRun(&worker_);
+-        shared_.stats.NotifyThreadRun(worker_.Index(), stopwatch);
+-
+-        // Notify barrier after `WorkerRun`. Note that we cannot send an
+-        // after-barrier timestamp, see above.
+-        pool::Barrier().WorkerReached(worker_, epoch);
+-
++        // Use the worker's current config; WorkerWait will loop until it
++        // changes or the worker exits.
++        CallWithConfig(worker_.NextConfig(), WorkerWait(tasks_, shared_), worker_);
+         // Check after notifying the barrier, otherwise the main thread
+         // deadlocks.
+       } while (!worker_.GetExit());

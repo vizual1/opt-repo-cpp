@@ -1,0 +1,37 @@
+diff --git a/snappy.cc b/snappy.cc
+index 3f446c6..de44b4d 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -1081,10 +1081,20 @@ inline uint32_t ExtractOffset(uint32_t val, size_t tag_type) {
+          reinterpret_cast<const char*>(&kExtractMasksCombined) + 2 * tag_type,
+          sizeof(result));
+   return val & result;
++#else
++#if defined(__aarch64__) || defined(__arm__)
++  // On ARM, use simple operations (no table lookup) to extract the low bytes.
++  // This typically compiles to two shifts (lsl + lsr) which is lower latency
++  // compared to a memory load of a small table entry.
++  size_t tt = tag_type & 3;
++  if (tt == 1) return val & 0xFFu;
++  if (tt == 2) return val & 0xFFFFu;
++  return 0u;
+ #else
+   static constexpr uint32_t kExtractMasks[4] = {0, 0xFF, 0xFFFF, 0};
+   return val & kExtractMasks[tag_type];
+ #endif
++#endif
+ };
+ 
+ // Core decompression loop, when there is enough data available.
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

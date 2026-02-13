@@ -1,0 +1,37 @@
+diff --git a/core/src/ReadBarcode.cpp b/core/src/ReadBarcode.cpp
+index ab8108c1..ec040526 100644
+--- a/core/src/ReadBarcode.cpp
++++ b/core/src/ReadBarcode.cpp
+@@ -45,6 +45,32 @@ static LumImage ExtractLum(const ImageView& iv, P projection)
+ 	return res;
+ }
+ 
++// Helper specialized extraction routines to assist compilers (notably gcc)
++// with auto-vectorization of the RGB -> luminance conversion.
++static LumImage ExtractLumRGB(const ImageView& iv, int rIndex, int gIndex, int bIndex)
++{
++	LumImage res(iv.width(), iv.height());
++	auto* dst = res.data();
++	for (int y = 0; y < iv.height(); ++y) {
++		for (int x = 0, w = iv.width(); x < w; ++x) {
++			const uint8_t* src = iv.data(x, y);
++			*dst++ = RGBToLum(src[rIndex], src[gIndex], src[bIndex]);
++		}
++	}
++	return res;
++}
++
++static LumImage ExtractLumPlain(const ImageView& iv)
++{
++	LumImage res(iv.width(), iv.height());
++	auto* dst = res.data();
++	for (int y = 0; y < iv.height(); ++y)
++		for (int x = 0, w = iv.width(); x < w; ++x)
++			*dst++ = *iv.data(x, y);
++	return res;
++}
++
++
+ class LumImagePyramid
+ {
+ 	std::vector<LumImage> buffers;

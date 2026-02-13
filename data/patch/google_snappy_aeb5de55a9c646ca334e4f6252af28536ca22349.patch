@@ -1,0 +1,31 @@
+diff --git a/snappy.cc b/snappy.cc
+index 4008e76..0da31b4 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -1018,9 +1018,12 @@ size_t AdvanceToNextTagARMOptimized(const uint8_t** ip_p, size_t* tag) {
+   const size_t literal_tag_offset = (*tag >> 2) + 1;
+   const size_t tag_type = *tag & 3;
+   const bool is_literal = (tag_type == 0);
++  // Compute the final ip advance early so the codegen can schedule the
++  // conditional increment (csinc) in parallel with the byte load.  This
++  // reduces the dependency chain on ip and improves throughput on ARM.
++  const size_t ip_advance = (is_literal ? literal_tag_offset : tag_type) + 1;
+   *tag = is_literal ? ip[literal_tag_offset] : ip[tag_type];
+-  ip += is_literal ? literal_tag_offset : tag_type;
+-  ip++;
++  ip += ip_advance;
+   return tag_type;
+ }
+ 
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

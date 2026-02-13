@@ -1,0 +1,157 @@
+diff --git a/src/P2.cpp b/src/P2.cpp
+index 77a3b43e..97c65fad 100644
+--- a/src/P2.cpp
++++ b/src/P2.cpp
+@@ -32,6 +32,7 @@
+ #include <iostream>
+ #include <iomanip>
+ #include <tuple>
++#include <vector>
+ 
+ #ifdef _OPENMP
+   #include <omp.h>
+@@ -150,6 +151,11 @@ T P2_OpenMP(T x, int64_t y, int threads)
+   using res_t = std::tuple<T, int64_t, int64_t>;
+   aligned_vector<res_t> res(threads);
+ 
++  // Shared prefix array used during aggregation to avoid sequential
++  // accumulation bottleneck. Allocated once per call.
++  std::vector<int64_t> prefix(threads);
++  int64_t total_pix = 0;
++
+   #pragma omp parallel num_threads(threads)
+   {
+   #ifdef _OPENMP
+@@ -166,26 +172,38 @@ T P2_OpenMP(T x, int64_t y, int threads)
+ 
+       // All threads have to wait here
+       #pragma omp barrier
++
++      // Build prefix sums of thread_pix (prefix[i] = sum_{j< i} thread_pix[j])
++      prefix[0] = 0;
+       #pragma omp single
+       {
+-        // The threads above have computed the sum of:
+-        // PrimePi(n) - PrimePi(thread_low - 1)
+-        // for many different values of n. However we actually want to
+-        // compute the sum of PrimePi(n). In order to get the complete
+-        // sum we now have to calculate the missing sum contributions in
+-        // sequential order as each thread depends on values from the
+-        // previous thread. The missing sum contribution for each thread
+-        // can be calculated using pi_low_minus_1 * thread_count.
+-        for (int i = 0; i < threads; i++)
++        for (int i = 1; i < threads; i++)
++          prefix[i] = prefix[i - 1] + std::get<1>(res[i - 1]);
++
++        // Total pix across all threads for this block (set by single)
++        total_pix = prefix[threads - 1] + std::get<1>(res[threads - 1]);
++      }
++
++      #pragma omp barrier
++
++      // Let threads add their contributions in parallel. Use a small
++      // critical section when updating the shared 'sum' to remain
++      // portable for all integer types (including int128).
++      #pragma omp for schedule(static)
++      for (int i = 0; i < threads; i++)
++      {
++        T thread_sum = std::get<0>(res[i]);
++        int64_t thread_count = std::get<2>(res[i]);
++        T add = thread_sum + (T) prefix[i] * thread_count;
++        #pragma omp critical
+         {
+-          auto thread_sum = std::get<0>(res[i]);
+-          auto thread_pix = std::get<1>(res[i]);
+-          auto thread_count = std::get<2>(res[i]);
+-          thread_sum += (T) pi_low_minus_1 * thread_count;
+-          sum += thread_sum;
+-          pi_low_minus_1 += thread_pix;
++          sum += add;
+         }
++      }
+ 
++      #pragma omp single
++      {
++        pi_low_minus_1 += total_pix;
+         low += thread_distance * threads;
+         balanceLoad(&thread_distance, low, z, threads, time);
+ 
+diff --git a/src/gourdon/B.cpp b/src/gourdon/B.cpp
+index 4fd69f90..96b274fd 100644
+--- a/src/gourdon/B.cpp
++++ b/src/gourdon/B.cpp
+@@ -31,6 +31,7 @@
+ #include <iostream>
+ #include <iomanip>
+ #include <tuple>
++#include <vector>
+ 
+ #ifdef _OPENMP
+   #include <omp.h>
+@@ -138,6 +139,11 @@ T B_OpenMP(T x, int64_t y, int threads)
+   using res_t = std::tuple<T, int64_t, int64_t>;
+   aligned_vector<res_t> res(threads);
+ 
++  // Shared prefix array used during aggregation to avoid sequential
++  // accumulation bottleneck. Allocated once per call.
++  std::vector<int64_t> prefix(threads);
++  int64_t total_pix = 0;
++
+   #pragma omp parallel num_threads(threads)
+   {
+   #ifdef _OPENMP
+@@ -153,26 +159,39 @@ T B_OpenMP(T x, int64_t y, int threads)
+ 
+       // All threads have to wait here
+       #pragma omp barrier
++
++      // Build prefix sums of thread_pix (prefix[i] = sum_{j< i} thread_pix[j])
+       #pragma omp single
+       {
+-        // The threads above have computed the sum of:
+-        // PrimePi(n) - PrimePi(thread_low - 1)
+-        // for many different values of n. However we actually want to
+-        // compute the sum of PrimePi(n). In order to get the complete
+-        // sum we now have to calculate the missing sum contributions in
+-        // sequential order as each thread depends on values from the
+-        // previous thread. The missing sum contribution for each thread
+-        // can be calculated using pi_low_minus_1 * thread_count.
+-        for (int i = 0; i < threads; i++)
++        prefix[0] = 0;
++        for (int i = 1; i < threads; i++)
++          prefix[i] = prefix[i - 1] + std::get<1>(res[i - 1]);
++
++        // Total pix across all threads for this block
++        total_pix = prefix[threads - 1] + std::get<1>(res[threads - 1]);
++      }
++
++      #pragma omp barrier
++      // Let threads add their contributions in parallel. Use a small
++      // critical section when updating the shared 'sum' to remain
++      // portable for all integer types (including int128).
++      #pragma omp for schedule(static)
++      for (int i = 0; i < threads; i++)
++      {
++        T thread_sum = std::get<0>(res[i]);
++        int64_t thread_count = std::get<2>(res[i]);
++        T add = thread_sum + (T) prefix[i] * thread_count;
++        #pragma omp critical
+         {
+-          auto thread_sum = std::get<0>(res[i]);
+-          auto thread_pix = std::get<1>(res[i]);
+-          auto thread_count = std::get<2>(res[i]);
+-          thread_sum += (T) pi_low_minus_1 * thread_count;
+-          sum += thread_sum;
+-          pi_low_minus_1 += thread_pix;
++          sum += add;
+         }
++      }
+ 
++      #pragma omp single
++      {
++        // Update pi_low_minus_1 once using the precomputed total
++        // and then advance the window and rebalance the load.
++        pi_low_minus_1 += total_pix;
+         low += thread_distance * threads;
+         balanceLoad(&thread_distance, low, z, threads, time);
+ 

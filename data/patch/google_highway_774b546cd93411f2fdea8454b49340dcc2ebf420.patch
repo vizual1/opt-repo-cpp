@@ -1,0 +1,41 @@
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 3630cf30..7bf37a34 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -2136,7 +2136,7 @@ HWY_API V CompressNot(V v, const svbool_t mask) {
+ 
+ template <class V, HWY_IF_LANE_SIZE_V(V, 8)>
+ HWY_API V CompressNot(V v, svbool_t mask) {
+-#if HWY_TARGET == HWY_SVE_256 || HWY_IDE
++#if HWY_TARGET == HWY_SVE_256 || HWY_TARGET == HWY_SVE2_128 || HWY_IDE
+   const DFromV<V> d;
+   const RebindToUnsigned<decltype(d)> du64;
+ 
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index 2d46ceb7..aca26207 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -1476,7 +1476,23 @@ HWY_API Mask128<int32_t, N> operator>(Vec128<int32_t, N> a,
+ template <size_t N>
+ HWY_API Mask128<int64_t, N> operator>(Vec128<int64_t, N> a,
+                                       Vec128<int64_t, N> b) {
++#if HWY_TARGET == HWY_SSSE3
++  // SSSE3 lacks 64-bit compare producing a mask; emulate from 32-bit
++  // comparisons. See the non-mask implementation for explanation.
++  const Simd<int64_t, N, 0> d;
++  const Vec128<int64_t, N> bit31 = Set(d, 0x80000000LL);
++  const __m128i m_gt = _mm_cmpgt_epi32(Xor(a, bit31).raw, Xor(b, bit31).raw);
++  const __m128i m_eq = _mm_cmpeq_epi32(a.raw, b.raw);
++  const __m128i lo_in_hi = _mm_shuffle_epi32(m_gt, _MM_SHUFFLE(2, 2, 0, 0));
++  const __m128i lo_gt = _mm_and_si128(m_eq, lo_in_hi);
++  const __m128i gt = _mm_or_si128(lo_gt, m_gt);
++  // Copy result in upper 32 bits to lower 32 bits so each 64-bit lane has the
++  // same result in both halves before converting to a mask.
++  const __m128i shuffled = _mm_shuffle_epi32(gt, _MM_SHUFFLE(3, 3, 1, 1));
++  return MaskFromVec(Vec128<int64_t, N>{shuffled});
++#else
+   return Mask128<int64_t, N>{_mm_cmpgt_epi64_mask(a.raw, b.raw)};
++#endif
+ }
+ 
+ template <size_t N>

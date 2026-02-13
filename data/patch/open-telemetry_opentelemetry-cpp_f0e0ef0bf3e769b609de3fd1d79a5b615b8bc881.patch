@@ -1,0 +1,76 @@
+diff --git a/sdk/src/logs/batch_log_record_processor.cc b/sdk/src/logs/batch_log_record_processor.cc
+index c85d5673..0cd86fd3 100644
+--- a/sdk/src/logs/batch_log_record_processor.cc
++++ b/sdk/src/logs/batch_log_record_processor.cc
+@@ -202,6 +202,9 @@ void BatchLogRecordProcessor::Export()
+           buffer_.size() >= max_export_batch_size_ ? max_export_batch_size_ : buffer_.size();
+     }
+ 
++    // Reserve space to avoid repeated reallocations when pushing records.
++    records_arr.reserve(num_records_to_export);
++
+     if (num_records_to_export == 0)
+     {
+       NotifyCompletion(notify_force_flush, exporter_, synchronization_data_);
+diff --git a/sdk/src/trace/batch_span_processor.cc b/sdk/src/trace/batch_span_processor.cc
+index c5e72f81..28efdf1b 100644
+--- a/sdk/src/trace/batch_span_processor.cc
++++ b/sdk/src/trace/batch_span_processor.cc
+@@ -201,6 +201,9 @@ void BatchSpanProcessor::Export()
+           buffer_.size() >= max_export_batch_size_ ? max_export_batch_size_ : buffer_.size();
+     }
+ 
++    // Reserve space to avoid repeated reallocations when pushing records.
++    spans_arr.reserve(num_records_to_export);
++
+     if (num_records_to_export == 0)
+     {
+       NotifyCompletion(notify_force_flush, exporter_, synchronization_data_);
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit 344117638c8ff7e239044fd0fa7085839fc03021
++Subproject commit 344117638c8ff7e239044fd0fa7085839fc03021-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit f8d7d77c06936315286eb55f8de22cd23c188571
++Subproject commit f8d7d77c06936315286eb55f8de22cd23c188571-dirty
+diff --git a/third_party/ms-gsl b/third_party/ms-gsl
+--- a/third_party/ms-gsl
++++ b/third_party/ms-gsl
+@@ -1 +1 @@
+-Subproject commit 6f4529395c5b7c2d661812257cd6780c67e54afa
++Subproject commit 6f4529395c5b7c2d661812257cd6780c67e54afa-dirty
+diff --git a/third_party/nlohmann-json b/third_party/nlohmann-json
+--- a/third_party/nlohmann-json
++++ b/third_party/nlohmann-json
+@@ -1 +1 @@
+-Subproject commit 9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03
++Subproject commit 9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03-dirty
+diff --git a/third_party/opentelemetry-proto b/third_party/opentelemetry-proto
+--- a/third_party/opentelemetry-proto
++++ b/third_party/opentelemetry-proto
+@@ -1 +1 @@
+-Subproject commit b3060d2104df364136d75a35779e6bd48bac449a
++Subproject commit b3060d2104df364136d75a35779e6bd48bac449a-dirty
+diff --git a/third_party/opentracing-cpp b/third_party/opentracing-cpp
+--- a/third_party/opentracing-cpp
++++ b/third_party/opentracing-cpp
+@@ -1 +1 @@
+-Subproject commit 06b57f48ded1fa3bdd3d4346f6ef29e40e08eaf5
++Subproject commit 06b57f48ded1fa3bdd3d4346f6ef29e40e08eaf5-dirty
+diff --git a/third_party/prometheus-cpp b/third_party/prometheus-cpp
+--- a/third_party/prometheus-cpp
++++ b/third_party/prometheus-cpp
+@@ -1 +1 @@
+-Subproject commit ad99e21f4706193670c42b36c9824dc997f4c475
++Subproject commit ad99e21f4706193670c42b36c9824dc997f4c475-dirty
+diff --git a/tools/vcpkg b/tools/vcpkg
+--- a/tools/vcpkg
++++ b/tools/vcpkg
+@@ -1 +1 @@
+-Subproject commit fba75d09065fcc76a25dcf386b1d00d33f5175af
++Subproject commit fba75d09065fcc76a25dcf386b1d00d33f5175af-dirty

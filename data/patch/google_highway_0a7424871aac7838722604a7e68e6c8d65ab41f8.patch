@@ -1,0 +1,67 @@
+diff --git a/hwy/contrib/sort/shared-inl.h b/hwy/contrib/sort/shared-inl.h
+index 574e61ba..26fdb938 100644
+--- a/hwy/contrib/sort/shared-inl.h
++++ b/hwy/contrib/sort/shared-inl.h
+@@ -70,6 +70,12 @@ struct SortConstants {
+   }
+ };
+ 
++
++// Small per-thread buffer size used by Sorter to avoid heap allocation for
++// non-scalable vector targets. Tune as needed; must be large enough to hold
++// buffers for BaseCase/Partition/Pivot for typical fixed-width vectors.
++HWY_INLINE size_t SorterSmallBufSize() { return 8192; }
++
+ }  // namespace hwy
+ 
+ #endif  // HIGHWAY_HWY_CONTRIB_SORT_SHARED_INL_H_
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index 42ee0a08..91802a11 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -53,6 +53,14 @@
+ #include "hwy/highway.h"
+ 
+ HWY_BEFORE_NAMESPACE();
++
++// Prefer small per-thread sorter buffer to avoid heap allocation for non-scalable
++// vectors when the required bytes do not exceed SorterSmallBufSize().
++HWY_INLINE bool PreferSmallSorterBuf(size_t bytes) {
++  return bytes <= ::hwy::SorterSmallBufSize();
++}
++
++
+ namespace hwy {
+ namespace HWY_NAMESPACE {
+ namespace detail {
+diff --git a/hwy/contrib/sort/vqsort.cc b/hwy/contrib/sort/vqsort.cc
+index 3c529431..5308d20f 100644
+--- a/hwy/contrib/sort/vqsort.cc
++++ b/hwy/contrib/sort/vqsort.cc
+@@ -129,10 +129,22 @@ Sorter::Sorter() {
+     max_bytes = HWY_MAX(max_bytes, buf_lanes * sizeof_t);
+   }
+ 
+-  ptr_ = hwy::AllocateAlignedBytes(max_bytes, nullptr, nullptr);
+-
+-  // Prevent msan errors by initializing.
+-  memset(ptr_, 0, max_bytes);
++  // Avoid heap allocation for common non-scalable vector targets by using a
++  // per-thread small buffer when possible. This reduces runtime overhead from
++  // malloc/free for small fixed-width vectors.
++  const size_t kSmall = SorterSmallBufSize();
++  if (max_bytes <= kSmall) {
++    // Per-thread buffer to avoid races between threads. Aligned to 64 bytes to
++    // match typical cache-line / SIMD alignment used elsewhere.
++    static thread_local alignas(64) unsigned char small_buf[kSmall];
++    ptr_ = static_cast<void*>(small_buf);
++    // Initialize only the required bytes.
++    memset(ptr_, 0, max_bytes);
++  } else {
++    ptr_ = hwy::AllocateAlignedBytes(max_bytes, nullptr, nullptr);
++    // Prevent msan errors by initializing.
++    memset(ptr_, 0, max_bytes);
++  }
+ }
+ 
+ void Sorter::Delete() {

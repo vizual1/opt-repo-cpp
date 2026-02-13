@@ -1,0 +1,61 @@
+diff --git a/include/popcnt.hpp b/include/popcnt.hpp
+index 79ef78c8..ba67de88 100644
+--- a/include/popcnt.hpp
++++ b/include/popcnt.hpp
+@@ -114,9 +114,29 @@ inline uint64_t popcnt64(uint64_t x)
+ inline uint64_t popcnt(const uint64_t* data, uint64_t size)
+ {
+   uint64_t cnt = 0;
+-
+-  for (uint64_t i = 0; i < size; i++)
+-    cnt += popcnt64(data[i]);
++  const uint64_t* p = data;
++
++  // Unroll loop to reduce overhead and help GCC auto-vectorize
++  while (size >= 8)
++  {
++    cnt += popcnt64(p[0]) + popcnt64(p[1]) + popcnt64(p[2]) + popcnt64(p[3])
++         + popcnt64(p[4]) + popcnt64(p[5]) + popcnt64(p[6]) + popcnt64(p[7]);
++    p += 8;
++    size -= 8;
++  }
++
++  if (size >= 4)
++  {
++    cnt += popcnt64(p[0]) + popcnt64(p[1]) + popcnt64(p[2]) + popcnt64(p[3]);
++    p += 4;
++    size -= 4;
++  }
++
++  while (size)
++  {
++    cnt += popcnt64(*p++);
++    --size;
++  }
+ 
+   return cnt;
+ }
+diff --git a/src/Sieve.cpp b/src/Sieve.cpp
+index 02d7b459..05757e73 100644
+--- a/src/Sieve.cpp
++++ b/src/Sieve.cpp
+@@ -595,10 +595,15 @@ void Sieve::cross_off_count(uint64_t prime, uint64_t i)
+ 
+   #define count_and_unset_bit(bit_index) \
+   { \
+-    auto is_bit = (sieve[m] >> bit_index) & 1; \
+-    counters[m >> counters_dist_log2] -= is_bit; \
+-    total_count -= is_bit; \
+-    sieve[m] &= ~(1 << bit_index); \
++    /* Load byte once and test bit to avoid unnecessary writes and shifts */ \
++    uint8_t v = sieve[m]; \
++    uint8_t mask = (uint8_t)(1u << (bit_index)); \
++    if (v & mask) \
++    { \
++      counters[m >> counters_dist_log2] -= 1; \
++      total_count -= 1; \
++      sieve[m] = v & (uint8_t)~mask; \
++    } \
+   }
+ 
+   #define check_finished(wheel_index) \

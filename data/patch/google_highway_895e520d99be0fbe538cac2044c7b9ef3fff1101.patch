@@ -1,0 +1,127 @@
+diff --git a/hwy/contrib/thread_pool/thread_pool.h b/hwy/contrib/thread_pool/thread_pool.h
+index 03be1bae..3103d86a 100644
+--- a/hwy/contrib/thread_pool/thread_pool.h
++++ b/hwy/contrib/thread_pool/thread_pool.h
+@@ -145,6 +145,9 @@ class PoolWorker {  // HWY_ALIGNMENT bytes
+       HWY_DASSERT(victims_[i] != thread);
+     }
+ 
++    // Initialize per-worker seq for futex-based wakeups (avoids global WakeAll).
++    seq_cmd_local_.store(0u, std::memory_order_relaxed);
++
+     (void)padding_;
+   }
+   ~PoolWorker() = default;
+@@ -161,6 +164,10 @@ class PoolWorker {  // HWY_ALIGNMENT bytes
+                                      static_cast<size_t>(num_victims_));
+   }
+ 
++  // Accessor for the per-worker seq atomic used for optimized wakeups.
++  std::atomic<uint32_t>& SeqCmdLocalAtomic() { return seq_cmd_local_; }
++  const std::atomic<uint32_t>& SeqCmdLocalAtomic() const { return seq_cmd_local_; }
++
+   // Called from main thread in Plan().
+   HWY_POOL_SETRANGE_INLINE void SetRange(uint64_t begin, uint64_t end) {
+     const auto rel = std::memory_order_release;
+@@ -183,8 +190,10 @@ class PoolWorker {  // HWY_ALIGNMENT bytes
+   std::atomic<PoolWaitMode> wait_mode_;  // (32-bit)
+   uint32_t num_victims_;                 // <= kPoolMaxVictims
+   std::array<uint32_t, kMaxVictims> victims_;
++  std::atomic<uint32_t> seq_cmd_local_;  // per-worker futex target
+ 
+-  uint8_t padding_[HWY_ALIGNMENT - 16 - 8 - sizeof(victims_)];
++  uint8_t padding_[HWY_ALIGNMENT - 16 - 8 - sizeof(victims_) -
++                   sizeof(seq_cmd_local_)];
+ };
+ static_assert(sizeof(PoolWorker) == HWY_ALIGNMENT, "");
+ 
+@@ -227,6 +236,9 @@ class PoolTasks {  // 32 bytes
+   std::atomic<uint64_t> end_;
+ };
+ 
++// Forward declaration of PoolMem so PoolCommands can notify per-worker seqs.
++struct PoolMem;
++
+ // Modified by main thread, shared with all workers.
+ class PoolCommands {  // 16 bytes
+   static constexpr uint32_t kInitial = 0;
+@@ -242,15 +254,24 @@ class PoolCommands {  // 16 bytes
+   // command as intended.
+   static uint32_t WorkerInitialSeqCmd() { return kInitial; }
+ 
+-  // Sends `cmd` to all workers.
+-  void Broadcast(uint32_t cmd) {
++  // Sends `cmd` to all workers. Uses per-worker seq atomics in `mem` to wake
++  // only blocked workers instead of waking everyone.
++  void Broadcast(uint32_t cmd, PoolMem* mem, size_t num_workers) {
+     HWY_DASSERT(cmd <= kMask);
+     const uint32_t epoch = ++epoch_;
+     const uint32_t seq_cmd = (epoch << kShift) | cmd;
+     seq_cmd_.store(seq_cmd, std::memory_order_release);
+ 
+-    // Wake any worker whose wait_mode_ is or was kBlock.
+-    WakeAll(seq_cmd_);
++    // Wake any worker whose wait_mode_ is or was kBlock by updating its local
++    // seq and calling WakeAll on that worker's atomic. This avoids a global
++    // WakeAll which can be costly across CCXs.
++    for (size_t t = 0; t < num_workers; ++t) {
++      PoolWorker& worker = mem->Worker(t);
++      if (worker.WorkerGetWaitMode() == PoolWaitMode::kBlock) {
++        worker.SeqCmdLocalAtomic().store(seq_cmd, std::memory_order_release);
++        WakeAll(worker.SeqCmdLocalAtomic());
++      }
++    }
+ 
+     // Workers are either starting up, or waiting for a command. Either way,
+     // they will not miss this command, so no need to wait for them here.
+@@ -258,12 +279,12 @@ class PoolCommands {  // 16 bytes
+ 
+   // Returns the command, i.e., one of the public constants, e.g., kTerminate.
+   uint32_t WorkerWaitForNewCommand(PoolWaitMode wait_mode,
+-                                   uint32_t& prev_seq_cmd) {
++                                   uint32_t& prev_seq_cmd, PoolWorker& worker) {
+     uint32_t seq_cmd;
+     if (HWY_LIKELY(wait_mode == PoolWaitMode::kSpin)) {
+       seq_cmd = SpinUntilDifferent(prev_seq_cmd, seq_cmd_);
+     } else {
+-      seq_cmd = BlockUntilDifferent(prev_seq_cmd, seq_cmd_);
++      seq_cmd = BlockUntilDifferent(prev_seq_cmd, worker.SeqCmdLocalAtomic());
+     }
+     prev_seq_cmd = seq_cmd;
+     return seq_cmd & kMask;
+@@ -539,7 +560,7 @@ class ThreadPool {
+     for (;;) {
+       const PoolWaitMode wait_mode = worker.WorkerGetWaitMode();
+       const uint32_t command =
+-          commands.WorkerWaitForNewCommand(wait_mode, prev_seq_cmd);
++          commands.WorkerWaitForNewCommand(wait_mode, prev_seq_cmd, worker);
+       if (HWY_UNLIKELY(command == PoolCommands::kTerminate)) {
+         return;  // exits thread
+       } else if (HWY_LIKELY(command == PoolCommands::kWork)) {
+@@ -584,7 +605,7 @@ class ThreadPool {
+   // Waits for all threads to exit.
+   ~ThreadPool() {
+     PoolMem& mem = *owner_.Mem();
+-    mem.commands.Broadcast(PoolCommands::kTerminate);  // requests threads exit
++    mem.commands.Broadcast(PoolCommands::kTerminate, &mem, owner_.NumWorkers());  // requests threads exit
+ 
+     for (std::thread& thread : threads_) {
+       HWY_ASSERT(thread.joinable());
+@@ -619,7 +640,7 @@ class ThreadPool {
+     // Send a no-op command so that workers wake as soon as possible. Skip the
+     // expensive barrier - workers may miss this command, but it is fine for
+     // them to wake up later and get the next actual command.
+-    mem.commands.Broadcast(PoolCommands::kNop);
++    mem.commands.Broadcast(PoolCommands::kNop, &mem, owner_.NumWorkers());
+ 
+     HWY_DASSERT(busy_.fetch_add(-1) == 1);
+   }
+@@ -641,7 +662,7 @@ class ThreadPool {
+       HWY_DASSERT(busy_.fetch_add(1) == 0);
+ 
+       mem.barrier.Reset();
+-      mem.commands.Broadcast(PoolCommands::kWork);
++      mem.commands.Broadcast(PoolCommands::kWork, &mem, num_workers);
+ 
+       // Also perform work on main thread instead of busy-waiting.
+       const size_t thread = num_workers - 1;

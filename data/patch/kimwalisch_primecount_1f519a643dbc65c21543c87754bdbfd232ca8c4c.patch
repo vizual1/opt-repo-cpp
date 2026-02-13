@@ -1,0 +1,66 @@
+diff --git a/src/phi.cpp b/src/phi.cpp
+index 7f40306f..9da31b8d 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -111,13 +111,22 @@ public:
+   template <int SIGN>
+   int64_t phi(int64_t x, int64_t a)
+   {
+-    if (x <= primes_[a])
++    // Cache frequently used member data in local variables to reduce
++    // repeated member access cost in this hot path.
++    const int32_t* primes_data = primes_.data();
++    int64_t pi_size = (int64_t) pi_.size();
++
++    if (x <= primes_data[a])
+       return SIGN;
+-    else if (is_phi_tiny(a))
++
++    if (is_phi_tiny(a))
+       return phi_tiny(x, a) * SIGN;
+-    else if (is_pix(x, a))
++
++    // Inline is_pix check to avoid an extra function call.
++    if (x < pi_size && x < isquare((int64_t) primes_data[a + 1]))
+       return (pi_[x] - a + 1) * SIGN;
+-    else if (is_cached(x, a))
++
++    if (is_cached(x, a))
+       return phi_cache(x, a) * SIGN;
+ 
+     // Cache all small phi(x, i) results with:
+@@ -138,7 +147,7 @@ public:
+       assert(larger_c <= a);
+       sum = phi_cache(x, c) * SIGN;
+     }
+-  
++
+     for (i = c; i < a; i++)
+     {
+       // phi(x / prime[i+1], i) = 1 if x / prime[i+1] <= prime[i].
+@@ -147,19 +156,20 @@ public:
+       // phi(x / prime[i+1], i) = 1 even if x / prime[i+1] > prime[i].
+       // This works because in this case there is no other prime
+       // inside the interval ]prime[i], x / prime[i+1]].
+-      if (primes_[i + 1] > sqrtx)
++      if (primes_data[i + 1] > sqrtx)
+         break;
+-      int64_t xp = fast_div(x, primes_[i + 1]);
+-      if (is_pix(xp, i))
++      int64_t xp = fast_div(x, (int64_t) primes_data[i + 1]);
++      // Inline is_pix(xp, i)
++      if (xp < pi_size && xp < isquare((int64_t) primes_data[i + 1]))
+         break;
+       sum += phi<-SIGN>(xp, i);
+     }
+ 
+     for (; i < a; i++)
+     {
+-      if (primes_[i + 1] > sqrtx)
++      if (primes_data[i + 1] > sqrtx)
+         break;
+-      int64_t xp = fast_div(x, primes_[i + 1]);
++      int64_t xp = fast_div(x, (int64_t) primes_data[i + 1]);
+       sum += (pi_[xp] - i + 1) * -SIGN;
+     }
+ 

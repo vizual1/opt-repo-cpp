@@ -1,0 +1,45 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 2a8570ec3cbb5e059861e732377c255be9181863
++Subproject commit 2a8570ec3cbb5e059861e732377c255be9181863-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 294331edbc68a0709c167b2369adbcf3eb430daa
++Subproject commit 294331edbc68a0709c167b2369adbcf3eb430daa-dirty
+diff --git a/includes/acl/math/quatf.h b/includes/acl/math/quatf.h
+index 1fd6ff43..abbe622f 100644
+--- a/includes/acl/math/quatf.h
++++ b/includes/acl/math/quatf.h
+@@ -174,12 +174,10 @@ namespace acl
+ 			rtm::vector4f& interp_xxxx, rtm::vector4f& interp_yyyy, rtm::vector4f& interp_zzzz, rtm::vector4f& interp_wwww)
+ 		{
+ 			// Calculate the vector4 dot product: dot(start, end)
+-			const rtm::vector4f xxxx_squared = rtm::vector_mul(xxxx0, xxxx1);
+-			const rtm::vector4f yyyy_squared = rtm::vector_mul(yyyy0, yyyy1);
+-			const rtm::vector4f zzzz_squared = rtm::vector_mul(zzzz0, zzzz1);
+-			const rtm::vector4f wwww_squared = rtm::vector_mul(wwww0, wwww1);
+-
+-			const rtm::vector4f dot4 = rtm::vector_add(rtm::vector_add(rtm::vector_add(xxxx_squared, yyyy_squared), zzzz_squared), wwww_squared);
++			rtm::vector4f dot4 = rtm::vector_mul(xxxx0, xxxx1);
++			dot4 = rtm::vector_mul_add(yyyy0, yyyy1, dot4);
++			dot4 = rtm::vector_mul_add(zzzz0, zzzz1, dot4);
++			dot4 = rtm::vector_mul_add(wwww0, wwww1, dot4);
+ 
+ 			// Calculate the bias, if the dot product is positive or zero, there is no bias
+ 			// but if it is negative, we want to flip the 'end' rotation XYZW components

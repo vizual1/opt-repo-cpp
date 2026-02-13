@@ -1,0 +1,70 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686
++Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6
++Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6-dirty
+diff --git a/includes/acl/math/vector4_packing.h b/includes/acl/math/vector4_packing.h
+index 84f6da83..c397be05 100644
+--- a/includes/acl/math/vector4_packing.h
++++ b/includes/acl/math/vector4_packing.h
+@@ -475,6 +475,41 @@ namespace acl
+ 		return rtm::vector_load(vector_data);
+ 	}
+ 
++#if defined(RTM_SSE3_INTRINSICS)
++        // SSE3/SSSE3 optimized implementation using _mm_shuffle_epi8 (SSSE3)
++        ACL_IMPL_DEBUG_FORCE_INLINE
++        rtm::vector4f RTM_SIMD_CALL unpack_vector3_96_unsafe(
++                const uint8_t* vector_data,
++                uint32_t bit_offset)
++        {
++                const uint32_t byte_offset = bit_offset / 8;
++                const uint32_t shift_offset = bit_offset % 8;
++
++                // Load 16 bytes
++                const __m128i raw_bytes = _mm_loadu_si128((const __m128i*)(vector_data + byte_offset));
++
++                const __m128i k_byte_swap_mask = _mm_setr_epi32(0x04050607, 0x00010203, 0x0c0d0e0f, 0x08090a0b);
++
++                // [7,6,5,4,3,2,1,0], [15,14,13,12,11,10,9,8]
++                const __m128i rev_raw_bytes = _mm_shuffle_epi8(raw_bytes, k_byte_swap_mask);
++
++                // Select each component and combine our pairs
++                // [7,6,5,4,3,2,1,0], [11,10,9,8,7,6,5,4]
++                __m128i xy = _mm_shuffle_epi32(rev_raw_bytes, _MM_SHUFFLE(0, 3, 1, 0));
++                // [15,14,13,12,11,10,9,8], [15,14,13,12,11,10,9,8]
++                __m128i zw = _mm_shuffle_epi32(rev_raw_bytes, _MM_SHUFFLE(3, 2, 3, 2));
++
++                // Shift out the extra bits
++                const __m128i shift_offset_s64 = _mm_set1_epi64x(shift_offset);
++                xy = _mm_sll_epi64(xy, shift_offset_s64);
++                zw = _mm_sll_epi64(zw, shift_offset_s64);
++
++                // Combine our result and cast
++                // As u64, we have: {x, y}, but when we cast to u32, we get: {_, x, _, y}
++                return _mm_shuffle_ps(_mm_castsi128_ps(xy), _mm_castsi128_ps(zw), _MM_SHUFFLE(3, 1, 3, 1));
++        }
++#endif
++
+ #if defined(RTM_SSE2_INTRINSICS)
+ 	// Assumes the 'vector_data' is in big-endian order and is padded in order to load up to 19 bytes from it
+ 	ACL_IMPL_DEBUG_FORCE_INLINE

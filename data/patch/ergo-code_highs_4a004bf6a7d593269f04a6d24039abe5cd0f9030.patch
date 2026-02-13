@@ -1,0 +1,51 @@
+diff --git a/highs/presolve/HPresolve.cpp b/highs/presolve/HPresolve.cpp
+index b87842218..1b0b9765e 100644
+--- a/highs/presolve/HPresolve.cpp
++++ b/highs/presolve/HPresolve.cpp
+@@ -4270,6 +4270,35 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
+   assert(!colDeleted[col]);
+   const bool logging_on = analysis_.logging_on_;
+   double boundDiff = model->col_upper_[col] - model->col_lower_[col];
++
++  // Cache for isRedundant checks to avoid repeated expensive computations
++  // across multiple row inspections within one column presolve. Use static
++  // storage to avoid repeated large allocations; track a per-call id to
++  // lazily initialize entries.
++  static std::vector<char> rowRedundantCache; // 0 = false, 1 = true
++  static std::vector<int> rowRedundantSeen;   // stores last seen id
++  static int rowRedundantId = 1;
++  if ((HighsInt)rowRedundantSeen.size() < model->num_row_) {
++    rowRedundantSeen.assign(model->num_row_, 0);
++    rowRedundantCache.assign(model->num_row_, 0);
++    rowRedundantId = 1;
++  }
++  ++rowRedundantId;
++  if (rowRedundantId == 0) {
++    // wrap-around protection; reinitialize
++    rowRedundantSeen.assign(model->num_row_, 0);
++    rowRedundantId = 1;
++  }
++  auto isRowRedundantCached = [&](HighsInt r) -> bool {
++    if (r < 0 || r >= (HighsInt)rowRedundantSeen.size())
++      return isRedundant(r);
++    if (rowRedundantSeen[r] != rowRedundantId) {
++      rowRedundantSeen[r] = rowRedundantId;
++      rowRedundantCache[r] = isRedundant(r) ? 1 : 0;
++    }
++    return rowRedundantCache[r] != 0;
++  };
++
+   if (boundDiff <= primal_feastol) {
+     if (boundDiff <= options->small_matrix_value ||
+         getMaxAbsColVal(col) * boundDiff <= primal_feastol) {
+@@ -4678,8 +4707,8 @@ HPresolve::Result HPresolve::dualFixing(HighsPostsolveStack& postsolve_stack,
+       HighsInt row = nz.index();
+       double val = nz.value();
+ 
+-      // skip rows that are already redundant
+-      if (isRedundant(row)) continue;
++      // skip rows that are already redundant (cached)
++      if (isRowRedundantCached(row)) continue;
+ 
+       // initialise
+       double rhs = 0.0;

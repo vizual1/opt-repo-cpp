@@ -1,0 +1,15 @@
+diff --git a/core/src/BinaryBitmap.cpp b/core/src/BinaryBitmap.cpp
+index c27dc51f..89224e5f 100644
+--- a/core/src/BinaryBitmap.cpp
++++ b/core/src/BinaryBitmap.cpp
+@@ -59,8 +59,8 @@ const BitMatrix* BinaryBitmap::getBitMatrix() const
+ 
+ void BinaryBitmap::invert()
+ {
+-	if (auto matrix = const_cast<BitMatrix*>(getBitMatrix()))
+-		matrix->flipAll();
++	if (_cache->matrix)
++		const_cast<BitMatrix*>(_cache->matrix.get())->flipAll();
+ 	_inverted = true;
+ }
+ 

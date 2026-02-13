@@ -1,0 +1,15 @@
+diff --git a/core/src/aztec/AZDetector.cpp b/core/src/aztec/AZDetector.cpp
+index 39aeba81..782036b3 100644
+--- a/core/src/aztec/AZDetector.cpp
++++ b/core/src/aztec/AZDetector.cpp
+@@ -178,6 +178,10 @@ static std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image,
+ 	int skip = tryHarder ? 1 : std::clamp(image.height() / 2 / 100, 1, 5);
+ 	int margin = tryHarder ? 5 : image.height() / 4;
+ 
++		PatternRow row;
++		row.reserve(image.width() + 2);
++	
++
+ 	for (int y = margin; y < image.height() - margin; y += skip)
+ 	{
+ 		PatternRow row;

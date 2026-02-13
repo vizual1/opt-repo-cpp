@@ -1,0 +1,17 @@
+diff --git a/quill/include/quill/detail/spsc_queue/UnboundedQueue.h b/quill/include/quill/detail/spsc_queue/UnboundedQueue.h
+index f40d535..7004437 100644
+--- a/quill/include/quill/detail/spsc_queue/UnboundedQueue.h
++++ b/quill/include/quill/detail/spsc_queue/UnboundedQueue.h
+@@ -241,9 +241,9 @@ public:
+ 
+ private:
+   /** Modified by either the producer or consumer but never both */
+-  Node* _producer{nullptr};
+-  Node* _consumer{nullptr};
+-  bool _huge_pages;
++  alignas(CACHE_LINE_ALIGNED) Node* _producer{nullptr};
++  alignas(CACHE_LINE_ALIGNED) Node* _consumer{nullptr};
++  alignas(CACHE_LINE_ALIGNED) bool _huge_pages{false};
+ };
+ 
+ } // namespace quill::detail

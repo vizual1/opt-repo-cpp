@@ -1,0 +1,64 @@
+diff --git a/snappy.cc b/snappy.cc
+index a8a8e80..92db060 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -124,12 +124,14 @@ constexpr std::array<int16_t, 256> MakeTable(index_sequence<seq...>) {
+   return std::array<int16_t, 256>{LengthMinusOffset(seq)...};
+ }
+ 
+-// We maximally co-locate the two tables so that only one register needs to be
+-// reserved for the table address.
+-struct {
+-  alignas(64) const std::array<int16_t, 256> length_minus_offset;
+-  uint32_t extract_masks[4];  // Used for extracting offset based on tag type.
+-} table = {MakeTable(make_index_sequence<256>{}), {0, 0xFF, 0xFFFF, 0}};
++// Keep the length_minus_offset table aligned to 64 bytes for cache
++// performance. Separate the extract masks into their own constexpr so that
++// the compiler can load them independently (helps some targets like ARM).
++alignas(64) constexpr std::array<int16_t, 256> length_minus_offset_table =
++    MakeTable(make_index_sequence<256>{});
++
++// Used for extracting offset based on tag type.
++constexpr uint32_t extract_masks_arr[4] = {0u, 0xFFu, 0xFFFFu, 0u};
+ 
+ // Any hash function will produce a valid compressed bitstream, but a good
+ // hash function reduces the number of collisions and thus yields better
+@@ -1075,7 +1077,7 @@ size_t AdvanceToNextTagX86Optimized(const uint8_t** ip_p, size_t* tag) {
+ 
+ // Extract the offset for copy-1 and copy-2 returns 0 for literals or copy-4.
+ inline uint32_t ExtractOffset(uint32_t val, size_t tag_type) {
+-  return val & table.extract_masks[tag_type];
++  return val & extract_masks_arr[tag_type];
+ };
+ 
+ // Core decompression loop, when there is enough data available.
+@@ -1108,7 +1110,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(
+         assert(tag == ip[-1]);
+         // For literals tag_type = 0, hence we will always obtain 0 from
+         // ExtractLowBytes. For literals offset will thus be kLiteralOffset.
+-        ptrdiff_t len_min_offset = table.length_minus_offset[tag];
++        ptrdiff_t len_min_offset = length_minus_offset_table[tag];
+ #if defined(__aarch64__)
+         size_t tag_type = AdvanceToNextTagARMOptimized(&ip, &tag);
+ #else
+@@ -1328,7 +1330,7 @@ class SnappyDecompressor {
+ 
+           if (!writer->AppendFromSelf(copy_offset, length, &op)) goto exit;
+         } else {
+-          const ptrdiff_t entry = table.length_minus_offset[c];
++          const ptrdiff_t entry = length_minus_offset_table[c];
+           preload = LittleEndian::Load32(ip);
+           const uint32_t trailer = ExtractLowBytes(preload, c & 3);
+           const uint32_t length = entry & 0xff;
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

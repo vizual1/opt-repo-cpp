@@ -1,0 +1,13 @@
+diff --git a/include/Sieve.hpp b/include/Sieve.hpp
+index b7251f7a..2bee9abb 100644
+--- a/include/Sieve.hpp
++++ b/include/Sieve.hpp
+@@ -51,7 +51,7 @@ public:
+   Sieve(uint64_t low, uint64_t segment_size, uint64_t wheel_size);
+   static uint64_t get_segment_size(uint64_t size);
+   uint64_t count(uint64_t start, uint64_t stop) const;
+-  NOINLINE uint64_t count(uint64_t stop);
++  uint64_t count(uint64_t stop);
+   NOINLINE void cross_off(uint64_t prime, uint64_t i);
+   NOINLINE void cross_off_count(uint64_t prime, uint64_t i);
+ 

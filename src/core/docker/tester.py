@@ -141,6 +141,9 @@ class DockerTester:
         new_times = []
         old_times = []
 
+        new_process = None
+        old_process = None
+
         try:
             local_image = image(self.repo_id, new_sha)
             container_name = local_image

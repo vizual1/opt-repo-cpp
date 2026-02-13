@@ -1,0 +1,36 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686
++Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6
++Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6-dirty
+diff --git a/includes/acl/compression/impl/quantize.transform.h b/includes/acl/compression/impl/quantize.transform.h
+index b083974a..907ee00d 100644
+--- a/includes/acl/compression/impl/quantize.transform.h
++++ b/includes/acl/compression/impl/quantize.transform.h
+@@ -57,6 +57,7 @@
+ #include <cstdint>
+ #include <functional>
+ 
++
+ #define ACL_IMPL_DEBUG_LEVEL_NONE					0		// No logging whatsoever
+ #define ACL_IMPL_DEBUG_LEVEL_SUMMARY_ONLY			1		// Logs a summary at the end
+ #define ACL_IMPL_DEBUG_LEVEL_BASIC_INFO				2		// Logs the best bit rate after each pass

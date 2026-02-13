@@ -1,0 +1,38 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index d40cb97f..e38bee0c 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -83,7 +83,9 @@ public:
+     // computations it is important to not cache too much,
+     // otherwise all threads will simultaneously write to main
+     // memory during initialization which decreases performance.
+-    uint64_t max_x = (uint64_t) pow(x, 1 / 2.3);
++    // Use explicit double arithmetic and avoid unnecessary caching
++    // for tiny computations.
++    uint64_t max_x = (uint64_t) pow((double) x, 1.0 / 2.3);
+ 
+     // The cache (i.e. the sieve and sieve_counts arrays)
+     // uses at most max_megabytes per thread.
+@@ -96,7 +98,8 @@ public:
+     max_x = min(max_x, cache_limit);
+     max_x_size_ = ceil_div(max_x, 240);
+ 
+-    if (max_x_size_ == 0)
++    // For tiny computations caching is not worth it
++    if (max_x_size_ < 4)
+       return;
+ 
+     // Make sure that there are no uninitialized
+diff --git a/src/phi.cpp b/src/phi.cpp
+index 29ef187a..4205ff57 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -81,7 +81,7 @@ public:
+     // computations it is important to not cache too much,
+     // otherwise all threads will simultaneously write to main
+     // memory during initialization which decreases performance.
+-    uint64_t max_x = (uint64_t) pow(x, 1 / 2.3);
++    uint64_t max_x = (uint64_t) pow((double) x, 1.0 / 2.3);
+ 
+     // The cache (i.e. the sieve and sieve_counts arrays)
+     // uses at most max_megabytes per thread.

@@ -1,0 +1,116 @@
+diff --git a/hwy/contrib/sort/result-inl.h b/hwy/contrib/sort/result-inl.h
+index c2c31f53..71f5a4be 100644
+--- a/hwy/contrib/sort/result-inl.h
++++ b/hwy/contrib/sort/result-inl.h
+@@ -42,15 +42,26 @@ static inline double SecondsSince(const Timestamp& t0) {
+ // Returns trimmed mean (we don't want to run an out-of-L3-cache sort often
+ // enough for the mode to be reliable).
+ static inline double SummarizeMeasurements(std::vector<double>& seconds) {
+-  std::sort(seconds.begin(), seconds.end());
++  // Only need the middle quartile; partial_sort is faster than full sort when
++  // the number of measurements is large.
++  const size_t num = seconds.size();
++  if (num == 0) return 0.0;
++  const size_t start = num / 4;
++  const size_t end = num / 2;
++  // Sort only the range [start, end). This places the smallest `end` elements
++  // in front, with the first `start` of them sorted; then we ensure the next
++  // `end-start` elements are the correct smallest ones by partial_sort on the
++  // subrange. This reduces work compared to sorting the entire vector.
++  if (start > 0) std::partial_sort(seconds.begin(), seconds.begin() + end,
++                                     seconds.end());
++  else std::partial_sort(seconds.begin(), seconds.begin() + end, seconds.end());
+   double sum = 0;
+   int count = 0;
+-  const size_t num = seconds.size();
+-  for (size_t i = num / 4; i < num / 2; ++i) {
++  for (size_t i = start; i < end; ++i) {
+     sum += seconds[i];
+-    count += 1;
++    ++count;
+   }
+-  return sum / count;
++  return count ? (sum / count) : 0.0;
+ }
+ 
+ }  // namespace hwy
+diff --git a/hwy/contrib/sort/sorting_networks-inl.h b/hwy/contrib/sort/sorting_networks-inl.h
+index 5e4a486d..2a23ff9d 100644
+--- a/hwy/contrib/sort/sorting_networks-inl.h
++++ b/hwy/contrib/sort/sorting_networks-inl.h
+@@ -24,6 +24,7 @@
+ 
+ #include "hwy/contrib/sort/shared-inl.h"  // SortConstants
+ #include "hwy/highway.h"
++#include "hwy/cache_control.h"  // Prefetch for hot loads
+ 
+ HWY_BEFORE_NAMESPACE();
+ namespace hwy {
+@@ -659,6 +660,13 @@ HWY_NOINLINE void SortingNetwork(Traits st, T* HWY_RESTRICT buf, size_t cols) {
+   // These are aligned iff cols == Lanes(d). We prefer unaligned/non-constexpr
+   // offsets to duplicating this code for every value of cols.
+   static_assert(Constants::kMaxRows == 16, "Update loads/stores/args");
++  // Prefetch the start and halfway point of the buffer to hide memory latency
++  // for the upcoming loads of the 16 vectors.
++  Prefetch(buf);
++  if (cols * 8 < 1024) {
++    // Small heuristic: prefetch a midpoint for modest sized columns.
++    Prefetch(buf + 8 * cols);
++  }
+   V v0 = LoadU(d, buf + 0x0 * cols);
+   V v1 = LoadU(d, buf + 0x1 * cols);
+   V v2 = LoadU(d, buf + 0x2 * cols);
+diff --git a/hwy/contrib/sort/traits128-inl.h b/hwy/contrib/sort/traits128-inl.h
+index 920866fe..a6c169ab 100644
+--- a/hwy/contrib/sort/traits128-inl.h
++++ b/hwy/contrib/sort/traits128-inl.h
+@@ -431,7 +431,10 @@ class Traits128 : public Base {
+     alignas(64) static constexpr uint64_t kIndices[8] = {3, 3, 3, 3,
+                                                          7, 7, 7, 7};
+     const ScalableTag<uint64_t> d;
+-    return TableLookupLanes(v, SetTableIndices(d, kIndices));
++    // Cache the table indices per instantiation to avoid recomputing them every
++    // call; SetTableIndices is lightweight but called hot in sorting loops.
++    static const auto table_indices = SetTableIndices(d, kIndices);
++    return TableLookupLanes(v, table_indices);
+ #endif
+   }
+ 
+@@ -492,7 +495,10 @@ class Traits128 : public Base {
+     // Similar to ReplicateTop4x, we want to gang together 2 comparison results
+     // (4 lanes). They are not contiguous, so use permute to replicate 4x.
+     alignas(64) uint64_t kIndices[8] = {7, 7, 5, 5, 5, 5, 7, 7};
+-    const Vec<D> select = TableLookupLanes(cmpHx, SetTableIndices(d, kIndices));
++    // Cache table indices per instantiation to avoid recomputing in hot loops.
++    const ScalableTag<uint64_t> table_d;
++    static const auto select_table_indices = SetTableIndices(table_d, kIndices);
++    const Vec<D> select = TableLookupLanes(cmpHx, select_table_indices);
+     return IfVecThenElse(select, swapped, v);
+   }
+ 
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index 564ebef9..8de8dac3 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -234,7 +234,7 @@ HWY_INLINE size_t PartitionToMultipleOfUnroll(D d, Traits st,
+ }
+ 
+ template <class V>
+-V OrXor(const V o, const V x1, const V x2) {
++HWY_INLINE V OrXor(const V o, const V x1, const V x2) {
+   return Or(o, Xor(x1, x2));  // ternlog on AVX3
+ }
+ 
+diff --git a/hwy/ops/shared-inl.h b/hwy/ops/shared-inl.h
+index 1dd6f4d9..04003b49 100644
+--- a/hwy/ops/shared-inl.h
++++ b/hwy/ops/shared-inl.h
+@@ -81,7 +81,7 @@ template <typename T>
+ HWY_INLINE void MaybeUnpoison(T* HWY_RESTRICT unaligned, size_t count) {
+   // Workaround for MSAN not marking compressstore as initialized (b/233326619)
+ #if HWY_IS_MSAN
+-  __msan_unpoison(unaligned, count * sizeof(T));
++  if (count) __msan_unpoison(unaligned, count * sizeof(T));
+ #else
+   (void)unaligned;
+   (void)count;

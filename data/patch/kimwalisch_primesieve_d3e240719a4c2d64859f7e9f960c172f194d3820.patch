@@ -1,0 +1,76 @@
+diff --git a/src/CountPrintPrimes.cpp b/src/CountPrintPrimes.cpp
+index 8ca2a12a..f6cf3177 100644
+--- a/src/CountPrintPrimes.cpp
++++ b/src/CountPrintPrimes.cpp
+@@ -140,6 +140,27 @@ void CountPrintPrimes::countkTuplets()
+   }
+ }
+ 
++// Fast integer to string
++void CountPrintPrimes::appendUInt(uint64_t n)
++{
++  if (n == 0)
++  {
++    stringBuffer_ += '0';
++    return;
++  }
++
++  char buf[20];
++  int pos = 0;
++  while (n != 0)
++  {
++    buf[pos++] = char('0' + (n % 10));
++    n /= 10;
++  }
++
++  for (int i = pos - 1; i >= 0; --i)
++    stringBuffer_ += buf[i];
++}
++
+ /// Print primes to stdout
+ void CountPrintPrimes::printPrimes()
+ {
+@@ -156,10 +177,12 @@ void CountPrintPrimes::printPrimes()
+     {
+       uint64_t bits = littleendian_cast<uint64_t>(&sieve_[i]);
+ 
+-      for (; bits != 0; bits &= bits - 1)
++      while (bits != 0)
+       {
+-        stringBuffer_ += std::to_string(nextPrime(bits, low));
++        uint64_t lsb = bits & -bits;
++        appendUInt(nextPrime(lsb, low));
+         stringBuffer_ += '\n';
++        bits ^= lsb;
+       }
+ 
+       low += 8 * 30;
+@@ -189,11 +212,13 @@ void CountPrintPrimes::printkTuplets()
+         stringBuffer_ += "(";
+         uint64_t bits = *bitmask;
+ 
+-        for (; bits != 0; bits &= bits - 1)
++        while (bits != 0)
+         {
++          uint64_t lsb = bits & -bits;
+           bool hasNext = (bits & (bits - 1)) != 0;
+-          stringBuffer_ += std::to_string(nextPrime(bits, low));
++          appendUInt(nextPrime(lsb, low));
+           stringBuffer_ += hasNext ? ", " : ")\n";
++          bits ^= lsb;
+         }
+       }
+     }
+diff --git a/src/CountPrintPrimes.hpp b/src/CountPrintPrimes.hpp
+index 3eb53699..7246e625 100644
+--- a/src/CountPrintPrimes.hpp
++++ b/src/CountPrintPrimes.hpp
+@@ -47,6 +47,8 @@ private:
+   void countkTuplets();
+   void printPrimes();
+   void printkTuplets();
++  // Fast append of unsigned integers to stringBuffer_ to avoid std::to_string overhead
++  void appendUInt(uint64_t n);
+ };
+ 
+ } // namespace

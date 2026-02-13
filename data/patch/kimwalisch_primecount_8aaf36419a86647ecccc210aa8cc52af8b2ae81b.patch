@@ -1,0 +1,18 @@
+diff --git a/include/DFactorTable.hpp b/include/DFactorTable.hpp
+index 6f6ec5ea..eda50c2b 100644
+--- a/include/DFactorTable.hpp
++++ b/include/DFactorTable.hpp
+@@ -150,7 +150,12 @@ public:
+         }
+ 
+         start = std::max(start, y);
+-        it.skipto(start, z);
++        // Use the original stop upper bound to avoid setting the iterator
++        // end to z which can be much larger than needed and slow down
++        // primesieve. Limiting to `stop` reduces the sieving range.
++        // Ensure the upper bound is at least `start` to avoid invalid
++        // ranges when y > stop.
++        it.skipto(start, std::max(start, stop));
+ 
+         while (true)
+         {

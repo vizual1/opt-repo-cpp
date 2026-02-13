@@ -12,7 +12,7 @@ class PatchPipeline:
     def patch(self) -> None:
         unique_id = str(uuid.uuid4())
         name = "-".join(self.config.repo_id.split("/"))
-        path = Path(f"tmp/patch_{unique_id}").resolve()
+        path = Path(f"data/tmp/patch_{unique_id}").resolve()
         patch_data = Path("data/patch").resolve()
         logging.info(f"Path: {path}, {patch_data}")
         path.mkdir(mode=0o777, parents=True, exist_ok=True)
@@ -23,7 +23,7 @@ class PatchPipeline:
             "-e", f"SANDBOX_RUNTIME_CONTAINER_IMAGE={self.config.llm.sandbox_base_container_image}",
             "-e", f"SANDBOX_VOLUMES={patch_data}:/results:rw,{path}:/workspace:rw",
             "-e", f"LLM_API_KEY={self.config.llm.api_key}",
-            "-e", f"LLM_MODEL={self.config.llm.model}",
+            "-e", f"LLM_MODEL={self.config.llm.model1}",
             "-e", f"LLM_BASE_URL={self.config.llm.base_url}",
             "-e", f"GITHUB_TOKEN={self.config.github.access_token}",
             "-e", "LOG_ALL_EVENTS=true",
@@ -39,28 +39,56 @@ class PatchPipeline:
         # move .git
         git_dir = path / ".git"
         temp_git_dir = path.parent / f".git_temp_{unique_id}"
-        try:
-            repo = self.config.git_client.get_repo(self.config.repo_id)
-            commit = repo.get_commit(self.config.sha)
-            parent_sha = commit.parents[0].sha
-            self.git_handler.clone_repo(self.config.repo_id, path, sha=parent_sha)
-            if git_dir.exists():
-                logging.info("Moving .git directory out of workspace before sandbox run")
-                git_dir.rename(temp_git_dir)
-            self.run(cmd, self.config.repo_id, self.config.sha)
-            if temp_git_dir.exists():
-                logging.info("Moving .git directory back into workspace after sandbox run")
-                temp_git_dir.rename(git_dir)
-            patch_file = patch_data / f"{image(self.config.repo_id, self.config.sha)}.patch"
-            with patch_file.open("wb") as f:
-                subprocess.run(["git", "diff", "--no-color", "--binary"], cwd=path, check=True, stdout=f)
-        finally:
-            if temp_git_dir.exists():
-                logging.info("Restoring .git directory after cleanup")
+        if self.config.repo_id and self.config.sha and self.config.prompt:
+            try:
+                repo = self.config.git_client.get_repo(self.config.repo_id)
+                commit = repo.get_commit(self.config.sha)
+                parent_sha = commit.parents[0].sha
+                self.git_handler.clone_repo(self.config.repo_id, path, sha=parent_sha)
+                if git_dir.exists():
+                    logging.info("Moving .git directory out of workspace before sandbox run")
+                    git_dir.rename(temp_git_dir)
+                self.run(cmd, self.config.repo_id, self.config.sha)
+                if temp_git_dir.exists():
+                    logging.info("Moving .git directory back into workspace after sandbox run")
+                    temp_git_dir.rename(git_dir)
+                patch_file = patch_data / f"{image(self.config.repo_id, self.config.sha)}.patch"
+                with patch_file.open("wb") as f:
+                    subprocess.run(["git", "diff", "--no-color", "--binary"], cwd=path, check=True, stdout=f)
+            finally:
+                if temp_git_dir.exists():
+                    logging.info("Restoring .git directory after cleanup")
+                    if path.exists():
+                        temp_git_dir.rename(path / ".git")
                 if path.exists():
-                    temp_git_dir.rename(path / ".git")
-            if path.exists():
-                shutil.rmtree(path)
+                    shutil.rmtree(path)
+        elif self.config.docker_image:
+            # start docker container of self.config.docker_image
+            # move all the files inside the container in /test_workspace/workspace/old/. into path outside
+            try:
+                get_commit_cmd = [
+                    "docker", "run", "-it", self.config.docker_image,
+                    "-v", f"{path}:/workspace",
+                    "cp", "/test_workspace/workspace/old/", "/workspace"
+                ]
+                self.run(get_commit_cmd, self.config.docker_image, "")
+                if git_dir.exists():
+                    logging.info("Moving .git directory out of workspace before sandbox run")
+                    git_dir.rename(temp_git_dir)
+                self.run(cmd, self.config.repo_id, self.config.sha)
+                if temp_git_dir.exists():
+                    logging.info("Moving .git directory back into workspace after sandbox run")
+                    temp_git_dir.rename(git_dir)
+                patch_file = patch_data / f"{image(self.config.repo_id, self.config.sha)}.patch"
+                with patch_file.open("wb") as f:
+                    subprocess.run(["git", "diff", "--no-color", "--binary"], cwd=path, check=True, stdout=f)
+            finally:
+                if temp_git_dir.exists():
+                    logging.info("Restoring .git directory after cleanup")
+                    if path.exists():
+                        temp_git_dir.rename(path / ".git")
+                if path.exists():
+                    shutil.rmtree(path)
     
     def run(self, cmd: list[str], repo_id: str, sha: str, timeout_seconds=15*60) -> None:
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout_seconds)

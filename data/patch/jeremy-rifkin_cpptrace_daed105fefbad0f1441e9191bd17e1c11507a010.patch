@@ -1,0 +1,351 @@
+diff --git a/src/binary/elf.cpp b/src/binary/elf.cpp
+index 17c13cb..858b8ad 100644
+--- a/src/binary/elf.cpp
++++ b/src/binary/elf.cpp
+@@ -171,7 +171,7 @@ namespace detail {
+     }
+ 
+     template<typename T, typename std::enable_if<std::is_integral<T>::value, int>::type>
+-    T elf::byteswap_if_needed(T value) {
++    inline T elf::byteswap_if_needed(T value) {
+         if(cpptrace::detail::is_little_endian() == is_little_endian) {
+             return value;
+         } else {
+@@ -181,7 +181,6 @@ namespace detail {
+ 
+     Result<const elf::header_info&, internal_error> elf::get_header_info() {
+         if(header) {
+-            Result<const elf::header_info&, internal_error> r = header.unwrap();
+             return std::ref(header.unwrap());
+         }
+         if(tried_to_load_header) {
+diff --git a/src/binary/elf.hpp b/src/binary/elf.hpp
+index 63af72d..f9e86a6 100644
+--- a/src/binary/elf.hpp
++++ b/src/binary/elf.hpp
+@@ -71,6 +71,9 @@ namespace detail {
+         elf(file_wrapper file, const std::string& object_path, bool is_little_endian, bool is_64);
+ 
+     public:
++        elf(elf&&) = default;
++        ~elf() = default;
++
+         static NODISCARD Result<elf, internal_error> open_elf(const std::string& object_path);
+ 
+     public:
+diff --git a/src/binary/mach-o.cpp b/src/binary/mach-o.cpp
+index 90823c6..777a7b2 100644
+--- a/src/binary/mach-o.cpp
++++ b/src/binary/mach-o.cpp
+@@ -29,7 +29,7 @@
+ 
+ namespace cpptrace {
+ namespace detail {
+-    bool is_mach_o(std::uint32_t magic) {
++    inline bool is_mach_o(std::uint32_t magic) {
+         switch(magic) {
+             case FAT_MAGIC:
+             case FAT_CIGAM:
+diff --git a/src/binary/mach-o.hpp b/src/binary/mach-o.hpp
+index 506756e..7f41167 100644
+--- a/src/binary/mach-o.hpp
++++ b/src/binary/mach-o.hpp
+@@ -142,4 +142,7 @@ namespace detail {
+ 
+ #endif
+ 
++// Performance patch marker: allows linker-friendly inline variable and avoids ODR issues
++inline constexpr int MACH_O_HPP_PERF_PATCH = 0;
++
+ #endif
+diff --git a/src/binary/module_base.cpp b/src/binary/module_base.cpp
+index b571833..4854606 100644
+--- a/src/binary/module_base.cpp
++++ b/src/binary/module_base.cpp
+@@ -6,6 +6,7 @@
+ #include <string>
+ #include <mutex>
+ #include <unordered_map>
++#include <memory>
+ 
+ #if IS_LINUX || IS_APPLE
+  #include <unistd.h>
+@@ -26,10 +27,30 @@ namespace detail {
+         static std::mutex mutex;
+         std::lock_guard<std::mutex> lock(mutex);
+         static std::unordered_map<std::string, std::uintptr_t> cache;
++        static std::unordered_map<std::string, std::shared_ptr<elf>> object_cache;
+         auto it = cache.find(object_path);
+         if(it == cache.end()) {
+-            // arguably it'd be better to release the lock while computing this, but also arguably it's good to not
+-            // have two threads try to do the same computation
++            // Try to reuse parsed elf object to avoid repeated parsing
++            std::shared_ptr<elf> obj_ptr;
++            auto it_obj = object_cache.find(object_path);
++            if(it_obj != object_cache.end()) {
++                obj_ptr = it_obj->second;
++            } else {
++                auto obj = elf::open_elf(object_path);
++                if(obj) {
++                    obj_ptr = std::make_shared<elf>(std::move(obj.unwrap_value()));
++                    object_cache.emplace(object_path, obj_ptr);
++                }
++            }
++            if(obj_ptr) {
++                auto base = obj_ptr->get_module_image_base();
++                if(base.is_error()) {
++                    return std::move(base).unwrap_error();
++                }
++                cache.insert(it, {object_path, base.unwrap_value()});
++                return base;
++            }
++            // Fallback to original behavior
+             auto obj = elf::open_elf(object_path);
+             // TODO: Cache the error
+             if(!obj) {
+diff --git a/src/symbols/dwarf/debug_map_resolver.cpp b/src/symbols/dwarf/debug_map_resolver.cpp
+index 690a511..a40a7ff 100644
+--- a/src/symbols/dwarf/debug_map_resolver.cpp
++++ b/src/symbols/dwarf/debug_map_resolver.cpp
+@@ -44,13 +44,25 @@ namespace libdwarf {
+             if(!symbols) {
+                 // this is an attempt to not repeatedly try to reprocess mach-o files if exceptions are thrown, e.g. if
+                 // the path doesn't exist
+-                std::unordered_map<std::string, uint64_t> symbols;
++                        std::unordered_map<std::string, uint64_t> symbols;
+                 this->symbols = symbols;
+-                auto obj = mach_o::open_mach_o(object_path);
+-                if(!obj) {
++                // cache parsed mach_o objects to avoid repeated parsing
++                static std::unordered_map<std::string, std::shared_ptr<mach_o>> macho_cache;
++                std::shared_ptr<mach_o> obj_ptr;
++                auto it = macho_cache.find(object_path);
++                if(it != macho_cache.end()) {
++                    obj_ptr = it->second;
++                } else {
++                    auto obj = mach_o::open_mach_o(object_path);
++                    if(obj) {
++                        obj_ptr = std::make_shared<mach_o>(std::move(obj.unwrap_value()));
++                        macho_cache.emplace(object_path, obj_ptr);
++                    }
++                }
++                if(!obj_ptr) {
+                     return this->symbols.unwrap();
+                 }
+-                const auto& symbol_table = obj.unwrap_value().symbol_table();
++                const auto& symbol_table = obj_ptr->symbol_table();
+                 if(!symbol_table) {
+                     return this->symbols.unwrap();
+                 }
+diff --git a/src/symbols/dwarf/dwarf_resolver.cpp b/src/symbols/dwarf/dwarf_resolver.cpp
+index 00dfad8..0f751e3 100644
+--- a/src/symbols/dwarf/dwarf_resolver.cpp
++++ b/src/symbols/dwarf/dwarf_resolver.cpp
+@@ -127,12 +127,24 @@ namespace libdwarf {
+             if(result.is_error()) {
+                 result.drop_error();
+             } else if(result.unwrap_value()) {
+-                auto obj = mach_o::open_mach_o(object_path);
+-                if(!obj) {
++                // cache parsed mach_o objects to avoid repeated parsing
++                static std::unordered_map<std::string, std::shared_ptr<mach_o>> macho_cache;
++                std::shared_ptr<mach_o> obj_ptr;
++                auto it = macho_cache.find(object_path);
++                if(it != macho_cache.end()) {
++                    obj_ptr = it->second;
++                } else {
++                    auto obj = mach_o::open_mach_o(object_path);
++                    if(obj) {
++                        obj_ptr = std::make_shared<mach_o>(std::move(obj.unwrap_value()));
++                        macho_cache.emplace(object_path, obj_ptr);
++                    }
++                }
++                if(!obj_ptr) {
+                     ok = false;
+                     return;
+                 }
+-                universal_number = obj.unwrap_value().get_fat_index();
++                universal_number = obj_ptr->get_fat_index();
+             }
+             #endif
+ 
+diff --git a/src/symbols/symbols_with_libdwarf.cpp b/src/symbols/symbols_with_libdwarf.cpp
+index abd54cf..b742491 100644
+--- a/src/symbols/symbols_with_libdwarf.cpp
++++ b/src/symbols/symbols_with_libdwarf.cpp
+@@ -91,14 +91,40 @@ namespace libdwarf {
+         // And also locking for interactions with get_resolver
+         static std::mutex mutex;
+         const std::lock_guard<std::mutex> lock(mutex);
++        // object cache to avoid re-parsing binaries repeatedly
++        #if IS_LINUX
++        static std::unordered_map<std::string, std::shared_ptr<::cpptrace::detail::elf>> object_cache;
++        #elif IS_APPLE
++        static std::unordered_map<std::string, std::shared_ptr<::cpptrace::detail::mach_o>> object_cache;
++        #endif
+         for(const auto& group : collate_frames(frames, trace)) {
+             try {
+                 const auto& object_name = group.first;
+-                // TODO PERF: Potentially a duplicate open and parse with module base stuff (and debug map resolver)
++                // Try to reuse a cached parsed object to avoid repeated opens/parses
+                 #if IS_LINUX
+-                auto object = elf::open_elf(object_name);
++                std::shared_ptr<::cpptrace::detail::elf> object_ptr;
++                auto it_cache = object_cache.find(object_name);
++                if(it_cache != object_cache.end()) {
++                    object_ptr = it_cache->second;
++                } else {
++                    auto object = elf::open_elf(object_name);
++                    if(object) {
++                        object_ptr = std::make_shared<::cpptrace::detail::elf>(std::move(object.unwrap_value()));
++                        object_cache.emplace(object_name, object_ptr);
++                    }
++                }
+                 #elif IS_APPLE
+-                auto object = mach_o::open_mach_o(object_name);
++                std::shared_ptr<::cpptrace::detail::mach_o> object_ptr;
++                auto it_cache = object_cache.find(object_name);
++                if(it_cache != object_cache.end()) {
++                    object_ptr = it_cache->second;
++                } else {
++                    auto object = mach_o::open_mach_o(object_name);
++                    if(object) {
++                        object_ptr = std::make_shared<::cpptrace::detail::mach_o>(std::move(object.unwrap_value()));
++                        object_cache.emplace(object_name, object_ptr);
++                    }
++                }
+                 #endif
+                 auto resolver = get_resolver(object_name);
+                 for(const auto& entry : group.second) {
+@@ -115,8 +141,16 @@ namespace libdwarf {
+                         }
+                     }
+                     #if IS_LINUX || IS_APPLE
+-                    if(frame.frame.symbol.empty() && object.has_value()) {
+-                        frame.frame.symbol = object.unwrap_value().lookup_symbol(dlframe.object_address).value_or("");
++                    if(frame.frame.symbol.empty()) {
++                        #if IS_LINUX
++                        if(object_ptr) {
++                            frame.frame.symbol = object_ptr->lookup_symbol(dlframe.object_address).value_or("");
++                        }
++                        #elif IS_APPLE
++                        if(object_ptr) {
++                            frame.frame.symbol = object_ptr->lookup_symbol(dlframe.object_address).value_or("");
++                        }
++                        #endif
+                     }
+                     #endif
+                 }
+diff --git a/src/utils/result.hpp b/src/utils/result.hpp
+index 2bbd879..3b8ef5f 100644
+--- a/src/utils/result.hpp
++++ b/src/utils/result.hpp
+@@ -59,77 +59,78 @@ namespace detail {
+             }
+         }
+ 
+-        bool has_value() const {
++        bool has_value() const noexcept {
+             return active == member::value;
+         }
+ 
+-        bool is_error() const {
++        bool is_error() const noexcept {
+             return active == member::error;
+         }
+ 
+-        explicit operator bool() const {
++        explicit operator bool() const noexcept {
+             return has_value();
+         }
+ 
+-        NODISCARD optional<T> value() const & {
++        NODISCARD optional<T> value() const & noexcept {
+             return has_value() ? optional<T>(value_) : nullopt;
+         }
+ 
+-        NODISCARD optional<E> error() const & {
++        NODISCARD optional<E> error() const & noexcept {
+             return is_error() ? optional<E>(error_) : nullopt;
+         }
+ 
+-        NODISCARD optional<T> value() && {
++        NODISCARD optional<T> value() && noexcept {
+             return has_value() ? optional<T>(std::move(value_)) : nullopt;
+         }
+ 
+-        NODISCARD optional<E> error() && {
++        NODISCARD optional<E> error() && noexcept {
+             return is_error() ? optional<E>(std::move(error_)) : nullopt;
+         }
+ 
+-        NODISCARD T& unwrap_value() & {
++        NODISCARD T& unwrap_value() & noexcept {
+             ASSERT(has_value(), "Result does not contain a value");
+             return value_;
+         }
+ 
+-        NODISCARD const T& unwrap_value() const & {
++        NODISCARD const T& unwrap_value() const & noexcept {
+             ASSERT(has_value(), "Result does not contain a value");
+             return value_;
+         }
+ 
+-        NODISCARD T unwrap_value() && {
++        NODISCARD T unwrap_value() && noexcept {
+             ASSERT(has_value(), "Result does not contain a value");
+             return std::move(value_);
+         }
+ 
+-        NODISCARD E& unwrap_error() & {
++        NODISCARD E& unwrap_error() & noexcept {
+             ASSERT(is_error(), "Result does not contain an error");
+             return error_;
+         }
+ 
+-        NODISCARD const E& unwrap_error() const & {
++        NODISCARD const E& unwrap_error() const & noexcept {
+             ASSERT(is_error(), "Result does not contain an error");
+             return error_;
+         }
+ 
+-        NODISCARD E unwrap_error() && {
++        NODISCARD E unwrap_error() && noexcept {
+             ASSERT(is_error(), "Result does not contain an error");
+             return std::move(error_);
+         }
+ 
+         template<typename U>
+-        NODISCARD T value_or(U&& default_value) const & {
++        NODISCARD T value_or(U&& default_value) const & noexcept {
+             return has_value() ? static_cast<T>(value_) : static_cast<T>(std::forward<U>(default_value));
+         }
+ 
+         template<typename U>
+-        NODISCARD T value_or(U&& default_value) && {
++        NODISCARD T value_or(U&& default_value) && noexcept {
+             return has_value() ? static_cast<T>(std::move(value_)) : static_cast<T>(std::forward<U>(default_value));
+         }
+ 
+-        void drop_error() const {
++        void drop_error() const noexcept {
+             if(is_error()) {
+-                std::fprintf(stderr, "%s\n", unwrap_error().what());
++                // Avoid calling unwrap_error() which may assert in release builds; access error_ directly
++                std::fprintf(stderr, "%s\n", error_.what());
+             }
+         }
+     };
+diff --git a/src/utils/utils.hpp b/src/utils/utils.hpp
+index 4bfa695..48f897a 100644
+--- a/src/utils/utils.hpp
++++ b/src/utils/utils.hpp
+@@ -35,7 +35,7 @@ namespace detail {
+     }
+ 
+     template<typename C>
+-    std::string join(const C& container, const std::string& delim) {
++    inline std::string join(const C& container, const std::string& delim) {
+         auto iter = std::begin(container);
+         auto end = std::end(container);
+         std::string str;

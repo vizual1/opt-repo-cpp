@@ -1,0 +1,55 @@
+diff --git a/src/PreSieve.cpp b/src/PreSieve.cpp
+index 8828a34b..53ec3bab 100644
+--- a/src/PreSieve.cpp
++++ b/src/PreSieve.cpp
+@@ -35,6 +35,16 @@
+ using std::copy_n;
+ using std::size_t;
+ 
++#ifndef RESTRICT
++# if defined(__GNUC__) || defined(__clang__)
++#  define RESTRICT __restrict__
++# elif defined(_MSC_VER)
++#  define RESTRICT __restrict
++# else
++#  define RESTRICT
++# endif
++#endif
++
+ namespace {
+ 
+ /// Pre-sieve with the primes <= 13
+@@ -152,16 +162,25 @@ const std::array<std::vector<uint64_t>, 4> bufferPrimes =
+   { 41, 43, 53 }      // 93 KiB
+ }};
+ 
+-void andBuffers(const uint8_t* buf1,
+-                const uint8_t* buf2,
+-                const uint8_t* buf3,
+-                const uint8_t* buf4,
+-                uint8_t* output,
++inline void andBuffers(const uint8_t* RESTRICT buf1,
++                const uint8_t* RESTRICT buf2,
++                const uint8_t* RESTRICT buf3,
++                const uint8_t* RESTRICT buf4,
++                uint8_t* RESTRICT output,
+                 size_t bytes)
+ {
+-  // This loop should be auto-vectorized
+-  for (size_t i = 0; i < bytes; i++)
+-    output[i] = buf1[i] & buf2[i] & buf3[i] & buf4[i];
++  // Use pointer arithmetic with restrict-qualified pointers to help the
++  // compiler optimize and vectorize the loop (better assembly with __restrict__).
++  const uint8_t* RESTRICT p1 = buf1;
++  const uint8_t* RESTRICT p2 = buf2;
++  const uint8_t* RESTRICT p3 = buf3;
++  const uint8_t* RESTRICT p4 = buf4;
++  uint8_t* RESTRICT out = output;
++
++  // Tight loop with pointer increments — avoids potential extra addressing math
++  // from indexing and gives the optimizer clearer aliasing information.
++  for (size_t i = 0; i < bytes; ++i)
++    *out++ = *p1++ & *p2++ & *p3++ & *p4++;
+ }
+ 
+ } // namespace

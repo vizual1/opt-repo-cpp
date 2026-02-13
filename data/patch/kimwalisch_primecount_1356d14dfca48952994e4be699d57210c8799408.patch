@@ -1,0 +1,39 @@
+diff --git a/src/P2.cpp b/src/P2.cpp
+index 5569ca3a..2002d9d2 100644
+--- a/src/P2.cpp
++++ b/src/P2.cpp
+@@ -136,7 +136,7 @@ T P2_OpenMP(T x, int64_t y, int threads)
+   {
+     int64_t thread_dist = loadBalancer.get_thread_dist(low);
+ 
+-    #pragma omp parallel for num_threads(threads)
++    #pragma omp parallel for num_threads(threads) schedule(dynamic, 1)
+     for (int64_t i = 0; i < threads; i++)
+       res[i] = P2_thread(x, y, z, low, i, thread_dist);
+ 
+diff --git a/src/P3.cpp b/src/P3.cpp
+index 14445cee..569ffd9b 100644
+--- a/src/P3.cpp
++++ b/src/P3.cpp
+@@ -45,7 +45,7 @@ int64_t P3(int64_t x, int64_t y, int threads)
+ 
+     threads = ideal_num_threads(threads, pi_x13, 100);
+ 
+-    #pragma omp parallel for num_threads(threads) schedule(dynamic) reduction(+: sum)
++    #pragma omp parallel for num_threads(threads) schedule(dynamic, 1) reduction(+: sum)
+     for (int64_t i = a + 1; i <= pi_x13; i++)
+     {
+       int64_t xi = x / primes[i];
+diff --git a/src/gourdon/B.cpp b/src/gourdon/B.cpp
+index fbc2ad9b..be36403f 100644
+--- a/src/gourdon/B.cpp
++++ b/src/gourdon/B.cpp
+@@ -123,7 +123,7 @@ T B_OpenMP(T x, int64_t y, int threads)
+   {
+     int64_t thread_dist = loadBalancer.get_thread_dist(low);
+ 
+-    #pragma omp parallel for num_threads(threads)
++    #pragma omp parallel for num_threads(threads) schedule(dynamic, 1)
+     for (int64_t i = 0; i < threads; i++)
+       res[i] = B_thread(x, y, z, low, i, thread_dist);
+ 

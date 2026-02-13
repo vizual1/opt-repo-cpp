@@ -1,0 +1,71 @@
+diff --git a/src/quick-lint-js/fe/keyword-lexer.h b/src/quick-lint-js/fe/keyword-lexer.h
+index c66fdabb..b6d29308 100644
+--- a/src/quick-lint-js/fe/keyword-lexer.h
++++ b/src/quick-lint-js/fe/keyword-lexer.h
+@@ -72,19 +72,14 @@ struct Keyword_Lexer {
+ 
+   // Step 2 of the hash function for Lexer::identifier_token_type().
+   static Hash_Type mix(Selection_Type selection, Seed_Type seed) {
+-    // This hash function executes quickly, but might produce a lot of
+-    // collisions. Collisions are fine, though; collisions just slow down table
+-    // generation, not run-time.
+-
+-    // Pierre L’Ecuyer. 1999. Tables of linear congruential generators of
+-    // different sizes and good lattice structure. Mathematics of Computation of
+-    // the American Mathematical Society 68, 225 (1999), 249–260.
+-    //
+-    // https://www.ams.org/journals/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf
+-    std::uint64_t magic = 4292484099903637661ULL;
+-
++    // A compact, fast 64-bit mixer inspired by splitmix-like permutations.
++    // Keep the function simple to help performance across platforms.
+     std::uint64_t x = static_cast<std::uint64_t>(selection) ^ seed;
+-    return static_cast<std::uint32_t>(multiply_u64_get_top_64(x, magic));
++    x += 0x9e3779b97f4a7c15ULL;
++    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
++    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
++    x = x ^ (x >> 31);
++    return static_cast<std::uint32_t>(x & 0xffffffffu);
+   }
+ 
+   // Compare two strings, 'a' and 'b', each with size 'size'.
+diff --git a/src/quick-lint-js/fe/lex-keyword-generated.cpp b/src/quick-lint-js/fe/lex-keyword-generated.cpp
+index 43973d82..1f282831 100644
+--- a/src/quick-lint-js/fe/lex-keyword-generated.cpp
++++ b/src/quick-lint-js/fe/lex-keyword-generated.cpp
+@@ -14,7 +14,7 @@
+ 
+ namespace quick_lint_js {
+ namespace {
+-constexpr std::size_t hash_table_size = 512LLU;
++constexpr std::size_t hash_table_size = 256LLU;
+ constexpr std::size_t string_table_size = 454LLU;
+ 
+ constexpr Keyword_Lexer::Seed_Type hash_seed = 2166215926LLU;
+@@ -638,7 +638,8 @@ Token_Type Lexer::identifier_token_type(String8_View identifier) {
+       Keyword_Lexer::select(identifier.data(), identifier_size);
+   Keyword_Lexer::Hash_Type hash = Keyword_Lexer::mix(selection, hash_seed);
+   Keyword_Lexer::Hash_Type index =
+-      static_cast<Keyword_Lexer::Hash_Type>(hash % hash_table_size);
++      static_cast<Keyword_Lexer::Hash_Type>(
++          hash & static_cast<Keyword_Lexer::Hash_Type>(hash_table_size - 1));
+ 
+   const Entry& e = tables.hash_table[index];
+   const Char8* e_key = &tables.string_table[e.key_index];
+diff --git a/tools/generate-lex-keyword.cpp b/tools/generate-lex-keyword.cpp
+index 3357da37..9121c0fb 100644
+--- a/tools/generate-lex-keyword.cpp
++++ b/tools/generate-lex-keyword.cpp
+@@ -156,8 +156,10 @@ struct Hash_Table {
+           Keyword_Lexer::select(key.data(), key.size());
+       Keyword_Lexer::Hash_Type hash =
+           Keyword_Lexer::mix(selection, this->seed.get());
+-      Keyword_Lexer::Hash_Type index =
+-          static_cast<Keyword_Lexer::Hash_Type>(hash % this->entries.size());
++      // Use bitmasking instead of modulo. `entries.size()` is always a power of
++      // two, so (size - 1) is a valid mask.
++      Keyword_Lexer::Hash_Type index = static_cast<Keyword_Lexer::Hash_Type>(
++          hash & (static_cast<Keyword_Lexer::Hash_Type>(this->entries.size() - 1)));
+       Table_Entry& entry = this->entries[index];
+       if (entry.is_taken(this->current_generation)) {
+         return false;

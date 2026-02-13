@@ -1,0 +1,13 @@
+diff --git a/hwy/contrib/sort/shared-inl.h b/hwy/contrib/sort/shared-inl.h
+index 8f60613e..f08fcacb 100644
+--- a/hwy/contrib/sort/shared-inl.h
++++ b/hwy/contrib/sort/shared-inl.h
+@@ -89,7 +89,7 @@ namespace HWY_NAMESPACE {
+ 
+ // Default tag / vector width selector.
+ // TODO(janwas): enable once LMUL < 1 is supported.
+-#if HWY_TARGET == HWY_RVV && 0
++#if HWY_TARGET == HWY_RVV
+ template <typename T>
+ using SortTag = ScalableTag<T, -1>;
+ #else

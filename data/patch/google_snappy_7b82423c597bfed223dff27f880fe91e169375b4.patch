@@ -1,0 +1,32 @@
+diff --git a/snappy.cc b/snappy.cc
+index 250e543..77a92ca 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -1079,10 +1079,11 @@ void MemCopy64(char* dst, const void* src, size_t size) {
+ }
+ 
+ void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {
+-  // TODO: Switch to [[maybe_unused]] when we can assume C++17.
+-  (void)dst;
+-  (void)src;
+-  (void)size;
++  // Convert the integer destination back to a pointer and delegate to the
++  // pointer-based implementation. The pointer-based overload implements
++  // optimized non-overlapping copies (and falls back to memmove when needed).
++  char* dstp = reinterpret_cast<char*>(dst);
++  MemCopy64(dstp, src, size);
+ }
+ 
+ SNAPPY_ATTRIBUTE_ALWAYS_INLINE
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

@@ -1,0 +1,25 @@
+diff --git a/include/xsimd/arch/xsimd_sse3.hpp b/include/xsimd/arch/xsimd_sse3.hpp
+index 199189a..107e80e 100644
+--- a/include/xsimd/arch/xsimd_sse3.hpp
++++ b/include/xsimd/arch/xsimd_sse3.hpp
+@@ -22,12 +22,17 @@ namespace xsimd {
+ 
+     // haddp
+     template<class A> batch<float, A> haddp(batch<float, A> const* row, requires_arch<sse3>) {
+-      return _mm_hadd_ps(_mm_hadd_ps(row[0], row[1]),
+-                              _mm_hadd_ps(row[2], row[3]));
++      __m128 r0 = _mm_castsi128_ps(_mm_lddqu_si128((const __m128i*) &row[0]));
++      __m128 r1 = _mm_castsi128_ps(_mm_lddqu_si128((const __m128i*) &row[1]));
++      __m128 r2 = _mm_castsi128_ps(_mm_lddqu_si128((const __m128i*) &row[2]));
++      __m128 r3 = _mm_castsi128_ps(_mm_lddqu_si128((const __m128i*) &row[3]));
++      return _mm_hadd_ps(_mm_hadd_ps(r0, r1), _mm_hadd_ps(r2, r3));
+     }
+     template <class A>
+     batch<double, A> haddp(batch<double, A> const *row, requires_arch<sse3>) {
+-      return _mm_hadd_pd(row[0], row[1]);
++      __m128d r0 = _mm_castsi128_pd(_mm_lddqu_si128((const __m128i*) &row[0]));
++      __m128d r1 = _mm_castsi128_pd(_mm_lddqu_si128((const __m128i*) &row[1]));
++      return _mm_hadd_pd(r0, r1);
+     }
+ 
+   }

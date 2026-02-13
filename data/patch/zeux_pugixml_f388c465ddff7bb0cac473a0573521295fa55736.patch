@@ -1,0 +1,13 @@
+diff --git a/src/pugixml.cpp b/src/pugixml.cpp
+index 60b55da..448b051 100644
+--- a/src/pugixml.cpp
++++ b/src/pugixml.cpp
+@@ -1275,6 +1275,8 @@ PUGI__NS_BEGIN
+ 		xml_node_struct* parent = node->parent;
+ 
+ 		child->parent = parent;
++			xml_node_struct* next = node->next_sibling;
++
+ 
+ 		if (node->next_sibling)
+ 			node->next_sibling->prev_sibling_c = child;

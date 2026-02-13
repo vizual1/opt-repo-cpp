@@ -1,0 +1,212 @@
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index 7902bd33..80492271 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -4059,12 +4059,12 @@ HWY_INLINE T ExtractLane(const Vec128<T, N> v) {
+ template <size_t kLane, typename T, size_t N, HWY_IF_T_SIZE(T, 4)>
+ HWY_INLINE T ExtractLane(const Vec128<T, N> v) {
+   static_assert(kLane < N, "Lane index out of bounds");
+-#if HWY_TARGET >= HWY_SSSE3
++#if HWY_TARGET >= HWY_SSE4
++  return static_cast<T>(_mm_extract_epi32(v.raw, kLane));
++#else
+   alignas(16) T lanes[4];
+   Store(v, DFromV<decltype(v)>(), lanes);
+   return lanes[kLane];
+-#else
+-  return static_cast<T>(_mm_extract_epi32(v.raw, kLane));
+ #endif
+ }
+ 
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index a54c8a79..9e746227 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -3011,6 +3011,84 @@ template <typename T>
+ HWY_API T ExtractLane(const Vec256<T> v, size_t i) {
+   const DFromV<decltype(v)> d;
+   HWY_DASSERT(i < Lanes(d));
++#if !HWY_IS_DEBUG_BUILD && HWY_COMPILER_GCC  // includes clang
++  if (__builtin_constant_p(i)) {
++    constexpr int k = 0; (void)k; // Silence unused warning when branches not used
++    if constexpr (sizeof(T) == 1) {
++      switch (i) {
++        case 0: return detail::ExtractLane<0>(LowerHalf(v));
++        case 1: return detail::ExtractLane<1>(LowerHalf(v));
++        case 2: return detail::ExtractLane<2>(LowerHalf(v));
++        case 3: return detail::ExtractLane<3>(LowerHalf(v));
++        case 4: return detail::ExtractLane<4>(LowerHalf(v));
++        case 5: return detail::ExtractLane<5>(LowerHalf(v));
++        case 6: return detail::ExtractLane<6>(LowerHalf(v));
++        case 7: return detail::ExtractLane<7>(LowerHalf(v));
++        case 8: return detail::ExtractLane<8>(LowerHalf(v));
++        case 9: return detail::ExtractLane<9>(LowerHalf(v));
++        case 10: return detail::ExtractLane<10>(LowerHalf(v));
++        case 11: return detail::ExtractLane<11>(LowerHalf(v));
++        case 12: return detail::ExtractLane<12>(LowerHalf(v));
++        case 13: return detail::ExtractLane<13>(LowerHalf(v));
++        case 14: return detail::ExtractLane<14>(LowerHalf(v));
++        case 15: return detail::ExtractLane<15>(LowerHalf(v));
++        case 16: return detail::ExtractLane<0>(UpperHalf(v));
++        case 17: return detail::ExtractLane<1>(UpperHalf(v));
++        case 18: return detail::ExtractLane<2>(UpperHalf(v));
++        case 19: return detail::ExtractLane<3>(UpperHalf(v));
++        case 20: return detail::ExtractLane<4>(UpperHalf(v));
++        case 21: return detail::ExtractLane<5>(UpperHalf(v));
++        case 22: return detail::ExtractLane<6>(UpperHalf(v));
++        case 23: return detail::ExtractLane<7>(UpperHalf(v));
++        case 24: return detail::ExtractLane<8>(UpperHalf(v));
++        case 25: return detail::ExtractLane<9>(UpperHalf(v));
++        case 26: return detail::ExtractLane<10>(UpperHalf(v));
++        case 27: return detail::ExtractLane<11>(UpperHalf(v));
++        case 28: return detail::ExtractLane<12>(UpperHalf(v));
++        case 29: return detail::ExtractLane<13>(UpperHalf(v));
++        case 30: return detail::ExtractLane<14>(UpperHalf(v));
++        case 31: return detail::ExtractLane<15>(UpperHalf(v));
++      }
++    } else if constexpr (sizeof(T) == 2) {
++      switch (i) {
++        case 0: return detail::ExtractLane<0>(LowerHalf(v));
++        case 1: return detail::ExtractLane<1>(LowerHalf(v));
++        case 2: return detail::ExtractLane<2>(LowerHalf(v));
++        case 3: return detail::ExtractLane<3>(LowerHalf(v));
++        case 4: return detail::ExtractLane<4>(LowerHalf(v));
++        case 5: return detail::ExtractLane<5>(LowerHalf(v));
++        case 6: return detail::ExtractLane<6>(LowerHalf(v));
++        case 7: return detail::ExtractLane<7>(LowerHalf(v));
++        case 8: return detail::ExtractLane<0>(UpperHalf(v));
++        case 9: return detail::ExtractLane<1>(UpperHalf(v));
++        case 10: return detail::ExtractLane<2>(UpperHalf(v));
++        case 11: return detail::ExtractLane<3>(UpperHalf(v));
++        case 12: return detail::ExtractLane<4>(UpperHalf(v));
++        case 13: return detail::ExtractLane<5>(UpperHalf(v));
++        case 14: return detail::ExtractLane<6>(UpperHalf(v));
++        case 15: return detail::ExtractLane<7>(UpperHalf(v));
++      }
++    } else if constexpr (sizeof(T) == 4) {
++      switch (i) {
++        case 0: return detail::ExtractLane<0>(LowerHalf(v));
++        case 1: return detail::ExtractLane<1>(LowerHalf(v));
++        case 2: return detail::ExtractLane<2>(LowerHalf(v));
++        case 3: return detail::ExtractLane<3>(LowerHalf(v));
++        case 4: return detail::ExtractLane<0>(UpperHalf(v));
++        case 5: return detail::ExtractLane<1>(UpperHalf(v));
++        case 6: return detail::ExtractLane<2>(UpperHalf(v));
++        case 7: return detail::ExtractLane<3>(UpperHalf(v));
++      }
++    } else if constexpr (sizeof(T) == 8) {
++      switch (i) {
++        case 0: return detail::ExtractLane<0>(LowerHalf(v));
++        case 1: return detail::ExtractLane<1>(LowerHalf(v));
++        case 2: return detail::ExtractLane<0>(UpperHalf(v));
++        case 3: return detail::ExtractLane<1>(UpperHalf(v));
++      }
++    }
++  }
++#endif
+   alignas(32) T lanes[32 / sizeof(T)];
+   Store(v, d, lanes);
+   return lanes[i];
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index 6aadc768..135bd512 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -2565,11 +2565,93 @@ template <typename T>
+ HWY_API T ExtractLane(const Vec512<T> v, size_t i) {
+   const DFromV<decltype(v)> d;
+   HWY_DASSERT(i < Lanes(d));
+-  alignas(64) T lanes[64 / sizeof(T)];
+-  Store(v, d, lanes);
+-  return lanes[i];
+-}
+-
++#if !HWY_IS_DEBUG_BUILD && HWY_COMPILER_GCC  // includes clang
++  if (__builtin_constant_p(i)) {
++    // For constant indices, route to ExtractLane on appropriate 256-bit half
++    if constexpr (sizeof(T) == 1) {
++      switch (i) {
++        case 0: return detail::ExtractLane<0>(LowerHalf(v));
++        case 1: return detail::ExtractLane<1>(LowerHalf(v));
++        case 2: return detail::ExtractLane<2>(LowerHalf(v));
++        case 3: return detail::ExtractLane<3>(LowerHalf(v));
++        case 4: return detail::ExtractLane<4>(LowerHalf(v));
++        case 5: return detail::ExtractLane<5>(LowerHalf(v));
++        case 6: return detail::ExtractLane<6>(LowerHalf(v));
++        case 7: return detail::ExtractLane<7>(LowerHalf(v));
++        case 8: return detail::ExtractLane<8>(LowerHalf(v));
++        case 9: return detail::ExtractLane<9>(LowerHalf(v));
++        case 10: return detail::ExtractLane<10>(LowerHalf(v));
++        case 11: return detail::ExtractLane<11>(LowerHalf(v));
++        case 12: return detail::ExtractLane<12>(LowerHalf(v));
++        case 13: return detail::ExtractLane<13>(LowerHalf(v));
++        case 14: return detail::ExtractLane<14>(LowerHalf(v));
++        case 15: return detail::ExtractLane<15>(LowerHalf(v));
++        case 16: return detail::ExtractLane<0>(UpperHalf(v));
++        case 17: return detail::ExtractLane<1>(UpperHalf(v));
++        case 18: return detail::ExtractLane<2>(UpperHalf(v));
++        case 19: return detail::ExtractLane<3>(UpperHalf(v));
++        case 20: return detail::ExtractLane<4>(UpperHalf(v));
++        case 21: return detail::ExtractLane<5>(UpperHalf(v));
++        case 22: return detail::ExtractLane<6>(UpperHalf(v));
++        case 23: return detail::ExtractLane<7>(UpperHalf(v));
++        case 24: return detail::ExtractLane<8>(UpperHalf(v));
++        case 25: return detail::ExtractLane<9>(UpperHalf(v));
++        case 26: return detail::ExtractLane<10>(UpperHalf(v));
++        case 27: return detail::ExtractLane<11>(UpperHalf(v));
++        case 28: return detail::ExtractLane<12>(UpperHalf(v));
++        case 29: return detail::ExtractLane<13>(UpperHalf(v));
++        case 30: return detail::ExtractLane<14>(UpperHalf(v));
++        case 31: return detail::ExtractLane<15>(UpperHalf(v));
++        case 32: return detail::ExtractLane<0>(ExtractBlock<2>(v));
++        case 33: return detail::ExtractLane<1>(ExtractBlock<2>(v));
++        case 34: return detail::ExtractLane<2>(ExtractBlock<2>(v));
++        case 35: return detail::ExtractLane<3>(ExtractBlock<2>(v));
++        case 36: return detail::ExtractLane<4>(ExtractBlock<2>(v));
++        case 37: return detail::ExtractLane<5>(ExtractBlock<2>(v));
++        case 38: return detail::ExtractLane<6>(ExtractBlock<2>(v));
++        case 39: return detail::ExtractLane<7>(ExtractBlock<2>(v));
++        case 40: return detail::ExtractLane<8>(ExtractBlock<2>(v));
++        case 41: return detail::ExtractLane<9>(ExtractBlock<2>(v));
++        case 42: return detail::ExtractLane<10>(ExtractBlock<2>(v));
++        case 43: return detail::ExtractLane<11>(ExtractBlock<2>(v));
++        case 44: return detail::ExtractLane<12>(ExtractBlock<2>(v));
++        case 45: return detail::ExtractLane<13>(ExtractBlock<2>(v));
++        case 46: return detail::ExtractLane<14>(ExtractBlock<2>(v));
++        case 47: return detail::ExtractLane<15>(ExtractBlock<2>(v));
++        case 48: return detail::ExtractLane<0>(ExtractBlock<3>(v));
++        case 49: return detail::ExtractLane<1>(ExtractBlock<3>(v));
++        case 50: return detail::ExtractLane<2>(ExtractBlock<3>(v));
++        case 51: return detail::ExtractLane<3>(ExtractBlock<3>(v));
++        case 52: return detail::ExtractLane<4>(ExtractBlock<3>(v));
++        case 53: return detail::ExtractLane<5>(ExtractBlock<3>(v));
++        case 54: return detail::ExtractLane<6>(ExtractBlock<3>(v));
++        case 55: return detail::ExtractLane<7>(ExtractBlock<3>(v));
++        case 56: return detail::ExtractLane<8>(ExtractBlock<3>(v));
++        case 57: return detail::ExtractLane<9>(ExtractBlock<3>(v));
++        case 58: return detail::ExtractLane<10>(ExtractBlock<3>(v));
++        case 59: return detail::ExtractLane<11>(ExtractBlock<3>(v));
++        case 60: return detail::ExtractLane<12>(ExtractBlock<3>(v));
++        case 61: return detail::ExtractLane<13>(ExtractBlock<3>(v));
++        case 62: return detail::ExtractLane<14>(ExtractBlock<3>(v));
++        case 63: return detail::ExtractLane<15>(ExtractBlock<3>(v));
++      }
++    } else if constexpr (sizeof(T) == 2) {
++      switch (i) {
++        case 0: return detail::ExtractLane<0>(LowerHalf(v));
++        case 1: return detail::ExtractLane<1>(LowerHalf(v));
++        case 2: return detail::ExtractLane<2>(LowerHalf(v));
++        case 3: return detail::ExtractLane<3>(LowerHalf(v));
++        case 4: return detail::ExtractLane<4>(LowerHalf(v));
++        case 5: return detail::ExtractLane<5>(LowerHalf(v));
++        case 6: return detail::ExtractLane<6>(LowerHalf(v));
++        case 7: return detail::ExtractLane<7>(LowerHalf(v));
++        case 8: return detail::ExtractLane<0>(UpperHalf(v));
++        case 9: return detail::ExtractLane<1>(UpperHalf(v));
++        case 10: return detail::ExtractLane<2>(UpperHalf(v));
++        case 11: return detail::ExtractLane<3>(UpperHalf(v));
++        case 12: return detail::ExtractLane<4>(UpperHalf(v));
++        case 13: return detail::ExtractLane<5>(UpperHalf(v));
++{
+ // ------------------------------ ExtractBlock
+ template <int kBlockIdx, class T, hwy::EnableIf<(kBlockIdx <= 1)>* = nullptr>
+ HWY_API Vec128<T> ExtractBlock(Vec512<T> v) {

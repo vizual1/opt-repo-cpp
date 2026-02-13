@@ -1,0 +1,67 @@
+diff --git a/hwy/base.h b/hwy/base.h
+index 937c0a5b..69051b9c 100644
+--- a/hwy/base.h
++++ b/hwy/base.h
+@@ -128,6 +128,9 @@
+ 
+ #define HWY_API static HWY_INLINE HWY_FLATTEN HWY_MAYBE_UNUSED
+ 
++// Modified by performance patch. No additional symbols are required here.
++
++
+ #define HWY_CONCAT_IMPL(a, b) a##b
+ #define HWY_CONCAT(a, b) HWY_CONCAT_IMPL(a, b)
+ 
+diff --git a/hwy/contrib/sort/traits-inl.h b/hwy/contrib/sort/traits-inl.h
+index 79e9f2a5..236be04f 100644
+--- a/hwy/contrib/sort/traits-inl.h
++++ b/hwy/contrib/sort/traits-inl.h
+@@ -34,6 +34,11 @@ namespace hwy {
+ namespace HWY_NAMESPACE {
+ namespace detail {
+ 
++// Forward declaration for sample-equality fast-path used by vqsort.
++template <class D, class Traits, typename T>
++HWY_INLINE bool SamplesAllEqual(D d, Traits st, T* HWY_RESTRICT buf);
++
++
+ #if VQSORT_ENABLED || HWY_IDE
+ 
+ // Highway does not provide a lane type for 128-bit keys, so we use uint64_t
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index 0491fb33..3cedb895 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -656,6 +656,19 @@ HWY_INLINE void SortSamples(D d, Traits st, T* HWY_RESTRICT buf) {
+ #endif
+ }
+ 
++// Fast check whether the drawn samples are all equal without sorting them.
++// This avoids the cost of SortSamples in the common case of many-equal inputs.
++template <class D, class Traits, typename T>
++HWY_INLINE bool SamplesAllEqual(D /*d*/, Traits st, T* HWY_RESTRICT buf) {
++  constexpr size_t kSampleLanes = 3 * 64 / sizeof(T);
++  // Use the Traits-provided LanesPerKey() member function where available.
++  const size_t lanes_per_key = st.LanesPerKey();
++  for (size_t i = lanes_per_key; i < kSampleLanes; i += lanes_per_key) {
++    if (!st.Equal1(buf, buf + i)) return false;
++  }
++  return true;
++}
++
+ // ------------------------------ Pivot selection
+ 
+ enum class PivotResult {
+@@ -933,6 +946,12 @@ HWY_NOINLINE Vec<D> ChoosePivot(D d, Traits st, T* HWY_RESTRICT keys,
+                                 const size_t num, T* HWY_RESTRICT buf,
+                                 Generator& rng, PivotResult& result) {
+   DrawSamples(d, st, keys, num, buf, rng);
++
++  // Fast path: if all samples are equal, no need to sort them.
++  if (SamplesAllEqual(d, st, buf)) {
++    return ChoosePivotForEqualSamples(d, st, keys, num, buf, result);
++  }
++
+   SortSamples(d, st, buf);
+ 
+   if (HWY_UNLIKELY(SortedSampleEqual(st, buf))) {

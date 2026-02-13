@@ -1,0 +1,107 @@
+diff --git a/include/primesieve/Erat.hpp b/include/primesieve/Erat.hpp
+index 279b312a..48b7e29b 100644
+--- a/include/primesieve/Erat.hpp
++++ b/include/primesieve/Erat.hpp
+@@ -148,6 +148,23 @@ inline uint64_t Erat::nextPrime(uint64_t bits, uint64_t low)
+ #endif
+ }
+ 
++// Extract the lowest set bit, clear it and return the corresponding prime.
++inline uint64_t extractPrimeAndClear(uint64_t &bits, uint64_t low)
++{
++#if defined(ctz64)
++  auto bitIndex = ctz64(bits);
++  uint64_t bitValue = bitValues[bitIndex];
++  bits &= bits - 1; // clear lowest set bit
++  return low + bitValue;
++#else
++  uint64_t debruijn = 0x3F08A4C6ACB9DBDull;
++  uint64_t hash = ((bits ^ (bits - 1)) * debruijn) >> 58;
++  uint64_t bitValue = bruijnBitValues[hash];
++  bits &= bits - 1; // clear lowest set bit
++  return low + bitValue;
++#endif
++}
++
+ inline void Erat::addSievingPrime(uint64_t prime)
+ {
+        if (prime > maxEratMedium_)   eratBig_.addSievingPrime(prime, segmentLow_);
+diff --git a/include/primesieve/forward.hpp b/include/primesieve/forward.hpp
+index a9662c96..76052b95 100644
+--- a/include/primesieve/forward.hpp
++++ b/include/primesieve/forward.hpp
+@@ -25,6 +25,9 @@ int get_sieve_size();
+ uint64_t get_max_stop();
+ uint64_t popcount(const uint64_t* array, uint64_t size);
+ 
++// Extract the lowest set bit, clear it and return the corresponding prime.
++uint64_t extractPrimeAndClear(uint64_t &bits, uint64_t low);
++
+ } // namespace
+ 
+ #endif
+diff --git a/src/PrimeGenerator.cpp b/src/PrimeGenerator.cpp
+index ae28861b..a5bcd9ac 100644
+--- a/src/PrimeGenerator.cpp
++++ b/src/PrimeGenerator.cpp
+@@ -287,8 +287,8 @@ void PrimeGenerator::fill(std::vector<uint64_t>& primes)
+     {
+       uint64_t bits = littleendian_cast<uint64_t>(&sieve_[sieveIdx_]);
+ 
+-      for (; bits != 0; bits &= bits - 1)
+-        primes.push_back(nextPrime(bits, low_));
++      while (bits)
++        primes.push_back(extractPrimeAndClear(bits, low_));
+ 
+       low_ += 8 * 30;
+       sieveIdx_ += 8;
+@@ -476,8 +476,8 @@ void PrimeGenerator::fill(std::vector<uint64_t>& primes,
+     {
+       uint64_t bits = littleendian_cast<uint64_t>(&sieve[sieveIdx]);
+ 
+-      for (; bits != 0; bits &= bits - 1)
+-        primes[i++] = nextPrime(bits, low);
++      while (bits)
++        primes[i++] = extractPrimeAndClear(bits, low);
+ 
+       low += 8 * 30;
+       sieveIdx += 8;
+diff --git a/src/PrintPrimes.cpp b/src/PrintPrimes.cpp
+index 3590a843..128e7052 100644
+--- a/src/PrintPrimes.cpp
++++ b/src/PrintPrimes.cpp
+@@ -156,8 +156,8 @@ void PrintPrimes::printPrimes() const
+     for (; i < size; i += 8)
+     {
+       uint64_t bits = littleendian_cast<uint64_t>(&sieve_[i]);
+-      for (; bits != 0; bits &= bits - 1)
+-        primes << nextPrime(bits, low) << '\n';
++      while (bits)
++        primes << extractPrimeAndClear(bits, low) << '\n';
+ 
+       low += 8 * 30;
+     }
+@@ -186,9 +186,9 @@ void PrintPrimes::printkTuplets() const
+         kTuplets << "(";
+         uint64_t bits = *bitmask;
+ 
+-        for (; bits != 0; bits &= bits - 1)
++        while (bits)
+         {
+-          kTuplets << nextPrime(bits, low);
++          kTuplets << extractPrimeAndClear(bits, low);
+           bool hasNext = (bits & (bits - 1)) != 0;
+           kTuplets << (hasNext ? ", " : ")\n");
+         }
+diff --git a/src/popcount.cpp b/src/popcount.cpp
+index 1862b3eb..74909850 100644
+--- a/src/popcount.cpp
++++ b/src/popcount.cpp
+@@ -21,6 +21,7 @@
+ ///
+ 
+ #include <stdint.h>
++#include <primesieve/popcnt.hpp>
+ 
+ namespace {
+ 

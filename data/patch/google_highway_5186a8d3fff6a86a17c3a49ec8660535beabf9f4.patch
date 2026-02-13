@@ -1,0 +1,49 @@
+diff --git a/hwy/ops/ppc_vsx-inl.h b/hwy/ops/ppc_vsx-inl.h
+index 09278b0b..0454b792 100644
+--- a/hwy/ops/ppc_vsx-inl.h
++++ b/hwy/ops/ppc_vsx-inl.h
+@@ -3763,6 +3763,44 @@ HWY_API size_t CountTrue(D /* tag */, MFromD<D> mask) {
+   return PopCount(detail::BitsFromMask(mask));
+ }
+ 
++// Find*True helpers: for small vectors (<=16 bytes) use 32-bit helpers to
++// improve codegen on PPC9/PPC10. Fall back to 64-bit helpers for larger
++// vectors.
++
++template <class D, HWY_IF_V_SIZE_LE_D(D, 16)>
++HWY_API size_t FindKnownFirstTrue(D d, MFromD<D> mask) {
++  constexpr size_t kN = MaxLanes(d);
++  const uint32_t mask_bits = static_cast<uint32_t>(detail::BitsFromMask(mask)) &
++                             ((1u << kN) - 1u);
++  return Num0BitsBelowLS1Bit_Nonzero32(mask_bits);
++}
++
++template <class D, HWY_IF_V_SIZE_LE_D(D, 16)>
++HWY_API intptr_t FindFirstTrue(D d, MFromD<D> mask) {
++  constexpr size_t kN = MaxLanes(d);
++  const uint32_t mask_bits = static_cast<uint32_t>(detail::BitsFromMask(mask)) &
++                             ((1u << kN) - 1u);
++  return mask_bits ? intptr_t(Num0BitsBelowLS1Bit_Nonzero32(mask_bits)) : -1;
++}
++
++template <class D, HWY_IF_V_SIZE_LE_D(D, 16)>
++HWY_API size_t FindKnownLastTrue(D d, MFromD<D> mask) {
++  constexpr size_t kN = MaxLanes(d);
++  const uint32_t mask_bits = static_cast<uint32_t>(detail::BitsFromMask(mask)) &
++                             ((1u << kN) - 1u);
++  return 31 - Num0BitsAboveMS1Bit_Nonzero32(mask_bits);
++}
++
++template <class D, HWY_IF_V_SIZE_LE_D(D, 16)>
++HWY_API intptr_t FindLastTrue(D d, MFromD<D> mask) {
++  constexpr size_t kN = MaxLanes(d);
++  const uint32_t mask_bits = static_cast<uint32_t>(detail::BitsFromMask(mask)) &
++                             ((1u << kN) - 1u);
++  return mask_bits ? intptr_t(31 - Num0BitsAboveMS1Bit_Nonzero32(mask_bits))
++                   : -1;
++}
++
++// Fallbacks for larger vectors use 64-bit helpers (existing behavior).
+ template <class D>
+ HWY_API size_t FindKnownFirstTrue(D /* tag */, MFromD<D> mask) {
+   return Num0BitsBelowLS1Bit_Nonzero64(detail::BitsFromMask(mask));

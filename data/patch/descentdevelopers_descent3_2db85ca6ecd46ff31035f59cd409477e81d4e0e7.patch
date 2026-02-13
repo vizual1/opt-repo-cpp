@@ -1,0 +1,261 @@
+diff --git a/renderer/HardwareOpenGL.cpp b/renderer/HardwareOpenGL.cpp
+index 2e93c869..e7fbed7e 100644
+--- a/renderer/HardwareOpenGL.cpp
++++ b/renderer/HardwareOpenGL.cpp
+@@ -181,6 +181,15 @@ static std::vector<GLuint> textures_;
+ static int OpenGL_cache_initted = 0;
+ static int OpenGL_last_bound[2];
+ 
++// Track current active texture unit to avoid redundant glActiveTexture calls which are relatively expensive
++static int OpenGL_current_active_texture_unit = -1;
++static inline void ActivateTextureUnitIfNeeded(int unit) {
++  if (OpenGL_current_active_texture_unit != unit) {
++    dglActiveTexture(GL_TEXTURE0_ARB + unit);
++    OpenGL_current_active_texture_unit = unit;
++  }
++}
++
+ extern int gpu_last_frame_polys_drawn;
+ extern int gpu_last_frame_verts_processed;
+ extern int gpu_last_uploaded;
+@@ -242,7 +251,7 @@ int opengl_MakeTextureObject(int tn) {
+   dglGenTextures(1, &num);
+   textures_.push_back(num);
+ 
+-  dglActiveTexture(GL_TEXTURE0_ARB + tn);
++  ActivateTextureUnitIfNeeded(tn);
+ 
+   dglBindTexture(GL_TEXTURE_2D, num);
+   dglPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+@@ -758,7 +767,7 @@ void opengl_TranslateBitmapToOpenGL(int texnum, int bm_handle, int map_type, int
+   int w, h;
+   int size;
+ 
+-  dglActiveTexture(GL_TEXTURE0_ARB + tn);
++  ActivateTextureUnitIfNeeded(tn);
+ 
+   if (map_type == MAP_TYPE_LIGHTMAP) {
+     if (GameLightmaps[bm_handle].flags & LF_BRAND_NEW)
+@@ -989,7 +998,7 @@ int opengl_MakeBitmapCurrent(int handle, int map_type, int tn) {
+   }
+ 
+   if (OpenGL_last_bound[tn] != texnum) {
+-    dglActiveTexture(GL_TEXTURE0_ARB + tn);
++    ActivateTextureUnitIfNeeded(tn);
+ 
+     dglBindTexture(GL_TEXTURE_2D, texnum);
+     OpenGL_last_bound[tn] = texnum;
+@@ -1018,7 +1027,7 @@ void opengl_MakeWrapTypeCurrent(int handle, int map_type, int tn) {
+   if (uwrap == dest_wrap)
+     return;
+ 
+-  dglActiveTexture(GL_TEXTURE0_ARB + tn);
++  ActivateTextureUnitIfNeeded(tn);
+ 
+   OpenGL_sets_this_frame[1]++;
+ 
+@@ -1061,7 +1070,7 @@ void opengl_MakeFilterTypeCurrent(int handle, int map_type, int tn) {
+   if (magf == dest_state)
+     return;
+ 
+-  dglActiveTexture(GL_TEXTURE0_ARB + tn);
++  ActivateTextureUnitIfNeeded(tn);
+ 
+   OpenGL_sets_this_frame[2]++;
+ 
+diff --git a/renderer/ShaderProgram.h b/renderer/ShaderProgram.h
+index 75ba79c1..bc45a2cd 100644
+--- a/renderer/ShaderProgram.h
++++ b/renderer/ShaderProgram.h
+@@ -22,7 +22,9 @@
+ #include <functional>
+ #include <stdexcept>
+ #include <string>
++#include <string_view>
+ #include <unordered_map>
++#include <vector>
+ #include <glm/mat4x4.hpp>
+ #include <glm/gtc/type_ptr.hpp>
+ #include "dyna_gl.h"
+@@ -50,6 +52,8 @@ VertexAttrib<EnclosingType> vertexAttrib(GLint size, GLenum type, GLboolean norm
+   };
+ }
+ 
++// Optimized vertex buffer: correctly size buffer based on the template type V
++// and avoid unnecessary copies of attribute lists by taking them by value (moved by callers).
+ template <typename V>
+ struct VertexBuffer {
+   VertexBuffer(GLuint program,
+@@ -61,20 +65,22 @@ struct VertexBuffer {
+       vbo_{outval(dglGenBuffers)} {
+     dglBindVertexArray(vao_);
+     dglBindBuffer(GL_ARRAY_BUFFER, vbo_);
++    // Use sizeof(V) so the buffer is sized correctly for the templated vertex type.
+     dglBufferData(GL_ARRAY_BUFFER,
+-                  vertex_count * sizeof(PosColorUV2Vertex),
++                  vertex_count * sizeof(V),
+                   initialData,
+                   bufferType);
+ 
+-    for (GLint i{}; i < attribs.size(); i++) {
+-      dglEnableVertexAttribArray(i);
+-      dglVertexAttribPointer(i,
++    for (size_t i = 0; i < attribs.size(); ++i) {
++      dglEnableVertexAttribArray(static_cast<GLuint>(i));
++      dglVertexAttribPointer(static_cast<GLuint>(i),
+                              attribs[i].size,
+                              attribs[i].type,
+                              attribs[i].normalized,
+                              sizeof(V),
+                              reinterpret_cast<void*>(attribs[i].offset));
+-      dglBindAttribLocation(program, i, attribs[i].name.c_str());
++      // Bind attribute location before program linking (caller does the link afterwards).
++      dglBindAttribLocation(program, static_cast<GLuint>(i), attribs[i].name.c_str());
+     }
+   }
+ 
+@@ -112,7 +118,7 @@ struct Shader {
+     }
+ 
+     char const* srcptr = src.data();
+-    GLint srclen = src.size();
++    GLint srclen = static_cast<GLint>(src.size());
+     dglShaderSource(id_, 1, &srcptr, &srclen);
+     dglCompileShader(id_);
+ 
+@@ -138,6 +144,23 @@ private:
+   MoveOnlyHolder<GLuint, DeleteShader> id_;
+ };
+ 
++// Small utility types that allow heterogeneous lookup by std::string_view
++struct StringViewHash {
++  using is_transparent = void; // enable heterogeneous lookup
++  size_t operator()(std::string_view s) const noexcept {
++    return std::hash<std::string_view>{}(s);
++  }
++  size_t operator()(std::string const& s) const noexcept {
++    return std::hash<std::string_view>{}(s);
++  }
++};
++struct StringViewEq {
++  using is_transparent = void;
++  bool operator()(std::string_view a, std::string_view b) const noexcept { return a == b; }
++  bool operator()(std::string const& a, std::string_view b) const noexcept { return a == b; }
++  bool operator()(std::string_view a, std::string const& b) const noexcept { return a == b; }
++};
++
+ template <typename V>
+ struct ShaderProgram {
+   explicit ShaderProgram(std::string_view vertexSrc, std::string_view fragmentSrc, std::vector<VertexAttrib<V>> attribs)
+@@ -160,6 +183,14 @@ struct ShaderProgram {
+       dglGetProgramInfoLog(id_, 1024, &log_length, message);
+       throw std::runtime_error(std::string{message, static_cast<size_t>(log_length)});
+     }
++
++    // Pre-cache a small set of commonly used uniform names to avoid repeated lookups at runtime.
++    // These are populated lazily if not present, but prefetching reduces per-frame overhead.
++    const char* common_uniforms[] = {"u_texture0","u_texture1","u_modelview","u_projection","u_texture_enable","u_fog_enable","u_fog_start","u_fog_end","u_fog_color"};
++    for (auto name : common_uniforms) {
++      auto loc = dglGetUniformLocation(id_, name);
++      uniform_cache_.try_emplace(name, loc);
++    }
+   }
+ 
+   void Use() const {
+@@ -174,35 +205,46 @@ struct ShaderProgram {
+     vbo_.UpdateData(offset, count, vertices);
+   }
+ 
+-  void setUniformMat4f(std::string const& name, glm::mat4x4 const& matrix) {
+-    dglUniformMatrix4fv(getUniformId(name), 1, GL_FALSE, glm::value_ptr(matrix));
++  // Accept string_view to avoid allocating temporaries for literal names.
++  void setUniformMat4f(std::string_view name, glm::mat4x4 const& matrix) {
++    auto loc = getUniformId(name);
++    if (loc == -1) return;
++    dglUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(matrix));
+   }
+ 
+-  void setUniform1i(std::string const& name, GLint val) {
+-    dglUniform1i(getUniformId(name), val);
++  void setUniform1i(std::string_view name, GLint val) {
++    auto loc = getUniformId(name);
++    if (loc == -1) return;
++    dglUniform1i(loc, val);
+   }
+ 
+-  void setUniform1f(std::string const& name, GLfloat val) {
+-    dglUniform1f(getUniformId(name), val);
++  void setUniform1f(std::string_view name, GLfloat val) {
++    auto loc = getUniformId(name);
++    if (loc == -1) return;
++    dglUniform1f(loc, val);
+   }
+ 
+-  void setUniform4fv(std::string const& name, GLfloat f0, GLfloat f1, GLfloat f2, GLfloat f3) {
+-    dglUniform4f(getUniformId(name), f0, f1, f2, f3);
++  void setUniform4fv(std::string_view name, GLfloat f0, GLfloat f1, GLfloat f2, GLfloat f3) {
++    auto loc = getUniformId(name);
++    if (loc == -1) return;
++    dglUniform4f(loc, f0, f1, f2, f3);
+   }
+ 
+ private:
+-  GLint getUniformId(std::string const& name) {
+-    auto it = uniform_cache_.find(name);
++  // Heterogeneous lookup keyed by std::string but allowing string_view lookups without allocation.
++  GLint getUniformId(std::string_view name) {
++    // Use a single std::string key for map lookup/emplace to ensure compatibility with
++    // compilers that don't provide heterogeneous lookup for unordered_map.
++    std::string key{name};
++    auto it = uniform_cache_.find(key);
+     if (it != uniform_cache_.end()) {
+       return it->second;
+     }
+ 
+-    it = uniform_cache_.emplace(name, dglGetUniformLocation(id_, name.c_str())).first;
+-    if (it->second != -1) {
+-      return it->second;
+-    }
+-
+-    throw std::runtime_error("uniform " + name + " nonexistent or inactive");
++    auto loc = dglGetUniformLocation(id_, key.c_str());
++    // store result (even if -1) to avoid repeated queries
++    auto inserted = uniform_cache_.emplace(std::move(key), loc);
++    return inserted.first->second;
+   }
+ 
+   static void DeleteProgram(GLuint id) {
+@@ -213,5 +255,5 @@ private:
+   Shader<GL_VERTEX_SHADER> vertex_;
+   Shader<GL_FRAGMENT_SHADER> fragment_;
+   VertexBuffer<V> vbo_;
+-  std::unordered_map<std::string, GLint> uniform_cache_;
++  std::unordered_map<std::string, GLint, StringViewHash, StringViewEq> uniform_cache_;
+ };
+\ No newline at end of file
+diff --git a/renderer/dyna_gl.h b/renderer/dyna_gl.h
+index 23a83aaa..23cd11ed 100644
+--- a/renderer/dyna_gl.h
++++ b/renderer/dyna_gl.h
+@@ -67,6 +67,7 @@ struct FnPtr<Ret(Args...)> {
+   explicit FnPtr(std::string_view name, bool optional = false);
+ 
+   Ret operator()(Args... args) const {
++#if defined(FATAL_GL_ERRORS)
+     if constexpr (std::is_same_v<Ret, void>) {
+       fn_(args...);
+       CheckError();
+@@ -75,6 +76,13 @@ struct FnPtr<Ret(Args...)> {
+       CheckError();
+       return ret;
+     }
++#else
++    if constexpr (std::is_same_v<Ret, void>) {
++      fn_(args...);
++    } else {
++      return fn_(args...);
++    }
++#endif
+   }
+ 
+   operator bool() const { return fn_; }

@@ -1,0 +1,78 @@
+diff --git a/include-refactoring/xsimd/arch/xsimd_avx512f.hpp b/include-refactoring/xsimd/arch/xsimd_avx512f.hpp
+index 5793f32..1803446 100644
+--- a/include-refactoring/xsimd/arch/xsimd_avx512f.hpp
++++ b/include-refactoring/xsimd/arch/xsimd_avx512f.hpp
+@@ -280,11 +280,11 @@ namespace xsimd {
+     }
+ 
+     template<class A> batch<float, A> bitwise_not(batch<float, A> const& self, requires<avx512f>) {
+-      return _mm256_xor_ps(self, _mm256_castsi256_ps(_mm256_set1_epi32(-1)));
++      return _mm512_xor_ps(self, _mm512_castsi512_ps(_mm512_set1_epi32(-1)));
+     }
+     template <class A>
+     batch<double, A> bitwise_not(batch<double, A> const &self, requires<avx512f>) {
+-      return _mm256_xor_pd(self, _mm256_castsi256_pd(_mm256_set1_epi32(-1)));
++      return _mm512_xor_pd(self, _mm512_castsi512_pd(_mm512_set1_epi32(-1)));
+     }
+ 
+     // bitwise_or
+diff --git a/include-refactoring/xsimd/config/xsimd_arch.hpp b/include-refactoring/xsimd/config/xsimd_arch.hpp
+index bd1f97b..c5c86b6 100644
+--- a/include-refactoring/xsimd/config/xsimd_arch.hpp
++++ b/include-refactoring/xsimd/config/xsimd_arch.hpp
+@@ -91,7 +91,7 @@ namespace xsimd {
+         : join<typename Arch::template extend<Archs...>, Args...> {};
+   } // namespace detail
+ 
+-  using all_x86_architectures = arch_list<avx512bw, avx512f, fma5, avx2, /*xop, fma4,*/ avx, fma3, sse4_2, sse4_1, /*sse4a,*/ ssse3, sse3, sse2, sse>;
++  using all_x86_architectures = arch_list<avx512bw, avx512dq, avx512cd, avx512f, fma5, avx2, /*xop, fma4,*/ avx, fma3, sse4_2, sse4_1, /*sse4a,*/ ssse3, sse3, sse2, sse>;
+   //using all_arm_architectures = arch_list<neon64, neon>;
+   using all_architectures = typename detail::join</*all_arm_architectures,*/ all_x86_architectures>::type;
+ 
+diff --git a/include-refactoring/xsimd/config/xsimd_config.hpp b/include-refactoring/xsimd/config/xsimd_config.hpp
+index ae5bdd0..6fb9bfe 100644
+--- a/include-refactoring/xsimd/config/xsimd_config.hpp
++++ b/include-refactoring/xsimd/config/xsimd_config.hpp
+@@ -91,4 +91,19 @@
+ #define XSIMD_WITH_AVX512BW 0
+ #endif
+ 
++// AVX512CD and AVX512DQ are subsets/extensions of AVX512F. Define
++// availability macros similarly to AVX512BW so other headers can
++// conditionally compile specialized implementations.
++#ifdef __AVX512CD__
++#define XSIMD_WITH_AVX512CD XSIMD_WITH_AVX512F
++#else
++#define XSIMD_WITH_AVX512CD 0
++#endif
++
++#ifdef __AVX512DQ__
++#define XSIMD_WITH_AVX512DQ XSIMD_WITH_AVX512F
++#else
++#define XSIMD_WITH_AVX512DQ 0
++#endif
++
+ #endif
+diff --git a/include-refactoring/xsimd/types/xsimd_all_registers.hpp b/include-refactoring/xsimd/types/xsimd_all_registers.hpp
+index 6e6fa22..022f9ba 100644
+--- a/include-refactoring/xsimd/types/xsimd_all_registers.hpp
++++ b/include-refactoring/xsimd/types/xsimd_all_registers.hpp
+@@ -11,3 +11,5 @@
+ 
+ #include "../types/xsimd_avx512f_register.hpp"
+ #include "../types/xsimd_avx512bw_register.hpp"
++#include "../types/xsimd_avx512cd_register.hpp"
++#include "../types/xsimd_avx512dq_register.hpp"
+diff --git a/include-refactoring/xsimd/types/xsimd_avx512bw_register.hpp b/include-refactoring/xsimd/types/xsimd_avx512bw_register.hpp
+index c9216fc..a314798 100644
+--- a/include-refactoring/xsimd/types/xsimd_avx512bw_register.hpp
++++ b/include-refactoring/xsimd/types/xsimd_avx512bw_register.hpp
+@@ -9,6 +9,8 @@ namespace xsimd {
+     static constexpr bool supported() { return XSIMD_WITH_AVX512BW; }
+     static constexpr bool available() { return true; }
+     static constexpr unsigned version() { return generic::version(3, 2, 0); }
++    // helper to indicate presence of mask-aware instructions on this arch
++    static constexpr bool has_mask_registers() { return true; }
+   };
+ 
+ #if XSIMD_WITH_AVX512BW

@@ -1,0 +1,19 @@
+diff --git a/include/fmt/format.h b/include/fmt/format.h
+index 7c2a19b4..8797446a 100644
+--- a/include/fmt/format.h
++++ b/include/fmt/format.h
+@@ -524,10 +524,11 @@ reserve(OutputIt it, size_t n) -> typename OutputIt::value_type* {
+ }
+ 
+ template <typename T>
+-inline auto reserve(basic_appender<T> it, size_t n) -> basic_appender<T> {
++inline auto reserve(basic_appender<T> it, size_t n) -> typename basic_appender<T>::pointer {
+   buffer<T>& buf = get_container(it);
+-  buf.try_reserve(buf.size() + n);
+-  return it;
++  auto size = buf.size();
++  buf.try_resize(size + n);
++  return buf.data() + size;
+ }
+ 
+ template <typename Iterator>

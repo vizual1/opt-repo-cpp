@@ -1,0 +1,31 @@
+diff --git a/src/util/HighsMatrixUtils.cpp b/src/util/HighsMatrixUtils.cpp
+index a86dbf002..d96c1da34 100644
+--- a/src/util/HighsMatrixUtils.cpp
++++ b/src/util/HighsMatrixUtils.cpp
+@@ -19,7 +19,7 @@
+ #include <algorithm>
+ #include <cmath>
+ #include <cstdio>
+-#include <map>
++#include "util/HighsHash.h"
+ 
+ HighsStatus assessMatrix(const HighsLogOptions& log_options,
+                          const std::string matrix_name, const HighsInt vec_dim,
+@@ -145,7 +145,7 @@ HighsStatus assessMatrix(
+   double max_large_value = 0;
+   double min_large_value = kHighsInf;
+   // Use index_map to identify duplicates.
+-  std::map<HighsInt, HighsInt> index_map;
++  HighsHashTable<HighsInt, HighsInt> index_map;
+ 
+   for (HighsInt ix = 0; ix < num_vec; ix++) {
+     HighsInt from_el = matrix_start[ix];
+@@ -178,7 +178,7 @@ HighsStatus assessMatrix(
+         return HighsStatus::kError;
+       }
+       // Check that the index has not already ocurred.
+-      legal_component = index_map.find(component) == index_map.end();
++      legal_component = index_map.find(component) == nullptr;
+       if (!legal_component) {
+         highsLogUser(log_options, HighsLogType::kError,
+                      "%s matrix packed vector %" HIGHSINT_FORMAT

@@ -1,0 +1,111 @@
+diff --git a/include/LoadBalancerAC.hpp b/include/LoadBalancerAC.hpp
+index 1663160b..dee8579b 100644
+--- a/include/LoadBalancerAC.hpp
++++ b/include/LoadBalancerAC.hpp
+@@ -24,10 +24,10 @@ namespace primecount {
+ class LoadBalancerAC
+ {
+ public:
+-  LoadBalancerAC(int64_t sqrtx, int64_t y, int threads, bool is_print);
+-  bool get_work(int64_t& low, int64_t& high, double& thread_secs);
++  LoadBalancerAC(int64_t sqrtx, int64_t y, int threads, bool is_print) noexcept;
++  bool get_work(int64_t& low, int64_t& high, double& thread_secs) noexcept;
+ private:
+-  void print_status(double current_time);
++  void print_status(double current_time) noexcept;
+   int64_t low_ = 0;
+   int64_t sqrtx_ = 0;
+   int64_t y_ = 0;
+diff --git a/src/gourdon/AC.cpp b/src/gourdon/AC.cpp
+index 6b21c299..3af4854a 100644
+--- a/src/gourdon/AC.cpp
++++ b/src/gourdon/AC.cpp
+@@ -58,7 +58,7 @@ T A(T x,
+     uint64_t b,
+     const Primes& primes,
+     const PiTable& pi,
+-    const SegmentedPiTable& segmentedPi)
++    const SegmentedPiTable& segmentedPi) noexcept
+ {
+   T sum = 0;
+ 
+@@ -112,7 +112,7 @@ T C1(T xp,
+      uint64_t min_m,
+      uint64_t max_m,
+      const Primes& primes,
+-     const PiTable& pi)
++     const PiTable& pi) noexcept
+ {
+   T sum = 0;
+ 
+@@ -150,7 +150,7 @@ T C2(T x,
+      uint64_t b,
+      const Primes& primes,
+      const PiTable& pi,
+-     const SegmentedPiTable& segmentedPi)
++     const SegmentedPiTable& segmentedPi) noexcept
+ {
+   T sum = 0;
+ 
+diff --git a/src/gourdon/AC_libdivide.cpp b/src/gourdon/AC_libdivide.cpp
+index 8064d986..8a76e278 100644
+--- a/src/gourdon/AC_libdivide.cpp
++++ b/src/gourdon/AC_libdivide.cpp
+@@ -67,7 +67,7 @@ T A_64(T xlow,
+        uint64_t prime,
+        const LibdividePrimes& primes,
+        const PiTable& pi,
+-       const SegmentedPiTable& segmentedPi)
++       const SegmentedPiTable& segmentedPi) noexcept
+ {
+   T sum = 0;
+ 
+diff --git a/src/gourdon/LoadBalancerAC.cpp b/src/gourdon/LoadBalancerAC.cpp
+index 95dd5b19..594eee2a 100644
+--- a/src/gourdon/LoadBalancerAC.cpp
++++ b/src/gourdon/LoadBalancerAC.cpp
+@@ -40,7 +40,7 @@ namespace primecount {
+ LoadBalancerAC::LoadBalancerAC(int64_t sqrtx,
+                                int64_t y,
+                                int threads,
+-                               bool is_print) :
++                               bool is_print) noexcept :
+   sqrtx_(sqrtx),
+   y_(y),
+   threads_(threads),
+@@ -77,7 +77,7 @@ LoadBalancerAC::LoadBalancerAC(int64_t sqrtx,
+ 
+ bool LoadBalancerAC::get_work(int64_t& low,
+                               int64_t& high,
+-                              double& thread_secs)
++                              double& thread_secs) noexcept
+ {
+   double current_time = get_time();
+   thread_secs = current_time - thread_secs;
+diff --git a/src/gourdon/SegmentedPiTable.cpp b/src/gourdon/SegmentedPiTable.cpp
+index 2097ab8f..b61a371f 100644
+--- a/src/gourdon/SegmentedPiTable.cpp
++++ b/src/gourdon/SegmentedPiTable.cpp
+@@ -76,6 +76,11 @@ void SegmentedPiTable::init_bits()
+   if (low >= high_)
+     return;
+ 
++  // Reserve local variables to avoid repeated member access
++  uint64_t low_minus = low_;
++  auto local_set_bit = set_bit_.data();
++  auto pi_ptr = &pi_[0];
++
+   primesieve::iterator it(low, high_);
+   uint64_t prime = 0;
+ 
+@@ -84,8 +89,8 @@ void SegmentedPiTable::init_bits()
+   // the pi[x] lookup table.
+   while ((prime = it.next_prime()) < high_)
+   {
+-    uint64_t p = prime - low_;
+-    pi_[p / 240].bits |= set_bit_[p % 240];
++    uint64_t p = prime - low_minus;
++    pi_ptr[p / 240].bits |= local_set_bit[p % 240];
+   }
+ }
+ 

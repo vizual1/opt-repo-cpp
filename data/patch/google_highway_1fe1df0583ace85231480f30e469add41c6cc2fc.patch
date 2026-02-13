@@ -1,0 +1,144 @@
+diff --git a/hwy/ops/arm_neon-inl.h b/hwy/ops/arm_neon-inl.h
+index e8fd98e0..d48607fd 100644
+--- a/hwy/ops/arm_neon-inl.h
++++ b/hwy/ops/arm_neon-inl.h
+@@ -7662,22 +7662,40 @@ HWY_API VFromD<DU32> SumOfMulQuadAccumulate(
+ #define HWY_NATIVE_U8_I8_SUMOFMULQUADACCUMULATE
+ #endif
+ 
+-template <class DI32, HWY_IF_I32_D(DI32)>
++template <class DI32, HWY_IF_I32_D(DI32), HWY_IF_V_SIZE_LE_D(DI32, 8)>
+ HWY_API VFromD<DI32> SumOfMulQuadAccumulate(
+-    DI32 di32, VFromD<Repartition<uint8_t, DI32>> a_u,
++    DI32 /*di32*/, VFromD<Repartition<uint8_t, DI32>> a_u,
+     VFromD<Repartition<int8_t, DI32>> b_i, VFromD<DI32> sum) {
+-  // TODO: use vusdot[q]_s32 on NEON targets that require support for NEON I8MM
+-
+-  const RebindToUnsigned<decltype(di32)> du32;
+-  const Repartition<uint8_t, decltype(di32)> du8;
+-
++#if defined(HWY_NEON_HAVE_I8MM) && HWY_NEON_HAVE_I8MM
++  return VFromD<DI32>(vusdot_s32(sum.raw, a_u.raw, b_i.raw));
++#else
++  const RebindToUnsigned<decltype(sum)> du32;
++  const Repartition<uint8_t, decltype(sum)> du8;
+   const auto b_u = BitCast(du8, b_i);
+   const auto result_sum0 =
+       SumOfMulQuadAccumulate(du32, a_u, b_u, BitCast(du32, sum));
+   const auto result_sum1 = ShiftLeft<8>(
+       SumOfMulQuadAccumulate(du32, a_u, ShiftRight<7>(b_u), Zero(du32)));
++  return BitCast(RebindToSigned<decltype(du32)>(), Sub(result_sum0, result_sum1));
++#endif
++}
+ 
+-  return BitCast(di32, Sub(result_sum0, result_sum1));
++template <class DI32, HWY_IF_I32_D(DI32), HWY_IF_V_SIZE_D(DI32, 16)>
++HWY_API VFromD<DI32> SumOfMulQuadAccumulate(
++    DI32 /*di32*/, VFromD<Repartition<uint8_t, DI32>> a_u,
++    VFromD<Repartition<int8_t, DI32>> b_i, VFromD<DI32> sum) {
++#if defined(HWY_NEON_HAVE_I8MM) && HWY_NEON_HAVE_I8MM
++  return VFromD<DI32>(vusdotq_s32(sum.raw, a_u.raw, b_i.raw));
++#else
++  const RebindToUnsigned<decltype(sum)> du32;
++  const Repartition<uint8_t, decltype(sum)> du8;
++  const auto b_u = BitCast(du8, b_i);
++  const auto result_sum0 =
++      SumOfMulQuadAccumulate(du32, a_u, b_u, BitCast(du32, sum));
++  const auto result_sum1 = ShiftLeft<8>(
++      SumOfMulQuadAccumulate(du32, a_u, ShiftRight<7>(b_u), Zero(du32)));
++  return BitCast(RebindToSigned<decltype(du32)>(), Sub(result_sum0, result_sum1));
++#endif
+ }
+ 
+ #endif  // HWY_TARGET == HWY_NEON_BF16
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 8acc66d4..886f4855 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -6545,6 +6545,23 @@ HWY_API VFromD<DU32> SumOfMulQuadAccumulate(DU32 /*du32*/, svuint8_t a,
+ template <class DI32, HWY_IF_I32_D(DI32)>
+ HWY_API VFromD<DI32> SumOfMulQuadAccumulate(DI32 di32, svuint8_t a_u,
+                                             svint8_t b_i, svint32_t sum) {
++#if defined(HWY_NEON_HAVE_I8MM) && HWY_NEON_HAVE_I8MM
++  // Use the unsigned*signed SVE dot-product intrinsic (svusdot) when
++  // I8MM is available.
++  const RebindToUnsigned<decltype(di32)> du32;
++  if (IsFull(di32)) {
++    return BitCast(di32, svusdot_u32(BitCast(du32, sum), a_u, b_i));
++  } else {
++    // For partial vectors, emulate using the same fallback as before for
++    // correctness.
++    const Repartition<uint8_t, decltype(di32)> du8;
++    const auto b_u = BitCast(du8, b_i);
++    const auto result_sum0 = svdot_u32(BitCast(du32, sum), a_u, b_u);
++    const auto result_sum1 =
++        ShiftLeft<8>(svdot_u32(Zero(du32), a_u, ShiftRight<7>(b_u)));
++    return BitCast(di32, Sub(result_sum0, result_sum1));
++  }
++#else
+   // TODO: use svusdot_u32 on SVE targets that require support for both SVE2
+   // and SVE I8MM.
+ 
+@@ -6557,6 +6574,7 @@ HWY_API VFromD<DI32> SumOfMulQuadAccumulate(DI32 di32, svuint8_t a_u,
+       ShiftLeft<8>(svdot_u32(Zero(du32), a_u, ShiftRight<7>(b_u)));
+ 
+   return BitCast(di32, Sub(result_sum0, result_sum1));
++#endif
+ }
+ 
+ #ifdef HWY_NATIVE_I16_I16_SUMOFMULQUADACCUMULATE
+diff --git a/hwy/ops/set_macros-inl.h b/hwy/ops/set_macros-inl.h
+index 9871ff1e..92f622aa 100644
+--- a/hwy/ops/set_macros-inl.h
++++ b/hwy/ops/set_macros-inl.h
+@@ -575,6 +575,24 @@
+ // HWY_TARGET_STR remains undefined
+ #endif
+ 
++
++// Define NEON I8MM availability macro for use in intrinsic selection.
++#undef HWY_NEON_HAVE_I8MM
++#if defined(__ARM_FEATURE_I8MM) || (HWY_TARGET == HWY_NEON_BF16)
++#define HWY_NEON_HAVE_I8MM 1
++#else
++#define HWY_NEON_HAVE_I8MM 0
++#endif
++
++// Define NEON I8MM availability macro for use in intrinsic selection.
++#undef HWY_NEON_HAVE_I8MM
++#if defined(__ARM_FEATURE_I8MM) || (HWY_TARGET == HWY_NEON_BF16)
++#define HWY_NEON_HAVE_I8MM 1
++#else
++#define HWY_NEON_HAVE_I8MM 0
++#endif
++
++
+ //-----------------------------------------------------------------------------
+ // SVE[2]
+ #elif HWY_TARGET_IS_SVE
+diff --git a/hwy/targets.cc b/hwy/targets.cc
+index 70c3dda4..86cd5580 100644
+--- a/hwy/targets.cc
++++ b/hwy/targets.cc
+@@ -298,6 +298,21 @@ static constexpr uint64_t kGroupAVX10 =
+     Bit(FeatureIndex::kVPCLMULQDQ) | Bit(FeatureIndex::kVAES) |
+     Bit(FeatureIndex::kGFNI) | kGroupAVX2;
+ 
++// Helper: check for I8MM capability in auxv. Non-Apple platforms only.
++static HWY_INLINE HWY_MAYBE_UNUSED bool HasI8MM() {
++#if HWY_OS_APPLE
++  (void)0; return false;
++#else
++  #if defined(AT_HWCAP2)
++  const unsigned long hw2 = getauxval(AT_HWCAP2);
++  return (hw2 & HWCAP2_I8MM) != 0;
++  #else
++  return false;
++  #endif
++#endif
++}
++
++
+ static int64_t DetectTargets() {
+   int64_t bits = 0;  // return value of supported targets.
+   HWY_IF_CONSTEXPR(HWY_ARCH_X86_64) {

@@ -1,0 +1,136 @@
+diff --git a/include/scn/detail/context.h b/include/scn/detail/context.h
+index 4d76e92..7cf9501 100644
+--- a/include/scn/detail/context.h
++++ b/include/scn/detail/context.h
+@@ -109,23 +109,23 @@ namespace scn {
+             return m_locale;
+         }
+ 
+-        constexpr iterator begin() const
++        SCN_NODISCARD constexpr iterator begin() const noexcept
+         {
+             return m_current;
+         }
+ 
+-        constexpr sentinel end() const
++        SCN_NODISCARD constexpr sentinel end() const noexcept
+         {
+             return ranges_std::default_sentinel;
+         }
+ 
+-        constexpr auto range() const
++        SCN_NODISCARD constexpr auto range() const noexcept
+         {
+             return ranges::subrange{begin(), end()};
+         }
+ 
+         /// Advances the beginning of the input range to `it`
+-        void advance_to(iterator it)
++        void advance_to(iterator it) noexcept
+         {
+             if constexpr (detail::is_comparable_with_nullptr<iterator>::value) {
+                 if (it == nullptr) {
+diff --git a/include/scn/detail/input_map.h b/include/scn/detail/input_map.h
+index 834f9b7..267d576 100644
+--- a/include/scn/detail/input_map.h
++++ b/include/scn/detail/input_map.h
+@@ -171,7 +171,7 @@ namespace scn {
+                                         priority_tag<4>{})>;
+ 
+         template <typename Range>
+-        auto make_scan_buffer(const Range& range)
++        SCN_NODISCARD auto make_scan_buffer(const Range& range) SCN_NOEXCEPT
+         {
+             using T =
+                 decltype(_make_scan_buffer::impl(range, priority_tag<4>{}));
+diff --git a/include/scn/detail/scan_buffer.h b/include/scn/detail/scan_buffer.h
+index b913d45..5b6a087 100644
+--- a/include/scn/detail/scan_buffer.h
++++ b/include/scn/detail/scan_buffer.h
+@@ -68,25 +68,29 @@ namespace scn {
+             }
+ 
+             SCN_NODISCARD std::basic_string_view<CharT> get_segment_starting_at(
+-                std::ptrdiff_t pos) const
+-            {
+-                if (SCN_UNLIKELY(pos < m_putback_buffer.size())) {
+-                    return std::basic_string_view<CharT>(m_putback_buffer)
+-                        .substr(pos);
++                std::ptrdiff_t pos) const SCN_NOEXCEPT
++            {
++                const auto putback_sz = static_cast<std::ptrdiff_t>(m_putback_buffer.size());
++                if (SCN_UNLIKELY(pos < putback_sz)) {
++                    const auto off = static_cast<std::size_t>(pos);
++                    return std::basic_string_view<CharT>(
++                        m_putback_buffer.data() + off,
++                        m_putback_buffer.size() - off);
+                 }
+-                const auto start = pos - m_putback_buffer.size();
+-                SCN_EXPECT(start <= m_current_view.size());
+-                return m_current_view.substr(start);
++                const auto start = pos - putback_sz;
++                SCN_EXPECT(start <= static_cast<std::ptrdiff_t>(m_current_view.size()));
++                return m_current_view.substr(static_cast<std::size_t>(start));
+             }
+ 
+-            SCN_NODISCARD CharT get_character_at(std::ptrdiff_t pos) const
++            SCN_NODISCARD CharT get_character_at(std::ptrdiff_t pos) const SCN_NOEXCEPT
+             {
+-                if (SCN_UNLIKELY(pos < m_putback_buffer.size())) {
+-                    return m_putback_buffer[pos];
++                const auto putback_sz = static_cast<std::ptrdiff_t>(m_putback_buffer.size());
++                if (SCN_UNLIKELY(pos < putback_sz)) {
++                    return m_putback_buffer[static_cast<std::size_t>(pos)];
+                 }
+-                const auto start = pos - m_putback_buffer.size();
+-                SCN_EXPECT(start < m_current_view.size());
+-                return m_current_view[start];
++                const auto start = pos - putback_sz;
++                SCN_EXPECT(start < static_cast<std::ptrdiff_t>(m_current_view.size()));
++                return m_current_view[static_cast<std::size_t>(start)];
+             }
+ 
+             SCN_NODISCARD bool is_contiguous() const
+diff --git a/src/scn/impl/algorithms/contiguous_range_factory.h b/src/scn/impl/algorithms/contiguous_range_factory.h
+index b63f1b6..7f54473 100644
+--- a/src/scn/impl/algorithms/contiguous_range_factory.h
++++ b/src/scn/impl/algorithms/contiguous_range_factory.h
+@@ -109,7 +109,7 @@ namespace scn {
+                 emplace_range(SCN_FWD(range));
+             }
+ 
+-            string_view_type view() const
++            SCN_NODISCARD string_view_type view() const SCN_NOEXCEPT
+             {
+                 if (!stores_allocated_string()) {
+                     return std::get<string_view_type>(m_buffer);
+diff --git a/src/scn/impl/algorithms/read.h b/src/scn/impl/algorithms/read.h
+index 8126a8d..8115680 100644
+--- a/src/scn/impl/algorithms/read.h
++++ b/src/scn/impl/algorithms/read.h
+@@ -91,8 +91,9 @@ namespace scn {
+             }
+ 
+             auto it = ranges::begin(range);
++            auto rend = ranges::end(range);
+             for (ranges::range_difference_t<Range> i = 0; i < count; ++i) {
+-                auto rng = ranges::subrange{it, ranges::end(range)};
++                auto rng = ranges::subrange{it, rend};
+ 
+                 if (auto e = eof_check(rng); SCN_UNLIKELY(!e)) {
+                     return unexpected(e);
+diff --git a/src/scn/vscan.cpp b/src/scn/vscan.cpp
+index 91786b2..bb9fb3c 100644
+--- a/src/scn/vscan.cpp
++++ b/src/scn/vscan.cpp
+@@ -362,7 +362,9 @@ namespace scn {
+             if (SCN_UNLIKELY(!handler)) {
+                 return unexpected(handler.error);
+             }
+-            return handler.ctx.begin().position();
++            // Use local copy of iterator to avoid repeated member access
++            auto it = handler.ctx.begin();
++            return it.position();
+         }
+ 
+         template <typename CharT>

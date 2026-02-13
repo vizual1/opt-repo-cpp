@@ -1,0 +1,98 @@
+diff --git a/src/ccache/storage/local/localstorage.cpp b/src/ccache/storage/local/localstorage.cpp
+index c682c3ab..9dc12d4c 100644
+--- a/src/ccache/storage/local/localstorage.cpp
++++ b/src/ccache/storage/local/localstorage.cpp
+@@ -926,57 +926,61 @@ LocalStorage::recompress(const std::optional<int8_t> level,
+ 
+           auto stats_file = get_stats_file(l1_index);
+ 
+-          for (size_t i = 0; i < files.size(); ++i) {
+-            const auto& file = files[i];
++          // New approach: enqueue one task per file and collect futures so we
++          // can do a single StatsFile update per L2 directory. This avoids
++          // many small file updates which are costly.
++          std::vector<std::future<void>> file_futures;
++          file_futures.reserve(files.size());
++          std::atomic<int64_t> l2_size_change_kibibyte{0};
++          std::atomic<uint64_t> l2_incompressible_size{0};
+ 
++          for (size_t i = 0; i < files.size(); ++i) {
++            const auto file = files[i];
+             if (file_type_from_path(file.path()) != FileType::unknown) {
+-              thread_pool.enqueue_detach(
+-                [=, &recompressor, &incompressible_size] {
++              file_futures.push_back(thread_pool.enqueue(
++                [file, level, &recompressor, &l2_size_change_kibibyte, &l2_incompressible_size, stats_file, l2_index] {
+                   try {
+                     DirEntry new_dir_entry = recompressor.recompress(
+                       file, level, core::FileRecompressor::KeepAtime::no);
+                     auto old_size = file.size();
+                     auto new_size = new_dir_entry.size();
+-                    // LOG_RAW+fmt::format instead of LOG due to GCC 12.3 bug
+-                    // #109241
+                     LOG_RAW(fmt::format("Recompressed {} from {} to {} bytes",
+-                                        file.path(),
+-                                        old_size,
+-                                        new_size));
+-                    auto size_change_kibibyte =
+-                      kibibyte_size_diff(file, new_dir_entry);
+-                    if (size_change_kibibyte != 0) {
+-                      StatsFile(stats_file).update([=](auto& cs) {
+-                        cs.increment(Statistic::cache_size_kibibyte,
+-                                     size_change_kibibyte);
+-                        cs.increment_offsetted(
+-                          Statistic::subdir_size_kibibyte_base,
+-                          l2_index,
+-                          size_change_kibibyte);
+-                      });
++                                        file.path(), old_size, new_size));
++                    auto size_change = kibibyte_size_diff(file, new_dir_entry);
++                    if (size_change != 0) {
++                      l2_size_change_kibibyte.fetch_add(size_change);
+                     }
+                   } catch (core::Error& e) {
+-                    // LOG_RAW+fmt::format instead of LOG due to GCC 12.3 bug
+-                    // #109241
+                     LOG_RAW(fmt::format("Error when recompressing {}: {}",
+-                                        file.path(),
+-                                        e.what()));
+-                    incompressible_size += file.size_on_disk();
++                                        file.path(), e.what()));
++                    l2_incompressible_size.fetch_add(file.size_on_disk());
+                   }
+-                });
++                }));
+             } else if (!util::TemporaryFile::is_tmp_file(file.path())) {
+-              incompressible_size += file.size_on_disk();
++              l2_incompressible_size.fetch_add(file.size_on_disk());
+             }
+ 
+             l2_progress_receiver(0.1 + 0.9 * ratio(i, files.size()));
+           }
+ 
+-          if (l2_dir.filename() == "f"
+-              && l2_dir.parent_path().filename() == "f") {
+-            // Wait here instead of after for_each_cache_subdir to avoid
+-            // updating the progress bar to 100% before all work is done.
+-            thread_pool.shut_down();
++          // Wait for all file tasks for this L2 dir to finish, then apply a single
++          // aggregated StatsFile update to reduce overhead.
++          for (auto& f : file_futures) {
++            f.get();
+           }
++
++          if (l2_size_change_kibibyte.load() != 0) {
++            StatsFile(stats_file).update([&](auto& cs) {
++              cs.increment(Statistic::cache_size_kibibyte,
++                           static_cast<int64_t>(l2_size_change_kibibyte.load()));
++              cs.increment_offsetted(Statistic::subdir_size_kibibyte_base,
++                                     l2_index,
++                                     static_cast<int64_t>(l2_size_change_kibibyte.load()));
++            });
++          }
++
++          // Add to global incompressible size counter.
++          incompressible_size += l2_incompressible_size.load();
+         });
+     });
+ 

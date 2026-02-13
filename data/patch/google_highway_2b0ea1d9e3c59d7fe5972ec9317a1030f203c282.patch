@@ -1,0 +1,116 @@
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index 468774ea..71d6a035 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -3277,6 +3277,35 @@ HWY_API Vec128<double, N> operator-(const Vec128<double, N> a,
+   return Vec128<double, N>{_mm_sub_pd(a.raw, b.raw)};
+ }
+ 
++// ------------------------------ SumsOf8
++
++// ------------------------------ SumsOf4 (AVX3 optimized)
++#if HWY_TARGET <= HWY_AVX3
++namespace detail {
++
++// I8->I32 SumsOf4 using VNNI dot-product (treat as unsigned after xor and correct)
++template <class V>
++HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(
++    hwy::SignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {
++  const auto ones = _mm_set1_epi8(1);
++  const auto v_adj = _mm_xor_si128(v.raw, _mm_set1_epi8(0x80));
++  const __m128i res = _mm_dpbusd_epi32(_mm_setzero_si128(), v_adj, ones);
++  // Subtract 4*128 to undo xor adjustment.
++  return VFromD<RepartitionToWideX2<DFromV<V>>>{_mm_add_epi32(res, _mm_set1_epi32(-512))};
++}
++
++// U8->U32 SumsOf4 using VNNI dot-product with ones
++template <class V>
++HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(
++    hwy::UnsignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {
++  const auto ones = _mm_set1_epi8(1);
++  const __m128i res = _mm_dpbusd_epi32(_mm_setzero_si128(), v.raw, ones);
++  return VFromD<RepartitionToWideX2<DFromV<V>>>{res};
++}
++
++}  // namespace detail
++#endif  // HWY_TARGET <= HWY_AVX3
++
+ // ------------------------------ SumsOf8
+ template <size_t N>
+ HWY_API Vec128<uint64_t, N / 8> SumsOf8(const Vec128<uint8_t, N> v) {
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index 8f074132..dd5e96a7 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -1783,6 +1783,33 @@ HWY_API Vec256<double> operator-(Vec256<double> a, Vec256<double> b) {
+   return Vec256<double>{_mm256_sub_pd(a.raw, b.raw)};
+ }
+ 
++// ------------------------------ SumsOf4 (AVX3 optimized)
++#if HWY_TARGET <= HWY_AVX3
++namespace detail {
++
++// I8->I32 SumsOf4 using VNNI dot-product (treat as unsigned after xor and correct)
++template <class V>
++HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(
++    hwy::SignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {
++  const __m256i ones = _mm256_set1_epi8(1);
++  const __m256i v_adj = _mm256_xor_si256(v.raw, _mm256_set1_epi8(0x80));
++  const __m256i res = _mm256_dpbusd_epi32(_mm256_setzero_si256(), v_adj, ones);
++  // Subtract 4*128 to undo xor adjustment.
++  return VFromD<RepartitionToWideX2<DFromV<V>>>{_mm256_add_epi32(res, _mm256_set1_epi32(-512))};
++}
++
++// U8->U32 SumsOf4 using VNNI dot-product with ones
++template <class V>
++HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(
++    hwy::UnsignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {
++  const __m256i ones = _mm256_set1_epi8(1);
++  const __m256i res = _mm256_dpbusd_epi32(_mm256_setzero_si256(), v.raw, ones);
++  return VFromD<RepartitionToWideX2<DFromV<V>>>{res};
++}
++
++}  // namespace detail
++#endif  // HWY_TARGET <= HWY_AVX3
++
+ // ------------------------------ SumsOf8
+ HWY_API Vec256<uint64_t> SumsOf8(Vec256<uint8_t> v) {
+   return Vec256<uint64_t>{_mm256_sad_epu8(v.raw, _mm256_setzero_si256())};
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index 3facbaac..c403e18e 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -990,6 +990,33 @@ HWY_API Vec512<double> operator-(Vec512<double> a, Vec512<double> b) {
+   return Vec512<double>{_mm512_sub_pd(a.raw, b.raw)};
+ }
+ 
++// ------------------------------ SumsOf4 (AVX3 optimized)
++#if HWY_TARGET <= HWY_AVX3
++namespace detail {
++
++// I8->I32 SumsOf4 using VNNI dot-product (treat as unsigned after xor and correct)
++template <class V>
++HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(
++    hwy::SignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {
++  const __m512i ones = _mm512_set1_epi8(1);
++  const __m512i v_adj = _mm512_xor_si512(v.raw, _mm512_set1_epi8(0x80));
++  const __m512i res = _mm512_dpbusd_epi32(_mm512_setzero_si512(), v_adj, ones);
++  // Subtract 4*128 to undo xor adjustment.
++  return VFromD<RepartitionToWideX2<DFromV<V>>>{_mm512_add_epi32(res, _mm512_set1_epi32(-512))};
++}
++
++// U8->U32 SumsOf4 using VNNI dot-product with ones
++template <class V>
++HWY_INLINE VFromD<RepartitionToWideX2<DFromV<V>>> SumsOf4(
++    hwy::UnsignedTag /*type_tag*/, hwy::SizeTag<1> /*lane_size_tag*/, V v) {
++  const __m512i ones = _mm512_set1_epi8(1);
++  const __m512i res = _mm512_dpbusd_epi32(_mm512_setzero_si512(), v.raw, ones);
++  return VFromD<RepartitionToWideX2<DFromV<V>>>{res};
++}
++
++}  // namespace detail
++#endif  // HWY_TARGET <= HWY_AVX3
++
+ // ------------------------------ SumsOf8
+ HWY_API Vec512<uint64_t> SumsOf8(const Vec512<uint8_t> v) {
+   const Full512<uint8_t> d;

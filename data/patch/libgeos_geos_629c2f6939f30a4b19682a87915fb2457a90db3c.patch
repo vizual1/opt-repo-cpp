@@ -1,0 +1,66 @@
+diff --git a/src/geom/util/LinearComponentExtracter.cpp b/src/geom/util/LinearComponentExtracter.cpp
+index 6217ff6f7..2abee4151 100644
+--- a/src/geom/util/LinearComponentExtracter.cpp
++++ b/src/geom/util/LinearComponentExtracter.cpp
+@@ -32,6 +32,7 @@ LinearComponentExtracter::LinearComponentExtracter(std::vector<const LineString*
+ void
+ LinearComponentExtracter::getLines(const Geometry& geom, std::vector<const LineString*>& ret)
+ {
++    if (geom.isEmpty()) return;
+     LinearComponentExtracter lce(ret);
+     geom.apply_ro(&lce);
+ }
+@@ -44,6 +45,13 @@ LinearComponentExtracter::filter_ro(const Geometry* geom)
+     if (typ == GEOS_LINEARRING || typ == GEOS_LINESTRING) {
+         comps.push_back(detail::down_cast<const LineString*>(geom));
+     }
++    else {
++        // short-circuit if geometry is a point or polygonal - no linear components inside
++        if (typ == GEOS_POINT || typ == GEOS_MULTIPOINT ||
++            typ == GEOS_POLYGON || typ == GEOS_MULTIPOLYGON) {
++            return;
++        }
++    }
+ }
+ 
+ }
+diff --git a/src/geom/util/PointExtracter.cpp b/src/geom/util/PointExtracter.cpp
+index 79f615487..2b7de84a7 100644
+--- a/src/geom/util/PointExtracter.cpp
++++ b/src/geom/util/PointExtracter.cpp
+@@ -19,6 +19,7 @@
+ 
+ #include <geos/geom/GeometryComponentFilter.h>
+ #include <geos/geom/util/PointExtracter.h>
++#include <geos/util.h>
+ 
+ namespace geos {
+ namespace geom { // geos.geom
+@@ -28,6 +29,7 @@ namespace util { // geos.geom.util
+ void
+ PointExtracter::getPoints(const Geometry& geom, Point::ConstVect& ret)
+ {
++    if (geom.isEmpty()) return;
+     PointExtracter pe(ret);
+     geom.apply_ro(&pe);
+ }
+diff --git a/src/geom/util/PolygonExtracter.cpp b/src/geom/util/PolygonExtracter.cpp
+index 5e4ae6bc6..1b93deed4 100644
+--- a/src/geom/util/PolygonExtracter.cpp
++++ b/src/geom/util/PolygonExtracter.cpp
+@@ -19,6 +19,7 @@
+ 
+ #include <geos/geom/GeometryComponentFilter.h>
+ #include <geos/geom/util/PolygonExtracter.h>
++#include <geos/util.h>
+ 
+ namespace geos {
+ namespace geom { // geos.geom
+@@ -27,6 +28,7 @@ namespace util { // geos.geom.util
+ void
+ PolygonExtracter::getPolygons(const Geometry& geom, std::vector<const Polygon*>& ret)
+ {
++    if (geom.isEmpty()) return;
+     PolygonExtracter pe(ret);
+     geom.apply_ro(&pe);
+ }

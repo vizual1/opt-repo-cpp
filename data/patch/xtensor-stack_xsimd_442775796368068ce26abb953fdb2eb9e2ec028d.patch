@@ -1,0 +1,54 @@
+diff --git a/include/xsimd/arch/generic/xsimd_generic_memory.hpp b/include/xsimd/arch/generic/xsimd_generic_memory.hpp
+index badd0e3..47d0a26 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_memory.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_memory.hpp
+@@ -539,6 +539,21 @@ namespace xsimd
+ #endif
+         }
+ 
++        // load for batch_bool
++        template <class A, class T>
++        XSIMD_INLINE batch_bool<T, A> load(batch_bool<T, A> const&, bool const* mem, requires_arch<generic>) noexcept
++        {
++            // Generic byte-wise fallback: fill an integer batch with 0/1 and compare to zero batch
++            using batch_type = batch<T, A>;
++            batch_type ref(0);
++            constexpr auto size = batch_bool<T, A>::size;
++            alignas(A::alignment()) T buffer[size];
++            for (std::size_t i = 0; i < size; ++i)
++                buffer[i] = mem[i] ? T(1) : T(0);
++            return ref != batch_type::load_aligned(&buffer[0]);
++        }
++
++
+         // store
+         template <class A, class T>
+         XSIMD_INLINE void store(batch_bool<T, A> const& self, bool* mem, requires_arch<generic>) noexcept
+diff --git a/include/xsimd/types/xsimd_batch.hpp b/include/xsimd/types/xsimd_batch.hpp
+index c9b6d11..1ae7948 100644
+--- a/include/xsimd/types/xsimd_batch.hpp
++++ b/include/xsimd/types/xsimd_batch.hpp
+@@ -968,17 +968,17 @@ namespace xsimd
+     template <class T, class A>
+     XSIMD_INLINE batch_bool<T, A> batch_bool<T, A>::load_aligned(bool const* mem) noexcept
+     {
+-        batch_type ref(0);
+-        alignas(A::alignment()) T buffer[size];
+-        for (std::size_t i = 0; i < size; ++i)
+-            buffer[i] = mem[i] ? 1 : 0;
+-        return ref != batch_type::load_aligned(&buffer[0]);
++        // Prefer architecture specific kernel implementation when available.
++        detail::static_check_supported_config<T, A>();
++        return kernel::load<A>(batch_bool<T, A>{}, mem, A {});
+     }
+ 
+     template <class T, class A>
+     XSIMD_INLINE batch_bool<T, A> batch_bool<T, A>::load_unaligned(bool const* mem) noexcept
+     {
+-        return load_aligned(mem);
++        // Unaligned load can reuse the aligned kernel implementation by default.
++        detail::static_check_supported_config<T, A>();
++        return kernel::load<A>(batch_bool<T, A>{}, mem, A {});
+     }
+ 
+     /**

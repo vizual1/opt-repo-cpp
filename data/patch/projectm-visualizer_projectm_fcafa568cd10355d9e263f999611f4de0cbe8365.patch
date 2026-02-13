@@ -1,0 +1,178 @@
+diff --git a/src/libprojectM/MilkdropPreset/CustomShape.cpp b/src/libprojectM/MilkdropPreset/CustomShape.cpp
+index a4b22bb6c..1af90ffd3 100644
+--- a/src/libprojectM/MilkdropPreset/CustomShape.cpp
++++ b/src/libprojectM/MilkdropPreset/CustomShape.cpp
+@@ -30,6 +30,13 @@ CustomShape::CustomShape(PresetState& presetState)
+     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(TexturedPoint), reinterpret_cast<void*>(offsetof(TexturedPoint, r))); // Color
+     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(TexturedPoint), reinterpret_cast<void*>(offsetof(TexturedPoint, u))); // Texture coordinate
+ 
++    // Preallocate buffer for maximum possible number of vertices to avoid reallocations when drawing
++    {
++        const int maxSides = 100; // maximum sides supported by the preset
++        const GLsizeiptr maxSize = static_cast<GLsizeiptr>(sizeof(TexturedPoint) * (maxSides + 2));
++        glBufferData(GL_ARRAY_BUFFER, maxSize, nullptr, GL_STREAM_DRAW);
++    }
++
+     glBindVertexArray(m_vaoIdUntextured);
+     glBindBuffer(GL_ARRAY_BUFFER, m_vboIdUntextured);
+ 
+@@ -39,8 +46,26 @@ CustomShape::CustomShape(PresetState& presetState)
+     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(TexturedPoint), reinterpret_cast<void*>(offsetof(TexturedPoint, x))); // Position
+     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(TexturedPoint), reinterpret_cast<void*>(offsetof(TexturedPoint, r))); // Color
+ 
++    // Preallocate buffer for untextured VBO as well
++    {
++        const int maxSides = 100; // maximum sides supported by the preset
++        const GLsizeiptr maxSize = static_cast<GLsizeiptr>(sizeof(TexturedPoint) * (maxSides + 2));
++        glBufferData(GL_ARRAY_BUFFER, maxSize, nullptr, GL_STREAM_DRAW);
++    }
++
+     RenderItem::Init();
+ 
++    // Preallocate generic VBO (used for outlines) to avoid reallocations when drawing borders
++    {
++        const int maxSides = 100;
++        const GLsizeiptr maxSize = static_cast<GLsizeiptr>(sizeof(Point) * maxSides);
++        glBindVertexArray(m_vaoID);
++        glBindBuffer(GL_ARRAY_BUFFER, m_vboID);
++        glBufferData(GL_ARRAY_BUFFER, maxSize, nullptr, GL_STREAM_DRAW);
++        glBindVertexArray(0);
++        glBindBuffer(GL_ARRAY_BUFFER, 0);
++    }
++
+     m_perFrameContext.RegisterBuiltinVariables();
+ }
+ 
+@@ -217,7 +242,8 @@ void CustomShape::Draw()
+ 
+             glBindBuffer(GL_ARRAY_BUFFER, m_vboIdTextured);
+ 
+-            glBufferData(GL_ARRAY_BUFFER, sizeof(TexturedPoint) * (sides + 2), vertexData.data(), GL_DYNAMIC_DRAW);
++            // Update the preallocated buffer instead of reallocating it
++            glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(TexturedPoint) * (sides + 2)), vertexData.data());
+ 
+             glBindVertexArray(m_vaoIdTextured);
+             glDrawArrays(GL_TRIANGLE_FAN, 0, sides + 2);
+@@ -231,7 +257,8 @@ void CustomShape::Draw()
+             // Untextured (creates a color gradient: center=r/g/b/a to border=r2/b2/g2/a2)
+             glBindBuffer(GL_ARRAY_BUFFER, m_vboIdUntextured);
+ 
+-            glBufferData(GL_ARRAY_BUFFER, sizeof(TexturedPoint) * (sides + 2), vertexData.data(), GL_DYNAMIC_DRAW);
++            // Update preallocated buffer
++            glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(TexturedPoint) * (sides + 2)), vertexData.data());
+ 
+             m_presetState.untexturedShader.Bind();
+             m_presetState.untexturedShader.SetUniformMat4x4("vertex_transformation", PresetState::orthogonalProjection);
+@@ -304,7 +331,8 @@ void CustomShape::Draw()
+                         break;
+                 }
+ 
+-                glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizei>(sizeof(Point) * sides), points.data(), GL_DYNAMIC_DRAW);
++                // Update preallocated buffer for outline points
++                glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(Point) * sides), points.data());
+                 glDrawArrays(GL_LINE_LOOP, 0, sides);
+             }
+         }
+diff --git a/src/libprojectM/MilkdropPreset/CustomWaveform.cpp b/src/libprojectM/MilkdropPreset/CustomWaveform.cpp
+index ee2e1721f..e1e5cb248 100644
+--- a/src/libprojectM/MilkdropPreset/CustomWaveform.cpp
++++ b/src/libprojectM/MilkdropPreset/CustomWaveform.cpp
+@@ -21,6 +21,16 @@ CustomWaveform::CustomWaveform(PresetState& presetState)
+ 
+     m_perFrameContext.RegisterBuiltinVariables();
+     m_perPointContext.RegisterBuiltinVariables();
++
++    // Preallocate VBO for maximum waveform points to avoid reallocations during Draw()
++    {
++        const GLsizeiptr maxSize = static_cast<GLsizeiptr>(sizeof(ColoredPoint) * CustomWaveformMaxSamples * 2);
++        glBindVertexArray(m_vaoID);
++        glBindBuffer(GL_ARRAY_BUFFER, m_vboID);
++        glBufferData(GL_ARRAY_BUFFER, maxSize, nullptr, GL_STREAM_DRAW);
++        glBindVertexArray(0);
++        glBindBuffer(GL_ARRAY_BUFFER, 0);
++    }
+ }
+ 
+ void CustomWaveform::InitVertexAttrib()
+diff --git a/src/libprojectM/MilkdropPreset/MotionVectors.cpp b/src/libprojectM/MilkdropPreset/MotionVectors.cpp
+index 191c9db5e..c87a71a1a 100644
+--- a/src/libprojectM/MilkdropPreset/MotionVectors.cpp
++++ b/src/libprojectM/MilkdropPreset/MotionVectors.cpp
+@@ -84,7 +84,9 @@ void MotionVectors::Draw(const PerFrameContext& presetPerFrameContext, std::shar
+     float const inverseHeight = 1.25f / static_cast<float>(m_presetState.renderContext.viewportSizeY);
+     float const minimumLength = sqrtf(inverseWidth * inverseWidth + inverseHeight * inverseHeight);
+ 
+-    std::vector<MotionVectorVertex> lineVertices(static_cast<std::size_t>(countX + 1) * 2); // countX + 1 lines for each grid row, 2 vertices each.
++    // Reuse a preallocated vector to avoid reallocations on every Draw().
++    static std::vector<MotionVectorVertex> lineVertices;
++    lineVertices.resize(static_cast<std::size_t>(countX + 1) * 2);
+ 
+     glEnable(GL_BLEND);
+     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+@@ -136,8 +138,20 @@ void MotionVectors::Draw(const PerFrameContext& presetPerFrameContext, std::shar
+                 }
+             }
+ 
+-            // Draw a row of lines.
+-            glBufferData(GL_ARRAY_BUFFER, sizeof(MotionVectorVertex) * vertex, lineVertices.data(), GL_DYNAMIC_DRAW);
++            // Only update buffer if we have more vertices than previously used (avoids unnecessary reallocations on GPU-side)
++            static GLsizeiptr previousBufferSize = 0;
++            GLsizeiptr requiredSize = sizeof(MotionVectorVertex) * vertex;
++            if (requiredSize > previousBufferSize)
++            {
++                glBufferData(GL_ARRAY_BUFFER, requiredSize, lineVertices.data(), GL_STREAM_DRAW);
++                previousBufferSize = requiredSize;
++            }
++            else
++            {
++                // Update only the used portion
++                glBufferSubData(GL_ARRAY_BUFFER, 0, requiredSize, lineVertices.data());
++            }
++
+             glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(vertex));
+         }
+     }
+diff --git a/src/libprojectM/MilkdropPreset/MotionVectors.hpp b/src/libprojectM/MilkdropPreset/MotionVectors.hpp
+index 973063c3f..c2b6ab7a4 100644
+--- a/src/libprojectM/MilkdropPreset/MotionVectors.hpp
++++ b/src/libprojectM/MilkdropPreset/MotionVectors.hpp
+@@ -47,6 +47,9 @@ private:
+ 
+     Renderer::Shader m_motionVectorShader; //!< The motion vector shader, calculates the trace positions in the GPU.
+     std::shared_ptr<Renderer::Sampler> m_sampler{std::make_shared<Renderer::Sampler>(GL_CLAMP_TO_EDGE, GL_LINEAR)}; //!< The texture sampler.
++
++    // Track the previous buffer size used for the VBO to avoid unnecessary reallocations
++    static inline GLsizeiptr s_previousMotionVectorBufferSize = 0;
+ };
+ 
+ } // namespace MilkdropPreset
+diff --git a/src/libprojectM/MilkdropPreset/Waveform.cpp b/src/libprojectM/MilkdropPreset/Waveform.cpp
+index 477ff6d5a..70bf82e38 100644
+--- a/src/libprojectM/MilkdropPreset/Waveform.cpp
++++ b/src/libprojectM/MilkdropPreset/Waveform.cpp
+@@ -22,8 +22,19 @@ Waveform::Waveform(PresetState& presetState)
+     , m_presetState(presetState)
+ {
+     RenderItem::Init();
++
++    // Preallocate VBO for maximum waveform points to avoid reallocations during Draw()
++    {
++        const GLsizeiptr maxSize = static_cast<GLsizeiptr>(sizeof(Point) * WaveformMaxPoints);
++        glBindVertexArray(m_vaoID);
++        glBindBuffer(GL_ARRAY_BUFFER, m_vboID);
++        glBufferData(GL_ARRAY_BUFFER, maxSize, nullptr, GL_STREAM_DRAW);
++        glBindVertexArray(0);
++        glBindBuffer(GL_ARRAY_BUFFER, 0);
++    }
+ }
+ 
++
+ void Waveform::InitVertexAttrib()
+ {
+     glEnableVertexAttribArray(0);
+diff --git a/vendor/projectm-eval b/vendor/projectm-eval
+--- a/vendor/projectm-eval
++++ b/vendor/projectm-eval
+@@ -1 +1 @@
+-Subproject commit 7cefc94eb2583c5106e022850cfba70d76391015
++Subproject commit 7cefc94eb2583c5106e022850cfba70d76391015-dirty

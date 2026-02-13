@@ -1,0 +1,39 @@
+diff --git a/include/spdlog/details/os.h b/include/spdlog/details/os.h
+index 9233ed57..ab0606e4 100644
+--- a/include/spdlog/details/os.h
++++ b/include/spdlog/details/os.h
+@@ -293,25 +293,27 @@ inline int utc_minutes_offset(const std::tm& tm = details::os::localtime())
+ }
+ 
+ //Return current thread id as size_t
+-//It exists because the std::this_thread::get_id() is much slower(espcially under VS 2013)
++//Cache thread id in thread-local storage to avoid repeated syscalls
+ inline size_t thread_id()
+ {
++    thread_local size_t cached_tid = 0;
++    if (cached_tid != 0)
++        return cached_tid;
+ #ifdef _WIN32
+-    return  static_cast<size_t>(::GetCurrentThreadId());
++    cached_tid = static_cast<size_t>(::GetCurrentThreadId());
+ #elif __linux__
+ # if defined(__ANDROID__) && defined(__ANDROID_API__) && (__ANDROID_API__ < 21)
+ #  define SYS_gettid __NR_gettid
+ # endif
+-    return  static_cast<size_t>(syscall(SYS_gettid));
++    cached_tid = static_cast<size_t>(syscall(SYS_gettid));
+ #elif __FreeBSD__
+     long tid;
+     thr_self(&tid);
+-    return static_cast<size_t>(tid);
++    cached_tid = static_cast<size_t>(tid);
+ #else //Default to standard C++11 (OSX and other Unix)
+-    return static_cast<size_t>(std::hash<std::thread::id>()(std::this_thread::get_id()));
++    cached_tid = static_cast<size_t>(std::hash<std::thread::id>()(std::this_thread::get_id()));
+ #endif
+-
+-
++    return cached_tid;
+ }
+ 
+ 

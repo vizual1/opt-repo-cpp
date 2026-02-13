@@ -1,0 +1,46 @@
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index e50db611..554c3a02 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -70,17 +70,31 @@ void HeapSort(Traits st, T* HWY_RESTRICT lanes, const size_t num_lanes) {
+ 
+   if (num_lanes < 2 * N1) return;
+ 
+-  // Build heap.
+-  for (size_t i = N1; i < num_lanes; i += N1) {
+-    size_t j = i;
+-    while (j != 0) {
+-      const size_t idx_parent = ((j - N1) / N1 / 2) * N1;
+-      if (AllFalse(d, st.Compare(d, st.SetKey(d, lanes + idx_parent),
+-                                 st.SetKey(d, lanes + j)))) {
+-        break;
++  // Build heap using O(N) Floyd heapify.
++  const size_t nodes = num_lanes / N1;
++  if (nodes > 1) {
++    const size_t last_parent_node = nodes / 2 - 1;
++    for (size_t node = last_parent_node + 1; node-- > 0;) {
++      size_t j = node * N1;
++      // Sift down the element at j.
++      while (j < num_lanes) {
++        const size_t left = 2 * j + N1;
++        const size_t right = 2 * j + 2 * N1;
++        size_t idx_larger = j;
++        const auto key_j = st.SetKey(d, lanes + j);
++        if (left < num_lanes &&
++            AllTrue(d, st.Compare(d, key_j, st.SetKey(d, lanes + left)))) {
++          idx_larger = left;
++        }
++        if (right < num_lanes &&
++            AllTrue(d, st.Compare(d, st.SetKey(d, lanes + idx_larger),
++                                  st.SetKey(d, lanes + right)))) {
++          idx_larger = right;
++        }
++        if (idx_larger == j) break;
++        st.Swap(lanes + j, lanes + idx_larger);
++        j = idx_larger;
+       }
+-      st.Swap(lanes + j, lanes + idx_parent);
+-      j = idx_parent;
+     }
+   }
+ 

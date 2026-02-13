@@ -1,0 +1,56 @@
+diff --git a/src/ccache/util/file.cpp b/src/ccache/util/file.cpp
+index 15d1905c..a7ecef66 100644
+--- a/src/ccache/util/file.cpp
++++ b/src/ccache/util/file.cpp
+@@ -70,6 +70,10 @@
+ #  include <sys/sendfile.h>
+ #endif
+ 
++#ifdef __APPLE__
++#  include <copyfile.h>
++#endif
++
+ namespace fs = util::filesystem;
+ 
+ using pstr = util::PathString;
+@@ -89,6 +93,40 @@ copy_file(const fs::path& src, const fs::path& dest, ViaTmpFile via_tmp_file)
+ 
+   Fd dest_fd;
+   fs::path tmp_file;
++
++#ifdef __APPLE__
++  // Try to use the faster copyfile(3) API on macOS. If it fails, fall back
++  // to the traditional read/write path below.
++  if (via_tmp_file == ViaTmpFile::yes) {
++    auto temp_file = TemporaryFile::create(dest);
++    if (!temp_file) {
++      return tl::unexpected(temp_file.error());
++    }
++    // Keep the path for copy; let temp_file.fd be closed when it goes out of
++    // scope so copyfile can overwrite the file.
++    tmp_file = std::move(temp_file->path);
++  }
++
++  const char* copy_dest = (via_tmp_file == ViaTmpFile::yes) ? pstr(tmp_file)
++                                                             : pstr(dest);
++  if (copyfile(pstr(src), copy_dest, nullptr, COPYFILE_DATA | COPYFILE_STAT)
++      == 0) {
++    // Success. No need to write anything else.
++    src_fd.close();
++    if (via_tmp_file == ViaTmpFile::yes) {
++      const auto result = fs::rename(tmp_file, dest);
++      if (!result) {
++        return tl::unexpected(FMT("Failed to rename {} to {}: {}",
++                                  tmp_file,
++                                  dest,
++                                  result.error().message()));
++      }
++    }
++    return {};
++  }
++  // If copyfile failed, fall through and perform a manual copy below.
++#endif
++
+   if (via_tmp_file == ViaTmpFile::yes) {
+     auto temp_file = TemporaryFile::create(dest);
+     if (!temp_file) {

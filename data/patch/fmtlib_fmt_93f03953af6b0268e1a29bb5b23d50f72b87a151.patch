@@ -1,0 +1,39 @@
+diff --git a/include/fmt/format-inl.h b/include/fmt/format-inl.h
+index 43596a0f..7cc1f579 100644
+--- a/include/fmt/format-inl.h
++++ b/include/fmt/format-inl.h
+@@ -191,6 +191,15 @@ inline auto umul96_upper64(uint32_t x, uint64_t y) noexcept -> uint64_t {
+   return umul128_upper64(static_cast<uint64_t>(x) << 32, y);
+ }
+ 
++// Helper that accepts any floating value and forwards to the internal
++// to_decimal implementation after converting the input to the appropriate
++// floating type. This allows callers to avoid manual casting and lets the
++// compiler pick optimal overloads.
++template <typename T>
++inline auto to_decimal_any(T x) noexcept -> decimal_fp<decltype(convert_float(x))> {
++  return to_decimal(convert_float(x));
++}
++
+ // Computes lower 128 bits of multiplication of a 64-bit unsigned integer and a
+ // 128-bit unsigned integer.
+ inline auto umul192_lower128(uint64_t x, uint128_fallback y) noexcept
+diff --git a/include/fmt/format.h b/include/fmt/format.h
+index 11c491ff..f17f1d4e 100644
+--- a/include/fmt/format.h
++++ b/include/fmt/format.h
+@@ -3410,9 +3410,11 @@ FMT_CONSTEXPR20 auto write(OutputIt out, T value, format_specs specs,
+   if (precision < 0) {
+     if (specs.type() != presentation_type::none) {
+       precision = 6;
+-    } else if (is_fast_float<T>::value && !is_constant_evaluated()) {
+-      // Use Dragonbox for the shortest format.
+-      auto dec = dragonbox::to_decimal(static_cast<fast_float_t<T>>(value));
++    } else if (!is_constant_evaluated()) {
++      // Use Dragonbox for the shortest format when no precision/type is specified.
++      // Convert the value to the appropriate floating type and delegate to
++      // dragonbox which is faster for shortest-representation formatting.
++      auto dec = dragonbox::to_decimal(convert_float(value));
+       return write_float<Char>(out, dec, specs, s, exp_upper, loc);
+     }
+   }

@@ -1,0 +1,89 @@
+diff --git a/src/gourdon/AC.cpp b/src/gourdon/AC.cpp
+index 7ada3ba9..1d27fea2 100644
+--- a/src/gourdon/AC.cpp
++++ b/src/gourdon/AC.cpp
+@@ -64,27 +64,33 @@ T A(T x,
+ {
+   T sum = 0;
+ 
+-  uint64_t prime = primes[b];
++  // Cache frequently used references to improve locality and let the
++  // compiler keep them in registers.
++  const auto& p = primes;
++  const PiTable& piRef = pi;
++  const SegmentedPiTable& seg = segmentedPi;
++
++  uint64_t prime = p[b];
+   T xp = x / prime;
+   uint64_t sqrt_xp = (uint64_t) isqrt(xp);
+   uint64_t min_2nd_prime = min(xhigh / prime, sqrt_xp);
+   uint64_t max_2nd_prime = min(xlow / prime, sqrt_xp);
+-  uint64_t i = pi[max(prime, min_2nd_prime)] + 1;
+-  uint64_t max_i1 = pi[min(xp / y, max_2nd_prime)];
+-  uint64_t max_i2 = pi[max_2nd_prime];
++  uint64_t i = piRef[max(prime, min_2nd_prime)] + 1;
++  uint64_t max_i1 = piRef[min(xp / y, max_2nd_prime)];
++  uint64_t max_i2 = piRef[max_2nd_prime];
+ 
+   // x / (p * q) >= y
+   for (; i <= max_i1; i++)
+   {
+-    uint64_t xpq = fast_div64(xp, primes[i]);
+-    sum += segmentedPi[xpq];
++    uint64_t xpq = fast_div64(xp, p[i]);
++    sum += seg[xpq];
+   }
+ 
+   // x / (p * q) < y
+   for (; i <= max_i2; i++)
+   {
+-    uint64_t xpq = fast_div64(xp, primes[i]);
+-    sum += segmentedPi[xpq] * 2;
++    uint64_t xpq = fast_div64(xp, p[i]);
++    sum += seg[xpq] * 2;
+   }
+ 
+   return sum;
+diff --git a/src/gourdon/AC_libdivide.cpp b/src/gourdon/AC_libdivide.cpp
+index 832294da..6a0ea1e8 100644
+--- a/src/gourdon/AC_libdivide.cpp
++++ b/src/gourdon/AC_libdivide.cpp
+@@ -72,25 +72,31 @@ T A_64(T xlow,
+ {
+   T sum = 0;
+ 
++  // Cache frequently used references to improve locality and let the
++  // compiler keep them in registers.
++  const auto& p = primes;
++  const PiTable& piRef = pi;
++  const SegmentedPiTable& seg = segmentedPi;
++
+   uint64_t sqrt_xp = isqrt(xp);
+   uint64_t min_2nd_prime = min(xhigh / prime, sqrt_xp);
+   uint64_t max_2nd_prime = min(xlow / prime, sqrt_xp);
+-  uint64_t i = pi[max(prime, min_2nd_prime)] + 1;
+-  uint64_t max_i1 = pi[min(xp / y, max_2nd_prime)];
+-  uint64_t max_i2 = pi[max_2nd_prime];
++  uint64_t i = piRef[max(prime, min_2nd_prime)] + 1;
++  uint64_t max_i1 = piRef[min(xp / y, max_2nd_prime)];
++  uint64_t max_i2 = piRef[max_2nd_prime];
+ 
+   // x / (p * q) >= y
+   for (; i <= max_i1; i++)
+   {
+-    uint64_t xpq = xp / primes[i];
+-    sum += segmentedPi[xpq];
++    uint64_t xpq = xp / p[i];
++    sum += seg[xpq];
+   }
+ 
+   // x / (p * q) < y
+   for (; i <= max_i2; i++)
+   {
+-    uint64_t xpq = xp / primes[i];
+-    sum += segmentedPi[xpq] * 2;
++    uint64_t xpq = xp / p[i];
++    sum += seg[xpq] * 2;
+   }
+ 
+   return sum;

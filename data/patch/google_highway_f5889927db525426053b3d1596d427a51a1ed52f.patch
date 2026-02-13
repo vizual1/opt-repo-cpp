@@ -1,0 +1,1060 @@
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index a485a9bd..22991df6 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -2873,93 +2873,648 @@ HWY_API Vec128<T, N> IfNegativeThenElse(Vec128<T, N> v, Vec128<T, N> yes,
+ 
+ // ------------------------------ ShiftLeftSame
+ 
++// Template (immediate) overloads enable the compiler to generate optimal
++// instructions when the shift amount is a compile-time constant.
++template <int kBits, size_t N>
++HWY_API Vec128<uint16_t, N> ShiftLeftSame(const Vec128<uint16_t, N> v) {
++  return Vec128<uint16_t, N>{_mm_slli_epi16(v.raw, kBits)};
++}
++template <int kBits, size_t N>
++HWY_API Vec128<uint32_t, N> ShiftLeftSame(const Vec128<uint32_t, N> v) {
++  return Vec128<uint32_t, N>{_mm_slli_epi32(v.raw, kBits)};
++}
++template <int kBits, size_t N>
++HWY_API Vec128<uint64_t, N> ShiftLeftSame(const Vec128<uint64_t, N> v) {
++  return Vec128<uint64_t, N>{_mm_slli_epi64(v.raw, kBits)};
++}
++
++template <int kBits, size_t N>
++HWY_API Vec128<int16_t, N> ShiftLeftSame(const Vec128<int16_t, N> v) {
++  return Vec128<int16_t, N>{_mm_slli_epi16(v.raw, kBits)};
++}
++template <int kBits, size_t N>
++HWY_API Vec128<int32_t, N> ShiftLeftSame(const Vec128<int32_t, N> v) {
++  return Vec128<int32_t, N>{_mm_slli_epi32(v.raw, kBits)};
++}
++template <int kBits, size_t N>
++HWY_API Vec128<int64_t, N> ShiftLeftSame(const Vec128<int64_t, N> v) {
++  return Vec128<int64_t, N>{_mm_slli_epi64(v.raw, kBits)};
++}
++
++template <int kBits, typename T, size_t N, HWY_IF_T_SIZE(T, 1)>
++HWY_API Vec128<T, N> ShiftLeftSame(const Vec128<T, N> v) {
++  const Vec128<T, N> shifted{ShiftLeftSame<kBits>(Vec128<MakeWide<T>>{v.raw}).raw};
++  const DFromV<decltype(v)> d8;
++  return shifted & Set(d8, static_cast<T>((0xFF << kBits) & 0xFF));
++}
++
++// Runtime (variable) variants now switch on the shift amount and call the
++// corresponding immediate-template overload when possible. When 'bits' is a
++// compile-time constant the compiler can optimize away the switch.
+ template <size_t N>
+ HWY_API Vec128<uint16_t, N> ShiftLeftSame(const Vec128<uint16_t, N> v,
+                                           const int bits) {
+-  return Vec128<uint16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    default:
++      return Vec128<uint16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ template <size_t N>
+ HWY_API Vec128<uint32_t, N> ShiftLeftSame(const Vec128<uint32_t, N> v,
+                                           const int bits) {
+-  return Vec128<uint32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    default:
++      return Vec128<uint32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ template <size_t N>
+ HWY_API Vec128<uint64_t, N> ShiftLeftSame(const Vec128<uint64_t, N> v,
+                                           const int bits) {
+-  return Vec128<uint64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    case 32: return ShiftLeftSame<32>(v);
++    case 33: return ShiftLeftSame<33>(v);
++    case 34: return ShiftLeftSame<34>(v);
++    case 35: return ShiftLeftSame<35>(v);
++    case 36: return ShiftLeftSame<36>(v);
++    case 37: return ShiftLeftSame<37>(v);
++    case 38: return ShiftLeftSame<38>(v);
++    case 39: return ShiftLeftSame<39>(v);
++    case 40: return ShiftLeftSame<40>(v);
++    case 41: return ShiftLeftSame<41>(v);
++    case 42: return ShiftLeftSame<42>(v);
++    case 43: return ShiftLeftSame<43>(v);
++    case 44: return ShiftLeftSame<44>(v);
++    case 45: return ShiftLeftSame<45>(v);
++    case 46: return ShiftLeftSame<46>(v);
++    case 47: return ShiftLeftSame<47>(v);
++    case 48: return ShiftLeftSame<48>(v);
++    case 49: return ShiftLeftSame<49>(v);
++    case 50: return ShiftLeftSame<50>(v);
++    case 51: return ShiftLeftSame<51>(v);
++    case 52: return ShiftLeftSame<52>(v);
++    case 53: return ShiftLeftSame<53>(v);
++    case 54: return ShiftLeftSame<54>(v);
++    case 55: return ShiftLeftSame<55>(v);
++    case 56: return ShiftLeftSame<56>(v);
++    case 57: return ShiftLeftSame<57>(v);
++    case 58: return ShiftLeftSame<58>(v);
++    case 59: return ShiftLeftSame<59>(v);
++    case 60: return ShiftLeftSame<60>(v);
++    case 61: return ShiftLeftSame<61>(v);
++    case 62: return ShiftLeftSame<62>(v);
++    case 63: return ShiftLeftSame<63>(v);
++    default:
++      return Vec128<uint64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+ template <size_t N>
+ HWY_API Vec128<int16_t, N> ShiftLeftSame(const Vec128<int16_t, N> v,
+                                          const int bits) {
+-  return Vec128<int16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    default:
++      return Vec128<int16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+ template <size_t N>
+ HWY_API Vec128<int32_t, N> ShiftLeftSame(const Vec128<int32_t, N> v,
+                                          const int bits) {
+-  return Vec128<int32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    default:
++      return Vec128<int32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+ template <size_t N>
+ HWY_API Vec128<int64_t, N> ShiftLeftSame(const Vec128<int64_t, N> v,
+                                          const int bits) {
+-  return Vec128<int64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    case 32: return ShiftLeftSame<32>(v);
++    case 33: return ShiftLeftSame<33>(v);
++    case 34: return ShiftLeftSame<34>(v);
++    case 35: return ShiftLeftSame<35>(v);
++    case 36: return ShiftLeftSame<36>(v);
++    case 37: return ShiftLeftSame<37>(v);
++    case 38: return ShiftLeftSame<38>(v);
++    case 39: return ShiftLeftSame<39>(v);
++    case 40: return ShiftLeftSame<40>(v);
++    case 41: return ShiftLeftSame<41>(v);
++    case 42: return ShiftLeftSame<42>(v);
++    case 43: return ShiftLeftSame<43>(v);
++    case 44: return ShiftLeftSame<44>(v);
++    case 45: return ShiftLeftSame<45>(v);
++    case 46: return ShiftLeftSame<46>(v);
++    case 47: return ShiftLeftSame<47>(v);
++    case 48: return ShiftLeftSame<48>(v);
++    case 49: return ShiftLeftSame<49>(v);
++    case 50: return ShiftLeftSame<50>(v);
++    case 51: return ShiftLeftSame<51>(v);
++    case 52: return ShiftLeftSame<52>(v);
++    case 53: return ShiftLeftSame<53>(v);
++    case 54: return ShiftLeftSame<54>(v);
++    case 55: return ShiftLeftSame<55>(v);
++    case 56: return ShiftLeftSame<56>(v);
++    case 57: return ShiftLeftSame<57>(v);
++    case 58: return ShiftLeftSame<58>(v);
++    case 59: return ShiftLeftSame<59>(v);
++    case 60: return ShiftLeftSame<60>(v);
++    case 61: return ShiftLeftSame<61>(v);
++    case 62: return ShiftLeftSame<62>(v);
++    case 63: return ShiftLeftSame<63>(v);
++    default:
++      return Vec128<int64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+-template <typename T, size_t N, HWY_IF_T_SIZE(T, 1)>
+-HWY_API Vec128<T, N> ShiftLeftSame(const Vec128<T, N> v, const int bits) {
+-  const DFromV<decltype(v)> d8;
+-  // Use raw instead of BitCast to support N=1.
+-  const Vec128<T, N> shifted{
+-      ShiftLeftSame(Vec128<MakeWide<T>>{v.raw}, bits).raw};
+-  return shifted & Set(d8, static_cast<T>((0xFF << bits) & 0xFF));
++template <int kBits, typename T, size_t N, HWY_IF_T_SIZE(T, 1)>
++HWY_API Vec128<T, N> ShiftLeftSame(const Vec128<T, N> v, const int /*bits*/) {
++  // This overload is used only by the template <kBits> variant above.
++  return ShiftLeftSame<kBits>(v);
+ }
+ 
+ // ------------------------------ ShiftRightSame (BroadcastSignBit)
+ 
++template <int kBits, size_t N>
++HWY_API Vec128<uint16_t, N> ShiftRightSame(const Vec128<uint16_t, N> v) {
++  return Vec128<uint16_t, N>{_mm_srli_epi16(v.raw, kBits)};
++}
++template <int kBits, size_t N>
++HWY_API Vec128<uint32_t, N> ShiftRightSame(const Vec128<uint32_t, N> v) {
++  return Vec128<uint32_t, N>{_mm_srli_epi32(v.raw, kBits)};
++}
++template <int kBits, size_t N>
++HWY_API Vec128<uint64_t, N> ShiftRightSame(const Vec128<uint64_t, N> v) {
++  return Vec128<uint64_t, N>{_mm_srli_epi64(v.raw, kBits)};
++}
++
++template <int kBits, size_t N>
++HWY_API Vec128<uint8_t, N> ShiftRightSame(const Vec128<uint8_t, N> v) {
++  const Vec128<uint8_t, N> shifted{
++      ShiftRightSame<kBits>(Vec128<uint16_t>{v.raw}).raw};
++  const DFromV<decltype(v)> d8;
++  return shifted & Set(d8, static_cast<uint8_t>(0xFF >> kBits));
++}
++
++template <int kBits, size_t N>
++HWY_API Vec128<int16_t, N> ShiftRightSame(const Vec128<int16_t, N> v) {
++  return Vec128<int16_t, N>{_mm_srai_epi16(v.raw, kBits)};
++}
++
++template <int kBits, size_t N>
++HWY_API Vec128<int32_t, N> ShiftRightSame(const Vec128<int32_t, N> v) {
++  return Vec128<int32_t, N>{_mm_srai_epi32(v.raw, kBits)};
++}
++
++template <int kBits, size_t N>
++HWY_API Vec128<int64_t, N> ShiftRightSame(const Vec128<int64_t, N> v) {
++#if HWY_TARGET <= HWY_AVX3
++  return Vec128<int64_t, N>{_mm_srai_epi64(v.raw, kBits)};
++#else
++  const RebindToUnsigned<Simd<int64_t, N, 0>> du;
++  const auto right = BitCast(Simd<int64_t, N, 0>{}, ShiftRightSame<kBits>(BitCast(du, v)));
++  const auto sign = ShiftLeftSame<(64 - kBits)>(BroadcastSignBit(v));
++  return right | sign;
++#endif
++}
++
++// Runtime (variable) variants now switch on the amount and call the
++// corresponding immediate-template overload when possible.
+ template <size_t N>
+ HWY_API Vec128<uint16_t, N> ShiftRightSame(const Vec128<uint16_t, N> v,
+                                            const int bits) {
+-  return Vec128<uint16_t, N>{_mm_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftRightSame<1>(v);
++    case 2: return ShiftRightSame<2>(v);
++    case 3: return ShiftRightSame<3>(v);
++    case 4: return ShiftRightSame<4>(v);
++    case 5: return ShiftRightSame<5>(v);
++    case 6: return ShiftRightSame<6>(v);
++    case 7: return ShiftRightSame<7>(v);
++    case 8: return ShiftRightSame<8>(v);
++    case 9: return ShiftRightSame<9>(v);
++    case 10: return ShiftRightSame<10>(v);
++    case 11: return ShiftRightSame<11>(v);
++    case 12: return ShiftRightSame<12>(v);
++    case 13: return ShiftRightSame<13>(v);
++    case 14: return ShiftRightSame<14>(v);
++    case 15: return ShiftRightSame<15>(v);
++    default:
++      return Vec128<uint16_t, N>{_mm_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ template <size_t N>
+ HWY_API Vec128<uint32_t, N> ShiftRightSame(const Vec128<uint32_t, N> v,
+                                            const int bits) {
+-  return Vec128<uint32_t, N>{_mm_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftRightSame<1>(v);
++    case 2: return ShiftRightSame<2>(v);
++    case 3: return ShiftRightSame<3>(v);
++    case 4: return ShiftRightSame<4>(v);
++    case 5: return ShiftRightSame<5>(v);
++    case 6: return ShiftRightSame<6>(v);
++    case 7: return ShiftRightSame<7>(v);
++    case 8: return ShiftRightSame<8>(v);
++    case 9: return ShiftRightSame<9>(v);
++    case 10: return ShiftRightSame<10>(v);
++    case 11: return ShiftRightSame<11>(v);
++    case 12: return ShiftRightSame<12>(v);
++    case 13: return ShiftRightSame<13>(v);
++    case 14: return ShiftRightSame<14>(v);
++    case 15: return ShiftRightSame<15>(v);
++    case 16: return ShiftRightSame<16>(v);
++    case 17: return ShiftRightSame<17>(v);
++    case 18: return ShiftRightSame<18>(v);
++    case 19: return ShiftRightSame<19>(v);
++    case 20: return ShiftRightSame<20>(v);
++    case 21: return ShiftRightSame<21>(v);
++    case 22: return ShiftRightSame<22>(v);
++    case 23: return ShiftRightSame<23>(v);
++    case 24: return ShiftRightSame<24>(v);
++    case 25: return ShiftRightSame<25>(v);
++    case 26: return ShiftRightSame<26>(v);
++    case 27: return ShiftRightSame<27>(v);
++    case 28: return ShiftRightSame<28>(v);
++    case 29: return ShiftRightSame<29>(v);
++    case 30: return ShiftRightSame<30>(v);
++    case 31: return ShiftRightSame<31>(v);
++    default:
++      return Vec128<uint32_t, N>{_mm_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ template <size_t N>
+ HWY_API Vec128<uint64_t, N> ShiftRightSame(const Vec128<uint64_t, N> v,
+                                            const int bits) {
+-  return Vec128<uint64_t, N>{_mm_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};
+-}
+-
+-template <size_t N>
+-HWY_API Vec128<uint8_t, N> ShiftRightSame(Vec128<uint8_t, N> v,
+-                                          const int bits) {
+-  const DFromV<decltype(v)> d8;
+-  // Use raw instead of BitCast to support N=1.
+-  const Vec128<uint8_t, N> shifted{
+-      ShiftRightSame(Vec128<uint16_t>{v.raw}, bits).raw};
+-  return shifted & Set(d8, static_cast<uint8_t>(0xFF >> bits));
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftRightSame<1>(v);
++    case 2: return ShiftRightSame<2>(v);
++    case 3: return ShiftRightSame<3>(v);
++    case 4: return ShiftRightSame<4>(v);
++    case 5: return ShiftRightSame<5>(v);
++    case 6: return ShiftRightSame<6>(v);
++    case 7: return ShiftRightSame<7>(v);
++    case 8: return ShiftRightSame<8>(v);
++    case 9: return ShiftRightSame<9>(v);
++    case 10: return ShiftRightSame<10>(v);
++    case 11: return ShiftRightSame<11>(v);
++    case 12: return ShiftRightSame<12>(v);
++    case 13: return ShiftRightSame<13>(v);
++    case 14: return ShiftRightSame<14>(v);
++    case 15: return ShiftRightSame<15>(v);
++    case 16: return ShiftRightSame<16>(v);
++    case 17: return ShiftRightSame<17>(v);
++    case 18: return ShiftRightSame<18>(v);
++    case 19: return ShiftRightSame<19>(v);
++    case 20: return ShiftRightSame<20>(v);
++    case 21: return ShiftRightSame<21>(v);
++    case 22: return ShiftRightSame<22>(v);
++    case 23: return ShiftRightSame<23>(v);
++    case 24: return ShiftRightSame<24>(v);
++    case 25: return ShiftRightSame<25>(v);
++    case 26: return ShiftRightSame<26>(v);
++    case 27: return ShiftRightSame<27>(v);
++    case 28: return ShiftRightSame<28>(v);
++    case 29: return ShiftRightSame<29>(v);
++    case 30: return ShiftRightSame<30>(v);
++    case 31: return ShiftRightSame<31>(v);
++    case 32: return ShiftRightSame<32>(v);
++    case 33: return ShiftRightSame<33>(v);
++    case 34: return ShiftRightSame<34>(v);
++    case 35: return ShiftRightSame<35>(v);
++    case 36: return ShiftRightSame<36>(v);
++    case 37: return ShiftRightSame<37>(v);
++    case 38: return ShiftRightSame<38>(v);
++    case 39: return ShiftRightSame<39>(v);
++    case 40: return ShiftRightSame<40>(v);
++    case 41: return ShiftRightSame<41>(v);
++    case 42: return ShiftRightSame<42>(v);
++    case 43: return ShiftRightSame<43>(v);
++    case 44: return ShiftRightSame<44>(v);
++    case 45: return ShiftRightSame<45>(v);
++    case 46: return ShiftRightSame<46>(v);
++    case 47: return ShiftRightSame<47>(v);
++    case 48: return ShiftRightSame<48>(v);
++    case 49: return ShiftRightSame<49>(v);
++    case 50: return ShiftRightSame<50>(v);
++    case 51: return ShiftRightSame<51>(v);
++    case 52: return ShiftRightSame<52>(v);
++    case 53: return ShiftRightSame<53>(v);
++    case 54: return ShiftRightSame<54>(v);
++    case 55: return ShiftRightSame<55>(v);
++    case 56: return ShiftRightSame<56>(v);
++    case 57: return ShiftRightSame<57>(v);
++    case 58: return ShiftRightSame<58>(v);
++    case 59: return ShiftRightSame<59>(v);
++    case 60: return ShiftRightSame<60>(v);
++    case 61: return ShiftRightSame<61>(v);
++    case 62: return ShiftRightSame<62>(v);
++    case 63: return ShiftRightSame<63>(v);
++    default:
++      return Vec128<uint64_t, N>{_mm_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+ template <size_t N>
+ HWY_API Vec128<int16_t, N> ShiftRightSame(const Vec128<int16_t, N> v,
+                                           const int bits) {
+-  return Vec128<int16_t, N>{_mm_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftRightSame<1>(v);
++    case 2: return ShiftRightSame<2>(v);
++    case 3: return ShiftRightSame<3>(v);
++    case 4: return ShiftRightSame<4>(v);
++    case 5: return ShiftRightSame<5>(v);
++    case 6: return ShiftRightSame<6>(v);
++    case 7: return ShiftRightSame<7>(v);
++    case 8: return ShiftRightSame<8>(v);
++    case 9: return ShiftRightSame<9>(v);
++    case 10: return ShiftRightSame<10>(v);
++    case 11: return ShiftRightSame<11>(v);
++    case 12: return ShiftRightSame<12>(v);
++    case 13: return ShiftRightSame<13>(v);
++    case 14: return ShiftRightSame<14>(v);
++    case 15: return ShiftRightSame<15>(v);
++    default:
++      return Vec128<int16_t, N>{_mm_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+ template <size_t N>
+ HWY_API Vec128<int32_t, N> ShiftRightSame(const Vec128<int32_t, N> v,
+                                           const int bits) {
+-  return Vec128<int32_t, N>{_mm_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftRightSame<1>(v);
++    case 2: return ShiftRightSame<2>(v);
++    case 3: return ShiftRightSame<3>(v);
++    case 4: return ShiftRightSame<4>(v);
++    case 5: return ShiftRightSame<5>(v);
++    case 6: return ShiftRightSame<6>(v);
++    case 7: return ShiftRightSame<7>(v);
++    case 8: return ShiftRightSame<8>(v);
++    case 9: return ShiftRightSame<9>(v);
++    case 10: return ShiftRightSame<10>(v);
++    case 11: return ShiftRightSame<11>(v);
++    case 12: return ShiftRightSame<12>(v);
++    case 13: return ShiftRightSame<13>(v);
++    case 14: return ShiftRightSame<14>(v);
++    case 15: return ShiftRightSame<15>(v);
++    case 16: return ShiftRightSame<16>(v);
++    case 17: return ShiftRightSame<17>(v);
++    case 18: return ShiftRightSame<18>(v);
++    case 19: return ShiftRightSame<19>(v);
++    case 20: return ShiftRightSame<20>(v);
++    case 21: return ShiftRightSame<21>(v);
++    case 22: return ShiftRightSame<22>(v);
++    case 23: return ShiftRightSame<23>(v);
++    case 24: return ShiftRightSame<24>(v);
++    case 25: return ShiftRightSame<25>(v);
++    case 26: return ShiftRightSame<26>(v);
++    case 27: return ShiftRightSame<27>(v);
++    case 28: return ShiftRightSame<28>(v);
++    case 29: return ShiftRightSame<29>(v);
++    case 30: return ShiftRightSame<30>(v);
++    case 31: return ShiftRightSame<31>(v);
++    default:
++      return Vec128<int32_t, N>{_mm_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
++
+ template <size_t N>
+ HWY_API Vec128<int64_t, N> ShiftRightSame(const Vec128<int64_t, N> v,
+                                           const int bits) {
+ #if HWY_TARGET <= HWY_AVX3
+-  return Vec128<int64_t, N>{_mm_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftRightSame<1>(v);
++    case 2: return ShiftRightSame<2>(v);
++    case 3: return ShiftRightSame<3>(v);
++    case 4: return ShiftRightSame<4>(v);
++    case 5: return ShiftRightSame<5>(v);
++    case 6: return ShiftRightSame<6>(v);
++    case 7: return ShiftRightSame<7>(v);
++    case 8: return ShiftRightSame<8>(v);
++    case 9: return ShiftRightSame<9>(v);
++    case 10: return ShiftRightSame<10>(v);
++    case 11: return ShiftRightSame<11>(v);
++    case 12: return ShiftRightSame<12>(v);
++    case 13: return ShiftRightSame<13>(v);
++    case 14: return ShiftRightSame<14>(v);
++    case 15: return ShiftRightSame<15>(v);
++    case 16: return ShiftRightSame<16>(v);
++    case 17: return ShiftRightSame<17>(v);
++    case 18: return ShiftRightSame<18>(v);
++    case 19: return ShiftRightSame<19>(v);
++    case 20: return ShiftRightSame<20>(v);
++    case 21: return ShiftRightSame<21>(v);
++    case 22: return ShiftRightSame<22>(v);
++    case 23: return ShiftRightSame<23>(v);
++    case 24: return ShiftRightSame<24>(v);
++    case 25: return ShiftRightSame<25>(v);
++    case 26: return ShiftRightSame<26>(v);
++    case 27: return ShiftRightSame<27>(v);
++    case 28: return ShiftRightSame<28>(v);
++    case 29: return ShiftRightSame<29>(v);
++    case 30: return ShiftRightSame<30>(v);
++    case 31: return ShiftRightSame<31>(v);
++    case 32: return ShiftRightSame<32>(v);
++    case 33: return ShiftRightSame<33>(v);
++    case 34: return ShiftRightSame<34>(v);
++    case 35: return ShiftRightSame<35>(v);
++    case 36: return ShiftRightSame<36>(v);
++    case 37: return ShiftRightSame<37>(v);
++    case 38: return ShiftRightSame<38>(v);
++    case 39: return ShiftRightSame<39>(v);
++    case 40: return ShiftRightSame<40>(v);
++    case 41: return ShiftRightSame<41>(v);
++    case 42: return ShiftRightSame<42>(v);
++    case 43: return ShiftRightSame<43>(v);
++    case 44: return ShiftRightSame<44>(v);
++    case 45: return ShiftRightSame<45>(v);
++    case 46: return ShiftRightSame<46>(v);
++    case 47: return ShiftRightSame<47>(v);
++    case 48: return ShiftRightSame<48>(v);
++    case 49: return ShiftRightSame<49>(v);
++    case 50: return ShiftRightSame<50>(v);
++    case 51: return ShiftRightSame<51>(v);
++    case 52: return ShiftRightSame<52>(v);
++    case 53: return ShiftRightSame<53>(v);
++    case 54: return ShiftRightSame<54>(v);
++    case 55: return ShiftRightSame<55>(v);
++    case 56: return ShiftRightSame<56>(v);
++    case 57: return ShiftRightSame<57>(v);
++    case 58: return ShiftRightSame<58>(v);
++    case 59: return ShiftRightSame<59>(v);
++    case 60: return ShiftRightSame<60>(v);
++    case 61: return ShiftRightSame<61>(v);
++    case 62: return ShiftRightSame<62>(v);
++    case 63: return ShiftRightSame<63>(v);
++    default:
++      return Vec128<int64_t, N>{_mm_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ #else
+   const DFromV<decltype(v)> di;
+   const RebindToUnsigned<decltype(di)> du;
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index c1892122..d874ed0f 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -1855,29 +1855,171 @@ HWY_API Vec256<T> IfNegativeThenElse(Vec256<T> v, Vec256<T> yes, Vec256<T> no) {
+ 
+ // ------------------------------ ShiftLeftSame
+ 
+-HWY_API Vec256<uint16_t> ShiftLeftSame(const Vec256<uint16_t> v,
+-                                       const int bits) {
+-  return Vec256<uint16_t>{_mm256_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++// Immediate-template overloads allow the compiler to constant-propagate the
++// shift amount and emit optimal instructions when 'bits' is known at compile
++// time. Runtime variants below will dispatch to these when possible.
++template <int kBits>
++HWY_API Vec256<uint16_t> ShiftLeftSame(const Vec256<uint16_t> v) {
++  return Vec256<uint16_t>{_mm256_slli_epi16(v.raw, kBits)};
+ }
+-HWY_API Vec256<uint32_t> ShiftLeftSame(const Vec256<uint32_t> v,
+-                                       const int bits) {
+-  return Vec256<uint32_t>{_mm256_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++template <int kBits>
++HWY_API Vec256<uint32_t> ShiftLeftSame(const Vec256<uint32_t> v) {
++  return Vec256<uint32_t>{_mm256_slli_epi32(v.raw, kBits)};
+ }
+-HWY_API Vec256<uint64_t> ShiftLeftSame(const Vec256<uint64_t> v,
+-                                       const int bits) {
+-  return Vec256<uint64_t>{_mm256_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++template <int kBits>
++HWY_API Vec256<uint64_t> ShiftLeftSame(const Vec256<uint64_t> v) {
++  return Vec256<uint64_t>{_mm256_slli_epi64(v.raw, kBits)};
++}
++
++template <int kBits>
++HWY_API Vec256<int16_t> ShiftLeftSame(const Vec256<int16_t> v) {
++  return Vec256<int16_t>{_mm256_slli_epi16(v.raw, kBits)};
++}
++
++template <int kBits>
++HWY_API Vec256<int32_t> ShiftLeftSame(const Vec256<int32_t> v) {
++  return Vec256<int32_t>{_mm256_slli_epi32(v.raw, kBits)};
++}
++
++template <int kBits>
++HWY_API Vec256<int64_t> ShiftLeftSame(const Vec256<int64_t> v) {
++  return Vec256<int64_t>{_mm256_slli_epi64(v.raw, kBits)};
+ }
+ 
+-HWY_API Vec256<int16_t> ShiftLeftSame(const Vec256<int16_t> v, const int bits) {
+-  return Vec256<int16_t>{_mm256_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++// Runtime dispatchers that call the immediate-template overloads when the
++// shift amount is known (or optimizable) at compile time. This enables the
++// compiler to constant-propagate 'bits' and produce better code.
++HWY_API Vec256<uint16_t> ShiftLeftSame(const Vec256<uint16_t> v, const int bits) {
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    default:
++      return Vec256<uint16_t>{_mm256_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+-HWY_API Vec256<int32_t> ShiftLeftSame(const Vec256<int32_t> v, const int bits) {
+-  return Vec256<int32_t>{_mm256_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++HWY_API Vec256<uint32_t> ShiftLeftSame(const Vec256<uint32_t> v, const int bits) {
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    default:
++      return Vec256<uint32_t>{_mm256_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+-HWY_API Vec256<int64_t> ShiftLeftSame(const Vec256<int64_t> v, const int bits) {
+-  return Vec256<int64_t>{_mm256_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++HWY_API Vec256<uint64_t> ShiftLeftSame(const Vec256<uint64_t> v, const int bits) {
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    case 32: return ShiftLeftSame<32>(v);
++    case 33: return ShiftLeftSame<33>(v);
++    case 34: return ShiftLeftSame<34>(v);
++    case 35: return ShiftLeftSame<35>(v);
++    case 36: return ShiftLeftSame<36>(v);
++    case 37: return ShiftLeftSame<37>(v);
++    case 38: return ShiftLeftSame<38>(v);
++    case 39: return ShiftLeftSame<39>(v);
++    case 40: return ShiftLeftSame<40>(v);
++    case 41: return ShiftLeftSame<41>(v);
++    case 42: return ShiftLeftSame<42>(v);
++    case 43: return ShiftLeftSame<43>(v);
++    case 44: return ShiftLeftSame<44>(v);
++    case 45: return ShiftLeftSame<45>(v);
++    case 46: return ShiftLeftSame<46>(v);
++    case 47: return ShiftLeftSame<47>(v);
++    case 48: return ShiftLeftSame<48>(v);
++    case 49: return ShiftLeftSame<49>(v);
++    case 50: return ShiftLeftSame<50>(v);
++    case 51: return ShiftLeftSame<51>(v);
++    case 52: return ShiftLeftSame<52>(v);
++    case 53: return ShiftLeftSame<53>(v);
++    case 54: return ShiftLeftSame<54>(v);
++    case 55: return ShiftLeftSame<55>(v);
++    case 56: return ShiftLeftSame<56>(v);
++    case 57: return ShiftLeftSame<57>(v);
++    case 58: return ShiftLeftSame<58>(v);
++    case 59: return ShiftLeftSame<59>(v);
++    case 60: return ShiftLeftSame<60>(v);
++    case 61: return ShiftLeftSame<61>(v);
++    case 62: return ShiftLeftSame<62>(v);
++    case 63: return ShiftLeftSame<63>(v);
++    default:
++      return Vec256<uint64_t>{_mm256_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+ template <typename T, HWY_IF_T_SIZE(T, 1)>
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index 74d02cc5..a550533a 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -971,29 +971,167 @@ HWY_API Vec512<uint64_t> RotateRight(const Vec512<uint64_t> v) {
+ 
+ // ------------------------------ ShiftLeftSame
+ 
+-HWY_API Vec512<uint16_t> ShiftLeftSame(const Vec512<uint16_t> v,
+-                                       const int bits) {
+-  return Vec512<uint16_t>{_mm512_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++// Immediate-template overloads to allow constant propagation of 'bits'.
++template <int kBits>
++HWY_API Vec512<uint16_t> ShiftLeftSame(const Vec512<uint16_t> v) {
++  return Vec512<uint16_t>{_mm512_slli_epi16(v.raw, kBits)};
+ }
+-HWY_API Vec512<uint32_t> ShiftLeftSame(const Vec512<uint32_t> v,
+-                                       const int bits) {
+-  return Vec512<uint32_t>{_mm512_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++template <int kBits>
++HWY_API Vec512<uint32_t> ShiftLeftSame(const Vec512<uint32_t> v) {
++  return Vec512<uint32_t>{_mm512_slli_epi32(v.raw, kBits)};
+ }
+-HWY_API Vec512<uint64_t> ShiftLeftSame(const Vec512<uint64_t> v,
+-                                       const int bits) {
+-  return Vec512<uint64_t>{_mm512_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++template <int kBits>
++HWY_API Vec512<uint64_t> ShiftLeftSame(const Vec512<uint64_t> v) {
++  return Vec512<uint64_t>{_mm512_slli_epi64(v.raw, kBits)};
++}
++
++template <int kBits>
++HWY_API Vec512<int16_t> ShiftLeftSame(const Vec512<int16_t> v) {
++  return Vec512<int16_t>{_mm512_slli_epi16(v.raw, kBits)};
+ }
+ 
+-HWY_API Vec512<int16_t> ShiftLeftSame(const Vec512<int16_t> v, const int bits) {
+-  return Vec512<int16_t>{_mm512_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++template <int kBits>
++HWY_API Vec512<int32_t> ShiftLeftSame(const Vec512<int32_t> v) {
++  return Vec512<int32_t>{_mm512_slli_epi32(v.raw, kBits)};
+ }
+ 
+-HWY_API Vec512<int32_t> ShiftLeftSame(const Vec512<int32_t> v, const int bits) {
+-  return Vec512<int32_t>{_mm512_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++template <int kBits>
++HWY_API Vec512<int64_t> ShiftLeftSame(const Vec512<int64_t> v) {
++  return Vec512<int64_t>{_mm512_slli_epi64(v.raw, kBits)};
+ }
+ 
+-HWY_API Vec512<int64_t> ShiftLeftSame(const Vec512<int64_t> v, const int bits) {
+-  return Vec512<int64_t>{_mm512_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++// Runtime dispatchers that call the immediate-template overloads when the
++// shift amount is known at compile time. This helps the compiler constant-
++// propagate 'bits' and produce optimal code paths.
++HWY_API Vec512<uint16_t> ShiftLeftSame(const Vec512<uint16_t> v, const int bits) {
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    default:
++      return Vec512<uint16_t>{_mm512_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};
++  }
++}
++HWY_API Vec512<uint32_t> ShiftLeftSame(const Vec512<uint32_t> v, const int bits) {
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    default:
++      return Vec512<uint32_t>{_mm512_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};
++  }
++}
++HWY_API Vec512<uint64_t> ShiftLeftSame(const Vec512<uint64_t> v, const int bits) {
++  switch (bits) {
++    case 0: return v;
++    case 1: return ShiftLeftSame<1>(v);
++    case 2: return ShiftLeftSame<2>(v);
++    case 3: return ShiftLeftSame<3>(v);
++    case 4: return ShiftLeftSame<4>(v);
++    case 5: return ShiftLeftSame<5>(v);
++    case 6: return ShiftLeftSame<6>(v);
++    case 7: return ShiftLeftSame<7>(v);
++    case 8: return ShiftLeftSame<8>(v);
++    case 9: return ShiftLeftSame<9>(v);
++    case 10: return ShiftLeftSame<10>(v);
++    case 11: return ShiftLeftSame<11>(v);
++    case 12: return ShiftLeftSame<12>(v);
++    case 13: return ShiftLeftSame<13>(v);
++    case 14: return ShiftLeftSame<14>(v);
++    case 15: return ShiftLeftSame<15>(v);
++    case 16: return ShiftLeftSame<16>(v);
++    case 17: return ShiftLeftSame<17>(v);
++    case 18: return ShiftLeftSame<18>(v);
++    case 19: return ShiftLeftSame<19>(v);
++    case 20: return ShiftLeftSame<20>(v);
++    case 21: return ShiftLeftSame<21>(v);
++    case 22: return ShiftLeftSame<22>(v);
++    case 23: return ShiftLeftSame<23>(v);
++    case 24: return ShiftLeftSame<24>(v);
++    case 25: return ShiftLeftSame<25>(v);
++    case 26: return ShiftLeftSame<26>(v);
++    case 27: return ShiftLeftSame<27>(v);
++    case 28: return ShiftLeftSame<28>(v);
++    case 29: return ShiftLeftSame<29>(v);
++    case 30: return ShiftLeftSame<30>(v);
++    case 31: return ShiftLeftSame<31>(v);
++    case 32: return ShiftLeftSame<32>(v);
++    case 33: return ShiftLeftSame<33>(v);
++    case 34: return ShiftLeftSame<34>(v);
++    case 35: return ShiftLeftSame<35>(v);
++    case 36: return ShiftLeftSame<36>(v);
++    case 37: return ShiftLeftSame<37>(v);
++    case 38: return ShiftLeftSame<38>(v);
++    case 39: return ShiftLeftSame<39>(v);
++    case 40: return ShiftLeftSame<40>(v);
++    case 41: return ShiftLeftSame<41>(v);
++    case 42: return ShiftLeftSame<42>(v);
++    case 43: return ShiftLeftSame<43>(v);
++    case 44: return ShiftLeftSame<44>(v);
++    case 45: return ShiftLeftSame<45>(v);
++    case 46: return ShiftLeftSame<46>(v);
++    case 47: return ShiftLeftSame<47>(v);
++    case 48: return ShiftLeftSame<48>(v);
++    case 49: return ShiftLeftSame<49>(v);
++    case 50: return ShiftLeftSame<50>(v);
++    case 51: return ShiftLeftSame<51>(v);
++    case 52: return ShiftLeftSame<52>(v);
++    case 53: return ShiftLeftSame<53>(v);
++    case 54: return ShiftLeftSame<54>(v);
++    case 55: return ShiftLeftSame<55>(v);
++    case 56: return ShiftLeftSame<56>(v);
++    case 57: return ShiftLeftSame<57>(v);
++    case 58: return ShiftLeftSame<58>(v);
++    case 59: return ShiftLeftSame<59>(v);
++    case 60: return ShiftLeftSame<60>(v);
++    case 61: return ShiftLeftSame<61>(v);
++    case 62: return ShiftLeftSame<62>(v);
++    case 63: return ShiftLeftSame<63>(v);
++    default:
++      return Vec512<uint64_t>{_mm512_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};
++  }
+ }
+ 
+ template <typename T, HWY_IF_T_SIZE(T, 1)>

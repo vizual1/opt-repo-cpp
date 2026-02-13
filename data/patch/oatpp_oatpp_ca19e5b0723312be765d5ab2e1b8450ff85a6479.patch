@@ -1,0 +1,63 @@
+diff --git a/src/oatpp/web/server/HttpConnectionHandler.cpp b/src/oatpp/web/server/HttpConnectionHandler.cpp
+index 61d9d654..4224ba63 100644
+--- a/src/oatpp/web/server/HttpConnectionHandler.cpp
++++ b/src/oatpp/web/server/HttpConnectionHandler.cpp
+@@ -73,8 +73,11 @@ void HttpConnectionHandler::handleConnection(const std::shared_ptr<oatpp::data::
+     connection->setOutputStreamIOMode(oatpp::data::stream::IOMode::BLOCKING);
+     connection->setInputStreamIOMode(oatpp::data::stream::IOMode::BLOCKING);
+ 
+-    /* Create working thread */
+-    std::thread thread(&HttpProcessor::Task::run, HttpProcessor::Task(m_components, connection, &m_spawns));
++    /* Create working thread using move-captured task to avoid an extra copy */
++    HttpProcessor::Task task(m_components, connection, &m_spawns);
++    std::thread thread([task = std::move(task)]() mutable {
++      task.run();
++    });
+ 
+     /* Get hardware concurrency -1 in order to have 1cpu free of workers. */
+     v_int32 concurrency = oatpp::concurrency::getHardwareConcurrency();
+diff --git a/src/oatpp/web/server/HttpProcessor.cpp b/src/oatpp/web/server/HttpProcessor.cpp
+index 6483c729..ef990450 100644
+--- a/src/oatpp/web/server/HttpProcessor.cpp
++++ b/src/oatpp/web/server/HttpProcessor.cpp
+@@ -228,6 +228,15 @@ HttpProcessor::Task::Task(const std::shared_ptr<Components>& components,
+   (*m_counter)++;
+ }
+ 
++HttpProcessor::Task::Task(HttpProcessor::Task &&other) noexcept
++  : m_components(std::move(other.m_components))
++  , m_connection(std::move(other.m_connection))
++  , m_counter(other.m_counter)
++{
++  /* Move constructor intentionally does not increment the task counter. */
++  other.m_counter = nullptr;
++}
++
+ HttpProcessor::Task::Task(const HttpProcessor::Task &copy)
+   : m_components(copy.m_components)
+   , m_connection(copy.m_connection)
+@@ -258,7 +267,7 @@ void HttpProcessor::Task::run(){
+ 
+ }
+ HttpProcessor::Task::~Task() {
+-  (*m_counter)--;
++  if(m_counter) (*m_counter)--;
+ }
+ 
+ ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+diff --git a/src/oatpp/web/server/HttpProcessor.hpp b/src/oatpp/web/server/HttpProcessor.hpp
+index 36e17add..804059a2 100644
+--- a/src/oatpp/web/server/HttpProcessor.hpp
++++ b/src/oatpp/web/server/HttpProcessor.hpp
+@@ -207,6 +207,11 @@ public:
+      */
+     Task(const Task &copy);
+ 
++    /**
++     * Move-Constructor. Transfers ownership without incrementing the task counter.
++     */
++    Task(Task &&other) noexcept;
++
+     /**
+      * Destructor, needed for counting.
+      */

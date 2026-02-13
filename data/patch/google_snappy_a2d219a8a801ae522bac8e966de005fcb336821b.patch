@@ -1,0 +1,61 @@
+diff --git a/snappy.cc b/snappy.cc
+index b072e5d..a58f97d 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -51,6 +51,12 @@
+ #include <immintrin.h>
+ #endif
+ 
++// If compiled with AVX support (but without BMI2), we still need immintrin.h
++// for the AVX intrinsics used in MemCopy64.
++#if (defined(__AVX__) || defined(__AVX2__)) && !defined(SNAPPY_HAVE_BMI2)
++#include <immintrin.h>
++#endif
++
+ #include <algorithm>
+ #include <array>
+ #include <cstddef>
+@@ -1000,6 +1006,23 @@ void MemCopy64(char* dst, const void* src, size_t size) {
+                                         dst) ||
+          std::less_equal<const void*>()(dst + size, src));
+ 
++  // Prefer AVX 32-byte unaligned load/stores on capable x86 platforms. Fall
++  // back to std::memmove otherwise.
++#if defined(__x86_64__) && (defined(__AVX__) || defined(__AVX2__))
++  // Ensure header availability even if SNAPPY_HAVE_BMI2 is not set.
++
++  // Load and store 32 bytes at a time. Use unaligned intrinsics to match
++  // behaviour of std::memmove for arbitrary pointers. We perform a load
++  // followed by a store for each 32-byte chunk so that reads happen before
++  // writes and overlapping source/destination up to 64 bytes is handled.
++  __m256i a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src));
++  _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst), a);
++  if (SNAPPY_PREDICT_FALSE(size > kShortMemCopy)) {
++    __m256i b = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(
++        static_cast<const uint8_t*>(src) + kShortMemCopy));
++    _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + kShortMemCopy), b);
++  }
++#else
+   // We know that src and dst are at least size bytes apart. However, because we
+   // might copy more than size bytes the copy still might overlap past size.
+   // E.g. if src and dst appear consecutively in memory (src + size == dst).
+@@ -1010,6 +1033,7 @@ void MemCopy64(char* dst, const void* src, size_t size) {
+                  static_cast<const uint8_t*>(src) + kShortMemCopy,
+                  kLongMemCopy - kShortMemCopy);
+   }
++#endif
+ }
+ 
+ void MemCopy64(ptrdiff_t dst, const void* src, size_t size) {
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

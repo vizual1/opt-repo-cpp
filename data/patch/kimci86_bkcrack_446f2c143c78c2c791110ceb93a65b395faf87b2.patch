@@ -1,0 +1,28 @@
+diff --git a/src/password.cpp b/src/password.cpp
+index 16cbe15..83bbb30 100644
+--- a/src/password.cpp
++++ b/src/password.cpp
+@@ -37,11 +37,22 @@ public:
+             y[4] = (y[5] - 1) * MultTab::multInv - lsb(x[5]);
+             z[3] = Crc32Tab::crc32inv(z[4], msb(y[4]));
+ 
++            // many p4 produce the same msb(y[3]) value; collect unique msb values first
++            std::bitset<1 << 8> seen_msb{};
+             for (const auto p4 : charset4)
+             {
+                 x[4] = Crc32Tab::crc32inv(x[5], p4);
+                 y[3] = (y[4] - 1) * MultTab::multInv - lsb(x[4]);
+-                z[2] = Crc32Tab::crc32inv(z[3], msb(y[3]));
++                seen_msb.set(msb(y[3]));
++            }
++
++            // compute z0 and zm1 contributions only once per unique msb(y[3])
++            for (std::size_t b = 0; b < (1u << 8); ++b)
++            {
++                if (!seen_msb.test(b))
++                    continue;
++
++                z[2] = Crc32Tab::crc32inv(z[3], static_cast<std::uint8_t>(b));
+                 z[1] = Crc32Tab::crc32inv(z[2], 0);
+                 z[0] = Crc32Tab::crc32inv(z[1], 0);
+ 

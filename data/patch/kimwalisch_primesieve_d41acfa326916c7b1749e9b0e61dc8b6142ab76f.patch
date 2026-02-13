@@ -1,0 +1,56 @@
+diff --git a/include/primesieve/pmath.hpp b/include/primesieve/pmath.hpp
+index 73b549f4..f0d94514 100644
+--- a/include/primesieve/pmath.hpp
++++ b/include/primesieve/pmath.hpp
+@@ -18,6 +18,10 @@
+ #include <limits>
+ #include <type_traits>
+ 
++#ifdef _MSC_VER
++#include <intrin.h>
++#endif
++
+ namespace {
+ 
+ template <typename X, typename Y>
+@@ -52,20 +56,29 @@ inline T floorPow2(T x)
+ template <typename T>
+ inline T ilog2(T x)
+ {
+-  T log2 = 0;
+-  T bits = numberOfBits<T>();
++  if (x == 0)
++    return 0;
+ 
+-  for (T i = bits / 2; i > 0; i /= 2)
++  using U = typename std::make_unsigned<T>::type;
++  U ux = (U) x;
++
++#ifdef _MSC_VER
++  unsigned long index = 0;
++  if (sizeof(U) <= 4)
+   {
+-    T one = 1;
+-    if (x >= (one << i))
+-    {
+-      x >>= i;
+-      log2 += i;
+-    }
++    _BitScanReverse(&index, (unsigned long) ux);
++    return (T) index;
+   }
+-
+-  return log2;
++  else
++  {
++    _BitScanReverse64(&index, (unsigned long long) ux);
++    return (T) index;
++  }
++#else
++  // Use builtin clzll which counts leading zeros on unsigned long long.
++  // __builtin_clzll(0) is undefined, but we've handled x == 0 above.
++  return (T) ((int)(sizeof(unsigned long long) * 8 - 1) - __builtin_clzll((unsigned long long) ux));
++#endif
+ }
+ 
+ #if __cplusplus >= 201402L

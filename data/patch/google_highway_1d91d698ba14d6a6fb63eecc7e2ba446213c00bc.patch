@@ -1,0 +1,274 @@
+diff --git a/hwy/base.h b/hwy/base.h
+index a539414f..be738970 100644
+--- a/hwy/base.h
++++ b/hwy/base.h
+@@ -18,6 +18,13 @@
+ 
+ // For SIMD module implementations and their callers, target-independent.
+ 
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
++
+ // IWYU pragma: begin_exports
+ #include <stddef.h>
+ #include <stdint.h>
+diff --git a/hwy/detect_targets.h b/hwy/detect_targets.h
+index 26aee9cd..b69abc90 100644
+--- a/hwy/detect_targets.h
++++ b/hwy/detect_targets.h
+@@ -16,6 +16,13 @@
+ #ifndef HIGHWAY_HWY_DETECT_TARGETS_H_
+ #define HIGHWAY_HWY_DETECT_TARGETS_H_
+ 
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
++
+ // Defines targets and chooses which to enable.
+ 
+ #include "hwy/detect_compiler_arch.h"
+diff --git a/hwy/ops/arm_neon-inl.h b/hwy/ops/arm_neon-inl.h
+index 544f4345..63447eaf 100644
+--- a/hwy/ops/arm_neon-inl.h
++++ b/hwy/ops/arm_neon-inl.h
+@@ -28,6 +28,12 @@ HWY_BEFORE_NAMESPACE();
+ HWY_DIAGNOSTICS(push)
+ HWY_DIAGNOSTICS_OFF(disable : 4701, ignored "-Wuninitialized")
+ #include <arm_neon.h>  // NOLINT(build/include_order)
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ HWY_DIAGNOSTICS(pop)
+ 
+ // Must come after arm_neon.h.
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 1de40106..f1a85915 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -17,6 +17,12 @@
+ // External include guard in highway.h - see comment there.
+ 
+ #include <arm_sve.h>
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ #include "hwy/ops/shared-inl.h"
+ 
+diff --git a/hwy/ops/emu128-inl.h b/hwy/ops/emu128-inl.h
+index f60dc8dd..90eaf3e5 100644
+--- a/hwy/ops/emu128-inl.h
++++ b/hwy/ops/emu128-inl.h
+@@ -17,6 +17,12 @@
+ // External include guard in highway.h - see comment there.
+ 
+ #include "hwy/base.h"
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ #ifndef HWY_NO_LIBCXX
+ #include <math.h>  // sqrtf
+ #endif
+diff --git a/hwy/ops/generic_ops-inl.h b/hwy/ops/generic_ops-inl.h
+index 34e67331..1c302aa6 100644
+--- a/hwy/ops/generic_ops-inl.h
++++ b/hwy/ops/generic_ops-inl.h
+@@ -21,6 +21,12 @@
+ // the generic implementation here if native ops are already defined.
+ 
+ #include "hwy/base.h"
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ // Define detail::Shuffle1230 etc, but only when viewing the current header;
+ // normally this is included via highway.h, which includes ops/*.h.
+diff --git a/hwy/ops/ppc_vsx-inl.h b/hwy/ops/ppc_vsx-inl.h
+index 33ba77a1..02dfb931 100644
+--- a/hwy/ops/ppc_vsx-inl.h
++++ b/hwy/ops/ppc_vsx-inl.h
+@@ -39,6 +39,12 @@
+ #pragma pop_macro("vector")
+ #pragma pop_macro("pixel")
+ #pragma pop_macro("bool")
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ #include "hwy/ops/shared-inl.h"
+ 
+diff --git a/hwy/ops/rvv-inl.h b/hwy/ops/rvv-inl.h
+index 78f12a7e..0452af71 100644
+--- a/hwy/ops/rvv-inl.h
++++ b/hwy/ops/rvv-inl.h
+@@ -17,6 +17,12 @@
+ // External include guard in highway.h - see comment there.
+ 
+ #include <riscv_vector.h>
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ #include "hwy/ops/shared-inl.h"
+ 
+diff --git a/hwy/ops/scalar-inl.h b/hwy/ops/scalar-inl.h
+index 44629e09..4bd045b6 100644
+--- a/hwy/ops/scalar-inl.h
++++ b/hwy/ops/scalar-inl.h
+@@ -17,6 +17,12 @@
+ // External include guard in highway.h - see comment there.
+ 
+ #include <stdint.h>
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ #ifndef HWY_NO_LIBCXX
+ #include <math.h>  // sqrtf
+ #endif
+diff --git a/hwy/ops/set_macros-inl.h b/hwy/ops/set_macros-inl.h
+index 9ff295cc..044f64f2 100644
+--- a/hwy/ops/set_macros-inl.h
++++ b/hwy/ops/set_macros-inl.h
+@@ -27,6 +27,12 @@
+ #endif  // HWY_SET_MACROS_PER_TARGET
+ 
+ #include "hwy/detect_compiler_arch.h"  // IWYU: export
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ #include "hwy/detect_targets.h"        // IWYU: export
+ 
+ #undef HWY_NAMESPACE
+diff --git a/hwy/ops/wasm_128-inl.h b/hwy/ops/wasm_128-inl.h
+index d37fb2c9..87cbeb3f 100644
+--- a/hwy/ops/wasm_128-inl.h
++++ b/hwy/ops/wasm_128-inl.h
+@@ -17,6 +17,12 @@
+ // External include guard in highway.h - see comment there.
+ 
+ #include <wasm_simd128.h>
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ #include "hwy/base.h"
+ #include "hwy/ops/shared-inl.h"
+diff --git a/hwy/ops/wasm_256-inl.h b/hwy/ops/wasm_256-inl.h
+index 0acb6cba..44fb844f 100644
+--- a/hwy/ops/wasm_256-inl.h
++++ b/hwy/ops/wasm_256-inl.h
+@@ -18,6 +18,12 @@
+ 
+ // For half-width vectors. Already includes base.h and shared-inl.h.
+ #include "hwy/ops/wasm_128-inl.h"
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ HWY_BEFORE_NAMESPACE();
+ namespace hwy {
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index 6a002fde..5c6ed17a 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -19,6 +19,12 @@
+ 
+ // Must come before HWY_DIAGNOSTICS and HWY_COMPILER_GCC_ACTUAL
+ #include "hwy/base.h"
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ // Avoid uninitialized warnings in GCC's emmintrin.h - see
+ // https://github.com/google/highway/issues/710 and pull/902
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index 334b4c43..e3cee2e8 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -50,6 +50,12 @@ HWY_DIAGNOSTICS_OFF(disable : 4701 4703 6001 26494,
+ 
+ // For half-width vectors. Already includes base.h.
+ #include "hwy/ops/shared-inl.h"
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ // Already included by shared-inl, but do it again to avoid IDE warnings.
+ #include "hwy/ops/x86_128-inl.h"
+ 
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index dda4983d..735c16fc 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -82,6 +82,12 @@ HWY_DIAGNOSTICS_OFF(disable : 4701 4703 6001 26494,
+ 
+ // For half-width vectors. Already includes base.h and shared-inl.h.
+ #include "hwy/ops/x86_256-inl.h"
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ 
+ HWY_BEFORE_NAMESPACE();
+ namespace hwy {
+diff --git a/hwy/targets.cc b/hwy/targets.cc
+index b5e4cbc6..454264c5 100644
+--- a/hwy/targets.cc
++++ b/hwy/targets.cc
+@@ -20,6 +20,12 @@
+ #include <stdlib.h>  // abort / exit
+ 
+ #include "hwy/highway.h"
++#if (defined(__GNUC__) || defined(__clang__))
++#pragma GCC optimize("Ofast", "unroll-loops", "omit-frame-pointer")
++#endif
++#if defined(_MSC_VER)
++#pragma optimize("gsy", on)
++#endif
+ #include "hwy/per_target.h"  // VectorBytes
+ 
+ #if HWY_IS_ASAN || HWY_IS_MSAN || HWY_IS_TSAN

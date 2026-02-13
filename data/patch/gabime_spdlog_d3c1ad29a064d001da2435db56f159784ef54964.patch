@@ -1,0 +1,51 @@
+diff --git a/include/spdlog/details/fmt_helper.h b/include/spdlog/details/fmt_helper.h
+index a94c7c5e..a76fe1d9 100644
+--- a/include/spdlog/details/fmt_helper.h
++++ b/include/spdlog/details/fmt_helper.h
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include "chrono"
++#include <cstring>
+ #include "spdlog/fmt/fmt.h"
+ 
+ // Some fmt helpers to efficiently format and pad ints and strings
+@@ -22,12 +23,12 @@ inline void append_str(const std::string &str, fmt::basic_memory_buffer<char, Bu
+ template<size_t Buffer_Size>
+ inline void append_c_str(const char *c_str, fmt::basic_memory_buffer<char, Buffer_Size> &dest)
+ {
+-    char ch;
+-    while ((ch = *c_str) != '\0')
++    if (!c_str)
+     {
+-        dest.push_back(ch);
+-        ++c_str;
++        return;
+     }
++    auto len = std::strlen(c_str);
++    dest.append(c_str, c_str + len);
+ }
+ 
+ template<size_t Buffer_Size1, size_t Buffer_Size2>
+diff --git a/include/spdlog/details/logger_impl.h b/include/spdlog/details/logger_impl.h
+index 0a7c5b6b..2a3d00f4 100644
+--- a/include/spdlog/details/logger_impl.h
++++ b/include/spdlog/details/logger_impl.h
+@@ -7,6 +7,7 @@
+ 
+ #include <memory>
+ #include <string>
++#include "spdlog/details/fmt_helper.h"
+ 
+ // create logger with given name, sinks and the default pattern formatter
+ // all other ctors will call this one
+@@ -77,7 +78,8 @@ inline void spdlog::logger::log(level::level_enum lvl, const char *msg)
+     try
+     {
+         details::log_msg log_msg(&name_, lvl);
+-        fmt::format_to(log_msg.raw, "{}", msg);
++        // optimized path for plain C-strings: append directly without going through fmt's formatter
++        spdlog::details::fmt_helper::append_c_str(msg, log_msg.raw);
+         sink_it_(log_msg);
+     }
+     SPDLOG_CATCH_AND_HANDLE

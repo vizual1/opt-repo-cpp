@@ -1,0 +1,14 @@
+diff --git a/src/ccache/util/threadpool.cpp b/src/ccache/util/threadpool.cpp
+index 6608dc4d..0dd61bc8 100644
+--- a/src/ccache/util/threadpool.cpp
++++ b/src/ccache/util/threadpool.cpp
+@@ -50,7 +50,8 @@ ThreadPool::enqueue(std::function<void()> function)
+     if (m_shutting_down) {
+       return;
+     }
+-    m_task_queue.emplace(function);
++    // Move the stored function into the task queue to avoid an extra copy.
++    m_task_queue.emplace(std::move(function));
+   }
+   m_task_enqueued_or_shutting_down_condition.notify_one();
+ }

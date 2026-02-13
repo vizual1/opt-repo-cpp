@@ -1,0 +1,51 @@
+diff --git a/hwy/ops/generic_ops-inl.h b/hwy/ops/generic_ops-inl.h
+index cbac8243..11f8e06e 100644
+--- a/hwy/ops/generic_ops-inl.h
++++ b/hwy/ops/generic_ops-inl.h
+@@ -2782,14 +2782,44 @@ template <class D, typename T = TFromD<D>>
+ HWY_API void ScatterIndexN(VFromD<D> v, D d, T* HWY_RESTRICT base,
+                            VFromD<RebindToSigned<D>> index,
+                            const size_t max_lanes_to_store) {
+-  MaskedScatterIndex(v, FirstN(d, max_lanes_to_store), d, base, index);
++  const RebindToSigned<decltype(d)> di;
++  using TI = TFromD<decltype(di)>;
++  static_assert(sizeof(T) == sizeof(TI), "Index/lane size must match");
++
++  const size_t N = Lanes(d);
++  const size_t clamped_max_lanes = HWY_MIN(max_lanes_to_store, N);
++#if HWY_MEM_OPS_MIGHT_FAULT
++  if (clamped_max_lanes == 0) return;
++#endif
++
++  for (size_t i = 0; i < clamped_max_lanes; ++i) {
++    const TI idx = ExtractLane(index, i);
++    HWY_DASSERT(idx >= 0);
++    base[static_cast<size_t>(idx)] = ExtractLane(v, i);
++  }
+ }
+ 
+ template <class D, typename T = TFromD<D>>
+ HWY_API VFromD<D> GatherIndexN(D d, const T* HWY_RESTRICT base,
+                                VFromD<RebindToSigned<D>> index,
+                                const size_t max_lanes_to_load) {
+-  return MaskedGatherIndex(FirstN(d, max_lanes_to_load), d, base, index);
++  const RebindToSigned<decltype(d)> di;
++  using TI = TFromD<decltype(di)>;
++  static_assert(sizeof(T) == sizeof(TI), "Index/lane size must match");
++
++  const size_t N = Lanes(d);
++  const size_t clamped_max_lanes = HWY_MIN(max_lanes_to_load, N);
++  VFromD<D> out = Zero(d);
++#if HWY_MEM_OPS_MIGHT_FAULT
++  if (clamped_max_lanes == 0) return out;
++#endif
++
++  for (size_t i = 0; i < clamped_max_lanes; ++i) {
++    const TI idx = ExtractLane(index, i);
++    HWY_DASSERT(idx >= 0);
++    out = InsertLane(out, i, base[static_cast<size_t>(idx)]);
++  }
++  return out;
+ }
+ 
+ // ------------------------------ Integer AbsDiff and SumsOf8AbsDiff

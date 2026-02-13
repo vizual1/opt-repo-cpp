@@ -1,0 +1,32 @@
+diff --git a/3rdparty/civetweb b/3rdparty/civetweb
+--- a/3rdparty/civetweb
++++ b/3rdparty/civetweb
+@@ -1 +1 @@
+-Subproject commit eefb26f82b233268fc98577d265352720d477ba4
++Subproject commit eefb26f82b233268fc98577d265352720d477ba4-dirty
+diff --git a/3rdparty/googletest b/3rdparty/googletest
+--- a/3rdparty/googletest
++++ b/3rdparty/googletest
+@@ -1 +1 @@
+-Subproject commit e2239ee6043f73722e7aa812a459f54a28552929
++Subproject commit e2239ee6043f73722e7aa812a459f54a28552929-dirty
+diff --git a/core/src/histogram.cc b/core/src/histogram.cc
+index 88038ea..14cec49 100644
+--- a/core/src/histogram.cc
++++ b/core/src/histogram.cc
+@@ -30,12 +30,9 @@ Histogram::Histogram(const BucketBoundaries& buckets)
+ }
+ 
+ void Histogram::Observe(const double value) {
+-  // TODO: determine bucket list size at which binary search would be faster
+-  const auto bucket_index = static_cast<std::size_t>(std::distance(
+-      bucket_boundaries_.begin(),
+-      std::find_if(
+-          std::begin(bucket_boundaries_), std::end(bucket_boundaries_),
+-          [value](const double boundary) { return boundary >= value; })));
++  // Buckets are strictly sorted; use binary search (lower_bound) for faster lookups
++  const auto it = std::lower_bound(bucket_boundaries_.begin(), bucket_boundaries_.end(), value);
++  const auto bucket_index = static_cast<std::size_t>(std::distance(bucket_boundaries_.begin(), it));
+ 
+   std::lock_guard<std::mutex> lock(mutex_);
+   sum_.Increment(value);

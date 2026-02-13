@@ -1,0 +1,13 @@
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 9e382332..c7216e0a 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -553,7 +553,7 @@ HWY_API svuint64_t SumsOf8(const svuint8_t v) {
+   // TODO(janwas): on SVE2, we can instead use svaddp.
+   const svuint64_t hi = svlsr_n_u64_x(pg, BitCast(du64, sums_of_4), 32);
+   // Isolate the lower 32 bits (to be added to the upper 32 and zero-extended)
+-  const svuint64_t lo = svextw_u64_x(pg, BitCast(du64, sums_of_4));
++  const svuint64_t lo = BitCast(du64, svuzp1_u32(sums_of_4, sums_of_4));
+   return Add(hi, lo);
+ }
+ 

@@ -1,0 +1,17 @@
+diff --git a/hwy/ops/rvv-inl.h b/hwy/ops/rvv-inl.h
+index 0b8e7a32..5cd5aca0 100644
+--- a/hwy/ops/rvv-inl.h
++++ b/hwy/ops/rvv-inl.h
+@@ -5791,10 +5791,10 @@ HWY_INLINE MFromD<D> Lt128(D d, const VFromD<D> a, const VFromD<D> b) {
+   const VFromD<D> eqHL = VecFromMask(d, Eq(a, b));
+   const VFromD<D> ltHL = VecFromMask(d, Lt(a, b));
+   // Shift leftward so L can influence H.
+-  const VFromD<D> ltLx = detail::Slide1Up(ltHL);
++  const VFromD<D> ltLx = DupEven(ltHL);
+   const VFromD<D> vecHx = OrAnd(ltHL, eqHL, ltLx);
+   // Replicate H to its neighbor.
+-  return MaskFromVec(OddEven(vecHx, detail::Slide1Down(vecHx)));
++  return MaskFromVec(DupOdd(vecHx));
+ }
+ 
+ // ------------------------------ Lt128Upper

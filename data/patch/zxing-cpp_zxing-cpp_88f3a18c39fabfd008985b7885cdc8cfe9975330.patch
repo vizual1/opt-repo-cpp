@@ -1,0 +1,64 @@
+diff --git a/core/src/GlobalHistogramBinarizer.cpp b/core/src/GlobalHistogramBinarizer.cpp
+index 5669650f..554d5cd5 100644
+--- a/core/src/GlobalHistogramBinarizer.cpp
++++ b/core/src/GlobalHistogramBinarizer.cpp
+@@ -74,6 +74,59 @@ static int EstimateBlackPoint(const std::array<int, LUMINANCE_BUCKETS>& buckets)
+ 
+ bool GlobalHistogramBinarizer::getPatternRow(int row, int rotation, PatternRow& res) const
+ {
++	// Fast path for non-rotated, contiguous images (common case).
++	if (rotation == 0) {
++		const ImageView& buf = _buffer;
++		const int width = buf.width();
++		if (width < 3)
++			return false; // special casing the code below for a width < 3 makes no sense
++
++		res.clear();
++
++		const uint8_t* luminances = buf.data(0, row);
++		const int pixStride = buf.pixStride();
++		// Only use this micro-optimized path when pixels are contiguous.
++		if (pixStride == 1) {
++			std::array<int, LUMINANCE_BUCKETS> buckets = {};
++			for (int x = 0; x < width; ++x)
++				buckets[luminances[x] >> LUMINANCE_SHIFT]++;
++
++			int blackPoint = EstimateBlackPoint(buckets);
++			if (blackPoint <= 0)
++				return false;
++
++			int lastPos = 0;
++			bool lastVal = luminances[0] < blackPoint;
++			if (lastVal)
++				res.push_back(0); // first value is number of white pixels, here 0
++
++			for (int i = 1; i < width - 1; ++i) {
++				int valv = (-luminances[i - 1] + (int)luminances[i] * 4 - luminances[i + 1]) / 2;
++				bool val = valv < blackPoint;
++				if (val != lastVal) {
++					res.push_back(narrow_cast<PatternRow::value_type>(i - lastPos));
++					lastVal = val;
++					lastPos = i;
++				}
++			}
++
++			int backIdx = width - 1;
++			bool backVal = luminances[backIdx] < blackPoint;
++			if (backVal != lastVal) {
++				res.push_back(narrow_cast<PatternRow::value_type>(backIdx - lastPos));
++				lastPos = backIdx;
++			}
++
++			res.push_back(narrow_cast<PatternRow::value_type>(width - lastPos));
++			if (backVal)
++				res.push_back(0); // last value is number of white pixels, here 0
++
++			assert(res.size() % 2 == 1);
++			return true;
++		}
++		// fallthrough to general path if pixStride != 1
++	}
++
+ 	auto buffer = _buffer.rotated(rotation);
+ 
+ 	if (buffer.width() < 3)

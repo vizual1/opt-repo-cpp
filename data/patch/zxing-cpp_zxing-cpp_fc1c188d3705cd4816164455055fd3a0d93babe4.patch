@@ -1,0 +1,50 @@
+diff --git a/core/src/ConcentricFinder.h b/core/src/ConcentricFinder.h
+index 59c95753..8834596b 100644
+--- a/core/src/ConcentricFinder.h
++++ b/core/src/ConcentricFinder.h
+@@ -35,15 +35,43 @@ static float CenterFromEnd(const std::array<T, N>& pattern, float end)
+ template<typename Pattern, typename Cursor>
+ std::optional<Pattern> ReadSymmetricPattern(Cursor& cur, int range)
+ {
+-	if (!cur.stepToEdge(std::tuple_size<Pattern>::value / 2 + 1, range))
++	constexpr size_t N = std::tuple_size<Pattern>::value;
++	constexpr size_t mid = N / 2;
++
++	// Move cursor to the center position as the original implementation did
++	if (!cur.stepToEdge(mid + 1, range))
+ 		return std::nullopt;
+ 
+ 	cur.turnBack();
+ 	cur.step();
+ 
+-	auto pattern = cur.template readPattern<Pattern>(range);
++	// Read outward from the center in both directions to avoid traversing the same
++	// pixels twice (once to one end and then back again).
++	auto curF = cur; // forward cursor
++	auto curB = cur; // backward cursor
++	curF.setDirection(cur.front());
++	curB.setDirection(cur.back());
++
++	Pattern pattern{};
++
++	// Read forward side: indices [mid .. N-1]
++	for (size_t i = mid; i < N; ++i) {
++		pattern[i] = curF.stepToEdge(1, range);
++	}
++
++	// Read backward side: indices [mid-1 .. 0]
++	for (size_t i = mid; i-- > 0; ) {
++		pattern[i] = curB.stepToEdge(1, range);
++	}
++
+ 	if (pattern.back() == 0)
+ 		return std::nullopt;
++
++	// Leave the original cursor at the forward end (matching previous behaviour
++	// where the cursor ended up at one end of the pattern after reading).
++	cur.p = curF.p;
++	cur.d = curF.d;
++
+ 	return pattern;
+ }
+ 

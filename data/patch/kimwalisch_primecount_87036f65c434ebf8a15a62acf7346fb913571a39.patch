@@ -1,0 +1,15 @@
+diff --git a/src/nth_prime.cpp b/src/nth_prime.cpp
+index 7015ef82..395f3d0e 100644
+--- a/src/nth_prime.cpp
++++ b/src/nth_prime.cpp
+@@ -60,6 +60,10 @@ int64_t nth_prime(int64_t n, int threads)
+   if (n > max_n)
+     throw primecount_error("nth_prime(n): n must be <= " + std::to_string(max_n));
+ 
++  // Ensure primesieve uses the requested number of threads which
++  // speeds up segmented sieving when primesieve is called below.
++  primesieve::set_num_threads(threads);
++
+   if (n < (int64_t) primes.size())
+     return primes[n];
+ 

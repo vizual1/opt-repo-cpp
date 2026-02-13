@@ -1,0 +1,63 @@
+diff --git a/src/quick-lint-js/expression.h b/src/quick-lint-js/expression.h
+index ab57f2ec..f3acbb92 100644
+--- a/src/quick-lint-js/expression.h
++++ b/src/quick-lint-js/expression.h
+@@ -93,6 +93,16 @@ class expression_arena {
+ 
+   using buffering_visitor_ptr = buffering_visitor *;
+ 
++  // Expose rewind_state and allow preparing for and rewinding the underlying
++  // monotonic allocator so callers can free expression memory in bulk.
++  using rewind_state = monotonic_allocator::rewind_state;
++
++  [[nodiscard]] rewind_state prepare_for_rewind() noexcept {
++    return this->allocator_.prepare_for_rewind();
++  }
++
++  void rewind(rewind_state &&r) noexcept { this->allocator_.rewind(std::move(r)); }
++
+   template <class T>
+   static inline constexpr bool is_allocatable =
+       std::is_trivially_destructible_v<std::remove_reference_t<T>>;
+diff --git a/src/quick-lint-js/linked-bump-allocator.h b/src/quick-lint-js/linked-bump-allocator.h
+index 4fdde5c1..a5274d04 100644
+--- a/src/quick-lint-js/linked-bump-allocator.h
++++ b/src/quick-lint-js/linked-bump-allocator.h
+@@ -60,7 +60,7 @@ class linked_bump_allocator : public boost::container::pmr::memory_resource {
+     char* chunk_end_;
+   };
+ 
+-  rewind_state prepare_for_rewind() {
++  [[nodiscard]] rewind_state prepare_for_rewind() noexcept {
+     return rewind_state{
+         .chunk_ = this->chunk_,
+         .next_allocation_ = this->next_allocation_,
+@@ -68,7 +68,7 @@ class linked_bump_allocator : public boost::container::pmr::memory_resource {
+     };
+   }
+ 
+-  void rewind(rewind_state&& r) {
++  void rewind(rewind_state&& r) noexcept {
+     bool allocated_new_chunk = this->chunk_ != r.chunk_;
+     if (allocated_new_chunk) {
+       // If we rewound to exactly where we were before, we might rewind near the
+diff --git a/src/quick-lint-js/parse.h b/src/quick-lint-js/parse.h
+index a3e14cbf..eb2eb180 100644
+--- a/src/quick-lint-js/parse.h
++++ b/src/quick-lint-js/parse.h
+@@ -3673,8 +3673,15 @@ class parser {
+ 
+   template <QLJS_PARSE_VISITOR Visitor>
+   void parse_and_visit_expression(Visitor &v, precedence prec) {
++    // Prepare to rewind the expression arena so we can free the AST memory in
++    // bulk after visiting. This reduces peak memory usage because expressions
++    // allocated by parse_expression are not used after visit_expression.
++    expression_arena::rewind_state rs = this->expressions_.prepare_for_rewind();
++
+     expression *ast = this->parse_expression(prec);
+     this->visit_expression(ast, v, variable_context::rhs);
++
++    this->expressions_.rewind(std::move(rs));
+   }
+ 
+   expression *parse_expression(precedence);

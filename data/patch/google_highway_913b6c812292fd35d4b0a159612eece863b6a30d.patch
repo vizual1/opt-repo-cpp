@@ -1,0 +1,20 @@
+diff --git a/hwy/ops/generic_ops-inl.h b/hwy/ops/generic_ops-inl.h
+index d2a8dd96..024f4fab 100644
+--- a/hwy/ops/generic_ops-inl.h
++++ b/hwy/ops/generic_ops-inl.h
+@@ -2361,13 +2361,13 @@ constexpr IndicesFromD<D> Pairwise128Indices(D d) {
+ 
+ // Pairwise add with output in 128 bit blocks of a and b.
+ template <class D, class V = VFromD<D>, HWY_IF_V_SIZE_GE_D(D, 16)>
+-HWY_API V PairwiseAdd128(D d, V a, V b) {
++HWY_INLINE V PairwiseAdd128(D d, V a, V b) {
+   return TableLookupLanes(PairwiseAdd(d, a, b), Pairwise128Indices<V>(d));
+ }
+ 
+ // Pairwise sub with output in 128 bit blocks of a and b.
+ template <class D, class V = VFromD<D>, HWY_IF_V_SIZE_GE_D(D, 16)>
+-HWY_API V PairwiseSub128(D d, V a, V b) {
++HWY_INLINE V PairwiseSub128(D d, V a, V b) {
+   return TableLookupLanes(PairwiseSub(d, a, b), Pairwise128Indices<V>(d));
+ }
+ 

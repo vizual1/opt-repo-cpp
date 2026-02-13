@@ -1,0 +1,30 @@
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index 4f92c7e7..a358e297 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -2113,8 +2113,8 @@ HWY_INLINE Vec256<uint32_t> SumsOf4(hwy::UnsignedTag /*type_tag*/,
+ // ------------------------------ SumsOfAdjQuadAbsDiff
+ 
+ template <int kAOffset, int kBOffset>
+-static Vec256<uint16_t> SumsOfAdjQuadAbsDiff(Vec256<uint8_t> a,
+-                                             Vec256<uint8_t> b) {
++HWY_INLINE static Vec256<uint16_t> SumsOfAdjQuadAbsDiff(Vec256<uint8_t> a,
++                                                        Vec256<uint8_t> b) {
+   static_assert(0 <= kAOffset && kAOffset <= 1,
+                 "kAOffset must be between 0 and 1");
+   static_assert(0 <= kBOffset && kBOffset <= 3,
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index fc1f6110..0eb1dc80 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -6744,8 +6744,8 @@ HWY_API Vec512<uint64_t> CLMulUpper(Vec512<uint64_t> va, Vec512<uint64_t> vb) {
+ // SumsOfAdjShufQuadAbsDiff)
+ 
+ template <int kAOffset, int kBOffset>
+-static Vec512<uint16_t> SumsOfAdjQuadAbsDiff(Vec512<uint8_t> a,
+-                                             Vec512<uint8_t> b) {
++HWY_INLINE static Vec512<uint16_t> SumsOfAdjQuadAbsDiff(Vec512<uint8_t> a,
++                                                        Vec512<uint8_t> b) {
+   static_assert(0 <= kAOffset && kAOffset <= 1,
+                 "kAOffset must be between 0 and 1");
+   static_assert(0 <= kBOffset && kBOffset <= 3,

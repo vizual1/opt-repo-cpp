@@ -1,0 +1,1113 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 8039b4030795b1c9b8cedb78e3a2a6fb89574b6e
++Subproject commit 8039b4030795b1c9b8cedb78e3a2a6fb89574b6e-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 27d43ec746fa445fc6fb7f46f8845825d9217a7f
++Subproject commit 27d43ec746fa445fc6fb7f46f8845825d9217a7f-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 9a58e9ad3a5aafb2bfc8f36cc67e40f0c20b3d04
++Subproject commit 9a58e9ad3a5aafb2bfc8f36cc67e40f0c20b3d04-dirty
+diff --git a/includes/acl/decompression/impl/transform_animated_track_cache.h b/includes/acl/decompression/impl/transform_animated_track_cache.h
+index 85604258..625ade27 100644
+--- a/includes/acl/decompression/impl/transform_animated_track_cache.h
++++ b/includes/acl/decompression/impl/transform_animated_track_cache.h
+@@ -553,31 +553,30 @@ namespace acl
+ 			rtm::vector4f_argn interpolation_alpha,
+ 			rtm::vector4f& interp_xxxx, rtm::vector4f& interp_yyyy, rtm::vector4f& interp_zzzz, rtm::vector4f& interp_wwww)
+ 		{
+-			// Calculate the vector4 dot product: dot(start, end)
+-			const rtm::vector4f xxxx_squared = rtm::vector_mul(xxxx0, xxxx1);
+-			const rtm::vector4f yyyy_squared = rtm::vector_mul(yyyy0, yyyy1);
+-			const rtm::vector4f zzzz_squared = rtm::vector_mul(zzzz0, zzzz1);
+-			const rtm::vector4f wwww_squared = rtm::vector_mul(wwww0, wwww1);
+-
+-			const rtm::vector4f dot4 = rtm::vector_add(rtm::vector_add(rtm::vector_add(xxxx_squared, yyyy_squared), zzzz_squared), wwww_squared);
+-
+-			// Calculate the bias, if the dot product is positive or zero, there is no bias
+-			// but if it is negative, we want to flip the 'end' rotation XYZW components
+-			const rtm::vector4f neg_zero = rtm::vector_set(-0.0F);
+-			const rtm::vector4f bias = rtm::vector_and(dot4, neg_zero);
+-
+-			// Apply our bias to the 'end'
+-			const rtm::vector4f xxxx1_with_bias = rtm::vector_xor(xxxx1, bias);
+-			const rtm::vector4f yyyy1_with_bias = rtm::vector_xor(yyyy1, bias);
+-			const rtm::vector4f zzzz1_with_bias = rtm::vector_xor(zzzz1, bias);
+-			const rtm::vector4f wwww1_with_bias = rtm::vector_xor(wwww1, bias);
+-
+-			// Lerp the rotation after applying the bias
+-			// ((1.0 - alpha) * start) + (alpha * (end ^ bias)) == (start - alpha * start) + (alpha * (end ^ bias))
+-			interp_xxxx = rtm::vector_mul_add(xxxx1_with_bias, interpolation_alpha, rtm::vector_neg_mul_sub(xxxx0, interpolation_alpha, xxxx0));
+-			interp_yyyy = rtm::vector_mul_add(yyyy1_with_bias, interpolation_alpha, rtm::vector_neg_mul_sub(yyyy0, interpolation_alpha, yyyy0));
+-			interp_zzzz = rtm::vector_mul_add(zzzz1_with_bias, interpolation_alpha, rtm::vector_neg_mul_sub(zzzz0, interpolation_alpha, zzzz0));
+-			interp_wwww = rtm::vector_mul_add(wwww1_with_bias, interpolation_alpha, rtm::vector_neg_mul_sub(wwww0, interpolation_alpha, wwww0));
++                    // Calculate the vector4 dot product: dot(start, end)
++                    const rtm::vector4f xxxx_squared = rtm::vector_mul(xxxx0, xxxx1);
++                    const rtm::vector4f yyyy_squared = rtm::vector_mul(yyyy0, yyyy1);
++                    const rtm::vector4f zzzz_squared = rtm::vector_mul(zzzz0, zzzz1);
++                    const rtm::vector4f wwww_squared = rtm::vector_mul(wwww0, wwww1);
++
++                    const rtm::vector4f dot4 = rtm::vector_add(rtm::vector_add(rtm::vector_add(xxxx_squared, yyyy_squared), zzzz_squared), wwww_squared);
++
++                    // Calculate the bias, if the dot product is positive or zero, there is no bias
++                    // but if it is negative, we want to flip the 'end' rotation XYZW components
++                    const rtm::vector4f neg_zero = rtm::vector_set(-0.0F);
++                    const rtm::vector4f bias = rtm::vector_and(dot4, neg_zero);
++
++                    // Apply our bias to the 'end'
++                    const rtm::vector4f xxxx1_with_bias = rtm::vector_xor(xxxx1, bias);
++                    const rtm::vector4f yyyy1_with_bias = rtm::vector_xor(yyyy1, bias);
++                    const rtm::vector4f zzzz1_with_bias = rtm::vector_xor(zzzz1, bias);
++                    const rtm::vector4f wwww1_with_bias = rtm::vector_xor(wwww1, bias);
++
++                    // Lerp using negmulsub-based expression for better codegen
++                    interp_xxxx = rtm::vector_neg_mul_sub(rtm::vector_sub(xxxx0, xxxx1_with_bias), interpolation_alpha, xxxx0);
++                    interp_yyyy = rtm::vector_neg_mul_sub(rtm::vector_sub(yyyy0, yyyy1_with_bias), interpolation_alpha, yyyy0);
++                    interp_zzzz = rtm::vector_neg_mul_sub(rtm::vector_sub(zzzz0, zzzz1_with_bias), interpolation_alpha, zzzz0);
++                    interp_wwww = rtm::vector_neg_mul_sub(rtm::vector_sub(wwww0, wwww1_with_bias), interpolation_alpha, wwww0);
+ 		}
+ 
+ 		// About 9 cycles with AVX on Skylake
+@@ -997,1028 +996,3 @@ namespace acl
+ 				if (format == vector_format8::vector3f_variable && decompression_settings_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable))
+ 				{
+ 					if (decomp_context.has_segments && (range_ignore_flags & 0x01) == 0)
+-					{
+-						// Apply segment range remapping
+-						const uint32_t range_entry_size = 3 * sizeof(uint8_t);
+-						const uint8_t* segment_range_min_ptr = segment_range_data;
+-						const uint8_t* segment_range_extent_ptr = segment_range_min_ptr + range_entry_size;
+-						segment_range_data = segment_range_extent_ptr + range_entry_size;
+-
+-						const rtm::vector4f segment_range_min = unpack_vector3_u24_unsafe(segment_range_min_ptr);
+-						const rtm::vector4f segment_range_extent = unpack_vector3_u24_unsafe(segment_range_extent_ptr);
+-
+-						sample = rtm::vector_mul_add(sample, segment_range_extent, segment_range_min);
+-					}
+-
+-					if ((range_ignore_flags & 0x02) == 0)
+-					{
+-						// Apply clip range remapping
+-						const uint32_t range_entry_size = 3 * sizeof(float);
+-						const uint32_t sub_track_offset = range_entry_size * 2 * unpack_index;
+-						const uint8_t* clip_range_min_ptr = clip_range_data + sub_track_offset;
+-						const uint8_t* clip_range_extent_ptr = clip_range_min_ptr + range_entry_size;
+-
+-						const rtm::vector4f clip_range_min = rtm::vector_load(clip_range_min_ptr);
+-						const rtm::vector4f clip_range_extent = rtm::vector_load(clip_range_extent_ptr);
+-
+-						sample = rtm::vector_mul_add(sample, clip_range_extent, clip_range_min);
+-					}
+-				}
+-
+-				ACL_ASSERT(rtm::vector_is_finite3(sample), "Vector3 is not valid!");
+-
+-				// TODO: Fill in W component with something sensible?
+-
+-				// Cache
+-				output_scratch[unpack_index] = sample;
+-			}
+-
+-			// Update our pointers
+-			segment_sampling_context.format_per_track_data = format_per_track_data;
+-			segment_sampling_context.segment_range_data = segment_range_data;
+-			segment_sampling_context.animated_track_data_bit_offset = animated_track_data_bit_offset;
+-
+-			// Prefetch the next cache line even if we don't have any data left
+-			// By the time we unpack again, it will have arrived in the CPU cache
+-			// If our format is full precision, we have at most 4 samples per cache line
+-			// If our format is drop W, we have at most 5.33 samples per cache line
+-
+-			// If our pointer was already aligned to a cache line before we unpacked our 4 values,
+-			// it now points to the first byte of the next cache line. Any offset between 0-63 will fetch it.
+-			// If our pointer had some offset into a cache line, we might have spanned 2 cache lines.
+-			// If this happens, we probably already read some data from the next cache line in which
+-			// case we don't need to prefetch it and we can go to the next one. Any offset after the end
+-			// of this cache line will fetch it. For safety, we prefetch 63 bytes ahead.
+-			// Prefetch 4 samples ahead in all levels of the CPU cache
+-			ACL_IMPL_ANIMATED_PREFETCH(format_per_track_data + 60);
+-			ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_track_data_bit_offset / 8) + 63);
+-			ACL_IMPL_ANIMATED_PREFETCH(segment_range_data + 48);
+-		}
+-
+-		template<class decompression_settings_adapter_type>
+-		inline RTM_DISABLE_SECURITY_COOKIE_CHECK rtm::vector4f RTM_SIMD_CALL unpack_single_animated_vector3(const persistent_transform_decompression_context_v0& decomp_context,
+-			uint32_t unpack_index,
+-			const clip_animated_sampling_context_v0& clip_sampling_context, const segment_animated_sampling_context_v0& segment_sampling_context)
+-		{
+-			const vector_format8 format = get_vector_format<decompression_settings_adapter_type>(decompression_settings_adapter_type::get_vector_format(decomp_context));
+-
+-			const uint8_t* format_per_track_data = segment_sampling_context.format_per_track_data;
+-			const uint8_t* segment_range_data = segment_sampling_context.segment_range_data;
+-			const uint8_t* animated_track_data = segment_sampling_context.animated_track_data;
+-			uint32_t animated_track_data_bit_offset = segment_sampling_context.animated_track_data_bit_offset;
+-
+-			const uint8_t* clip_range_data = clip_sampling_context.clip_range_data;
+-
+-			// Range ignore flags are used to skip range normalization at the clip and/or segment levels
+-			// Each sample has two bits like so:
+-			//    - 0x01 = ignore segment level
+-			//    - 0x02 = ignore clip level
+-			uint32_t range_ignore_flags;
+-
+-			rtm::vector4f sample;
+-			if (format == vector_format8::vector3f_variable && decompression_settings_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable))
+-			{
+-				// Fall-through intentional
+-				uint32_t skip_size = 0;
+-				switch (unpack_index)
+-				{
+-				default:
+-				case 3:
+-					skip_size += format_per_track_data[2];
+-					ACL_SWITCH_CASE_FALLTHROUGH_INTENTIONAL;
+-				case 2:
+-					skip_size += format_per_track_data[1];
+-					ACL_SWITCH_CASE_FALLTHROUGH_INTENTIONAL;
+-				case 1:
+-					skip_size += format_per_track_data[0];
+-					ACL_SWITCH_CASE_FALLTHROUGH_INTENTIONAL;
+-				case 0:
+-					// Nothing to skip
+-					(void)skip_size;
+-				}
+-
+-				// Skip prior samples
+-				animated_track_data_bit_offset += skip_size * 3;
+-				segment_range_data += sizeof(uint8_t) * 6 * unpack_index;
+-				clip_range_data += sizeof(rtm::float3f) * 2 * unpack_index;
+-
+-				const uint32_t num_bits_at_bit_rate = format_per_track_data[unpack_index];
+-
+-				if (num_bits_at_bit_rate == 0)	// Constant bit rate
+-				{
+-					sample = unpack_vector3_u48_unsafe(segment_range_data);
+-					range_ignore_flags = 0x01;	// Skip segment only
+-				}
+-				else if (num_bits_at_bit_rate == 32)	// Raw bit rate
+-				{
+-					sample = unpack_vector3_96_unsafe(animated_track_data, animated_track_data_bit_offset);
+-					range_ignore_flags = 0x03;	// Skip clip and segment
+-				}
+-				else
+-				{
+-					sample = unpack_vector3_uXX_unsafe(num_bits_at_bit_rate, animated_track_data, animated_track_data_bit_offset);
+-					range_ignore_flags = 0x00;	// Don't skip range reduction
+-				}
+-			}
+-			else // vector_format8::vector3f_full
+-			{
+-				animated_track_data_bit_offset += unpack_index * 96;
+-				sample = unpack_vector3_96_unsafe(animated_track_data, animated_track_data_bit_offset);
+-				range_ignore_flags = 0x03;	// Skip clip and segment
+-			}
+-
+-			// Remap within our ranges
+-			if (format == vector_format8::vector3f_variable && decompression_settings_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable))
+-			{
+-				if (decomp_context.has_segments && (range_ignore_flags & 0x01) == 0)
+-				{
+-					// Apply segment range remapping
+-					const rtm::vector4f segment_range_min = unpack_vector3_u24_unsafe(segment_range_data);
+-					const rtm::vector4f segment_range_extent = unpack_vector3_u24_unsafe(segment_range_data + 3 * sizeof(uint8_t));
+-
+-					sample = rtm::vector_mul_add(sample, segment_range_extent, segment_range_min);
+-				}
+-
+-				if ((range_ignore_flags & 0x02) == 0)
+-				{
+-					// Apply clip range remapping
+-					const rtm::vector4f clip_range_min = rtm::vector_load(clip_range_data);
+-					const rtm::vector4f clip_range_extent = rtm::vector_load(clip_range_data + sizeof(rtm::float3f));
+-
+-					sample = rtm::vector_mul_add(sample, clip_range_extent, clip_range_min);
+-				}
+-			}
+-
+-			ACL_ASSERT(rtm::vector_is_finite3(sample), "Vector3 is not valid!");
+-			return sample;
+-		}
+-
+-		// Force inline this function, we only use it to keep the code readable
+-		RTM_FORCE_INLINE RTM_DISABLE_SECURITY_COOKIE_CHECK void count_animated_group_bit_size(
+-			const uint8_t* format_per_track_data0, const uint8_t* format_per_track_data1, uint32_t num_groups_to_skip,
+-			uint32_t& out_group_bit_size_per_component0, uint32_t& out_group_bit_size_per_component1)
+-		{
+-			// TODO: Do the same with NEON
+-#if defined(RTM_AVX_INTRINSICS)
+-			__m128i zero = _mm_setzero_si128();
+-			__m128i group_bit_size_per_component0_v = zero;
+-			__m128i group_bit_size_per_component1_v = zero;
+-
+-			// We add 4 at a time in SIMD
+-			for (uint32_t group_index = 0; group_index < num_groups_to_skip; ++group_index)
+-			{
+-				const uint32_t group_offset = group_index * 4;
+-				const __m128i group_bit_size_per_component0_u8 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(format_per_track_data0 + group_offset));
+-				const __m128i group_bit_size_per_component1_u8 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(format_per_track_data1 + group_offset));
+-
+-				group_bit_size_per_component0_v = _mm_add_epi32(group_bit_size_per_component0_v, _mm_unpacklo_epi16(_mm_unpacklo_epi8(group_bit_size_per_component0_u8, zero), zero));
+-				group_bit_size_per_component1_v = _mm_add_epi32(group_bit_size_per_component1_v, _mm_unpacklo_epi16(_mm_unpacklo_epi8(group_bit_size_per_component1_u8, zero), zero));
+-			}
+-
+-			// Now we sum horizontally
+-			group_bit_size_per_component0_v = _mm_hadd_epi32(_mm_hadd_epi32(group_bit_size_per_component0_v, group_bit_size_per_component0_v), group_bit_size_per_component0_v);
+-			group_bit_size_per_component1_v = _mm_hadd_epi32(_mm_hadd_epi32(group_bit_size_per_component1_v, group_bit_size_per_component1_v), group_bit_size_per_component1_v);
+-
+-			out_group_bit_size_per_component0 = _mm_cvtsi128_si32(group_bit_size_per_component0_v);
+-			out_group_bit_size_per_component1 = _mm_cvtsi128_si32(group_bit_size_per_component1_v);
+-#else
+-			uint32_t group_bit_size_per_component0 = 0;
+-			uint32_t group_bit_size_per_component1 = 0;
+-
+-			for (uint32_t group_index = 0; group_index < num_groups_to_skip; ++group_index)
+-			{
+-				group_bit_size_per_component0 += format_per_track_data0[(group_index * 4) + 0];
+-				group_bit_size_per_component1 += format_per_track_data1[(group_index * 4) + 0];
+-
+-				group_bit_size_per_component0 += format_per_track_data0[(group_index * 4) + 1];
+-				group_bit_size_per_component1 += format_per_track_data1[(group_index * 4) + 1];
+-
+-				group_bit_size_per_component0 += format_per_track_data0[(group_index * 4) + 2];
+-				group_bit_size_per_component1 += format_per_track_data1[(group_index * 4) + 2];
+-
+-				group_bit_size_per_component0 += format_per_track_data0[(group_index * 4) + 3];
+-				group_bit_size_per_component1 += format_per_track_data1[(group_index * 4) + 3];
+-			}
+-
+-			out_group_bit_size_per_component0 = group_bit_size_per_component0;
+-			out_group_bit_size_per_component1 = group_bit_size_per_component1;
+-#endif
+-		}
+-
+-		// Performance notes:
+-		//    - Using SOA after unpacking vec3 appears to be slightly slower. Full groups aren't super common
+-		//      because animated translation/scale isn't common. But even with clips with lots of full groups,
+-		//      SOA remains slightly slower. It seems the longer dependency chains offsets the gain from
+-		//      using all SIMD lanes.
+-		//    - Removing the unpack prefetches seems to harm performance, especially on mobile
+-		//      I also tried reworking them to be more optimal for single segment usage but while I could get
+-		//      a small win on desktop, mobile remained under performing.
+-
+-		struct animated_track_cache_v0
+-		{
+-			static constexpr uint32_t k_num_rounding_modes = 4;	// none, floor, ceil, nearest
+-
+-			track_cache_quatf_v0<8, k_num_rounding_modes>		rotations;
+-			track_cache_vector4f_v0<8, k_num_rounding_modes>	translations;
+-			track_cache_vector4f_v0<8, k_num_rounding_modes>	scales;
+-
+-			// Scratch space when we decompress our samples before we interpolate
+-			rtm::vector4f scratch0[4];
+-			rtm::vector4f scratch1[4];
+-
+-			clip_animated_sampling_context_v0 clip_sampling_context_rotations;
+-			clip_animated_sampling_context_v0 clip_sampling_context_translations;
+-			clip_animated_sampling_context_v0 clip_sampling_context_scales;
+-
+-			segment_animated_sampling_context_v0 segment_sampling_context_rotations[2];
+-			segment_animated_sampling_context_v0 segment_sampling_context_translations[2];
+-			segment_animated_sampling_context_v0 segment_sampling_context_scales[2];
+-
+-			template<class decompression_settings_type, class decompression_settings_translation_adapter_type>
+-			void RTM_DISABLE_SECURITY_COOKIE_CHECK initialize(const persistent_transform_decompression_context_v0& decomp_context)
+-			{
+-				const transform_tracks_header& transform_header = get_transform_tracks_header(*decomp_context.tracks);
+-
+-				const segment_header* segment0 = decomp_context.segment_offsets[0].add_to(decomp_context.tracks);
+-				const segment_header* segment1 = decomp_context.segment_offsets[1].add_to(decomp_context.tracks);
+-
+-				const uint8_t* animated_track_data0 = decomp_context.animated_track_data[0];
+-				const uint8_t* animated_track_data1 = decomp_context.animated_track_data[1];
+-
+-				const uint8_t* clip_range_data_rotations = transform_header.get_clip_range_data();
+-				clip_sampling_context_rotations.clip_range_data = clip_range_data_rotations;
+-
+-				const uint8_t* format_per_track_data_rotations0 = decomp_context.format_per_track_data[0];
+-				const uint8_t* segment_range_data_rotations0 = decomp_context.segment_range_data[0];
+-				const uint32_t animated_track_data_bit_offset_rotations0 = decomp_context.key_frame_bit_offsets[0];
+-				segment_sampling_context_rotations[0].format_per_track_data = format_per_track_data_rotations0;
+-				segment_sampling_context_rotations[0].segment_range_data = segment_range_data_rotations0;
+-				segment_sampling_context_rotations[0].animated_track_data = animated_track_data0;
+-				segment_sampling_context_rotations[0].animated_track_data_bit_offset = animated_track_data_bit_offset_rotations0;
+-
+-				const uint8_t* format_per_track_data_rotations1 = decomp_context.format_per_track_data[1];
+-				const uint8_t* segment_range_data_rotations1 = decomp_context.segment_range_data[1];
+-				const uint32_t animated_track_data_bit_offset_rotations1 = decomp_context.key_frame_bit_offsets[1];
+-				segment_sampling_context_rotations[1].format_per_track_data = format_per_track_data_rotations1;
+-				segment_sampling_context_rotations[1].segment_range_data = segment_range_data_rotations1;
+-				segment_sampling_context_rotations[1].animated_track_data = animated_track_data1;
+-				segment_sampling_context_rotations[1].animated_track_data_bit_offset = animated_track_data_bit_offset_rotations1;
+-
+-				const rotation_format8 rotation_format = get_rotation_format<decompression_settings_type>(decomp_context.rotation_format);
+-				const bool are_rotations_variable = rotation_format == rotation_format8::quatf_drop_w_variable && decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_drop_w_variable);
+-
+-				const uint32_t num_animated_rotation_sub_tracks_padded = align_to(transform_header.num_animated_rotation_sub_tracks, 4);
+-
+-				// Rotation range data follows translations, no padding
+-				const uint32_t rotation_clip_range_data_size = are_rotations_variable ? (sizeof(rtm::float3f) * 2) : 0;
+-				const uint8_t* clip_range_data_translations = clip_range_data_rotations + (transform_header.num_animated_rotation_sub_tracks * rotation_clip_range_data_size);
+-				clip_sampling_context_translations.clip_range_data = clip_range_data_translations;
+-
+-				// Rotation metadata is padded to 4 sub-tracks (1 byte each)
+-				const uint32_t rotation_per_track_metadata_size = are_rotations_variable ? 1 : 0;
+-				const uint8_t* format_per_track_data_translations0 = format_per_track_data_rotations0 + (num_animated_rotation_sub_tracks_padded * rotation_per_track_metadata_size);
+-				const uint8_t* format_per_track_data_translations1 = format_per_track_data_rotations1 + (num_animated_rotation_sub_tracks_padded * rotation_per_track_metadata_size);
+-				segment_sampling_context_translations[0].format_per_track_data = format_per_track_data_translations0;
+-				segment_sampling_context_translations[1].format_per_track_data = format_per_track_data_translations1;
+-
+-				// Rotation range data is padded to 4 sub-tracks (6 bytes each)
+-				const uint32_t rotation_segment_range_data_size = are_rotations_variable ? 6 : 0;
+-				const uint8_t* segment_range_data_translations0 = segment_range_data_rotations0 + (num_animated_rotation_sub_tracks_padded * rotation_segment_range_data_size);
+-				const uint8_t* segment_range_data_translations1 = segment_range_data_rotations1 + (num_animated_rotation_sub_tracks_padded * rotation_segment_range_data_size);
+-				segment_sampling_context_translations[0].segment_range_data = segment_range_data_translations0;
+-				segment_sampling_context_translations[1].segment_range_data = segment_range_data_translations1;
+-
+-				// Every sub-track uses the same base animated track data pointer
+-				segment_sampling_context_translations[0].animated_track_data = animated_track_data0;
+-				segment_sampling_context_translations[1].animated_track_data = animated_track_data1;
+-
+-				const uint32_t animated_track_data_bit_offset_translations0 = animated_track_data_bit_offset_rotations0 + segment0->animated_rotation_bit_size;
+-				const uint32_t animated_track_data_bit_offset_translations1 = animated_track_data_bit_offset_rotations1 + segment1->animated_rotation_bit_size;
+-				segment_sampling_context_translations[0].animated_track_data_bit_offset = animated_track_data_bit_offset_translations0;
+-				segment_sampling_context_translations[1].animated_track_data_bit_offset = animated_track_data_bit_offset_translations1;
+-
+-				if (decomp_context.has_scale)
+-				{
+-					const vector_format8 translation_format = get_vector_format<decompression_settings_translation_adapter_type>(decompression_settings_translation_adapter_type::get_vector_format(decomp_context));
+-					const bool are_translations_variable = translation_format == vector_format8::vector3f_variable && decompression_settings_translation_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable);
+-
+-					// Scale data just follows the translation data without any extra padding
+-					const uint32_t translation_clip_range_data_size = are_translations_variable ? (sizeof(rtm::float3f) * 2) : 0;
+-					clip_sampling_context_scales.clip_range_data = clip_range_data_translations + (transform_header.num_animated_translation_sub_tracks * translation_clip_range_data_size);
+-
+-					const uint32_t translation_per_track_metadata_size = are_translations_variable ? 1 : 0;
+-					segment_sampling_context_scales[0].format_per_track_data = format_per_track_data_translations0 + (transform_header.num_animated_translation_sub_tracks * translation_per_track_metadata_size);
+-					segment_sampling_context_scales[1].format_per_track_data = format_per_track_data_translations1 + (transform_header.num_animated_translation_sub_tracks * translation_per_track_metadata_size);
+-
+-					const uint32_t translation_segment_range_data_size = are_translations_variable ? 6 : 0;
+-					segment_sampling_context_scales[0].segment_range_data = segment_range_data_translations0 + (transform_header.num_animated_translation_sub_tracks * translation_segment_range_data_size);
+-					segment_sampling_context_scales[1].segment_range_data = segment_range_data_translations1 + (transform_header.num_animated_translation_sub_tracks * translation_segment_range_data_size);
+-
+-					segment_sampling_context_scales[0].animated_track_data = animated_track_data0;
+-					segment_sampling_context_scales[1].animated_track_data = animated_track_data1;
+-
+-					segment_sampling_context_scales[0].animated_track_data_bit_offset = animated_track_data_bit_offset_translations0 + segment0->animated_translation_bit_size;
+-					segment_sampling_context_scales[1].animated_track_data_bit_offset = animated_track_data_bit_offset_translations1 + segment1->animated_translation_bit_size;
+-				}
+-
+-				rotations.num_left_to_unpack = transform_header.num_animated_rotation_sub_tracks;
+-				translations.num_left_to_unpack = transform_header.num_animated_translation_sub_tracks;
+-				scales.num_left_to_unpack = transform_header.num_animated_scale_sub_tracks;
+-			}
+-
+-			template<class decompression_settings_type>
+-			void RTM_DISABLE_SECURITY_COOKIE_CHECK unpack_rotation_group(const persistent_transform_decompression_context_v0& decomp_context)
+-			{
+-				const uint32_t num_left_to_unpack = rotations.num_left_to_unpack;
+-				if (num_left_to_unpack == 0)
+-					return;	// Nothing left to do, we are done
+-
+-				// If we have less than 4 cached samples, unpack 4 more and prefetch the next cache line
+-				const uint32_t num_cached = rotations.get_num_cached();
+-				if (num_cached >= 4)
+-					return;	// Enough cached, nothing to do
+-
+-				const uint32_t num_to_unpack = std::min<uint32_t>(num_left_to_unpack, 4);
+-				rotations.num_left_to_unpack = num_left_to_unpack - num_to_unpack;
+-
+-				// Write index will be either 0 or 4 here since we always unpack 4 at a time
+-				const uint32_t cache_write_index = rotations.cache_write_index % 8;
+-				rotations.cache_write_index += num_to_unpack;
+-
+-				const rotation_format8 rotation_format = get_rotation_format<decompression_settings_type>(decomp_context.rotation_format);
+-
+-				segment_animated_scratch_v0 segment_scratch;
+-
+-				// We start by unpacking our segment range data into our scratch memory
+-				// We often only use a single segment to interpolate, we can avoid redundant work
+-				if (rotation_format == rotation_format8::quatf_drop_w_variable && decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_drop_w_variable))
+-				{
+-					if (decomp_context.has_segments)
+-					{
+-						unpack_segment_range_data(segment_sampling_context_rotations[0].segment_range_data, 0, segment_scratch);
+-
+-						// We are interpolating between two segments (rare)
+-						if (!decomp_context.uses_single_segment)
+-							unpack_segment_range_data(segment_sampling_context_rotations[1].segment_range_data, 1, segment_scratch);
+-
+-#if !defined(ACL_IMPL_PREFETCH_EARLY)
+-						// Our segment range data takes 24 bytes per group (4 samples, 6 bytes each), each cache line fits 2.67 groups
+-						// Prefetch every time while alternating between both segments
+-						ACL_IMPL_ANIMATED_PREFETCH(segment_sampling_context_rotations[cache_write_index % 2].segment_range_data + 64);
+-#endif
+-					}
+-				}
+-
+-				const range_reduction_masks_t range_reduction_masks0 = unpack_animated_quat<decompression_settings_type>(decomp_context, scratch0, num_to_unpack, segment_sampling_context_rotations[0]);
+-				const range_reduction_masks_t range_reduction_masks1 = unpack_animated_quat<decompression_settings_type>(decomp_context, scratch1, num_to_unpack, segment_sampling_context_rotations[1]);
+-
+-				// Swizzle our samples into SOA form
+-				rtm::vector4f scratch0_xxxx;
+-				rtm::vector4f scratch0_yyyy;
+-				rtm::vector4f scratch0_zzzz;
+-				rtm::vector4f scratch0_wwww;
+-				RTM_MATRIXF_TRANSPOSE_4X4(scratch0[0], scratch0[1], scratch0[2], scratch0[3], scratch0_xxxx, scratch0_yyyy, scratch0_zzzz, scratch0_wwww);
+-
+-				rtm::vector4f scratch1_xxxx;
+-				rtm::vector4f scratch1_yyyy;
+-				rtm::vector4f scratch1_zzzz;
+-				rtm::vector4f scratch1_wwww;
+-				RTM_MATRIXF_TRANSPOSE_4X4(scratch1[0], scratch1[1], scratch1[2], scratch1[3], scratch1_xxxx, scratch1_yyyy, scratch1_zzzz, scratch1_wwww);
+-
+-#if defined(ACL_IMPL_USE_AVX_8_WIDE_DECOMP)
+-				__m256 scratch_xxxx0_xxxx1 = _mm256_set_m128(scratch1_xxxx, scratch0_xxxx);
+-				__m256 scratch_yyyy0_yyyy1 = _mm256_set_m128(scratch1_yyyy, scratch0_yyyy);
+-				__m256 scratch_zzzz0_zzzz1 = _mm256_set_m128(scratch1_zzzz, scratch0_zzzz);
+-#endif
+-
+-				// If we have a variable bit rate, we perform range reduction, skip the data we used
+-				if (rotation_format == rotation_format8::quatf_drop_w_variable && decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_drop_w_variable))
+-				{
+-					if (decomp_context.has_segments)
+-					{
+-#if defined(ACL_IMPL_USE_AVX_8_WIDE_DECOMP)
+-						remap_segment_range_data_avx8(segment_scratch, range_reduction_masks0, range_reduction_masks1, scratch_xxxx0_xxxx1, scratch_yyyy0_yyyy1, scratch_zzzz0_zzzz1);
+-#else
+-						remap_segment_range_data4(segment_scratch, 0, range_reduction_masks0, scratch0_xxxx, scratch0_yyyy, scratch0_zzzz);
+-						remap_segment_range_data4(segment_scratch, uint32_t(!decomp_context.uses_single_segment), range_reduction_masks1, scratch1_xxxx, scratch1_yyyy, scratch1_zzzz);
+-#endif
+-					}
+-
+-					const uint8_t* clip_range_data = clip_sampling_context_rotations.clip_range_data;
+-
+-#if defined(ACL_IMPL_USE_AVX_8_WIDE_DECOMP)
+-					remap_clip_range_data_avx8(clip_range_data, num_to_unpack, range_reduction_masks0, range_reduction_masks1, scratch_xxxx0_xxxx1, scratch_yyyy0_yyyy1, scratch_zzzz0_zzzz1);
+-#else
+-					remap_clip_range_data4(clip_range_data, num_to_unpack, range_reduction_masks0, range_reduction_masks1, scratch0_xxxx, scratch0_yyyy, scratch0_zzzz, scratch1_xxxx, scratch1_yyyy, scratch1_zzzz);
+-#endif
+-
+-					// Skip our data
+-					clip_range_data += num_to_unpack * sizeof(rtm::float3f) * 2;
+-					clip_sampling_context_rotations.clip_range_data = clip_range_data;
+-
+-#if defined(ACL_IMPL_PREFETCH_EARLY)
+-					// Clip range data is 24 bytes per sub-track and as such we need to prefetch two cache lines ahead to process 4 sub-tracks
+-					ACL_IMPL_ANIMATED_PREFETCH(clip_range_data + 64);
+-					ACL_IMPL_ANIMATED_PREFETCH(clip_range_data + 128);
+-#endif
+-				}
+-
+-				// Reconstruct our quaternion W component in SOA
+-				if (rotation_format != rotation_format8::quatf_full || !decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_full))
+-				{
+-#if defined(ACL_IMPL_USE_AVX_8_WIDE_DECOMP)
+-					const __m256 scratch_wwww0_wwww1 = quat_from_positive_w_avx8(scratch_xxxx0_xxxx1, scratch_yyyy0_yyyy1, scratch_zzzz0_zzzz1);
+-
+-					// This is the last AVX step, unpack everything
+-					scratch0_xxxx = _mm256_extractf128_ps(scratch_xxxx0_xxxx1, 0);
+-					scratch1_xxxx = _mm256_extractf128_ps(scratch_xxxx0_xxxx1, 1);
+-					scratch0_yyyy = _mm256_extractf128_ps(scratch_yyyy0_yyyy1, 0);
+-					scratch1_yyyy = _mm256_extractf128_ps(scratch_yyyy0_yyyy1, 1);
+-					scratch0_zzzz = _mm256_extractf128_ps(scratch_zzzz0_zzzz1, 0);
+-					scratch1_zzzz = _mm256_extractf128_ps(scratch_zzzz0_zzzz1, 1);
+-					scratch0_wwww = _mm256_extractf128_ps(scratch_wwww0_wwww1, 0);
+-					scratch1_wwww = _mm256_extractf128_ps(scratch_wwww0_wwww1, 1);
+-#else
+-					scratch0_wwww = quat_from_positive_w4(scratch0_xxxx, scratch0_yyyy, scratch0_zzzz);
+-
+-#if !defined(ACL_IMPL_PREFETCH_EARLY)
+-					if (rotation_format == rotation_format8::quatf_drop_w_variable && decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_drop_w_variable))
+-					{
+-						// Our segment per track metadata takes 4 bytes per group (4 samples, 1 byte each), each cache line fits 16 groups
+-						// Prefetch every other 8th group
+-						// We prefetch here because we have a square-root in quat_from_positive_w4(..) that we'll wait after
+-						// This allows us to insert the prefetch basically for free in its shadow
+-						// Branching is faster than prefetching every time and alternating between the two
+-						if (cache_write_index == 0)
+-							ACL_IMPL_ANIMATED_PREFETCH(segment_sampling_context_rotations[0].format_per_track_data + 64);
+-						else if (cache_write_index == 4)
+-							ACL_IMPL_ANIMATED_PREFETCH(segment_sampling_context_rotations[1].format_per_track_data + 64);
+-					}
+-#endif
+-
+-					scratch1_wwww = quat_from_positive_w4(scratch1_xxxx, scratch1_yyyy, scratch1_zzzz);
+-
+-#if !defined(ACL_IMPL_PREFETCH_EARLY)
+-					if (rotation_format == rotation_format8::quatf_drop_w_variable && decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_drop_w_variable))
+-					{
+-						// Our clip range data is 24 bytes per sub-track and as such we need to prefetch two cache lines ahead to process 4 sub-tracks
+-						// Each group is 96 bytes (4 samples, 24 bytes each), each cache line fits 0.67 groups
+-						// We prefetch here because we have a square-root in quat_from_positive_w4(..) that we'll wait after
+-						// This allows us to insert the prefetch basically for free in its shadow
+-						ACL_IMPL_ANIMATED_PREFETCH(clip_sampling_context_rotations.clip_range_data + 64);
+-						ACL_IMPL_ANIMATED_PREFETCH(clip_sampling_context_rotations.clip_range_data + 128);
+-					}
+-#endif
+-#endif
+-				}
+-
+-				// Interpolate linearly and store our rotations in SOA
+-				{
+-					const float interpolation_alpha = decomp_context.interpolation_alpha;
+-					const rtm::vector4f interpolation_alpha_v = rtm::vector_set(interpolation_alpha);
+-
+-					if (decompression_settings_type::is_per_track_rounding_supported())
+-					{
+-						// If we support per track rounding, we have to retain everything
+-						// Write both floor/ceil samples and interpolate as well
+-						// When we consume the sample, we'll pick the right one according to the rounding policy
+-
+-						// We swizzle and store the floor/ceil first because we have sqrt instructions in flight
+-						// from above. Most of the shuffles below can execute without any dependency.
+-						// We should have enough registers to avoid spilling and there is enough work to perform
+-						// to avoid any dependencies and fully hide the sqrt costs. That being said, there is
+-						// quite a bit of work to do and we might still be CPU bound below.
+-
+-						{
+-							// Swizzle out our 4 floor samples
+-							rtm::vector4f sample0;
+-							rtm::vector4f sample1;
+-							rtm::vector4f sample2;
+-							rtm::vector4f sample3;
+-							RTM_MATRIXF_TRANSPOSE_4X4(scratch0_xxxx, scratch0_yyyy, scratch0_zzzz, scratch0_wwww, sample0, sample1, sample2, sample3);
+-
+-							rtm::quatf* cache_ptr = &rotations.cached_samples[static_cast<int>(sample_rounding_policy::floor)][cache_write_index];
+-
+-							cache_ptr[0] = rtm::vector_to_quat(sample0);
+-							cache_ptr[1] = rtm::vector_to_quat(sample1);
+-							cache_ptr[2] = rtm::vector_to_quat(sample2);
+-							cache_ptr[3] = rtm::vector_to_quat(sample3);
+-						}
+-
+-						{
+-							// Swizzle out our 4 floor ceil
+-							rtm::vector4f sample0;
+-							rtm::vector4f sample1;
+-							rtm::vector4f sample2;
+-							rtm::vector4f sample3;
+-							RTM_MATRIXF_TRANSPOSE_4X4(scratch1_xxxx, scratch1_yyyy, scratch1_zzzz, scratch1_wwww, sample0, sample1, sample2, sample3);
+-
+-							rtm::quatf* cache_ptr = &rotations.cached_samples[static_cast<int>(sample_rounding_policy::ceil)][cache_write_index];
+-
+-							cache_ptr[0] = rtm::vector_to_quat(sample0);
+-							cache_ptr[1] = rtm::vector_to_quat(sample1);
+-							cache_ptr[2] = rtm::vector_to_quat(sample2);
+-							cache_ptr[3] = rtm::vector_to_quat(sample3);
+-						}
+-
+-						{
+-							// Find nearest and swizzle it out
+-							const rtm::mask4f use_sample0 = rtm::vector_less_than(interpolation_alpha_v, rtm::vector_set(0.5F));
+-
+-							const rtm::vector4f nearest_xxxx = rtm::vector_select(use_sample0, scratch0_xxxx, scratch1_xxxx);
+-							const rtm::vector4f nearest_yyyy = rtm::vector_select(use_sample0, scratch0_yyyy, scratch1_yyyy);
+-							const rtm::vector4f nearest_zzzz = rtm::vector_select(use_sample0, scratch0_zzzz, scratch1_zzzz);
+-							const rtm::vector4f nearest_wwww = rtm::vector_select(use_sample0, scratch0_wwww, scratch1_wwww);
+-
+-							rtm::vector4f sample0;
+-							rtm::vector4f sample1;
+-							rtm::vector4f sample2;
+-							rtm::vector4f sample3;
+-							RTM_MATRIXF_TRANSPOSE_4X4(nearest_xxxx, nearest_yyyy, nearest_zzzz, nearest_wwww, sample0, sample1, sample2, sample3);
+-
+-							rtm::quatf* cache_ptr = &rotations.cached_samples[static_cast<int>(sample_rounding_policy::nearest)][cache_write_index];
+-
+-							cache_ptr[0] = rtm::vector_to_quat(sample0);
+-							cache_ptr[1] = rtm::vector_to_quat(sample1);
+-							cache_ptr[2] = rtm::vector_to_quat(sample2);
+-							cache_ptr[3] = rtm::vector_to_quat(sample3);
+-						}
+-
+-						{
+-							rtm::vector4f interp_xxxx;
+-							rtm::vector4f interp_yyyy;
+-							rtm::vector4f interp_zzzz;
+-							rtm::vector4f interp_wwww;
+-
+-							// Interpolate our quaternions without normalizing just yet
+-							quat_lerp4(scratch0_xxxx, scratch0_yyyy, scratch0_zzzz, scratch0_wwww,
+-								scratch1_xxxx, scratch1_yyyy, scratch1_zzzz, scratch1_wwww,
+-								interpolation_alpha_v,
+-								interp_xxxx, interp_yyyy, interp_zzzz, interp_wwww);
+-
+-							// Due to the interpolation, the result might not be anywhere near normalized!
+-							// Make sure to normalize afterwards if we need to
+-							constexpr bool normalize_rotations = decompression_settings_type::normalize_rotations();
+-							if (normalize_rotations)
+-								quat_normalize4(interp_xxxx, interp_yyyy, interp_zzzz, interp_wwww);
+-
+-#if !defined(ACL_IMPL_PREFETCH_EARLY)
+-							{
+-								// Our animated variable bit packed data uses at most 32 bits per component
+-								// When we use raw data, that means each group uses 64 bytes (4 bytes per component, 4 components, 4 samples in group), we have 1 group per cache line
+-								// When we use variable data, the highest bit rate uses 32 bits per component and thus our upper bound is 48 bytes per group (4 bytes per component, 3 components, 4 samples in group), we have 1.33 group per cache line
+-								// In practice, the highest bit rate is rare and the second higher uses 19 bits per component which brings us to 28.5 bytes per group, leading to 2.24 group per cache line
+-								// We prefetch both key frames every time to help hide TLB miss latency in large clips
+-								// We prefetch here because we have a square-root and division in quat_normalize4(..) that we'll wait after
+-								// This allows us to insert the prefetch basically for free in their shadow
+-								const uint8_t* animated_track_data = segment_sampling_context_rotations[0].animated_track_data + 64;	// One cache line ahead
+-								const uint32_t animated_bit_offset0 = segment_sampling_context_rotations[0].animated_track_data_bit_offset;
+-								const uint32_t animated_bit_offset1 = segment_sampling_context_rotations[1].animated_track_data_bit_offset;
+-								ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset0 / 8));
+-								ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset1 / 8));
+-							}
+-#endif
+-
+-							// Swizzle out our 4 samples
+-							rtm::vector4f sample0;
+-							rtm::vector4f sample1;
+-							rtm::vector4f sample2;
+-							rtm::vector4f sample3;
+-							RTM_MATRIXF_TRANSPOSE_4X4(interp_xxxx, interp_yyyy, interp_zzzz, interp_wwww, sample0, sample1, sample2, sample3);
+-
+-							rtm::quatf* cache_ptr = &rotations.cached_samples[static_cast<int>(sample_rounding_policy::none)][cache_write_index];
+-
+-							cache_ptr[0] = rtm::vector_to_quat(sample0);
+-							cache_ptr[1] = rtm::vector_to_quat(sample1);
+-							cache_ptr[2] = rtm::vector_to_quat(sample2);
+-							cache_ptr[3] = rtm::vector_to_quat(sample3);
+-						}
+-					}
+-					else
+-					{
+-						rtm::vector4f interp_xxxx;
+-						rtm::vector4f interp_yyyy;
+-						rtm::vector4f interp_zzzz;
+-						rtm::vector4f interp_wwww;
+-
+-						const bool should_interpolate = should_interpolate_samples<decompression_settings_type>(rotation_format, interpolation_alpha);
+-						if (should_interpolate)
+-						{
+-							// Interpolate our quaternions without normalizing just yet
+-							quat_lerp4(scratch0_xxxx, scratch0_yyyy, scratch0_zzzz, scratch0_wwww,
+-								scratch1_xxxx, scratch1_yyyy, scratch1_zzzz, scratch1_wwww,
+-								interpolation_alpha_v,
+-								interp_xxxx, interp_yyyy, interp_zzzz, interp_wwww);
+-
+-							// Due to the interpolation, the result might not be anywhere near normalized!
+-							// Make sure to normalize afterwards if we need to
+-							constexpr bool normalize_rotations = decompression_settings_type::normalize_rotations();
+-							if (normalize_rotations)
+-								quat_normalize4(interp_xxxx, interp_yyyy, interp_zzzz, interp_wwww);
+-						}
+-						else
+-						{
+-							// If we don't interpolate, just pick the sample we need, it is already normalized after reconstructing
+-							// the W component or it was raw to begin with
+-							const rtm::mask4f use_sample0 = rtm::vector_less_equal(rtm::vector_set(interpolation_alpha), rtm::vector_zero());
+-
+-							interp_xxxx = rtm::vector_select(use_sample0, scratch0_xxxx, scratch1_xxxx);
+-							interp_yyyy = rtm::vector_select(use_sample0, scratch0_yyyy, scratch1_yyyy);
+-							interp_zzzz = rtm::vector_select(use_sample0, scratch0_zzzz, scratch1_zzzz);
+-							interp_wwww = rtm::vector_select(use_sample0, scratch0_wwww, scratch1_wwww);
+-						}
+-
+-#if !defined(ACL_IMPL_PREFETCH_EARLY)
+-						{
+-							// Our animated variable bit packed data uses at most 32 bits per component
+-							// When we use raw data, that means each group uses 64 bytes (4 bytes per component, 4 components, 4 samples in group), we have 1 group per cache line
+-							// When we use variable data, the highest bit rate uses 32 bits per component and thus our upper bound is 48 bytes per group (4 bytes per component, 3 components, 4 samples in group), we have 1.33 group per cache line
+-							// In practice, the highest bit rate is rare and the second higher uses 19 bits per component which brings us to 28.5 bytes per group, leading to 2.24 group per cache line
+-							// We prefetch both key frames every time to help hide TLB miss latency in large clips
+-							// We prefetch here because we have a square-root and division in quat_normalize4(..) that we'll wait after
+-							// This allows us to insert the prefetch basically for free in their shadow
+-							const uint8_t* animated_track_data = segment_sampling_context_rotations[0].animated_track_data + 64;	// One cache line ahead
+-							const uint32_t animated_bit_offset0 = segment_sampling_context_rotations[0].animated_track_data_bit_offset;
+-							const uint32_t animated_bit_offset1 = segment_sampling_context_rotations[1].animated_track_data_bit_offset;
+-							ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset0 / 8));
+-							ACL_IMPL_ANIMATED_PREFETCH(animated_track_data + (animated_bit_offset1 / 8));
+-						}
+-#endif
+-
+-						// Swizzle out our 4 samples
+-						rtm::vector4f sample0;
+-						rtm::vector4f sample1;
+-						rtm::vector4f sample2;
+-						rtm::vector4f sample3;
+-						RTM_MATRIXF_TRANSPOSE_4X4(interp_xxxx, interp_yyyy, interp_zzzz, interp_wwww, sample0, sample1, sample2, sample3);
+-
+-						// Always first rounding mode (none)
+-						rtm::quatf* cache_ptr = &rotations.cached_samples[static_cast<int>(sample_rounding_policy::none)][cache_write_index];
+-
+-						cache_ptr[0] = rtm::vector_to_quat(sample0);
+-						cache_ptr[1] = rtm::vector_to_quat(sample1);
+-						cache_ptr[2] = rtm::vector_to_quat(sample2);
+-						cache_ptr[3] = rtm::vector_to_quat(sample3);
+-					}
+-				}
+-			}
+-
+-			template<class decompression_settings_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK void skip_rotation_groups(const persistent_transform_decompression_context_v0& decomp_context, uint32_t num_groups_to_skip)
+-			{
+-				const uint32_t num_left_to_unpack = rotations.num_left_to_unpack;
+-				const uint32_t num_to_skip = num_groups_to_skip * 4;
+-				ACL_ASSERT(num_to_skip < num_left_to_unpack, "Cannot skip rotations that aren't present");
+-
+-				rotations.num_left_to_unpack = num_left_to_unpack - num_to_skip;
+-
+-				const rotation_format8 rotation_format = get_rotation_format<decompression_settings_type>(decomp_context.rotation_format);
+-				if (rotation_format == rotation_format8::quatf_drop_w_variable && decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_drop_w_variable))
+-				{
+-					const uint8_t* format_per_track_data0 = segment_sampling_context_rotations[0].format_per_track_data;
+-					const uint8_t* format_per_track_data1 = segment_sampling_context_rotations[1].format_per_track_data;
+-
+-					uint32_t group_bit_size_per_component0;
+-					uint32_t group_bit_size_per_component1;
+-					count_animated_group_bit_size(format_per_track_data0, format_per_track_data1, num_groups_to_skip, group_bit_size_per_component0, group_bit_size_per_component1);
+-
+-					const uint32_t format_per_track_data_skip_size = num_groups_to_skip * 4;
+-					const uint32_t segment_range_data_skip_size = num_groups_to_skip * 6 * 4;
+-
+-					segment_sampling_context_rotations[0].format_per_track_data = format_per_track_data0 + format_per_track_data_skip_size;
+-					segment_sampling_context_rotations[0].segment_range_data += segment_range_data_skip_size;
+-					segment_sampling_context_rotations[0].animated_track_data_bit_offset += group_bit_size_per_component0 * 3;
+-
+-					segment_sampling_context_rotations[1].format_per_track_data = format_per_track_data1 + format_per_track_data_skip_size;
+-					segment_sampling_context_rotations[1].segment_range_data += segment_range_data_skip_size;
+-					segment_sampling_context_rotations[1].animated_track_data_bit_offset += group_bit_size_per_component1 * 3;
+-
+-					clip_sampling_context_rotations.clip_range_data += sizeof(rtm::float3f) * 2 * 4 * num_groups_to_skip;
+-				}
+-				else
+-				{
+-					uint32_t group_bit_size;
+-					if (rotation_format == rotation_format8::quatf_full && decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_full))
+-						group_bit_size = 32 * 4 * 4 * num_groups_to_skip;
+-					else // drop w full
+-						group_bit_size = 32 * 3 * 4 * num_groups_to_skip;
+-
+-					segment_sampling_context_rotations[0].animated_track_data_bit_offset += group_bit_size;
+-					segment_sampling_context_rotations[1].animated_track_data_bit_offset += group_bit_size;
+-				}
+-			}
+-
+-			template<class decompression_settings_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK rtm::quatf RTM_SIMD_CALL unpack_rotation_within_group(const persistent_transform_decompression_context_v0& decomp_context, uint32_t unpack_index, float interpolation_alpha)
+-			{
+-				ACL_ASSERT(unpack_index < rotations.num_left_to_unpack && unpack_index < 4, "Cannot unpack sample that isn't present");
+-
+-				const uint32_t group_size = std::min<uint32_t>(rotations.num_left_to_unpack, 4);
+-
+-				const rtm::vector4f sample_as_vec0 = unpack_single_animated_quat<decompression_settings_type>(decomp_context, unpack_index, group_size, clip_sampling_context_rotations, segment_sampling_context_rotations[0]);
+-				const rtm::vector4f sample_as_vec1 = unpack_single_animated_quat<decompression_settings_type>(decomp_context, unpack_index, group_size, clip_sampling_context_rotations, segment_sampling_context_rotations[1]);
+-
+-				rtm::quatf sample0;
+-				rtm::quatf sample1;
+-
+-				// Reconstruct our quaternion W component
+-				const rotation_format8 rotation_format = get_rotation_format<decompression_settings_type>(decomp_context.rotation_format);
+-				if (rotation_format != rotation_format8::quatf_full || !decompression_settings_type::is_rotation_format_supported(rotation_format8::quatf_full))
+-				{
+-					sample0 = rtm::quat_from_positive_w(sample_as_vec0);
+-					sample1 = rtm::quat_from_positive_w(sample_as_vec1);
+-				}
+-				else
+-				{
+-					sample0 = rtm::vector_to_quat(sample_as_vec0);
+-					sample1 = rtm::vector_to_quat(sample_as_vec1);
+-				}
+-
+-				rtm::quatf result;
+-
+-				const bool should_interpolate = should_interpolate_samples<decompression_settings_type>(rotation_format, interpolation_alpha);
+-				if (should_interpolate)
+-				{
+-					// Due to the interpolation, the result might not be anywhere near normalized!
+-					// Make sure to normalize afterwards before using
+-					constexpr bool normalize_rotations = decompression_settings_type::normalize_rotations();
+-					if (normalize_rotations)
+-						result = rtm::quat_lerp(sample0, sample1, interpolation_alpha);
+-					else
+-						result = quat_lerp_no_normalization(sample0, sample1, interpolation_alpha);
+-				}
+-				else
+-				{
+-					// If we don't interpolate, just pick the sample we need, it is already normalized after reconstructing
+-					// the W component or it was raw to begin with
+-					result = interpolation_alpha <= 0.0F ? sample0 : sample1;
+-				}
+-
+-				return result;
+-			}
+-
+-			RTM_FORCE_INLINE RTM_DISABLE_SECURITY_COOKIE_CHECK const rtm::quatf& consume_rotation(sample_rounding_policy policy)
+-			{
+-				ACL_ASSERT(rotations.cache_read_index < rotations.cache_write_index, "Attempting to consume an animated sample that isn't cached");
+-				const uint32_t cache_read_index = rotations.cache_read_index++;
+-				return rotations.cached_samples[static_cast<int>(policy)][cache_read_index % 8];
+-			}
+-
+-			template<class decompression_settings_adapter_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK void unpack_translation_group(const persistent_transform_decompression_context_v0& decomp_context)
+-			{
+-				const uint32_t num_left_to_unpack = translations.num_left_to_unpack;
+-				if (num_left_to_unpack == 0)
+-					return;	// Nothing left to do, we are done
+-
+-				// If we have less than 4 cached samples, unpack 4 more and prefetch the next cache line
+-				const uint32_t num_cached = translations.get_num_cached();
+-				if (num_cached >= 4)
+-					return;	// Enough cached, nothing to do
+-
+-				const uint32_t num_to_unpack = std::min<uint32_t>(num_left_to_unpack, 4);
+-				translations.num_left_to_unpack = num_left_to_unpack - num_to_unpack;
+-
+-				// Write index will be either 0 or 4 here since we always unpack 4 at a time
+-				const uint32_t cache_write_index = translations.cache_write_index % 8;
+-				translations.cache_write_index += num_to_unpack;
+-
+-				unpack_animated_vector3<decompression_settings_adapter_type>(decomp_context, scratch0, num_to_unpack, clip_sampling_context_translations, segment_sampling_context_translations[0]);
+-				unpack_animated_vector3<decompression_settings_adapter_type>(decomp_context, scratch1, num_to_unpack, clip_sampling_context_translations, segment_sampling_context_translations[1]);
+-
+-				const rtm::vector4f interpolation_alpha = rtm::vector_set(decomp_context.interpolation_alpha);
+-				const rtm::mask4f use_sample0 = rtm::vector_less_than(interpolation_alpha, rtm::vector_set(0.5F));
+-
+-				// If we support per track rounding, we have to retain everything
+-				// Write both floor/ceil/nearest samples and interpolate as well
+-				// When we consume the sample, we'll pick the right one according to the rounding policy
+-
+-				rtm::vector4f* cache_ptr_none = &translations.cached_samples[static_cast<int>(sample_rounding_policy::none)][cache_write_index];
+-				rtm::vector4f* cache_ptr_floor = &translations.cached_samples[static_cast<int>(sample_rounding_policy::floor)][cache_write_index];
+-				rtm::vector4f* cache_ptr_ceil = &translations.cached_samples[static_cast<int>(sample_rounding_policy::ceil)][cache_write_index];
+-				rtm::vector4f* cache_ptr_nearest = &translations.cached_samples[static_cast<int>(sample_rounding_policy::nearest)][cache_write_index];
+-				
+-				for (uint32_t unpack_index = 0; unpack_index < num_to_unpack; ++unpack_index)
+-				{
+-					const rtm::vector4f sample0 = scratch0[unpack_index];
+-					const rtm::vector4f sample1 = scratch1[unpack_index];
+-
+-					if (decompression_settings_adapter_type::is_per_track_rounding_supported())
+-					{
+-						// These stores have no dependency and can be dispatched right away
+-						cache_ptr_floor[unpack_index] = sample0;
+-						cache_ptr_ceil[unpack_index] = sample1;
+-						cache_ptr_nearest[unpack_index] = rtm::vector_select(use_sample0, sample0, sample1);
+-					}
+-
+-					const rtm::vector4f sample = rtm::vector_lerp(sample0, sample1, interpolation_alpha);
+-
+-					cache_ptr_none[unpack_index] = sample;
+-				}
+-
+-				// If we have clip range data, skip it
+-				const vector_format8 format = get_vector_format<decompression_settings_adapter_type>(decompression_settings_adapter_type::get_vector_format(decomp_context));
+-				if (format == vector_format8::vector3f_variable && decompression_settings_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable))
+-				{
+-					clip_sampling_context_translations.clip_range_data += num_to_unpack * sizeof(rtm::float3f) * 2;
+-
+-					// Clip range data is 24 bytes per sub-track and as such we need to prefetch two cache lines ahead to process 4 sub-tracks
+-					ACL_IMPL_ANIMATED_PREFETCH(clip_sampling_context_translations.clip_range_data + 64);
+-					ACL_IMPL_ANIMATED_PREFETCH(clip_sampling_context_translations.clip_range_data + 128);
+-				}
+-			}
+-
+-			template<class decompression_settings_adapter_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK void skip_translation_groups(const persistent_transform_decompression_context_v0& decomp_context, uint32_t num_groups_to_skip)
+-			{
+-				const uint32_t num_left_to_unpack = translations.num_left_to_unpack;
+-				const uint32_t num_to_skip = num_groups_to_skip * 4;
+-				ACL_ASSERT(num_to_skip < num_left_to_unpack, "Cannot skip translations that aren't present");
+-
+-				translations.num_left_to_unpack = num_left_to_unpack - num_to_skip;
+-
+-				const vector_format8 format = get_vector_format<decompression_settings_adapter_type>(decompression_settings_adapter_type::get_vector_format(decomp_context));
+-				if (format == vector_format8::vector3f_variable && decompression_settings_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable))
+-				{
+-					const uint8_t* format_per_track_data0 = segment_sampling_context_translations[0].format_per_track_data;
+-					const uint8_t* format_per_track_data1 = segment_sampling_context_translations[1].format_per_track_data;
+-
+-					uint32_t group_bit_size_per_component0;
+-					uint32_t group_bit_size_per_component1;
+-					count_animated_group_bit_size(format_per_track_data0, format_per_track_data1, num_groups_to_skip, group_bit_size_per_component0, group_bit_size_per_component1);
+-
+-					const uint32_t format_per_track_data_skip_size = num_groups_to_skip * 4;
+-					const uint32_t segment_range_data_skip_size = num_groups_to_skip * 6 * 4;
+-
+-					segment_sampling_context_translations[0].format_per_track_data = format_per_track_data0 + format_per_track_data_skip_size;
+-					segment_sampling_context_translations[0].segment_range_data += segment_range_data_skip_size;
+-					segment_sampling_context_translations[0].animated_track_data_bit_offset += group_bit_size_per_component0 * 3;
+-
+-					segment_sampling_context_translations[1].format_per_track_data = format_per_track_data1 + format_per_track_data_skip_size;
+-					segment_sampling_context_translations[1].segment_range_data += segment_range_data_skip_size;
+-					segment_sampling_context_translations[1].animated_track_data_bit_offset += group_bit_size_per_component1 * 3;
+-
+-					clip_sampling_context_translations.clip_range_data += sizeof(rtm::float3f) * 2 * 4 * num_groups_to_skip;
+-				}
+-				else
+-				{
+-					const uint32_t group_bit_size = 32 * 3 * 4 * num_groups_to_skip;
+-					segment_sampling_context_translations[0].animated_track_data_bit_offset += group_bit_size;
+-					segment_sampling_context_translations[1].animated_track_data_bit_offset += group_bit_size;
+-				}
+-			}
+-
+-			template<class decompression_settings_adapter_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK rtm::vector4f RTM_SIMD_CALL unpack_translation_within_group(const persistent_transform_decompression_context_v0& decomp_context, uint32_t unpack_index, float interpolation_alpha)
+-			{
+-				ACL_ASSERT(unpack_index < translations.num_left_to_unpack && unpack_index < 4, "Cannot unpack sample that isn't present");
+-
+-				const rtm::vector4f sample0 = unpack_single_animated_vector3<decompression_settings_adapter_type>(decomp_context, unpack_index, clip_sampling_context_translations, segment_sampling_context_translations[0]);
+-				const rtm::vector4f sample1 = unpack_single_animated_vector3<decompression_settings_adapter_type>(decomp_context, unpack_index, clip_sampling_context_translations, segment_sampling_context_translations[1]);
+-
+-				return rtm::vector_lerp(sample0, sample1, interpolation_alpha);
+-			}
+-
+-			RTM_FORCE_INLINE RTM_DISABLE_SECURITY_COOKIE_CHECK const rtm::vector4f& consume_translation(sample_rounding_policy policy)
+-			{
+-				ACL_ASSERT(translations.cache_read_index < translations.cache_write_index, "Attempting to consume an animated sample that isn't cached");
+-				const uint32_t cache_read_index = translations.cache_read_index++;
+-				return translations.cached_samples[static_cast<int>(policy)][cache_read_index % 8];
+-			}
+-
+-			template<class decompression_settings_adapter_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK void unpack_scale_group(const persistent_transform_decompression_context_v0& decomp_context)
+-			{
+-				const uint32_t num_left_to_unpack = scales.num_left_to_unpack;
+-				if (num_left_to_unpack == 0)
+-					return;	// Nothing left to do, we are done
+-
+-				// If we have less than 4 cached samples, unpack 4 more and prefetch the next cache line
+-				const uint32_t num_cached = scales.get_num_cached();
+-				if (num_cached >= 4)
+-					return;	// Enough cached, nothing to do
+-
+-				const uint32_t num_to_unpack = std::min<uint32_t>(num_left_to_unpack, 4);
+-				scales.num_left_to_unpack = num_left_to_unpack - num_to_unpack;
+-
+-				// Write index will be either 0 or 4 here since we always unpack 4 at a time
+-				const uint32_t cache_write_index = scales.cache_write_index % 8;
+-				scales.cache_write_index += num_to_unpack;
+-
+-				unpack_animated_vector3<decompression_settings_adapter_type>(decomp_context, scratch0, num_to_unpack, clip_sampling_context_scales, segment_sampling_context_scales[0]);
+-				unpack_animated_vector3<decompression_settings_adapter_type>(decomp_context, scratch1, num_to_unpack, clip_sampling_context_scales, segment_sampling_context_scales[1]);
+-
+-				const rtm::vector4f interpolation_alpha = rtm::vector_set(decomp_context.interpolation_alpha);
+-				const rtm::mask4f use_sample0 = rtm::vector_less_than(interpolation_alpha, rtm::vector_set(0.5F));
+-
+-				// If we support per track rounding, we have to retain everything
+-				// Write both floor/ceil/nearest samples and interpolate as well
+-				// When we consume the sample, we'll pick the right one according to the rounding policy
+-
+-				rtm::vector4f* cache_ptr_none = &scales.cached_samples[static_cast<int>(sample_rounding_policy::none)][cache_write_index];
+-				rtm::vector4f* cache_ptr_floor = &scales.cached_samples[static_cast<int>(sample_rounding_policy::floor)][cache_write_index];
+-				rtm::vector4f* cache_ptr_ceil = &scales.cached_samples[static_cast<int>(sample_rounding_policy::ceil)][cache_write_index];
+-				rtm::vector4f* cache_ptr_nearest = &scales.cached_samples[static_cast<int>(sample_rounding_policy::nearest)][cache_write_index];
+-
+-				for (uint32_t unpack_index = 0; unpack_index < num_to_unpack; ++unpack_index)
+-				{
+-					const rtm::vector4f sample0 = scratch0[unpack_index];
+-					const rtm::vector4f sample1 = scratch1[unpack_index];
+-
+-					if (decompression_settings_adapter_type::is_per_track_rounding_supported())
+-					{
+-						// These stores have no dependency and can be dispatched right away
+-						cache_ptr_floor[unpack_index] = sample0;
+-						cache_ptr_ceil[unpack_index] = sample1;
+-						cache_ptr_nearest[unpack_index] = rtm::vector_select(use_sample0, sample0, sample1);
+-					}
+-
+-					const rtm::vector4f sample = rtm::vector_lerp(sample0, sample1, interpolation_alpha);
+-
+-					cache_ptr_none[unpack_index] = sample;
+-				}
+-
+-				// If we have clip range data, skip it
+-				const vector_format8 format = get_vector_format<decompression_settings_adapter_type>(decompression_settings_adapter_type::get_vector_format(decomp_context));
+-				if (format == vector_format8::vector3f_variable && decompression_settings_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable))
+-				{
+-					clip_sampling_context_scales.clip_range_data += num_to_unpack * sizeof(rtm::float3f) * 2;
+-
+-					// Clip range data is 24 bytes per sub-track and as such we need to prefetch two cache lines ahead to process 4 sub-tracks
+-					ACL_IMPL_ANIMATED_PREFETCH(clip_sampling_context_scales.clip_range_data + 64);
+-					ACL_IMPL_ANIMATED_PREFETCH(clip_sampling_context_scales.clip_range_data + 128);
+-				}
+-			}
+-
+-			template<class decompression_settings_adapter_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK void skip_scale_groups(const persistent_transform_decompression_context_v0& decomp_context, uint32_t num_groups_to_skip)
+-			{
+-				const uint32_t num_left_to_unpack = scales.num_left_to_unpack;
+-				const uint32_t num_to_skip = num_groups_to_skip * 4;
+-				ACL_ASSERT(num_to_skip < num_left_to_unpack, "Cannot skip scales that aren't present");
+-
+-				scales.num_left_to_unpack = num_left_to_unpack - num_to_skip;
+-
+-				const vector_format8 format = get_vector_format<decompression_settings_adapter_type>(decompression_settings_adapter_type::get_vector_format(decomp_context));
+-				if (format == vector_format8::vector3f_variable && decompression_settings_adapter_type::is_vector_format_supported(vector_format8::vector3f_variable))
+-				{
+-					const uint8_t* format_per_track_data0 = segment_sampling_context_scales[0].format_per_track_data;
+-					const uint8_t* format_per_track_data1 = segment_sampling_context_scales[1].format_per_track_data;
+-
+-					uint32_t group_bit_size_per_component0;
+-					uint32_t group_bit_size_per_component1;
+-					count_animated_group_bit_size(format_per_track_data0, format_per_track_data1, num_groups_to_skip, group_bit_size_per_component0, group_bit_size_per_component1);
+-
+-					const uint32_t format_per_track_data_skip_size = num_groups_to_skip * 4;
+-					const uint32_t segment_range_data_skip_size = num_groups_to_skip * 6 * 4;
+-
+-					segment_sampling_context_scales[0].format_per_track_data = format_per_track_data0 + format_per_track_data_skip_size;
+-					segment_sampling_context_scales[0].segment_range_data += segment_range_data_skip_size;
+-					segment_sampling_context_scales[0].animated_track_data_bit_offset += group_bit_size_per_component0 * 3;
+-
+-					segment_sampling_context_scales[1].format_per_track_data = format_per_track_data1 + format_per_track_data_skip_size;
+-					segment_sampling_context_scales[1].segment_range_data += segment_range_data_skip_size;
+-					segment_sampling_context_scales[1].animated_track_data_bit_offset += group_bit_size_per_component1 * 3;
+-
+-					clip_sampling_context_scales.clip_range_data += sizeof(rtm::float3f) * 2 * 4 * num_groups_to_skip;
+-				}
+-				else
+-				{
+-					const uint32_t group_bit_size = 32 * 3 * 4 * num_groups_to_skip;
+-					segment_sampling_context_scales[0].animated_track_data_bit_offset += group_bit_size;
+-					segment_sampling_context_scales[1].animated_track_data_bit_offset += group_bit_size;
+-				}
+-			}
+-
+-			template<class decompression_settings_adapter_type>
+-			RTM_DISABLE_SECURITY_COOKIE_CHECK rtm::vector4f RTM_SIMD_CALL unpack_scale_within_group(const persistent_transform_decompression_context_v0& decomp_context, uint32_t unpack_index, float interpolation_alpha)
+-			{
+-				ACL_ASSERT(unpack_index < scales.num_left_to_unpack && unpack_index < 4, "Cannot unpack sample that isn't present");
+-
+-				const rtm::vector4f sample0 = unpack_single_animated_vector3<decompression_settings_adapter_type>(decomp_context, unpack_index, clip_sampling_context_scales, segment_sampling_context_scales[0]);
+-				const rtm::vector4f sample1 = unpack_single_animated_vector3<decompression_settings_adapter_type>(decomp_context, unpack_index, clip_sampling_context_scales, segment_sampling_context_scales[1]);
+-
+-				return rtm::vector_lerp(sample0, sample1, interpolation_alpha);
+-			}
+-
+-			RTM_FORCE_INLINE RTM_DISABLE_SECURITY_COOKIE_CHECK const rtm::vector4f& consume_scale(sample_rounding_policy policy)
+-			{
+-				ACL_ASSERT(scales.cache_read_index < scales.cache_write_index, "Attempting to consume an animated sample that isn't cached");
+-				const uint32_t cache_read_index = scales.cache_read_index++;
+-				return scales.cached_samples[static_cast<int>(policy)][cache_read_index % 8];
+-			}
+-		};
+-	}
+-
+-	ACL_IMPL_VERSION_NAMESPACE_END
+-}
+-
+-#if defined(RTM_COMPILER_MSVC)
+-	#pragma warning(pop)
+-#endif
+-
+-#if defined(RTM_COMPILER_GCC)
+-	#pragma GCC diagnostic pop
+-#endif
+-
+-ACL_IMPL_FILE_PRAGMA_POP

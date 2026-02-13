@@ -1,0 +1,18 @@
+diff --git a/wrappers/python/zxing.cpp b/wrappers/python/zxing.cpp
+index 3e35d74d..a9efca3c 100644
+--- a/wrappers/python/zxing.cpp
++++ b/wrappers/python/zxing.cpp
+@@ -90,7 +90,12 @@ auto read_barcodes_impl(py::object _image, const BarcodeFormats& formats, bool t
+ 	}
+ 
+ 	const auto bytes = image.data();
+-	return ReadBarcodes({bytes, width, height, imgfmt, width * channels, channels}, hints);
++	Results results;
++		{
++			py::gil_scoped_release release;
++			results = ReadBarcodes({bytes, width, height, imgfmt, width * channels, channels}, hints);
++		}
++		return results;
+ }
+ 
+ std::optional<Result> read_barcode(py::object _image, const BarcodeFormats& formats, bool try_rotate, bool try_downscale,

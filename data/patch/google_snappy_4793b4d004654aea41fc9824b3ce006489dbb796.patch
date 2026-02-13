@@ -1,0 +1,59 @@
+diff --git a/snappy-internal.h b/snappy-internal.h
+index ae78247..6fcb677 100644
+--- a/snappy-internal.h
++++ b/snappy-internal.h
+@@ -236,20 +236,11 @@ static inline std::pair<size_t, bool> FindMatchLength(const char* s1,
+ #ifndef __x86_64__
+       a2 = static_cast<uint32_t>(xorval) == 0 ? a3 : a2;
+ #else
+-      // Ideally this would just be
+-      //
+-      // a2 = static_cast<uint32_t>(xorval) == 0 ? a3 : a2;
+-      //
+-      // However clang correctly infers that the above statement participates on
+-      // a critical data dependency chain and thus, unfortunately, refuses to
+-      // use a conditional move (it's tuned to cut data dependencies). In this
+-      // case there is a longer parallel chain anyway AND this will be fairly
+-      // unpredictable.
+-      asm("testl %k2, %k2\n\t"
+-          "cmovzq %1, %0\n\t"
+-          : "+r"(a2)
+-          : "r"(a3), "r"(xorval)
+-          : "cc");
++      // Branchless selection: if the low 32 bits of xorval are zero then use a3
++      // otherwise keep a2. Using a arithmetic mask avoids branches and inline
++      // asm, improving portability and letting the compiler optimize better.
++      uint64_t mask = -static_cast<uint64_t>(static_cast<uint32_t>(xorval) == 0);
++      a2 = (a2 & ~mask) | (a3 & mask);
+ #endif
+       *data = a2 >> (shift & (3 * 8));
+       return std::pair<size_t, bool>(matched_bytes, true);
+@@ -279,11 +270,11 @@ static inline std::pair<size_t, bool> FindMatchLength(const char* s1,
+ #ifndef __x86_64__
+       a2 = static_cast<uint32_t>(xorval) == 0 ? a3 : a2;
+ #else
+-      asm("testl %k2, %k2\n\t"
+-          "cmovzq %1, %0\n\t"
+-          : "+r"(a2)
+-          : "r"(a3), "r"(xorval)
+-          : "cc");
++      // Branchless selection: if the low 32 bits of xorval are zero then use a3
++      // otherwise keep a2. This avoids inline asm and lets the compiler better
++      // optimize the code across platforms.
++      uint64_t mask = -static_cast<uint64_t>(static_cast<uint32_t>(xorval) == 0);
++      a2 = (a2 & ~mask) | (a3 & mask);
+ #endif
+       *data = a2 >> (shift & (3 * 8));
+       matched += matched_bytes;
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit d572f4777349d43653b21d6c2fc63020ab326db2
++Subproject commit d572f4777349d43653b21d6c2fc63020ab326db2-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit b796f7d44681514f58a683a3a71ff17c94edb0c1
++Subproject commit b796f7d44681514f58a683a3a71ff17c94edb0c1-dirty

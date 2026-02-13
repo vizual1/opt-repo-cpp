@@ -1,0 +1,75 @@
+diff --git a/snappy-internal.h b/snappy-internal.h
+index 720ccd8..875db6b 100644
+--- a/snappy-internal.h
++++ b/snappy-internal.h
+@@ -32,6 +32,15 @@
+ #define THIRD_PARTY_SNAPPY_SNAPPY_INTERNAL_H_
+ 
+ #include "snappy-stubs-internal.h"
++// Enable SSSE3-style optimizations when ARM NEON is available as well.
++#if !defined(SNAPPY_HAVE_SSSE3)
++#if defined(__SSSE3__) || defined(__AVX__) || defined(__ARM_NEON__) || defined(__ARM_NEON)
++#define SNAPPY_HAVE_SSSE3 1
++#else
++#define SNAPPY_HAVE_SSSE3 0
++#endif
++#endif
++
+ 
+ namespace snappy {
+ namespace internal {
+diff --git a/snappy.cc b/snappy.cc
+index 79dc0e8..3a2f8a9 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -33,8 +33,10 @@
+ #if !defined(SNAPPY_HAVE_SSSE3)
+ // __SSSE3__ is defined by GCC and Clang. Visual Studio doesn't target SIMD
+ // support between SSE2 and AVX (so SSSE3 instructions require AVX support), and
+-// defines __AVX__ when AVX support is available.
+-#if defined(__SSSE3__) || defined(__AVX__)
++// defines __AVX__ when AVX support is available. We also enable the SSSE3-style
++// optimizations when ARM NEON is present since the code uses a very thin
++// translation layer to map PSHUFB-like behavior to NEON.
++#if defined(__SSSE3__) || defined(__AVX__) || defined(__ARM_NEON__) || defined(__ARM_NEON)
+ #define SNAPPY_HAVE_SSSE3 1
+ #else
+ #define SNAPPY_HAVE_SSSE3 0
+@@ -57,9 +59,24 @@
+ #endif  // !defined(SNAPPY_HAVE_BMI2)
+ 
+ #if SNAPPY_HAVE_SSSE3
++# if defined(__SSSE3__) || defined(__AVX__)
+ // Please do not replace with <x86intrin.h>. or with headers that assume more
+ // advanced SSE versions without checking with all the OWNERS.
+-#include <tmmintrin.h>
++#  include <tmmintrin.h>
++# elif defined(__ARM_NEON__) || defined(__ARM_NEON)
++// ARM NEON: provide a very thin translation layer for the small set of
++// SSSE3 intrinsics used in this file (load/store and byte-wise shuffle).
++#  include <arm_neon.h>
++// Use the NEON 128-bit vector as a stand-in for __m128i.
++typedef uint8x16_t __m128i;
++static inline __m128i _mm_loadu_si128(const void* p) { return vld1q_u8((const uint8_t*)(p)); }
++static inline __m128i _mm_load_si128(const void* p) { return vld1q_u8((const uint8_t*)(p)); }
++static inline void _mm_storeu_si128(void* p, __m128i v) { vst1q_u8((uint8_t*)(p), v); }
++// Map PSHUFB-like behavior to NEON table lookup. vqtbl1q_u8 is available on
++// recent ARM targets (including aarch64). It maps out-of-range indices to 0,
++// which matches the behavior necessary for our masked shuffles here.
++static inline __m128i _mm_shuffle_epi8(__m128i a, __m128i mask) { return vqtbl1q_u8(a, mask); }
++# endif
+ #endif
+ 
+ #if SNAPPY_HAVE_BMI2
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

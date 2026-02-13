@@ -1,0 +1,34 @@
+diff --git a/snappy.cc b/snappy.cc
+index 30505ad..ad49813 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -1170,7 +1170,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(
+           // Due to the spurious offset in literals have this will trigger
+           // at the start of a block when op is still smaller than 256.
+           if (tag_type != 0) goto break_loop;
+-          MemCopy(op_base + op, old_ip, 64);
++          MemCopy(op_base + op, old_ip, len);
+           op += len;
+           continue;
+         }
+@@ -1179,7 +1179,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(
+         // we need to copy from ip instead of from the stream.
+         const void* from =
+             tag_type ? reinterpret_cast<void*>(op_base + delta) : old_ip;
+-        MemMove(op_base + op, from, 64);
++        MemMove(op_base + op, from, len);
+         op += len;
+       }
+     } while (ip < ip_limit_min_slop && op < op_limit_min_slop);
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

@@ -1,0 +1,31 @@
+diff --git a/src/scn/impl/algorithms/read.h b/src/scn/impl/algorithms/read.h
+index 4022e73..775bf77 100644
+--- a/src/scn/impl/algorithms/read.h
++++ b/src/scn/impl/algorithms/read.h
+@@ -441,11 +441,21 @@ namespace scn {
+             }
+ #endif
+ 
+-            if (SCN_UNLIKELY(!std::equal(
+-                    ranges::begin(range), it, str.begin(), [&](auto a, auto b) {
+-                        return ascii_tolower(a) ==
+-                               static_cast<detail::char_t<Range>>(b);
+-                    }))) {
++            auto fast_streq_nocase = [&](auto it_begin, auto it_end, std::string_view s) noexcept {
++                auto it2 = it_begin;
++                for (size_t i = 0; i < s.size(); ++i) {
++                    if (it2 == it_end) {
++                        return false;
++                    }
++                    if (SCN_UNLIKELY(ascii_tolower(*it2) != static_cast<char_type>(s[i]))) {
++                        return false;
++                    }
++                    ++it2;
++                }
++                return it2 == it_end;
++            };
++
++            if (SCN_UNLIKELY(!fast_streq_nocase(ranges::begin(range), it, str))) {
+                 return unexpected(parse_error::error);
+             }
+ 

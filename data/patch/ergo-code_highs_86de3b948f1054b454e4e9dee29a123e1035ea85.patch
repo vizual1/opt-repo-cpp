@@ -1,0 +1,123 @@
+diff --git a/src/interfaces/highs_c_api.cpp b/src/interfaces/highs_c_api.cpp
+index 6ab7279d6..8616cb3bc 100644
+--- a/src/interfaces/highs_c_api.cpp
++++ b/src/interfaces/highs_c_api.cpp
+@@ -32,10 +32,8 @@ HighsInt Highs_lpCall(const HighsInt num_col, const HighsInt num_row,
+   status = highs.run();
+ 
+   if (status == HighsStatus::kOk) {
+-    HighsSolution solution;
+-    HighsBasis basis;
+-    solution = highs.getSolution();
+-    basis = highs.getBasis();
++    const HighsSolution& solution = highs.getSolution();
++    const HighsBasis& basis = highs.getBasis();
+     *model_status = (HighsInt)highs.getModelStatus();
+     const HighsInfo& info = highs.getInfo();
+ 
+@@ -87,8 +85,7 @@ HighsInt Highs_mipCall(const HighsInt num_col, const HighsInt num_row,
+   status = highs.run();
+ 
+   if (status == HighsStatus::kOk) {
+-    HighsSolution solution;
+-    solution = highs.getSolution();
++    const HighsSolution& solution = highs.getSolution();
+     *model_status = (HighsInt)highs.getModelStatus();
+     const HighsInfo& info = highs.getInfo();
+     const bool copy_col_value =
+@@ -132,10 +129,8 @@ HighsInt Highs_qpCall(
+   status = highs.run();
+ 
+   if (status == HighsStatus::kOk) {
+-    HighsSolution solution;
+-    HighsBasis basis;
+-    solution = highs.getSolution();
+-    basis = highs.getBasis();
++    const HighsSolution& solution = highs.getSolution();
++    const HighsBasis& basis = highs.getBasis();
+     *model_status = (HighsInt)highs.getModelStatus();
+     const HighsInfo& info = highs.getInfo();
+ 
+@@ -430,7 +425,7 @@ HighsInt Highs_getInfoType(const void* highs, const char* info,
+ HighsInt Highs_getSolution(const void* highs, double* col_value,
+                            double* col_dual, double* row_value,
+                            double* row_dual) {
+-  HighsSolution solution = ((Highs*)highs)->getSolution();
++  const HighsSolution& solution = ((Highs*)highs)->getSolution();
+ 
+   if (col_value != nullptr) {
+     for (HighsInt i = 0; i < (HighsInt)solution.col_value.size(); i++) {
+@@ -460,7 +455,7 @@ HighsInt Highs_getSolution(const void* highs, double* col_value,
+ 
+ HighsInt Highs_getBasis(const void* highs, HighsInt* col_status,
+                         HighsInt* row_status) {
+-  HighsBasis basis = ((Highs*)highs)->getBasis();
++  const HighsBasis& basis = ((Highs*)highs)->getBasis();
+   for (HighsInt i = 0; i < (HighsInt)basis.col_status.size(); i++) {
+     col_status[i] = (HighsInt)basis.col_status[i];
+   }
+diff --git a/src/interfaces/highs_c_api.h b/src/interfaces/highs_c_api.h
+index 739fee1c1..5c838b0dd 100644
+--- a/src/interfaces/highs_c_api.h
++++ b/src/interfaces/highs_c_api.h
+@@ -13,7 +13,7 @@
+ 
+ #include "util/HighsInt.h"
+ 
+-const HighsInt kHighsMaximumStringLength = 512;
++constexpr HighsInt kHighsMaximumStringLength = 512;
+ 
+ const HighsInt kHighsStatusError = -1;
+ const HighsInt kHighsStatusOk = 0;
+diff --git a/src/util/HighsDataStack.h b/src/util/HighsDataStack.h
+index f7c585357..afb4fd695 100644
+--- a/src/util/HighsDataStack.h
++++ b/src/util/HighsDataStack.h
+@@ -29,7 +29,7 @@
+ 
+ class HighsDataStack {
+   std::vector<char> data;
+-  HighsInt position;
++  HighsInt position = 0;
+ 
+  public:
+   void resetPosition() { position = data.size(); }
+diff --git a/src/util/HighsHash.h b/src/util/HighsHash.h
+index 074466113..c1a3c54e3 100644
+--- a/src/util/HighsHash.h
++++ b/src/util/HighsHash.h
+@@ -193,7 +193,7 @@ struct HighsHashHelpers {
+ #endif
+ 
+   /// compute a * b mod 2^61-1
+-  static u64 multiply_modM61(u64 a, u64 b) {
++  inline static u64 multiply_modM61(u64 a, u64 b) {
+     u64 ahi = a >> 32;
+     u64 bhi = b >> 32;
+     u64 alo = a & 0xffffffffu;
+@@ -226,7 +226,7 @@ struct HighsHashHelpers {
+     return result;
+   }
+ 
+-  static u64 modexp_M61(u64 a, u64 e) {
++  inline static u64 modexp_M61(u64 a, u64 e) {
+     // the exponent need to be greater than zero
+     assert(e > 0);
+     u64 result = a;
+@@ -249,14 +249,14 @@ struct HighsHashHelpers {
+   static constexpr u64 M31() { return u32{0x7fffffff}; };
+ 
+   /// compute a * b mod 2^31-1
+-  static u32 multiply_modM31(u32 a, u32 b) {
++  inline static u32 multiply_modM31(u32 a, u32 b) {
+     u64 result = u64(a) * u64(b);
+     result = (result >> 31) + (result & M31());
+     if (result >= M31()) result -= M31();
+     return result;
+   }
+ 
+-  static u32 modexp_M31(u32 a, u64 e) {
++  inline static u32 modexp_M31(u32 a, u64 e) {
+     // the exponent need to be greater than zero
+     assert(e > 0);
+     u32 result = a;

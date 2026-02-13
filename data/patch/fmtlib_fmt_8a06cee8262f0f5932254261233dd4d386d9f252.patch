@@ -1,0 +1,36 @@
+diff --git a/include/fmt/format.h b/include/fmt/format.h
+index 98896bb7..a4eeb9bb 100644
+--- a/include/fmt/format.h
++++ b/include/fmt/format.h
+@@ -2993,22 +2993,28 @@ FMT_CONSTEXPR20 inline void format_dragon(basic_fp<uint128_t> value,
+   if (shortest) {
+     // Generate the shortest representation.
+     num_digits = 0;
++    // Reserve some space to avoid repeated reallocations and to allow direct
++    // writes into the buffer storage which improves runtime performance.
++    const size_t reserve_digits = 64;
++    buf.try_reserve(buf.size() + reserve_digits);
+     char* data = buf.data();
++    char* p = data;
+     for (;;) {
+       int digit = numerator.divmod_assign(denominator);
+       bool low = compare(numerator, lower) - even < 0;  // numerator <[=] lower.
+       // numerator + upper >[=] pow10:
+       bool high = add_compare(numerator, *upper, denominator) + even > 0;
+-      data[num_digits++] = static_cast<char>('0' + digit);
++      *p++ = static_cast<char>('0' + digit);
+       if (low || high) {
+         if (!low) {
+-          ++data[num_digits - 1];
++          ++*(p - 1);
+         } else if (high) {
+           int result = add_compare(numerator, numerator, denominator);
+           // Round half to even.
+           if (result > 0 || (result == 0 && (digit % 2) != 0))
+-            ++data[num_digits - 1];
++            ++*(p - 1);
+         }
++        num_digits = static_cast<int>(p - data);
+         buf.try_resize(to_unsigned(num_digits));
+         exp10 -= num_digits - 1;
+         return;

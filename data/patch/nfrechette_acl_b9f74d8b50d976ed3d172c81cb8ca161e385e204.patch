@@ -1,0 +1,317 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 07d19a308487fc475791c7ed0a9a54e638828fc5
++Subproject commit 07d19a308487fc475791c7ed0a9a54e638828fc5-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit de3ca96309d1f4c7f1f27e72795ce63dd8113795
++Subproject commit de3ca96309d1f4c7f1f27e72795ce63dd8113795-dirty
+diff --git a/includes/acl/core/bit_manip_utils.h b/includes/acl/core/bit_manip_utils.h
+index a6d22611..3adc8aef 100644
+--- a/includes/acl/core/bit_manip_utils.h
++++ b/includes/acl/core/bit_manip_utils.h
+@@ -34,182 +34,165 @@
+ 
+ // Popcount intrinsic support
+ #if !defined(ACL_USE_POPCOUNT) && !defined(RTM_NO_INTRINSICS)
+-	// TODO: Enable this for other publicly available console defines as well
+-	#if defined(_DURANGO) || defined(_XBOX_ONE)
+-		// Enable pop-count type instructions on Xbox One
+-		#define ACL_USE_POPCOUNT
+-	#endif
++// TODO: Enable this for other publicly available console defines as well
++#if defined(_DURANGO) || defined(_XBOX_ONE)
++// Enable pop-count type instructions on Xbox One
++#define ACL_USE_POPCOUNT
++#endif
+ #endif
+ 
+ #if defined(ACL_USE_POPCOUNT)
+-	#include <nmmintrin.h>
++#include <nmmintrin.h>
+ #endif
+ 
+ // BMI intrinsic support
+ #if !defined(ACL_BMI_INTRINSICS) && !defined(RTM_NO_INTRINSICS)
+-	// TODO: Enable this for other publicly available console defines as well
+-	#if defined(_DURANGO) || defined(_XBOX_ONE)
+-		// Enable BMI type instructions on Xbox One
+-		#define ACL_BMI_INTRINSICS
+-	#elif defined(__BMI__)
+-		// Clang and GCC define __BMI__ when -mbmi is used
+-		#define ACL_BMI_INTRINSICS
+-	#elif defined(RTM_AVX_INTRINSICS) && defined(RTM_COMPILER_MSVC)
+-		// Enable BMI when AVX is enabled except with clang under Windows
+-		// Note: It seems that the Clang toolchain with MSVC enables BMI only with AVX2 unlike
+-		// MSVC which enables it with AVX
+-		#define ACL_BMI_INTRINSICS
+-	#endif
++// TODO: Enable this for other publicly available console defines as well
++#if defined(_DURANGO) || defined(_XBOX_ONE)
++// Enable BMI type instructions on Xbox One
++#define ACL_BMI_INTRINSICS
++#elif defined(__BMI__)
++// Clang and GCC define __BMI__ when -mbmi is used
++#define ACL_BMI_INTRINSICS
++#elif defined(RTM_AVX_INTRINSICS) && defined(RTM_COMPILER_MSVC)
++// Enable BMI when AVX is enabled except with clang under Windows
++// Note: It seems that the Clang toolchain with MSVC enables BMI only with AVX2 unlike
++// MSVC which enables it with AVX
++#define ACL_BMI_INTRINSICS
++#endif
+ #endif
+ 
+ #if defined(ACL_BMI_INTRINSICS)
+-	#include <ammintrin.h>		// MSVC uses this header for _andn_u32 BMI intrinsic
+-	#include <immintrin.h>		// Intel documentation says _andn_u32 and others are here
++#include <ammintrin.h>// MSVC uses this header for _andn_u32 BMI intrinsic
++#include <immintrin.h>// Intel documentation says _andn_u32 and others are here
+ #endif
+ 
+ ACL_IMPL_FILE_PRAGMA_PUSH
+ 
+ #if defined(RTM_COMPILER_MSVC)
+-	#pragma warning(push)
+-	// warning C4146: unary minus operator applied to unsigned type, result still unsigned
+-	// This is fine because we use bitwise arithmetic and rely on the fact that unsigned
+-	// integers use twos complement.
+-	#pragma warning(disable : 4146)
++#pragma warning(push)
++// warning C4146: unary minus operator applied to unsigned type, result still unsigned
++// This is fine because we use bitwise arithmetic and rely on the fact that unsigned
++// integers use twos complement.
++#pragma warning(disable : 4146)
+ #endif
+ 
+ namespace acl
+ {
+-	ACL_IMPL_VERSION_NAMESPACE_BEGIN
++ACL_IMPL_VERSION_NAMESPACE_BEGIN
+ 
+-	//////////////////////////////////////////////////////////////////////////
+-	// Counts the number of '1' bits (aka: pop-count)
+-	inline uint8_t count_set_bits(uint8_t value)
+-	{
++//////////////////////////////////////////////////////////////////////////
++// Counts the number of '1' bits (aka: pop-count)
++inline uint32_t count_set_bits(uint32_t value)
++{
+ #if defined(ACL_USE_POPCOUNT)
+-		return (uint8_t)_mm_popcnt_u32(value);
++return _mm_popcnt_u32(value);
+ #elif defined(RTM_NEON_INTRINSICS)
+-		return (uint8_t)vget_lane_u8(vcnt_u8(vcreate_u8(value)), 0);
++return (uint32_t)vget_lane_u32(vpaddl_u16(vpaddl_u8(vcnt_u8(vcreate_u8(value)))), 0);
+ #else
+-		value = value - ((value >> 1) & 0x55);
+-		value = (value & 0x33) + ((value >> 2) & 0x33);
+-		return ((value + (value >> 4)) & 0x0F);
++value = value - ((value >> 1) & 0x55555555);
++value = (value & 0x33333333) + ((value >> 2) & 0x33333333);
++return (((value + (value >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+ #endif
+-	}
++}
+ 
+-	//////////////////////////////////////////////////////////////////////////
+-	// Counts the number of '1' bits (aka: pop-count)
+-	inline uint16_t count_set_bits(uint16_t value)
+-	{
++//////////////////////////////////////////////////////////////////////////
++// Counts the number of '1' bits (aka: pop-count)
++inline uint64_t count_set_bits(uint64_t value)
++{
+ #if defined(ACL_USE_POPCOUNT)
+-		return (uint16_t)_mm_popcnt_u32(value);
++return _mm_popcnt_u64(value);
+ #elif defined(RTM_NEON_INTRINSICS)
+-		return (uint16_t)vget_lane_u16(vpaddl_u8(vcnt_u8(vcreate_u8(value))), 0);
++return vget_lane_u64(vpaddl_u32(vpaddl_u16(vpaddl_u8(vcnt_u8(vcreate_u8(value))))), 0);
+ #else
+-		value = value - ((value >> 1) & 0x5555);
+-		value = (value & 0x3333) + ((value >> 2) & 0x3333);
+-		return uint16_t(((value + (value >> 4)) & 0x0F0F) * 0x0101) >> 8;
++value = value - ((value >> 1) & 0x5555555555555555ULL);
++value = (value & 0x3333333333333333ULL) + ((value >> 2) & 0x3333333333333333ULL);
++return (((value + (value >> 4)) & 0x0F0F0F0F0F0F0F0FULL) * 0x0101010101010101ULL) >> 56;
+ #endif
+-	}
++}
+ 
+-	//////////////////////////////////////////////////////////////////////////
+-	// Counts the number of '1' bits (aka: pop-count)
+-	inline uint32_t count_set_bits(uint32_t value)
+-	{
+-#if defined(ACL_USE_POPCOUNT)
+-		return _mm_popcnt_u32(value);
+-#elif defined(RTM_NEON_INTRINSICS)
+-		return (uint32_t)vget_lane_u32(vpaddl_u16(vpaddl_u8(vcnt_u8(vcreate_u8(value)))), 0);
+-#else
+-		value = value - ((value >> 1) & 0x55555555);
+-		value = (value & 0x33333333) + ((value >> 2) & 0x33333333);
+-		return (((value + (value >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+-#endif
+-	}
++//////////////////////////////////////////////////////////////////////////
++// For small integer types, promote to 32-bit and reuse the 32-bit implementation
++// to avoid small-type arithmetic and improve inlining opportunities.
++inline uint8_t count_set_bits(uint8_t value)
++{
++return static_cast<uint8_t>(count_set_bits(static_cast<uint32_t>(value)));
++}
+ 
+-	//////////////////////////////////////////////////////////////////////////
+-	// Counts the number of '1' bits (aka: pop-count)
+-	inline uint64_t count_set_bits(uint64_t value)
+-	{
+-#if defined(ACL_USE_POPCOUNT)
+-		return _mm_popcnt_u64(value);
+-#elif defined(RTM_NEON_INTRINSICS)
+-		return vget_lane_u64(vpaddl_u32(vpaddl_u16(vpaddl_u8(vcnt_u8(vcreate_u8(value))))), 0);
+-#else
+-		value = value - ((value >> 1) & 0x5555555555555555ULL);
+-		value = (value & 0x3333333333333333ULL) + ((value >> 2) & 0x3333333333333333ULL);
+-		return (((value + (value >> 4)) & 0x0F0F0F0F0F0F0F0FULL) * 0x0101010101010101ULL) >> 56;
+-#endif
+-	}
++inline uint16_t count_set_bits(uint16_t value)
++{
++return static_cast<uint16_t>(count_set_bits(static_cast<uint32_t>(value)));
++}
+ 
+-	//////////////////////////////////////////////////////////////////////////
+-	// Starting at the MSB, counts the number of leading zeros
+-	inline uint32_t count_leading_zeros(uint32_t value)
+-	{
++//////////////////////////////////////////////////////////////////////////
++// Starting at the MSB, counts the number of leading zeros
++inline uint32_t count_leading_zeros(uint32_t value)
++{
+ #if defined(ACL_USE_POPCOUNT)
+-		return _lzcnt_u32(value);
++return _lzcnt_u32(value);
+ #elif defined(RTM_COMPILER_MSVC)
+-		unsigned long first_set_bit_index;
+-		return _BitScanReverse(&first_set_bit_index, value) ? (31 - first_set_bit_index) : 32;
++unsigned long first_set_bit_index;
++return _BitScanReverse(&first_set_bit_index, value) ? (31 - first_set_bit_index) : 32;
+ #elif defined(RTM_COMPILER_GCC) || defined(RTM_COMPILER_CLANG)
+-		return value != 0 ? __builtin_clz(value) : 32;
++return value != 0 ? __builtin_clz(value) : 32;
+ #else
+-		value = value | (value >> 1);
+-		value = value | (value >> 2);
+-		value = value | (value >> 4);
+-		value = value | (value >> 8);
+-		value = value | (value >> 16);
+-		return count_set_bits(~value);
++value = value | (value >> 1);
++value = value | (value >> 2);
++value = value | (value >> 4);
++value = value | (value >> 8);
++value = value | (value >> 16);
++return count_set_bits(~value);
+ #endif
+-	}
++}
+ 
+-	//////////////////////////////////////////////////////////////////////////
+-	// Starting at the LSB, counts the number of trailing zeros
+-	inline uint32_t count_trailing_zeros(uint32_t value)
+-	{
++//////////////////////////////////////////////////////////////////////////
++// Starting at the LSB, counts the number of trailing zeros
++inline uint32_t count_trailing_zeros(uint32_t value)
++{
+ #if defined(ACL_BMI_INTRINSICS)
+-		return _tzcnt_u32(value);
++return _tzcnt_u32(value);
+ #elif defined(RTM_COMPILER_MSVC)
+-		unsigned long first_set_bit_index;
+-		return _BitScanForward(&first_set_bit_index, value) ? first_set_bit_index : 32;
++unsigned long first_set_bit_index;
++return _BitScanForward(&first_set_bit_index, value) ? first_set_bit_index : 32;
+ #elif defined(RTM_COMPILER_GCC) || defined(RTM_COMPILER_CLANG)
+-		return value != 0 ? __builtin_ctz(value) : 32;
++return value != 0 ? __builtin_ctz(value) : 32;
+ #else
+-		return value != 0 ? (31 - count_leading_zeros(value & -value)) : 32;
++return value != 0 ? (31 - count_leading_zeros(value & -value)) : 32;
+ #endif
+-	}
+-
+-	//////////////////////////////////////////////////////////////////////////
+-	// Rotate the bits left by some amount
+-	inline uint32_t rotate_bits_left(uint32_t value, int32_t num_bits)
+-	{
+-		ACL_ASSERT(num_bits >= 0, "Attempting to rotate by negative bits");
+-		ACL_ASSERT(num_bits < 32, "Attempting to rotate by too many bits");
+-		const uint32_t mask = 32 - 1;
+-		num_bits &= mask;
+-		return (value << num_bits) | (value >> ((-num_bits) & mask));
+-	}
+-
+-	//////////////////////////////////////////////////////////////////////////
+-	// Perform: ~not_value & and_value
+-	inline uint32_t and_not(uint32_t not_value, uint32_t and_value)
+-	{
++}
++
++//////////////////////////////////////////////////////////////////////////
++// Rotate the bits left by some amount
++inline uint32_t rotate_bits_left(uint32_t value, int32_t num_bits)
++{
++ACL_ASSERT(num_bits >= 0, "Attempting to rotate by negative bits");
++ACL_ASSERT(num_bits < 32, "Attempting to rotate by too many bits");
++const uint32_t mask = 32 - 1;
++num_bits &= mask;
++return (value << num_bits) | (value >> ((-num_bits) & mask));
++}
++
++//////////////////////////////////////////////////////////////////////////
++// Perform: ~not_value & and_value
++inline uint32_t and_not(uint32_t not_value, uint32_t and_value)
++{
+ #if defined(ACL_BMI_INTRINSICS)
+-		// Use BMI
++// Use BMI
+ #if defined(RTM_COMPILER_GCC) && !defined(_andn_u32)
+-		return __andn_u32(not_value, and_value);	// GCC doesn't define the right intrinsic symbol
++return __andn_u32(not_value, and_value); // GCC doesn't define the right intrinsic symbol
+ #else
+-		return _andn_u32(not_value, and_value);
++return _andn_u32(not_value, and_value);
+ #endif
+ #else
+-		return ~not_value & and_value;
++return ~not_value & and_value;
+ #endif
+-	}
++}
+ 
+-	ACL_IMPL_VERSION_NAMESPACE_END
++ACL_IMPL_VERSION_NAMESPACE_END
+ }
+ 
+ #if defined(RTM_COMPILER_MSVC)
+-	#pragma warning(pop)
++#pragma warning(pop)
+ #endif
+ 
+ ACL_IMPL_FILE_PRAGMA_POP

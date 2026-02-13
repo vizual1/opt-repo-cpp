@@ -1,0 +1,96 @@
+diff --git a/src/scn/impl/reader/reader.h b/src/scn/impl/reader/reader.h
+index be1e3e3..2c01a76 100644
+--- a/src/scn/impl/reader/reader.h
++++ b/src/scn/impl/reader/reader.h
+@@ -39,14 +39,14 @@ namespace scn {
+                                    Range&& range,
+                                    detail::locale_ref loc)
+         {
+-            if (auto e = eof_check(range); SCN_UNLIKELY(!e)) {
+-                return unexpected(e);
+-            }
+-
+             if (!is_required) {
+                 return ranges::begin(range);
+             }
+ 
++            if (auto e = eof_check(range); SCN_UNLIKELY(!e)) {
++                return unexpected(e);
++            }
++
+             return skip_classic_whitespace(SCN_FWD(range));
+         }
+ 
+diff --git a/src/scn/impl/reader/regex_reader.h b/src/scn/impl/reader/regex_reader.h
+index cbcd158..2c2ae20 100644
+--- a/src/scn/impl/reader/regex_reader.h
++++ b/src/scn/impl/reader/regex_reader.h
+@@ -159,8 +159,7 @@ namespace scn {
+                     "Regex matching failed with an error");
+             }
+ 
+-            return input.begin() +
+-                   ranges::distance(input.data(), matches[0].second);
++            return input.begin() + (matches[0].second - input.data());
+ #elif SCN_REGEX_BACKEND == SCN_REGEX_BACKEND_BOOST
+             auto re =
+ #if SCN_REGEX_BOOST_USE_ICU
+@@ -205,8 +204,7 @@ namespace scn {
+                     "Regex matching failed with an error");
+             }
+ 
+-            return input.begin() +
+-                   ranges::distance(input.data(), matches[0].second);
++            return input.begin() + (matches[0].second - input.data());
+ #elif SCN_REGEX_BACKEND == SCN_REGEX_BACKEND_RE2
+             static_assert(std::is_same_v<CharT, char>);
+             std::string flagged_pattern{};
+@@ -283,8 +281,7 @@ namespace scn {
+                     return detail::make_string_view_from_pointers(match.first,
+                                                                   match.second);
+                 });
+-            return input.begin() +
+-                   ranges::distance(input.data(), matches[0].second);
++            return input.begin() + (matches[0].second - input.data());
+ #elif SCN_REGEX_BACKEND == SCN_REGEX_BACKEND_BOOST
+             std::vector<std::basic_string<CharT>> names;
+             for (size_t i = 0; i < pattern.size();) {
+@@ -373,8 +370,7 @@ namespace scn {
+                     }
+                     return sv;
+                 });
+-            return input.begin() +
+-                   ranges::distance(input.data(), matches[0].second);
++            return input.begin() + (matches[0].second - input.data());
+ #elif SCN_REGEX_BACKEND == SCN_REGEX_BACKEND_RE2
+             static_assert(std::is_same_v<CharT, char>);
+             std::string flagged_pattern{};
+diff --git a/src/scn/impl/reader/string_reader.h b/src/scn/impl/reader/string_reader.h
+index baf548a..59d20f6 100644
+--- a/src/scn/impl/reader/string_reader.h
++++ b/src/scn/impl/reader/string_reader.h
+@@ -40,6 +40,24 @@ namespace scn {
+             static_assert(
+                 ranges_std::forward_iterator<detail::remove_cvref_t<Iterator>>);
+ 
++            if (is_entire_source_contiguous(range)) {
++                auto input = get_as_contiguous(range);
++                using src_char_t = typename decltype(input)::value_type;
++                auto offset = ranges::distance(ranges::begin(range), result);
++                auto view = std::basic_string_view<src_char_t>(input.data(),
++                                                               static_cast<size_t>(offset));
++                if (!validate_unicode(view)) {
++                    return unexpected_scan_error(
++                        scan_error::invalid_scanned_value,
++                        "Invalid encoding in scanned string");
++                }
++                if constexpr (std::is_same_v<src_char_t, ValueCharT>) {
++                    value.assign(view.data(), view.size());
++                    return SCN_MOVE(result);
++                }
++                // fallthrough to original path for transcoding
++            }
++
+             auto src = make_contiguous_buffer(
+                 ranges::subrange{ranges::begin(range), result});
+             if (!validate_unicode(src.view())) {

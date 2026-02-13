@@ -1,0 +1,74 @@
+diff --git a/include/primesieve/iterator.h b/include/primesieve/iterator.h
+index cb855dc7..e507298d 100644
+--- a/include/primesieve/iterator.h
++++ b/include/primesieve/iterator.h
+@@ -26,6 +26,14 @@
+ #include <stdint.h>
+ #include <stddef.h>
+ 
++#ifndef IF_UNLIKELY_PRIMESIEVE
++# if defined(__GNUC__) || defined(__clang__)
++#  define IF_UNLIKELY_PRIMESIEVE(x) (__builtin_expect((x), 0))
++# else
++#  define IF_UNLIKELY_PRIMESIEVE(x) (x)
++# endif
++#endif
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -81,7 +89,7 @@ void primesieve_generate_prev_primes(primesieve_iterator*);
+  */
+ static inline uint64_t primesieve_next_prime(primesieve_iterator* it)
+ {
+-  if (++(it->i) >= it->size)
++  if (IF_UNLIKELY_PRIMESIEVE(++(it->i) >= it->size))
+     primesieve_generate_next_primes(it);
+   return it->primes[it->i];
+ }
+@@ -96,7 +104,7 @@ static inline uint64_t primesieve_next_prime(primesieve_iterator* it)
+  */
+ static inline uint64_t primesieve_prev_prime(primesieve_iterator* it)
+ {
+-  if (it->i-- == 0)
++  if (IF_UNLIKELY_PRIMESIEVE(it->i-- == 0))
+     primesieve_generate_prev_primes(it);
+   return it->primes[it->i];
+ }
+diff --git a/include/primesieve/iterator.hpp b/include/primesieve/iterator.hpp
+index fa0c248a..1580a255 100644
+--- a/include/primesieve/iterator.hpp
++++ b/include/primesieve/iterator.hpp
+@@ -16,6 +16,14 @@
+ #include <cstddef>
+ #include <limits>
+ 
++#ifndef IF_UNLIKELY_PRIMESIEVE
++# if defined(__GNUC__) || defined(__clang__)
++#  define IF_UNLIKELY_PRIMESIEVE(x) (__builtin_expect((x), 0))
++# else
++#  define IF_UNLIKELY_PRIMESIEVE(x) (x)
++# endif
++#endif
++
+ namespace primesieve {
+ 
+ /// primesieve::iterator allows to easily iterate over primes both
+@@ -76,7 +84,7 @@ struct iterator
+   ///
+   uint64_t next_prime()
+   {
+-    if (++i_ >= size_)
++    if (IF_UNLIKELY_PRIMESIEVE(++i_ >= size_))
+       generate_next_primes();
+     return primes_[i_];
+   }
+@@ -89,7 +97,7 @@ struct iterator
+   ///
+   uint64_t prev_prime()
+   {
+-    if (i_-- == 0)
++    if (IF_UNLIKELY_PRIMESIEVE(i_-- == 0))
+       generate_prev_primes();
+     return primes_[i_];
+   }

@@ -1,0 +1,95 @@
+diff --git a/src/LogarithmicIntegral.cpp b/src/LogarithmicIntegral.cpp
+index bcb7ab80..77645532 100644
+--- a/src/LogarithmicIntegral.cpp
++++ b/src/LogarithmicIntegral.cpp
+@@ -137,24 +137,37 @@ template <typename T>
+ T Li_inverse(T x)
+ {
+   T t = initialNthPrimeApprox(x);
+-  T old_term = std::numeric_limits<T>::infinity();
++  T old_delta = std::numeric_limits<T>::infinity();
+ 
+   if (x < 3)
+     return t;
+ 
+-  // The condition i < ITERS is required in case the computation
+-  // does not converge. This happened on Linux i386 where
+-  // the precision of the libc math functions is very limited.
++  // Use Halley's method for faster cubic convergence.
++  // f(z) = Li(z) - x, f'(z) = 1 / log(z), f''(z) = -1 / (z * log(z)^2)
++  // Halley update: delta = (2 f f') / (2 f'^2 - f f'')
+   for (int i = 0; i < 100; i++)
+   {
+-    T term = (Li(t) - x) * std::log(t);
++    T f = Li(t) - x;
++    T lp = std::log(t);
++    T fp = T(1) / lp;
++    T fpp = -T(1) / (t * lp * lp);
++
++    T numer = T(2) * f * fp;
++    T denom = T(2) * fp * fp - f * fpp;
++
++    T delta;
++    // Fallback to Newton step if denominator is too small
++    if (std::abs(denom) <= std::numeric_limits<T>::epsilon())
++      delta = f * lp; // Newton: f / f' == f * log(t)
++    else
++      delta = numer / denom;
+ 
+     // Not converging anymore
+-    if (std::abs(term) >= std::abs(old_term))
++    if (std::abs(delta) >= std::abs(old_delta))
+       break;
+ 
+-    t -= term;
+-    old_term = term;
++    t -= delta;
++    old_delta = delta;
+   }
+ 
+   return t;
+@@ -262,24 +275,36 @@ __float128 Li(__float128 x)
+ __float128 Li_inverse(__float128 x)
+ {
+   __float128 t = initialNthPrimeApprox(x);
+-  __float128 old_term = HUGE_VALQ;
++  __float128 old_delta = HUGE_VALQ;
+ 
+   if (x < 3)
+     return t;
+ 
+-  // The condition i < ITERS is required in case the computation
+-  // does not converge. This happened on Linux i386 where
+-  // the precision of the libc math functions is very limited.
++  // Use Halley's method for faster cubic convergence (quadmath variant).
++  // f(z) = Li(z) - x, f'(z) = 1 / log(z), f''(z) = -1 / (z * log(z)^2)
++  // Halley update: delta = (2 f f') / (2 f'^2 - f f'')
+   for (int i = 0; i < 100; i++)
+   {
+-    __float128 term = (Li(t) - x) * logq(t);
++    __float128 f = Li(t) - x;
++    __float128 lp = logq(t);
++    __float128 fp = (__float128) 1 / lp;
++    __float128 fpp = -(__float128) 1 / (t * lp * lp);
++
++    __float128 numer = (__float128) 2 * f * fp;
++    __float128 denom = (__float128) 2 * fp * fp - f * fpp;
++
++    __float128 delta;
++    if (denom == (__float128) 0)
++      delta = f * lp; // fallback to Newton step
++    else
++      delta = numer / denom;
+ 
+     // Not converging anymore
+-    if (fabsq(term) >= fabsq(old_term))
++    if (fabsq(delta) >= fabsq(old_delta))
+       break;
+ 
+-    t -= term;
+-    old_term = term;
++    t -= delta;
++    old_delta = delta;
+   }
+ 
+   return t;

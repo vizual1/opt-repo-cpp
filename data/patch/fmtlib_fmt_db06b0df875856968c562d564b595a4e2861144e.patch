@@ -1,0 +1,30 @@
+diff --git a/include/fmt/format.h b/include/fmt/format.h
+index a2dbdf98..3ec8dd1f 100644
+--- a/include/fmt/format.h
++++ b/include/fmt/format.h
+@@ -504,6 +504,25 @@ FMT_CONSTEXPR20 inline auto countl_zero(uint64_t n) -> int {
+   return countl_zero_fallback(n);
+ }
+ 
++// Generic countl_zero for wider unsigned integer types (e.g., 128-bit).
++// Uses the 64-bit builtin where available for performance.
++template <typename UInt>
++FMT_CONSTEXPR20 inline auto countl_zero(UInt n) -> int {
++#if defined(FMT_BUILTIN_CLZLL)
++  if (!is_constant_evaluated()) {
++    if constexpr (num_bits<UInt>() > 64) {
++      uint64_t hi = static_cast<uint64_t>(n >> 64);
++      if (hi) return FMT_BUILTIN_CLZLL(hi);
++      uint64_t lo = static_cast<uint64_t>(n);
++      return 64 + FMT_BUILTIN_CLZLL(lo);
++    } else {
++      return FMT_BUILTIN_CLZLL(static_cast<uint64_t>(n));
++    }
++  }
++#endif
++  return countl_zero_fallback(n);
++}
++
+ FMT_INLINE void assume(bool condition) {
+   (void)condition;
+ #if FMT_HAS_BUILTIN(__builtin_assume) && !FMT_ICC_VERSION

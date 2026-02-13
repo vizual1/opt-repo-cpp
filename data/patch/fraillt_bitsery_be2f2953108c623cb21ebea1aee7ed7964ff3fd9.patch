@@ -1,0 +1,65 @@
+diff --git a/include/bitsery/adapter/buffer.h b/include/bitsery/adapter/buffer.h
+index c392f53..40c40d3 100644
+--- a/include/bitsery/adapter/buffer.h
++++ b/include/bitsery/adapter/buffer.h
+@@ -267,7 +267,7 @@ private:
+   size_t _bufferSize{ 0 };
+   size_t _biggestCurrentPos{ 0 };
+ 
+-  void maybeResize(size_t newOffset, std::true_type)
++  void maybeResize(size_t newOffset, std::true_type) BITSERY_NOINLINE_COLD
+   {
+     if (newOffset > _bufferSize) {
+       traits::BufferAdapterTraits<Buffer>::increaseBufferSize(
+diff --git a/include/bitsery/bitsery.h b/include/bitsery/bitsery.h
+index 3d38bce..f732e4e 100644
+--- a/include/bitsery/bitsery.h
++++ b/include/bitsery/bitsery.h
+@@ -42,6 +42,17 @@
+ #define BITSERY_MAYBE_UNUSED
+ #endif
+ 
++/* Hint to compiler: mark rare resize path as noinline and cold so it is
++   discouraged from inlining and placed out-of-line. This helps keep hot
++   paths smaller. */
++#if defined(__GNUC__) || defined(__clang__)
++#define BITSERY_NOINLINE_COLD __attribute__((noinline)) __attribute__((cold))
++#elif defined(_MSC_VER)
++#define BITSERY_NOINLINE_COLD __declspec(noinline)
++#else
++#define BITSERY_NOINLINE_COLD
++#endif
++
+ #include "deserializer.h"
+ #include "serializer.h"
+ 
+diff --git a/include/bitsery/traits/core/std_defaults.h b/include/bitsery/traits/core/std_defaults.h
+index 20cd5ef..d079683 100644
+--- a/include/bitsery/traits/core/std_defaults.h
++++ b/include/bitsery/traits/core/std_defaults.h
+@@ -26,6 +26,16 @@
+ #include "../../details/serialization_common.h"
+ #include "traits.h"
+ 
++#ifndef BITSERY_NOINLINE_COLD
++#if defined(__GNUC__) || defined(__clang__)
++#define BITSERY_NOINLINE_COLD __attribute__((noinline)) __attribute__((cold))
++#elif defined(_MSC_VER)
++#define BITSERY_NOINLINE_COLD __declspec(noinline)
++#else
++#define BITSERY_NOINLINE_COLD
++#endif
++#endif
++
+ namespace bitsery {
+ namespace traits {
+ 
+@@ -94,7 +104,7 @@ struct StdContainerForBufferAdapter<T, true>
+ 
+   static void increaseBufferSize(T& container,
+                                  size_t /*currSize*/,
+-                                 size_t minSize)
++                                 size_t minSize) BITSERY_NOINLINE_COLD
+   {
+     // since we're writing to buffer use different resize strategy than default
+     // implementation when small size grow faster, to avoid thouse 2/4/8/16...

@@ -1,0 +1,228 @@
+diff --git a/hwy/contrib/sort/shared-inl.h b/hwy/contrib/sort/shared-inl.h
+index f98a3d52..95ff3d93 100644
+--- a/hwy/contrib/sort/shared-inl.h
++++ b/hwy/contrib/sort/shared-inl.h
+@@ -85,6 +85,11 @@ struct SortConstants {
+   static constexpr HWY_INLINE size_t BufBytes(size_t vector_size) {
+     return sizeof(T) * BufNum<T>(vector_size / sizeof(T));
+   }
++
++  // Returns true if a full-width network is used (columns equal lanes).
++  static constexpr HWY_INLINE bool UsesFullNetwork(size_t cols, size_t lanes) {
++    return cols == lanes;
++  }
+ };
+ 
+ }  // namespace hwy
+diff --git a/hwy/contrib/sort/sorting_networks-inl.h b/hwy/contrib/sort/sorting_networks-inl.h
+index ce72fe6b..b47d0832 100644
+--- a/hwy/contrib/sort/sorting_networks-inl.h
++++ b/hwy/contrib/sort/sorting_networks-inl.h
+@@ -611,71 +611,136 @@ HWY_INLINE void SortingNetwork(Traits st, T* HWY_RESTRICT buf, size_t cols) {
+   const size_t keys = cols / kLanesPerKey;
+   constexpr size_t kMaxKeys = MaxLanes(d) / kLanesPerKey;
+ 
+-  // These are aligned iff cols == Lanes(d). We prefer unaligned/non-constexpr
+-  // offsets to duplicating this code for every value of cols.
++  // These are aligned iff cols == Lanes(d).
+   static_assert(Constants::kMaxRows == 16, "Update loads/stores/args");
+-  V v0 = LoadU(d, buf + 0x0 * cols);
+-  V v1 = LoadU(d, buf + 0x1 * cols);
+-  V v2 = LoadU(d, buf + 0x2 * cols);
+-  V v3 = LoadU(d, buf + 0x3 * cols);
+-  V v4 = LoadU(d, buf + 0x4 * cols);
+-  V v5 = LoadU(d, buf + 0x5 * cols);
+-  V v6 = LoadU(d, buf + 0x6 * cols);
+-  V v7 = LoadU(d, buf + 0x7 * cols);
+-  V v8 = LoadU(d, buf + 0x8 * cols);
+-  V v9 = LoadU(d, buf + 0x9 * cols);
+-  V va = LoadU(d, buf + 0xa * cols);
+-  V vb = LoadU(d, buf + 0xb * cols);
+-  V vc = LoadU(d, buf + 0xc * cols);
+-  V vd = LoadU(d, buf + 0xd * cols);
+-  V ve = LoadU(d, buf + 0xe * cols);
+-  V vf = LoadU(d, buf + 0xf * cols);
+-
+-  Sort16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve, vf);
+-
+-  // Checking MaxLanes avoids generating HWY_ASSERT code for the unreachable
+-  // code paths: if MaxLanes < 2, then keys <= cols < 2.
+-  if (HWY_LIKELY(keys >= 2 && kMaxKeys >= 2)) {
+-    Merge2(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
++
++  // If we use a full-width network and the buffer is aligned to vector
++  // boundaries, use aligned loads/stores which can be faster on some targets.
++  const bool full_network = Constants::UsesFullNetwork(cols, Lanes(d));
++  const bool buf_aligned =
++      (reinterpret_cast<uintptr_t>(buf) % (Lanes(d) * sizeof(T)) == 0);
++  if (full_network && buf_aligned) {
++    V v0 = Load(d, buf + 0x0 * cols);
++    V v1 = Load(d, buf + 0x1 * cols);
++    V v2 = Load(d, buf + 0x2 * cols);
++    V v3 = Load(d, buf + 0x3 * cols);
++    V v4 = Load(d, buf + 0x4 * cols);
++    V v5 = Load(d, buf + 0x5 * cols);
++    V v6 = Load(d, buf + 0x6 * cols);
++    V v7 = Load(d, buf + 0x7 * cols);
++    V v8 = Load(d, buf + 0x8 * cols);
++    V v9 = Load(d, buf + 0x9 * cols);
++    V va = Load(d, buf + 0xa * cols);
++    V vb = Load(d, buf + 0xb * cols);
++    V vc = Load(d, buf + 0xc * cols);
++    V vd = Load(d, buf + 0xd * cols);
++    V ve = Load(d, buf + 0xe * cols);
++    V vf = Load(d, buf + 0xf * cols);
++
++    Sort16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+            vf);
+ 
+-    if (HWY_LIKELY(keys >= 4 && kMaxKeys >= 4)) {
+-      Merge4(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
++    if (HWY_LIKELY(keys >= 2 && kMaxKeys >= 2)) {
++      Merge2(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
+              vf);
+ 
+-      if (HWY_LIKELY(keys >= 8 && kMaxKeys >= 8)) {
+-        Merge8(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd,
++      if (HWY_LIKELY(keys >= 4 && kMaxKeys >= 4)) {
++        Merge4(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd,
+                ve, vf);
+ 
+-        // Avoids build timeout
+-#if !HWY_COMPILER_MSVC
+-        if (HWY_LIKELY(keys >= 16 && kMaxKeys >= 16)) {
+-          Merge16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd,
+-                  ve, vf);
++        if (HWY_LIKELY(keys >= 8 && kMaxKeys >= 8)) {
++          Merge8(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd,
++                 ve, vf);
+ 
+-          static_assert(Constants::kMaxCols <= 16, "Add more branches");
++#if !HWY_COMPILER_MSVC
++          if (HWY_LIKELY(keys >= 16 && kMaxKeys >= 16)) {
++            Merge16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc,
++                    vd, ve, vf);
++            static_assert(Constants::kMaxCols <= 16, "Add more branches");
++          }
++#endif
+         }
++      }
++    }
++
++    Store(v0, d, buf + 0x0 * cols);
++    Store(v1, d, buf + 0x1 * cols);
++    Store(v2, d, buf + 0x2 * cols);
++    Store(v3, d, buf + 0x3 * cols);
++    Store(v4, d, buf + 0x4 * cols);
++    Store(v5, d, buf + 0x5 * cols);
++    Store(v6, d, buf + 0x6 * cols);
++    Store(v7, d, buf + 0x7 * cols);
++    Store(v8, d, buf + 0x8 * cols);
++    Store(v9, d, buf + 0x9 * cols);
++    Store(va, d, buf + 0xa * cols);
++    Store(vb, d, buf + 0xb * cols);
++    Store(vc, d, buf + 0xc * cols);
++    Store(vd, d, buf + 0xd * cols);
++    Store(ve, d, buf + 0xe * cols);
++    Store(vf, d, buf + 0xf * cols);
++  } else {
++    V v0 = LoadU(d, buf + 0x0 * cols);
++    V v1 = LoadU(d, buf + 0x1 * cols);
++    V v2 = LoadU(d, buf + 0x2 * cols);
++    V v3 = LoadU(d, buf + 0x3 * cols);
++    V v4 = LoadU(d, buf + 0x4 * cols);
++    V v5 = LoadU(d, buf + 0x5 * cols);
++    V v6 = LoadU(d, buf + 0x6 * cols);
++    V v7 = LoadU(d, buf + 0x7 * cols);
++    V v8 = LoadU(d, buf + 0x8 * cols);
++    V v9 = LoadU(d, buf + 0x9 * cols);
++    V va = LoadU(d, buf + 0xa * cols);
++    V vb = LoadU(d, buf + 0xb * cols);
++    V vc = LoadU(d, buf + 0xc * cols);
++    V vd = LoadU(d, buf + 0xd * cols);
++    V ve = LoadU(d, buf + 0xe * cols);
++    V vf = LoadU(d, buf + 0xf * cols);
++
++    Sort16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
++           vf);
++
++    if (HWY_LIKELY(keys >= 2 && kMaxKeys >= 2)) {
++      Merge2(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd, ve,
++             vf);
++
++      if (HWY_LIKELY(keys >= 4 && kMaxKeys >= 4)) {
++        Merge4(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd,
++               ve, vf);
++
++        if (HWY_LIKELY(keys >= 8 && kMaxKeys >= 8)) {
++          Merge8(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc, vd,
++                 ve, vf);
++
++#if !HWY_COMPILER_MSVC
++          if (HWY_LIKELY(keys >= 16 && kMaxKeys >= 16)) {
++            Merge16(d, st, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, va, vb, vc,
++                    vd, ve, vf);
++
++            static_assert(Constants::kMaxCols <= 16, "Add more branches");
++          }
+ #endif
++        }
+       }
+     }
+-  }
+ 
+-  StoreU(v0, d, buf + 0x0 * cols);
+-  StoreU(v1, d, buf + 0x1 * cols);
+-  StoreU(v2, d, buf + 0x2 * cols);
+-  StoreU(v3, d, buf + 0x3 * cols);
+-  StoreU(v4, d, buf + 0x4 * cols);
+-  StoreU(v5, d, buf + 0x5 * cols);
+-  StoreU(v6, d, buf + 0x6 * cols);
+-  StoreU(v7, d, buf + 0x7 * cols);
+-  StoreU(v8, d, buf + 0x8 * cols);
+-  StoreU(v9, d, buf + 0x9 * cols);
+-  StoreU(va, d, buf + 0xa * cols);
+-  StoreU(vb, d, buf + 0xb * cols);
+-  StoreU(vc, d, buf + 0xc * cols);
+-  StoreU(vd, d, buf + 0xd * cols);
+-  StoreU(ve, d, buf + 0xe * cols);
+-  StoreU(vf, d, buf + 0xf * cols);
++    StoreU(v0, d, buf + 0x0 * cols);
++    StoreU(v1, d, buf + 0x1 * cols);
++    StoreU(v2, d, buf + 0x2 * cols);
++    StoreU(v3, d, buf + 0x3 * cols);
++    StoreU(v4, d, buf + 0x4 * cols);
++    StoreU(v5, d, buf + 0x5 * cols);
++    StoreU(v6, d, buf + 0x6 * cols);
++    StoreU(v7, d, buf + 0x7 * cols);
++    StoreU(v8, d, buf + 0x8 * cols);
++    StoreU(v9, d, buf + 0x9 * cols);
++    StoreU(va, d, buf + 0xa * cols);
++    StoreU(vb, d, buf + 0xb * cols);
++    StoreU(vc, d, buf + 0xc * cols);
++    StoreU(vd, d, buf + 0xd * cols);
++    StoreU(ve, d, buf + 0xe * cols);
++    StoreU(vf, d, buf + 0xf * cols);
++  }
+ }
+ 
+ }  // namespace detail
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index 50b4d16f..e2cd2e7d 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -185,6 +185,14 @@ HWY_NOINLINE void BaseCase(D d, Traits st, T* HWY_RESTRICT keys, size_t num,
+       HWY_MAX(st.LanesPerKey(), num_pow2 >> Constants::kMaxRowsLog2);
+   HWY_DASSERT(cols <= N);
+ 
++  // If the full-width network is used and the input exactly fills the matrix,
++  // avoid copying into a separate buffer by operating directly on `keys`.
++  // This avoids the extra memcpy and padding writes.
++  if (Constants::UsesFullNetwork(cols, N) && num == Constants::BaseCaseNum(N)) {
++    SortingNetwork(st, keys, cols);
++    return;
++  }
++
+   // Copy `keys` to `buf`.
+   size_t i;
+   for (i = 0; i + N <= num; i += N) {

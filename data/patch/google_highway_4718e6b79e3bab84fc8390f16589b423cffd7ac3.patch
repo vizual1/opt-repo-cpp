@@ -1,0 +1,84 @@
+diff --git a/hwy/ops/arm_sve-inl.h b/hwy/ops/arm_sve-inl.h
+index 40fc9bc6..c3c282e4 100644
+--- a/hwy/ops/arm_sve-inl.h
++++ b/hwy/ops/arm_sve-inl.h
+@@ -5245,8 +5245,14 @@ HWY_SVE_FOREACH_UI(HWY_SVE_RETV_ARGPVV, AverageRound, rhadd)
+ #else
+ template <class V, HWY_IF_NOT_FLOAT_NOR_SPECIAL_V(V)>
+ HWY_API V AverageRound(const V a, const V b) {
+-  return Add(Add(ShiftRight<1>(a), ShiftRight<1>(b)),
+-             detail::AndN(Or(a, b), 1));
++  const DFromV<decltype(a)> d;
++  const RebindToUnsigned<decltype(d)> du;
++  const auto au = BitCast(du, a);
++  const auto bu = BitCast(du, b);
++  const auto x = Xor(au, bu);
++  using UT = TFromD<decltype(du)>;
++  const auto sum = Add(And(au, bu), ShiftRight<1>(Add(x, Set(du, UT{1}))));
++  return BitCast(d, sum);
+ }
+ #endif  // HWY_SVE_HAVE_2
+ 
+diff --git a/hwy/ops/emu128-inl.h b/hwy/ops/emu128-inl.h
+index b21b7e1f..1f014b9f 100644
+--- a/hwy/ops/emu128-inl.h
++++ b/hwy/ops/emu128-inl.h
+@@ -682,11 +682,13 @@ HWY_API Vec128<T, N> SaturatedSub(Vec128<T, N> a, Vec128<T, N> b) {
+ 
+ template <typename T, size_t N, HWY_IF_NOT_FLOAT_NOR_SPECIAL(T)>
+ HWY_API Vec128<T, N> AverageRound(Vec128<T, N> a, Vec128<T, N> b) {
++  using UT = MakeUnsigned<T>;
+   for (size_t i = 0; i < N; ++i) {
+-    const T a_val = a.raw[i];
+-    const T b_val = b.raw[i];
+-    a.raw[i] = static_cast<T>(ScalarShr(a_val, 1) + ScalarShr(b_val, 1) +
+-                              ((a_val | b_val) & 1));
++    const UT au = static_cast<UT>(a.raw[i]);
++    const UT bu = static_cast<UT>(b.raw[i]);
++    const UT x = au ^ bu;
++    const UT res = (au & bu) + static_cast<UT>(ScalarShr(static_cast<UT>(x + UT{1}), 1));
++    a.raw[i] = static_cast<T>(res);
+   }
+   return a;
+ }
+diff --git a/hwy/ops/generic_ops-inl.h b/hwy/ops/generic_ops-inl.h
+index 1630c7bf..8be8063b 100644
+--- a/hwy/ops/generic_ops-inl.h
++++ b/hwy/ops/generic_ops-inl.h
+@@ -5338,8 +5338,13 @@ template <class V, HWY_IF_UI32(TFromV<V>)>
+ HWY_API V AverageRound(V a, V b) {
+   using T = TFromV<V>;
+   const DFromV<decltype(a)> d;
+-  return Add(Add(ShiftRight<1>(a), ShiftRight<1>(b)),
+-             And(Or(a, b), Set(d, T{1})));
++  const RebindToUnsigned<decltype(d)> du;
++  const auto au = BitCast(du, a);
++  const auto bu = BitCast(du, b);
++  const auto x = Xor(au, bu);
++  using UT = TFromD<decltype(du)>;
++  const auto sum = Add(And(au, bu), ShiftRight<1>(Add(x, Set(du, UT{1}))));
++  return BitCast(d, sum);
+ }
+ 
+ #endif  // HWY_NATIVE_AVERAGE_ROUND_UI64
+diff --git a/hwy/ops/scalar-inl.h b/hwy/ops/scalar-inl.h
+index 52c01a89..8d743a7b 100644
+--- a/hwy/ops/scalar-inl.h
++++ b/hwy/ops/scalar-inl.h
+@@ -624,10 +624,12 @@ HWY_API Vec1<int16_t> SaturatedSub(const Vec1<int16_t> a,
+ 
+ template <class T, HWY_IF_NOT_FLOAT_NOR_SPECIAL(T)>
+ HWY_API Vec1<T> AverageRound(const Vec1<T> a, const Vec1<T> b) {
+-  const T a_val = a.raw;
+-  const T b_val = b.raw;
+-  return Vec1<T>(static_cast<T>(ScalarShr(a_val, 1) + ScalarShr(b_val, 1) +
+-                                ((a_val | b_val) & 1)));
++  using UT = MakeUnsigned<T>;
++  const UT au = static_cast<UT>(a.raw);
++  const UT bu = static_cast<UT>(b.raw);
++  const UT x = au ^ bu;
++  const UT res = (au & bu) + static_cast<UT>(ScalarShr(static_cast<UT>(x + UT{1}), 1));
++  return Vec1<T>(static_cast<T>(res));
+ }
+ 
+ // ------------------------------ Absolute value

@@ -1,0 +1,65 @@
+diff --git a/core/src/ReadBarcode.cpp b/core/src/ReadBarcode.cpp
+index 5ac61e25..51bf8333 100644
+--- a/core/src/ReadBarcode.cpp
++++ b/core/src/ReadBarcode.cpp
+@@ -49,22 +49,44 @@ class LumImagePyramid
+ 	std::vector<LumImage> buffers;
+ 
+ 	void addLayer()
+-	{
+-		auto siv = layers.back();
+-		buffers.emplace_back(siv.width() / N, siv.height() / N);
+-		layers.push_back(buffers.back());
+-		auto& div = buffers.back();
+-		auto* d   = div.data();
+-
+-		for (int dy = 0; dy < div.height(); ++dy)
+-			for (int dx = 0; dx < div.width(); ++dx) {
+-				int sum = (N * N) / 2;
+-				for (int ty = 0; ty < N; ++ty)
+-					for (int tx = 0; tx < N; ++tx)
+-						sum += *siv.data(dx * N + tx, dy * N + ty);
+-				*d++ = sum / (N * N);
+-			}
+-	}
++{
++auto siv = layers.back();
++const int srcW = siv.width();
++const int srcH = siv.height();
++const int dstW = srcW / N;
++const int dstH = srcH / N;
++
++buffers.emplace_back(dstW, dstH);
++layers.push_back(buffers.back());
++auto& div = buffers.back();
++auto* d   = div.data();
++
++// Precompute number of elements and bias for rounding
++const int area = N * N;
++const int bias = area / 2;
++
++// Temporary storage for row pointers to enable linear memory access
++std::vector<const uint8_t*> rowPtrs(N);
++
++for (int dy = 0; dy < dstH; ++dy) {
++// gather pointers to the N source rows for each output row to avoid repeated calls to siv.data(x,y)
++for (int ty = 0; ty < N; ++ty)
++rowPtrs[ty] = siv.data(0, dy * N + ty);
++
++for (int dx = 0; dx < dstW; ++dx) {
++int sum = bias;
++const int base = dx * N;
++// Sum NxN block; inner loop accesses contiguous memory via p[tx] which helps auto-vectorization
++for (int ty = 0; ty < N; ++ty) {
++const uint8_t* p = rowPtrs[ty] + base;
++for (int tx = 0; tx < N; ++tx)
++sum += p[tx];
++}
++*d++ = static_cast<uint8_t>(sum / area);
++}
++}
++}
++
+ 
+ public:
+ 	std::vector<ImageView> layers;

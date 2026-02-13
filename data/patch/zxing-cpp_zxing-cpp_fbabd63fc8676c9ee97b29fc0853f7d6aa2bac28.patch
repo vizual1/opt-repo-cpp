@@ -1,0 +1,17 @@
+diff --git a/core/src/HybridBinarizer.cpp b/core/src/HybridBinarizer.cpp
+index 598bd2a8..f48dd115 100644
+--- a/core/src/HybridBinarizer.cpp
++++ b/core/src/HybridBinarizer.cpp
+@@ -49,8 +49,10 @@ static Matrix<int> CalculateBlackPoints(const uint8_t* luminances, int subWidth,
+ 				for (int xx = 0; xx < BLOCK_SIZE; xx++) {
+ 					auto pixel = luminances[offset + xx];
+ 					sum += pixel;
+-					min = min < pixel ? min : pixel;
+-					max = max > pixel ? max : pixel;
++					if (pixel < min)
++						min = pixel;
++					else if (pixel > max)
++						max = pixel;
+ 				}
+ 				// short-circuit min/max tests once dynamic range is met
+ 				if (max - min > MIN_DYNAMIC_RANGE) {

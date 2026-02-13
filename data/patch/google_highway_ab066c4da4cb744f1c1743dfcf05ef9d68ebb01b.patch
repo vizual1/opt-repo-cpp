@@ -1,0 +1,126 @@
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index 3f5c223d..7d893a46 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -101,28 +101,29 @@ class Vec128 {
+ 
+   // Compound assignment. Only usable if there is a corresponding non-member
+   // binary operator overload. For example, only f32 and f64 support division.
+-  HWY_INLINE Vec128& operator*=(const Vec128 other) {
++  // Use const reference parameters to avoid unnecessary copies.
++  HWY_INLINE Vec128& operator*=(const Vec128& other) {
+     return *this = (*this * other);
+   }
+-  HWY_INLINE Vec128& operator/=(const Vec128 other) {
++  HWY_INLINE Vec128& operator/=(const Vec128& other) {
+     return *this = (*this / other);
+   }
+-  HWY_INLINE Vec128& operator+=(const Vec128 other) {
++  HWY_INLINE Vec128& operator+=(const Vec128& other) {
+     return *this = (*this + other);
+   }
+-  HWY_INLINE Vec128& operator-=(const Vec128 other) {
++  HWY_INLINE Vec128& operator-=(const Vec128& other) {
+     return *this = (*this - other);
+   }
+-  HWY_INLINE Vec128& operator%=(const Vec128 other) {
++  HWY_INLINE Vec128& operator%=(const Vec128& other) {
+     return *this = (*this % other);
+   }
+-  HWY_INLINE Vec128& operator&=(const Vec128 other) {
++  HWY_INLINE Vec128& operator&=(const Vec128& other) {
+     return *this = (*this & other);
+   }
+-  HWY_INLINE Vec128& operator|=(const Vec128 other) {
++  HWY_INLINE Vec128& operator|=(const Vec128& other) {
+     return *this = (*this | other);
+   }
+-  HWY_INLINE Vec128& operator^=(const Vec128 other) {
++  HWY_INLINE Vec128& operator^=(const Vec128& other) {
+     return *this = (*this ^ other);
+   }
+ 
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index 7e3f4051..6331f099 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -119,28 +119,29 @@ class Vec256 {
+ 
+   // Compound assignment. Only usable if there is a corresponding non-member
+   // binary operator overload. For example, only f32 and f64 support division.
+-  HWY_INLINE Vec256& operator*=(const Vec256 other) {
++  // Use const reference parameters to avoid unnecessary copies.
++  HWY_INLINE Vec256& operator*=(const Vec256& other) {
+     return *this = (*this * other);
+   }
+-  HWY_INLINE Vec256& operator/=(const Vec256 other) {
++  HWY_INLINE Vec256& operator/=(const Vec256& other) {
+     return *this = (*this / other);
+   }
+-  HWY_INLINE Vec256& operator+=(const Vec256 other) {
++  HWY_INLINE Vec256& operator+=(const Vec256& other) {
+     return *this = (*this + other);
+   }
+-  HWY_INLINE Vec256& operator-=(const Vec256 other) {
++  HWY_INLINE Vec256& operator-=(const Vec256& other) {
+     return *this = (*this - other);
+   }
+-  HWY_INLINE Vec256& operator%=(const Vec256 other) {
++  HWY_INLINE Vec256& operator%=(const Vec256& other) {
+     return *this = (*this % other);
+   }
+-  HWY_INLINE Vec256& operator&=(const Vec256 other) {
++  HWY_INLINE Vec256& operator&=(const Vec256& other) {
+     return *this = (*this & other);
+   }
+-  HWY_INLINE Vec256& operator|=(const Vec256 other) {
++  HWY_INLINE Vec256& operator|=(const Vec256& other) {
+     return *this = (*this | other);
+   }
+-  HWY_INLINE Vec256& operator^=(const Vec256 other) {
++  HWY_INLINE Vec256& operator^=(const Vec256& other) {
+     return *this = (*this ^ other);
+   }
+ 
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index da2bb67c..1b8988c8 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -140,28 +140,29 @@ class Vec512 {
+ 
+   // Compound assignment. Only usable if there is a corresponding non-member
+   // binary operator overload. For example, only f32 and f64 support division.
+-  HWY_INLINE Vec512& operator*=(const Vec512 other) {
++  // Use const reference parameters to avoid unnecessary copies.
++  HWY_INLINE Vec512& operator*=(const Vec512& other) {
+     return *this = (*this * other);
+   }
+-  HWY_INLINE Vec512& operator/=(const Vec512 other) {
++  HWY_INLINE Vec512& operator/=(const Vec512& other) {
+     return *this = (*this / other);
+   }
+-  HWY_INLINE Vec512& operator+=(const Vec512 other) {
++  HWY_INLINE Vec512& operator+=(const Vec512& other) {
+     return *this = (*this + other);
+   }
+-  HWY_INLINE Vec512& operator-=(const Vec512 other) {
++  HWY_INLINE Vec512& operator-=(const Vec512& other) {
+     return *this = (*this - other);
+   }
+-  HWY_INLINE Vec512& operator%=(const Vec512 other) {
++  HWY_INLINE Vec512& operator%=(const Vec512& other) {
+     return *this = (*this % other);
+   }
+-  HWY_INLINE Vec512& operator&=(const Vec512 other) {
++  HWY_INLINE Vec512& operator&=(const Vec512& other) {
+     return *this = (*this & other);
+   }
+-  HWY_INLINE Vec512& operator|=(const Vec512 other) {
++  HWY_INLINE Vec512& operator|=(const Vec512& other) {
+     return *this = (*this | other);
+   }
+-  HWY_INLINE Vec512& operator^=(const Vec512 other) {
++  HWY_INLINE Vec512& operator^=(const Vec512& other) {
+     return *this = (*this ^ other);
+   }
+ 

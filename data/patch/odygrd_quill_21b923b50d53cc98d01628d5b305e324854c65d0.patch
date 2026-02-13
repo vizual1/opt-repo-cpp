@@ -1,0 +1,31 @@
+diff --git a/include/quill/std/ForwardList.h b/include/quill/std/ForwardList.h
+index ae24d25..d0ad690 100644
+--- a/include/quill/std/ForwardList.h
++++ b/include/quill/std/ForwardList.h
+@@ -97,21 +97,12 @@ struct Codec<std::forward_list<T, Allocator>>
+ 
+       std::forward_list<T, Allocator> arg;
+ 
+-      if (number_of_elements > 0)
+-      {
+-        arg.emplace_front(Codec<T>::decode_arg(buffer));
+-      }
+-
+-      for (size_t i = 1; i < number_of_elements; ++i)
++      // Efficient linear-time insertion: keep an iterator to the last inserted element
++      auto it = arg.before_begin();
++      for (size_t i = 0; i < number_of_elements; ++i)
+       {
+-        auto it = arg.before_begin();
+-        for (auto curr = arg.begin(); curr != arg.end(); ++it, ++curr)
+-        {
+-          // iterate
+-        }
+-
+-        // Insert after the last element
+-        arg.emplace_after(it, Codec<T>::decode_arg(buffer));
++        // emplace_after returns an iterator to the newly inserted element
++        it = arg.emplace_after(it, Codec<T>::decode_arg(buffer));
+       }
+ 
+       return arg;

@@ -1,0 +1,23 @@
+diff --git a/src/lsp-server.cpp b/src/lsp-server.cpp
+index a9d6a917..a2c811e6 100644
+--- a/src/lsp-server.cpp
++++ b/src/lsp-server.cpp
+@@ -324,15 +324,15 @@ void linting_lsp_server_handler<Linter>::relint_open_documents(
+         // TODO(strager): Report a warning and use a default configuration.
+         QLJS_UNIMPLEMENTED();
+       }
+-      configuration_or_error config = this->get_config(document_path, &doc);
+-      if (!config.ok()) {
++      configuration* config_ptr = change_it->config;
++      if (config_ptr == nullptr) {
+         QLJS_UNIMPLEMENTED();
+       }
+       // TODO(strager): Don't copy document_uri if it contains only non-special
+       // characters.
+       // TODO(strager): Cache the result of to_json_escaped_string?
+       this->linter_.lint_and_get_diagnostics_notification(
+-          *config, doc.doc.string(),
++          *config_ptr, doc.doc.string(),
+           to_json_escaped_string_with_quotes(document_uri), doc.version_json,
+           notification_json);
+       need_comma = true;

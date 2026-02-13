@@ -1,0 +1,22 @@
+diff --git a/include/for_atomic_inc.hpp b/include/for_atomic_inc.hpp
+index 16a33816..ad4a30c1 100644
+--- a/include/for_atomic_inc.hpp
++++ b/include/for_atomic_inc.hpp
+@@ -29,7 +29,7 @@
+ ///
+ #define for_atomic_inc(start, condition, atomic_i) \
+   for (decltype(start) is_first_thread = -1, \
+-       b = (atomic_i.compare_exchange_strong(is_first_thread, start)) \
++       b = (atomic_i.compare_exchange_strong(is_first_thread, start, std::memory_order_relaxed)) \
+        ? atomic_i.fetch_add(1, std::memory_order_relaxed) \
+        : atomic_i.fetch_add(1, std::memory_order_relaxed); \
+        condition; b = atomic_i.fetch_add(1, std::memory_order_relaxed))
+@@ -51,7 +51,7 @@
+ ///
+ #define for_atomic_add(start, condition, atomic_i, inc) \
+   for (decltype(start) is_first_thread = -1, \
+-       b = (atomic_i.compare_exchange_strong(is_first_thread, start)) \
++       b = (atomic_i.compare_exchange_strong(is_first_thread, start, std::memory_order_relaxed)) \
+        ? atomic_i.fetch_add(inc, std::memory_order_relaxed) \
+        : atomic_i.fetch_add(inc, std::memory_order_relaxed); \
+        condition; b = atomic_i.fetch_add(inc, std::memory_order_relaxed))

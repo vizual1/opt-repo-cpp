@@ -1,0 +1,23 @@
+diff --git a/include/fmt/base.h b/include/fmt/base.h
+index 42e192ac..4900aa9c 100644
+--- a/include/fmt/base.h
++++ b/include/fmt/base.h
+@@ -1848,9 +1848,16 @@ template <typename T> class buffer {
+       try_reserve(size_ + count);
+       auto free_cap = capacity_ - size_;
+       if (free_cap < count) count = free_cap;
+-      // A loop is faster than memcpy on small sizes.
+       T* out = ptr_ + size_;
+-      for (size_t i = 0; i < count; ++i) out[i] = begin[i];
++      // Use memcpy when possible for better performance on trivially
++      // copyable types of the same type; fall back to element-wise copy
++      // otherwise. Avoid calling memcpy during constant evaluation.
++      if (std::is_trivially_copyable<T>::value && std::is_same<T, U>::value &&
++          !is_constant_evaluated()) {
++        memcpy(out, begin, count * sizeof(T));
++      } else {
++        for (size_t i = 0; i < count; ++i) out[i] = begin[i];
++      }
+       size_ += count;
+       begin += count;
+     }

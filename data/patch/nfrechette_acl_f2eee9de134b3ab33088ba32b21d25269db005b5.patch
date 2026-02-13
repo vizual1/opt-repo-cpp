@@ -1,0 +1,61 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686
++Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6
++Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6-dirty
+diff --git a/includes/acl/decompression/impl/steps/rotation_constant.h b/includes/acl/decompression/impl/steps/rotation_constant.h
+index af3f4707..daf7ea26 100644
+--- a/includes/acl/decompression/impl/steps/rotation_constant.h
++++ b/includes/acl/decompression/impl/steps/rotation_constant.h
+@@ -132,6 +132,7 @@ namespace acl
+ 			// prefetching every entry, the ptr will remain forever null and this
+ 			// the branch is always constant: not zero for some time, then forever zero
+ 			const void* next_prefetch_ptr = *prefetch_queue_ptr;
++				bool prefetching_done = (next_prefetch_ptr == nullptr);
+ 
+ 			// Tuned to give us the right number of instructions per sub-step
+ 			// On ARM64, 4 yields 78-103 instructions (68-93 with vst4q_f32):
+diff --git a/includes/acl/decompression/impl/steps/rotation_default.h b/includes/acl/decompression/impl/steps/rotation_default.h
+index 3822b9a0..25b7412d 100644
+--- a/includes/acl/decompression/impl/steps/rotation_default.h
++++ b/includes/acl/decompression/impl/steps/rotation_default.h
+@@ -63,6 +63,7 @@ namespace acl
+ 			// prefetching every entry, the ptr will remain forever null and this
+ 			// the branch is always constant: not zero for some time, then forever zero
+ 			const void* next_prefetch_ptr = *prefetch_queue_ptr;
++				bool prefetching_done = (next_prefetch_ptr == nullptr);
+ 
+ 			// Grab our constant default rotation if we have one, otherwise init with some value
+ 			const rtm::quatf default_rotation = default_mode == default_sub_track_mode::constant ? writer.get_constant_default_rotation() : rtm::quat_identity();
+diff --git a/includes/acl/decompression/impl/steps/scale_default.h b/includes/acl/decompression/impl/steps/scale_default.h
+index e6b512af..29896eb2 100644
+--- a/includes/acl/decompression/impl/steps/scale_default.h
++++ b/includes/acl/decompression/impl/steps/scale_default.h
+@@ -62,6 +62,8 @@ namespace acl
+ 			// prefetching every entry, the ptr will remain forever null and this
+ 			// the branch is always constant: not zero for some time, then forever zero
+ 			const void* next_prefetch_ptr = *prefetch_queue_ptr;
++			bool prefetching_done = (next_prefetch_ptr == nullptr);
++
+ 
+ 			// Grab our constant default scale if we have one, otherwise init with some value
+ 			rtm::vector4f default_scale;

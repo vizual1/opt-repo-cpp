@@ -1,0 +1,61 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 2a8570ec3cbb5e059861e732377c255be9181863
++Subproject commit 2a8570ec3cbb5e059861e732377c255be9181863-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 294331edbc68a0709c167b2369adbcf3eb430daa
++Subproject commit 294331edbc68a0709c167b2369adbcf3eb430daa-dirty
+diff --git a/includes/acl/core/string.h b/includes/acl/core/string.h
+index 5cb629d5..d6ca180f 100644
+--- a/includes/acl/core/string.h
++++ b/includes/acl/core/string.h
+@@ -37,6 +37,19 @@ namespace acl
+ {
+ 	ACL_IMPL_VERSION_NAMESPACE_BEGIN
+ 
++		//////////////////////////////////////////////////////////////////////////
++		// Fast strlen replacement to avoid the overhead of std::strlen in hot paths.
++		// Implemented as a simple inline scanner. Placed inside the acl namespace.
++		static inline size_t fast_strlen(const char* str) noexcept
++		{
++			if (str == nullptr)
++				return 0;
++			const char* s = str;
++			while (*s) ++s;
++			return static_cast<size_t>(s - str);
++		}
++
++
+ 	//////////////////////////////////////////////////////////////////////////
+ 	// A basic string class that uses our custom allocator.
+ 	// It is used exclusively for debug purposes.
+@@ -46,10 +59,10 @@ namespace acl
+ 	class string
+ 	{
+ 	public:
+-		string() noexcept : m_allocator(nullptr), m_c_str(nullptr) {}
++		string() noexcept : m_allocator(nullptr), m_c_str(nullptr), m_size(0) {}
+ 
+ 		string(iallocator& allocator, const char* c_str, size_t length)
+-			: m_allocator(&allocator)
++			: m_allocator(&allocator), m_size(length)
+ 		{
+ 			if (length > 0)
+ 			{

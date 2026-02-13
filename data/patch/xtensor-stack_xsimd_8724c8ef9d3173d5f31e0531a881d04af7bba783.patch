@@ -1,0 +1,31 @@
+diff --git a/include/xsimd/arch/generic/xsimd_generic_memory.hpp b/include/xsimd/arch/generic/xsimd_generic_memory.hpp
+index 7594eb9..beaf7d7 100644
+--- a/include/xsimd/arch/generic/xsimd_generic_memory.hpp
++++ b/include/xsimd/arch/generic/xsimd_generic_memory.hpp
+@@ -77,8 +77,8 @@ namespace xsimd
+         } // namespace detail
+ 
+         // Gather with runtime indexes and mismatched strides.
+-        template <typename T, typename A, typename U, typename V>
+-        inline detail::sizes_mismatch_t<T, U, batch<T, A>>
++        template <typename T, typename A, typename U, typename V, typename = typename detail::sizes_mismatch_t<T, U, int>>
++        inline batch<T, A>
+         gather(batch<T, A> const&, U const* src, batch<V, A> const& index,
+                kernel::requires_arch<generic>) noexcept
+         {
+diff --git a/include/xsimd/types/xsimd_utils.hpp b/include/xsimd/types/xsimd_utils.hpp
+index 2188ae4..8f7e9ea 100644
+--- a/include/xsimd/types/xsimd_utils.hpp
++++ b/include/xsimd/types/xsimd_utils.hpp
+@@ -232,6 +232,11 @@ namespace xsimd
+             template <class T, class U, class B = int>
+             using sizes_mismatch_t = typename std::enable_if<sizeof(T) != sizeof(U), B>::type;
+         } // namespace detail
++
++                // Note: SFINAE-friendly aliases. These helpers are used by
++                // the generic memory kernel to enable overload resolution
++                // for optimized gather implementations when strides match.
++
+     } // namespace kernel
+ 
+     /*****************************************

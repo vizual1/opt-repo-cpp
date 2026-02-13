@@ -1,0 +1,18 @@
+diff --git a/highs/presolve/HPresolve.cpp b/highs/presolve/HPresolve.cpp
+index 675184287..066776b9c 100644
+--- a/highs/presolve/HPresolve.cpp
++++ b/highs/presolve/HPresolve.cpp
+@@ -1675,6 +1675,13 @@ HPresolve::Result HPresolve::runProbing(HighsPostsolveStack& postsolve_stack) {
+       ++numProbed;
+       numProbes[i] += 1;
+ 
++      // Decrease probing budget after a soft limit to avoid excessive runtime
++      const HighsInt kProbingSoftLimit = 1000;
++      const HighsInt kProbingSlack = 100;
++      if (numProbed > kProbingSoftLimit) {
++        probingContingent = std::min(probingContingent, numProbed + kProbingSlack);
++      }
++
+       // Stop collecting lifting opportunities if maximum is reached
+       if (numLiftOpps >= maxNumLiftOpps)
+         implications.storeLiftingOpportunity = nullptr;

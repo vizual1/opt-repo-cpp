@@ -1,0 +1,82 @@
+diff --git a/hwy/ops/generic_ops-inl.h b/hwy/ops/generic_ops-inl.h
+index 914cf547..afaa4cf3 100644
+--- a/hwy/ops/generic_ops-inl.h
++++ b/hwy/ops/generic_ops-inl.h
+@@ -158,6 +158,16 @@ HWY_INLINE VFromD<DTo> ZeroExtendResizeBitCast(
+ }  // namespace detail
+ #endif  // HWY_TARGET != HWY_EMU128 && HWY_TARGET != HWY_SCALAR
+ 
++// Overload for literal 16-byte arrays: construct duplicated 128-bit block from
++// compile-time values to avoid a memory load when possible.
++template <class D>
++HWY_API VFromD<D> LoadDup128(D d, const uint8_t (&p)[16]) {
++  const RebindToUnsigned<decltype(d)> du;
++  return BitCast(d, Dup128VecFromValues(du, p[0], p[1], p[2], p[3], p[4], p[5],
++                                         p[6], p[7], p[8], p[9], p[10], p[11],
++                                         p[12], p[13], p[14], p[15]));
++}
++
+ template <class DTo, class DFrom>
+ HWY_API VFromD<DTo> ZeroExtendResizeBitCast(DTo d_to, DFrom d_from,
+                                             VFromD<DFrom> v) {
+diff --git a/hwy/ops/x86_128-inl.h b/hwy/ops/x86_128-inl.h
+index ed2f8f75..48496a4a 100644
+--- a/hwy/ops/x86_128-inl.h
++++ b/hwy/ops/x86_128-inl.h
+@@ -1910,6 +1910,17 @@ HWY_API VFromD<D> LoadU(D d, const TFromD<D>* HWY_RESTRICT p) {
+   return Load(d, p);
+ }
+ 
++// Overload for 16-byte literal arrays: construct duplicated 128-bit block from
++// compile-time values to avoid a memory load when possible.
++template <class D>
++HWY_API VFromD<D> LoadDup128(D /*d*/, const uint8_t (&p)[16]) {
++  // Build a 128-bit byte vector from the literal values and bit-cast to the
++  // requested D.
++  return BitCast(D(), Dup128VecFromValues(Full128<uint8_t>(), p[0], p[1], p[2], p[3],
++                                           p[4], p[5], p[6], p[7], p[8], p[9],
++                                           p[10], p[11], p[12], p[13], p[14], p[15]));
++}
++
+ // 128-bit SIMD => nothing to duplicate, same as an unaligned load.
+ template <class D, HWY_IF_V_SIZE_LE_D(D, 16)>
+ HWY_API VFromD<D> LoadDup128(D d, const TFromD<D>* HWY_RESTRICT p) {
+diff --git a/hwy/ops/x86_256-inl.h b/hwy/ops/x86_256-inl.h
+index 7eb10c12..1fc42e03 100644
+--- a/hwy/ops/x86_256-inl.h
++++ b/hwy/ops/x86_256-inl.h
+@@ -361,6 +361,15 @@ HWY_API VFromD<D> ResizeBitCast(D d, FromV v) {
+ 
+ // ------------------------------ Dup128VecFromValues
+ 
++// Overload for literal 16-byte arrays: construct duplicated 128-bit block from
++// compile-time values to avoid a memory load when possible.
++template <class D, HWY_IF_V_SIZE_D(D, 32), HWY_IF_UI8_D(D)>
++HWY_API VFromD<D> LoadDup128(D /*d*/, const uint8_t (&p)[16]) {
++  return Dup128VecFromValues(D(), p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
++                              p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
++}
++
++
+ template <class D, HWY_IF_UI8_D(D), HWY_IF_V_SIZE_D(D, 32)>
+ HWY_API VFromD<D> Dup128VecFromValues(D /*d*/, TFromD<D> t0, TFromD<D> t1,
+                                       TFromD<D> t2, TFromD<D> t3, TFromD<D> t4,
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index 8a9fd417..3939076e 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -3048,6 +3048,14 @@ HWY_API VFromD<D> MaskedLoadOr(VFromD<D> v, Mask512<double> m, D /* tag */,
+ 
+ // ------------------------------ LoadDup128
+ 
++// Overload for literal 16-byte arrays: construct duplicated 128-bit block from
++// compile-time values to avoid a memory load when possible.
++template <class D, HWY_IF_V_SIZE_D(D, 64), HWY_IF_UI8_D(D)>
++HWY_API VFromD<D> LoadDup128(D /*d*/, const uint8_t (&p)[16]) {
++  return Dup128VecFromValues(D(), p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
++                              p[8], p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
++}
++
+ // Loads 128 bit and duplicates into both 128-bit halves. This avoids the
+ // 3-cycle cost of moving data between 128-bit halves and avoids port 5.
+ template <class D, HWY_IF_V_SIZE_D(D, 64), HWY_IF_NOT_FLOAT3264_D(D)>

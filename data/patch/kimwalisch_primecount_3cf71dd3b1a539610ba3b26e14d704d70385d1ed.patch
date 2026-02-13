@@ -1,0 +1,20 @@
+diff --git a/src/nth_prime_sieve.hpp b/src/nth_prime_sieve.hpp
+index c5c395c6..11868936 100644
+--- a/src/nth_prime_sieve.hpp
++++ b/src/nth_prime_sieve.hpp
+@@ -44,6 +44,15 @@
+   #include <omp.h>
+ #endif
+ 
++#ifndef if_likely
++  #if defined(__GNUC__) || defined(__clang__)
++    #define if_likely(x) (__builtin_expect(!!(x), 1))
++  #else
++    #define if_likely(x) (x)
++  #endif
++#endif
++
++
+ namespace {
+ 
+ using namespace primecount;

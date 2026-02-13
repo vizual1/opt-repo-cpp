@@ -1,0 +1,74 @@
+diff --git a/src/gourdon/LoadBalancerAC.cpp b/src/gourdon/LoadBalancerAC.cpp
+index 6193afa0..c48285b6 100644
+--- a/src/gourdon/LoadBalancerAC.cpp
++++ b/src/gourdon/LoadBalancerAC.cpp
+@@ -22,7 +22,7 @@
+ #include <stdint.h>
+ #include <algorithm>
+ #include <iostream>
+-#include <sstream>
++#include <string>
+ 
+ namespace {
+ 
+@@ -102,11 +102,14 @@ bool LoadBalancerAC::get_work(ThreadDataAC& thread)
+   // amongst all threads by using a small segment size.
+   // Above y we increase the segment size (or the number of
+   // segments) by 2x if the thread runtime is close to 0.
+-  if (low_ > y_ &&
+-      thread.secs < increase_threshold &&
+-      thread.segments == segments_ &&
+-      thread.segment_size == segment_size_ &&
+-      segments_ * segment_size_ * (threads_ * 8) < remaining_dist)
++  // Micro-optimizations: reduce repeated arithmetic & allocations.
++  int64_t threads_mul_8 = static_cast<int64_t>(threads_) * 8;
++  bool can_try_increase = (low_ > y_) &&
++                          (thread.secs < increase_threshold) &&
++                          (thread.segments == segments_) &&
++                          (thread.segment_size == segment_size_);
++
++  if (can_try_increase && (segments_ * segment_size_ * threads_mul_8 < remaining_dist))
+   {
+     int64_t increase_factor = 2;
+ 
+@@ -115,7 +118,8 @@ bool LoadBalancerAC::get_work(ThreadDataAC& thread)
+     else
+     {
+       segment_size_ = segment_size_ * increase_factor;
+-      segment_size_ = std::min(segment_size_, max_segment_size_);
++      if (segment_size_ > max_segment_size_)
++        segment_size_ = max_segment_size_;
+       segment_size_ = SegmentedPiTable::get_segment_size(segment_size_);
+     }
+   }
+@@ -134,7 +138,7 @@ bool LoadBalancerAC::get_work(ThreadDataAC& thread)
+ 
+ void LoadBalancerAC::print_status(double time)
+ {
+-  double threshold = 0.1;
++  const double threshold = 0.1;
+ 
+   if (time - print_time_ >= threshold)
+   {
+@@ -145,11 +149,16 @@ void LoadBalancerAC::print_status(double time)
+     int64_t total_segments = ceil_div(remaining_dist, thread_dist);
+     total_segments += segment_nr_;
+ 
+-    std::ostringstream status;
+-    // Clear line because total_segments may become smaller
+-    status << "\r                                    "
+-            << "\rSegments: " << segment_nr_ << '/' << total_segments;
+-    std::cout << status.str() << std::flush;
++    // Build status string without stream allocations.
++    std::string status;
++    status.reserve(64);
++    status.append("\r                                    ");
++    status.append("\rSegments: ");
++    status.append(std::to_string(segment_nr_));
++    status.push_back('/');
++    status.append(std::to_string(total_segments));
++
++    std::cout << status << std::flush;
+   }
+ }
+ 

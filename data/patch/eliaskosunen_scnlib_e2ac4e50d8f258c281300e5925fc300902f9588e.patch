@@ -1,0 +1,79 @@
+diff --git a/include/scn/detail/erased_range.h b/include/scn/detail/erased_range.h
+index 3356c4e..b320520 100644
+--- a/include/scn/detail/erased_range.h
++++ b/include/scn/detail/erased_range.h
+@@ -91,8 +91,15 @@ namespace scn {
+                 return do_get_current();
+             }
+ 
++            CharT get_current_at_index(std::ptrdiff_t i)
++            {
++                SCN_EXPECT(!is_current_at_end());
++                return do_get_current_at_index(i);
++            }
++
+         protected:
+             virtual CharT do_get_current() = 0;
++            virtual CharT do_get_current_at_index(std::ptrdiff_t) = 0;
+         };
+ 
+         template <typename Range, typename CharT>
+@@ -122,6 +129,29 @@ namespace scn {
+             {
+                 return *m_current;
+             }
++
++            CharT do_get_current_at_index(std::ptrdiff_t i) override
++            {
++                SCN_EXPECT(i >= 0);
++                if (i == m_current_index) {
++                    return *m_current;
++                }
++                if (i > m_current_index) {
++                    auto n = i - m_current_index;
++                    std::advance(m_current, n);
++                    m_current_index = i;
++                    return *m_current;
++                }
++                // i < m_current_index
++                m_current = ranges::begin(m_range);
++                m_current_index = 0;
++                if (i != 0) {
++                    std::advance(m_current, i);
++                    m_current_index = i;
++                }
++                return *m_current;
++            }
++
+             void do_increment_current(std::ptrdiff_t n) override
+             {
+                 SCN_EXPECT(n >= 0);
+@@ -270,8 +300,7 @@ namespace scn {
+         {
+             SCN_EXPECT(m_impl);
+ 
+-            advance_until_index(m_current);
+-            return m_impl->get_current();
++            return m_impl->get_current_at_index(m_current);
+         }
+ 
+         friend bool operator==(const iterator& x,
+@@ -358,13 +387,14 @@ namespace scn {
+ 
+         void advance_until_index(std::ptrdiff_t i) const
+         {
+-            if (i == m_impl->get_current_index()) {
++            SCN_EXPECT(m_impl);
++            auto cur = m_impl->get_current_index();
++            if (i == cur) {
+                 return;
+             }
+ 
+-            if (i > m_impl->get_current_index()) {
+-                return m_impl->increment_current(i -
+-                                                 m_impl->get_current_index());
++            if (i > cur) {
++                return m_impl->increment_current(i - cur);
+             }
+ 
+             m_impl->reset_current_to_begin();

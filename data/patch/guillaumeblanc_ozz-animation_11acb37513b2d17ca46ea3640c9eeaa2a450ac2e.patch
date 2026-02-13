@@ -1,0 +1,22 @@
+diff --git a/src/animation/runtime/track_sampling_job.cc b/src/animation/runtime/track_sampling_job.cc
+index 190adb07..db2fa522 100644
+--- a/src/animation/runtime/track_sampling_job.cc
++++ b/src/animation/runtime/track_sampling_job.cc
+@@ -66,6 +66,17 @@ bool TrackSamplingJob<_Track>::Run() const {
+     return true;
+   }
+ 
++  // Fast paths: if ratio is at or before first key, or at/after last key, avoid searching.
++  const size_t rcount = ratios.size();
++  if (clamped_ratio <= ratios[0]) {
++    *result = values[0];
++    return true;
++  }
++  if (clamped_ratio >= ratios[rcount - 1]) {
++    *result = values[rcount - 1];
++    return true;
++  }
++
+   // Search for the first key frame with a ratio value greater than input ratio.
+   // Our ratio is between this one and the previous one.
+   const float* ptk1 =

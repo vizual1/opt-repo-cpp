@@ -1,0 +1,196 @@
+diff --git a/src/qpsolver/basis.cpp b/src/qpsolver/basis.cpp
+index 3516ebcb9..714c21980 100644
+--- a/src/qpsolver/basis.cpp
++++ b/src/qpsolver/basis.cpp
+@@ -173,7 +173,7 @@ void Basis::updatebasis(const Settings& settings, HighsInt newactivecon, HighsIn
+ 
+ Vector& Basis::btran(const Vector& rhs, Vector& target, bool buffer,
+                      HighsInt p) {
+-  HVector rhs_hvec = vec2hvec(rhs);
++  HVector& rhs_hvec = vec2hvec(rhs);
+   basisfactor.btranCall(rhs_hvec, 1.0);
+   if (buffer) {
+     row_ep.copy(&rhs_hvec);
+@@ -189,7 +189,7 @@ Vector& Basis::btran(const Vector& rhs, Vector& target, bool buffer,
+ }
+ 
+ Vector Basis::btran(const Vector& rhs, bool buffer, HighsInt p) {
+-  HVector rhs_hvec = vec2hvec(rhs);
++  HVector& rhs_hvec = vec2hvec(rhs);
+   basisfactor.btranCall(rhs_hvec, 1.0);
+   if (buffer) {
+     row_ep.copy(&rhs_hvec);
+@@ -206,7 +206,7 @@ Vector Basis::btran(const Vector& rhs, bool buffer, HighsInt p) {
+ 
+ Vector& Basis::ftran(const Vector& rhs, Vector& target, bool buffer,
+                      HighsInt q) {
+-  HVector rhs_hvec = vec2hvec(rhs);
++  HVector& rhs_hvec = vec2hvec(rhs);
+   basisfactor.ftranCall(rhs_hvec, 1.0);
+   if (buffer) {
+     col_aq.copy(&rhs_hvec);
+@@ -223,7 +223,7 @@ Vector& Basis::ftran(const Vector& rhs, Vector& target, bool buffer,
+ }
+ 
+ Vector Basis::ftran(const Vector& rhs, bool buffer, HighsInt q) {
+-  HVector rhs_hvec = vec2hvec(rhs);
++  HVector& rhs_hvec = vec2hvec(rhs);
+   basisfactor.ftranCall(rhs_hvec, 1.0);
+   if (buffer) {
+     col_aq.copy(&rhs_hvec);
+diff --git a/src/qpsolver/basis.hpp b/src/qpsolver/basis.hpp
+index 136d70a00..12af969ba 100644
+--- a/src/qpsolver/basis.hpp
++++ b/src/qpsolver/basis.hpp
+@@ -83,6 +83,10 @@ class Basis {
+   HVector row_ep;
+   HVector col_aq;
+ 
++  // scratch vectors exposed for external reuse to avoid repeated allocations
++  // Note: kept private but accessible via methods if needed
++  
++
+  public:
+   Basis(Runtime& rt, std::vector<HighsInt> active,
+         std::vector<BasisStatus> atlower, std::vector<HighsInt> inactive);
+diff --git a/src/qpsolver/dantzigpricing.hpp b/src/qpsolver/dantzigpricing.hpp
+index 7d2a18e54..43ebb4900 100644
+--- a/src/qpsolver/dantzigpricing.hpp
++++ b/src/qpsolver/dantzigpricing.hpp
+@@ -15,8 +15,8 @@ class DantzigPricing : public Pricing {
+   ReducedCosts& redcosts;
+ 
+   HighsInt chooseconstrainttodrop(const Vector& lambda) {
+-    auto activeconstraintidx = basis.getactive();
+-    auto constraintindexinbasisfactor = basis.getindexinfactor();
++    const auto& activeconstraintidx = basis.getactive();
++    const auto& constraintindexinbasisfactor = basis.getindexinfactor();
+ 
+     HighsInt minidx = -1;
+     double maxabslambda = 0.0;
+diff --git a/src/qpsolver/devexharrispricing.hpp b/src/qpsolver/devexharrispricing.hpp
+index 2531e6514..1dc62b0a8 100644
+--- a/src/qpsolver/devexharrispricing.hpp
++++ b/src/qpsolver/devexharrispricing.hpp
+@@ -15,8 +15,8 @@ class DevexHarrisPricing : public Pricing {
+   std::vector<double> weights;
+ 
+   HighsInt chooseconstrainttodrop(const Vector& lambda) {
+-    auto activeconstraintidx = basis.getactive();
+-    auto constraintindexinbasisfactor = basis.getindexinfactor();
++    const auto& activeconstraintidx = basis.getactive();
++    const auto& constraintindexinbasisfactor = basis.getindexinfactor();
+ 
+     HighsInt minidx = -1;
+     double maxabslambda = 0.0;
+@@ -55,11 +55,12 @@ class DevexHarrisPricing : public Pricing {
+   DevexHarrisPricing(Runtime& rt, Basis& bas)
+       : runtime(rt),
+         basis(bas),
+-        weights(std::vector<double>(rt.instance.num_var, 1.0)){};
++        weights(std::vector<double>(rt.instance.num_var, 1.0)),
++        lambda_buffer(Vector(rt.instance.num_var)){};
+ 
+   HighsInt price(const Vector& x, const Vector& gradient) {
+-    Vector lambda = basis.ftran(gradient);
+-    HighsInt minidx = chooseconstrainttodrop(lambda);
++    basis.ftran(gradient, lambda_buffer);
++    HighsInt minidx = chooseconstrainttodrop(lambda_buffer);
+     return minidx;
+   }
+ 
+@@ -82,6 +83,9 @@ class DevexHarrisPricing : public Pricing {
+       }
+     }
+   }
++
++ private:
++  Vector lambda_buffer;
+ };
+ 
+ #endif
+diff --git a/src/qpsolver/quass.cpp b/src/qpsolver/quass.cpp
+index c7b4d8027..7cdc98f53 100644
+--- a/src/qpsolver/quass.cpp
++++ b/src/qpsolver/quass.cpp
+@@ -78,8 +78,9 @@ static void computerowmove(Runtime& runtime, Basis& basis, Vector& p,
+ // VECTOR
+ static Vector& computesearchdirection_minor(Runtime& rt, Basis& bas,
+                                      CholeskyFactor& cf,
+-                                     ReducedGradient& redgrad, Vector& p) {
+-  Vector g2 = -redgrad.get();
++                                     ReducedGradient& redgrad, Vector& p, Vector& g2) {
++  g2 = redgrad.get();
++  g2.scale(-1.0);
+   g2.sanitize();
+   cf.solve(g2);
+ 
+@@ -285,6 +286,7 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim
+   Vector p(runtime.instance.num_var);
+   Vector rowmove(runtime.instance.num_con);
+ 
++  // Buffers reused to avoid reallocations
+   Vector buffer_yp(runtime.instance.num_var);
+   Vector buffer_gyp(runtime.instance.num_var);
+   Vector buffer_l(runtime.instance.num_var);
+@@ -295,6 +297,10 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim
+   // buffers for reduction
+   Vector buffer_d(runtime.instance.num_var);
+ 
++  // additional scratch vectors to reduce temporaries
++  Vector scratch_g2(runtime.instance.num_var);
++  Vector scratch_lambda(runtime.instance.num_var);
++
+   regularize(runtime);
+ 
+   runtime.relaxed_for_ratiotest = ratiotest_relax_instance(runtime);
+@@ -364,7 +370,7 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim
+       }
+       redgrad.expand(buffer_yp);
+     } else {
+-      computesearchdirection_minor(runtime, basis, factor, redgrad, p);
++      computesearchdirection_minor(runtime, basis, factor, redgrad, p, scratch_g2);
+       computerowmove(runtime, basis, p, rowmove);
+       tidyup(p, rowmove, basis, runtime);
+       runtime.instance.Q.mat_vec(p, buffer_Qp);
+diff --git a/src/qpsolver/steepestedgepricing.hpp b/src/qpsolver/steepestedgepricing.hpp
+index 27c7e9823..fbed15cc7 100644
+--- a/src/qpsolver/steepestedgepricing.hpp
++++ b/src/qpsolver/steepestedgepricing.hpp
+@@ -15,8 +15,8 @@ class SteepestEdgePricing : public Pricing {
+   std::vector<double> weights;
+ 
+   HighsInt chooseconstrainttodrop(const Vector& lambda) {
+-    auto activeconstraintidx = basis.getactive();
+-    auto constraintindexinbasisfactor = basis.getindexinfactor();
++    const auto& activeconstraintidx = basis.getactive();
++    const auto& constraintindexinbasisfactor = basis.getindexinfactor();
+ 
+     HighsInt minidx = -1;
+     double maxval = 0.0;
+@@ -55,11 +55,12 @@ class SteepestEdgePricing : public Pricing {
+   SteepestEdgePricing(Runtime& rt, Basis& bas)
+       : runtime(rt),
+         basis(bas),
+-        weights(std::vector<double>(rt.instance.num_var, 1.0)){};
++        weights(std::vector<double>(rt.instance.num_var, 1.0)),
++        lambda_buffer(Vector(rt.instance.num_var)){};
+ 
+   HighsInt price(const Vector& x, const Vector& gradient) {
+-    Vector lambda = basis.ftran(gradient);
+-    HighsInt minidx = chooseconstrainttodrop(lambda);
++    basis.ftran(gradient, lambda_buffer);
++    HighsInt minidx = chooseconstrainttodrop(lambda_buffer);
+     return minidx;
+   }
+ 
+@@ -82,6 +83,9 @@ class SteepestEdgePricing : public Pricing {
+       }
+     }
+   }
++
++ private:
++  Vector lambda_buffer;
+ };
+ 
+ #endif

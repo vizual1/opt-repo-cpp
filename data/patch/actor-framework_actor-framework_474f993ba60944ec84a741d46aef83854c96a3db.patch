@@ -1,0 +1,52 @@
+diff --git a/libcaf_core/caf/actor_system.cpp b/libcaf_core/caf/actor_system.cpp
+index a5463d264..e91c31ee0 100644
+--- a/libcaf_core/caf/actor_system.cpp
++++ b/libcaf_core/caf/actor_system.cpp
+@@ -32,6 +32,7 @@
+ #include <fstream>
+ #include <limits>
+ #include <memory>
++#include <new>
+ #include <mutex>
+ #include <span>
+ #include <unordered_map>
+@@ -531,9 +532,13 @@ public:
+       CAF_SET_LOGGER_SYS(parent);
+     }
+     // Make sure we have a clock.
+-    if (!clock) {
+-      clock = std::make_unique<detail::thread_safe_actor_clock>(*parent);
+-    }
++    // For performance, defer creating the system clock until it's actually
++    // needed. Constructing the default thread-safe clock spawns a dedicated
++    // dispatcher thread which is relatively expensive. Lazily creating the
++    // clock avoids starting that thread for systems that never schedule
++    // timeouts or delayed messages.
++    // The clock will be created on-demand in actor_system::clock().
++    (void)clock;
+     // Make sure we have a scheduler up and running.
+     if (!scheduler) {
+       using defaults::scheduler::policy;
+@@ -755,6 +760,22 @@ const actor_system_config& actor_system::config() const {
+ }
+ 
+ actor_clock& actor_system::clock() noexcept {
++  // Lazily create the default clock to avoid spawning the dispatcher thread
++  // when no scheduling is required by the application. Creating the clock
++  // may allocate resources; use nothrow and abort via CAF_CRITICAL on failure
++  // to preserve the noexcept contract of this function.
++  if (!impl_->clock) {
++    try {
++      auto ptr = new (std::nothrow) detail::thread_safe_actor_clock(*this);
++      if (!ptr)
++        CAF_CRITICAL("unable to allocate actor clock");
++      impl_->clock.reset(ptr);
++    } catch (const std::exception& e) {
++      CAF_CRITICAL("unable to create actor clock: {}", e.what());
++    } catch (...) {
++      CAF_CRITICAL("unable to create actor clock: unknown error");
++    }
++  }
+   return *impl_->clock;
+ }
+ 

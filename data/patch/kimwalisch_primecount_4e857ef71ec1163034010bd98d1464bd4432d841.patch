@@ -1,0 +1,71 @@
+diff --git a/src/gourdon/StatusAC.cpp b/src/gourdon/StatusAC.cpp
+index 0f7a5e30..c0aca109 100644
+--- a/src/gourdon/StatusAC.cpp
++++ b/src/gourdon/StatusAC.cpp
+@@ -19,8 +19,8 @@
+ #include <algorithm>
+ #include <cmath>
+ #include <iomanip>
+-#include <sstream>
+ #include <string>
++#include <cstdio>
+ 
+ #if defined(_OPENMP)
+   #include <omp.h>
+@@ -41,15 +41,26 @@ namespace {
+ template <typename T>
+ double skewed_percent(T x, T y)
+ {
+-  double exp = 0.94;
++  // Fast-path for trivial cases
+   double percent = get_percent(x, y);
+-  double base = exp + percent / (101 / (1 - exp));
+-  double low = pow(base, 100.0);
+-  double dividend = pow(base, percent) - low;
+-  percent = 100 - (100 * dividend / (1 - low));
+-  percent = in_between(0, percent, 100);
++  if (percent <= 0.0)
++    return 0.0;
++  if (percent >= 100.0)
++    return 100.0;
+ 
+-  return percent;
++  // Constants hoisted out to avoid repeated computations
++  const double skew_exp = 0.94;
++  const double scale = 101.0 / (1.0 - skew_exp);
++
++  // Compute base and use pow only where necessary
++  double base = skew_exp + percent / scale;
++  double pow_base_percent = pow(base, percent);
++  double pow_base_100 = pow(base, 100.0);
++
++  double dividend = pow_base_percent - pow_base_100;
++  double result = 100.0 - (100.0 * dividend / (1.0 - pow_base_100));
++
++  return in_between(0.0, result, 100.0);
+ }
+ 
+ } // namespace
+@@ -77,9 +88,19 @@ void StatusAC::print(double percent)
+   if ((percent - old) >= epsilon_)
+   {
+     percent_ = percent;
+-    ostringstream status;
+-    status << "\rStatus: " << fixed << setprecision(precision_) << percent << "%";
+-    cout << status.str() << flush;
++
++    // Use a small stack buffer and snprintf to avoid expensive
++    // iostream temporary allocations and locale overhead.
++    char buf[64];
++    int len = std::snprintf(buf, sizeof(buf), "\rStatus: %.*f%%", precision_, percent);
++    if (len < 0)
++      return;
++    if (len >= (int)sizeof(buf))
++      len = (int)sizeof(buf) - 1;
++
++    // Write directly to cout (faster than creating ostringstream)
++    cout.write(buf, len);
++    cout.flush();
+   }
+ }
+ 

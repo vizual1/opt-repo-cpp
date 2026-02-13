@@ -1,0 +1,15 @@
+diff --git a/src/quick-lint-js/event-loop.h b/src/quick-lint-js/event-loop.h
+index 1ac2b2b1..ccbc8d4a 100644
+--- a/src/quick-lint-js/event-loop.h
++++ b/src/quick-lint-js/event-loop.h
+@@ -237,7 +237,9 @@ class kqueue_event_loop : public event_loop_base<Derived> {
+           break;
+         }
+       }
+-      this->derived().on_fs_changed_kevents();
++      if (fs_changed) {
++        this->derived().on_fs_changed_kevents();
++      }
+     }
+   }
+ 

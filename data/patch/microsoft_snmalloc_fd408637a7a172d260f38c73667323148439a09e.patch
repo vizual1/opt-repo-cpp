@@ -1,0 +1,43 @@
+diff --git a/src/ds/mpmcstack.h b/src/ds/mpmcstack.h
+index d7a4f92..b701c05 100644
+--- a/src/ds/mpmcstack.h
++++ b/src/ds/mpmcstack.h
+@@ -11,7 +11,7 @@ namespace snmalloc
+     using ABAT = ABA<T, c>;
+ 
+   private:
+-    ABAT stack;
++    alignas(CACHELINE_SIZE) ABAT stack;
+ 
+   public:
+     constexpr MPMCStack() = default;
+diff --git a/src/mem/chunkallocator.h b/src/mem/chunkallocator.h
+index 0a8e41e..c38f934 100644
+--- a/src/mem/chunkallocator.h
++++ b/src/mem/chunkallocator.h
+@@ -20,7 +20,7 @@ namespace snmalloc
+   struct ChunkRecord
+   {
+     MetaCommon meta_common;
+-    std::atomic<ChunkRecord*> next;
++    alignas(CACHELINE_SIZE) std::atomic<ChunkRecord*> next;
+   };
+   static_assert(std::is_standard_layout_v<ChunkRecord>);
+   static_assert(
+diff --git a/src/mem/pool.h b/src/mem/pool.h
+index 0c470c7..8855fab 100644
+--- a/src/mem/pool.h
++++ b/src/mem/pool.h
+@@ -28,9 +28,9 @@ namespace snmalloc
+     friend class Pool;
+ 
+   private:
+-    std::atomic_flag lock = ATOMIC_FLAG_INIT;
+-    MPMCStack<T, PreZeroed> stack;
+-    T* list{nullptr};
++    alignas(CACHELINE_SIZE) std::atomic_flag lock = ATOMIC_FLAG_INIT;
++    alignas(CACHELINE_SIZE) MPMCStack<T, PreZeroed> stack;
++    alignas(CACHELINE_SIZE) T* list{nullptr};
+ 
+   public:
+     constexpr PoolState() = default;

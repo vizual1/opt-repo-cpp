@@ -1,0 +1,188 @@
+diff --git a/src/common/gizmosql_library.cpp b/src/common/gizmosql_library.cpp
+index 2fd5fc8..3e77a73 100644
+--- a/src/common/gizmosql_library.cpp
++++ b/src/common/gizmosql_library.cpp
+@@ -20,6 +20,7 @@
+ #include <cstdlib>
+ #include <csignal>
+ #include <iostream>
++#include <chrono>
+ #include <filesystem>
+ #include <regex>
+ #include <vector>
+diff --git a/src/common/health_service.cpp b/src/common/health_service.cpp
+index 713c418..28480ce 100644
+--- a/src/common/health_service.cpp
++++ b/src/common/health_service.cpp
+@@ -24,8 +24,49 @@
+ 
+ namespace gizmosql {
+ 
+-GizmoSQLHealthServiceImpl::GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn)
+-    : health_check_fn_(std::move(health_check_fn)) {}
++GizmoSQLHealthServiceImpl::GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn,
++                                                     std::chrono::milliseconds cache_ttl)
++    : health_check_fn_(std::move(health_check_fn)),
++      cache_ttl_(cache_ttl) {
++  // Initialize the last check time to a value that forces an immediate check on first call
++  last_check_time_ms_.store(0);
++  last_status_.store(false);
++}
++
++// Helper to get cached health status, refreshing the cached value only when
++// the cache ttl has expired. Uses double-checked locking to avoid contention
++// on frequent concurrent checks.
++static long long NowMs() {
++  return std::chrono::duration_cast<std::chrono::milliseconds>(
++             std::chrono::steady_clock::now().time_since_epoch())
++      .count();
++}
++
++bool GizmoSQLHealthServiceImpl::GetCachedHealth() {
++  auto now_ms = NowMs();
++  auto last_ms = last_check_time_ms_.load(std::memory_order_acquire);
++  if (now_ms - last_ms < cache_ttl_.count() && last_ms != 0) {
++    return last_status_.load(std::memory_order_relaxed);
++  }
++
++  std::lock_guard<std::mutex> lock(check_mutex_);
++  // Re-read after acquiring lock
++  last_ms = last_check_time_ms_.load(std::memory_order_acquire);
++  if (now_ms - last_ms < cache_ttl_.count() && last_ms != 0) {
++    return last_status_.load(std::memory_order_relaxed);
++  }
++
++  bool is_healthy = false;
++  try {
++    is_healthy = health_check_fn_();
++  } catch (...) {
++    is_healthy = false;
++  }
++
++  last_status_.store(is_healthy, std::memory_order_release);
++  last_check_time_ms_.store(NowMs(), std::memory_order_release);
++  return is_healthy;
++}
+ 
+ grpc::Status GizmoSQLHealthServiceImpl::Check(
+     grpc::ServerContext* context,
+@@ -36,20 +77,10 @@ grpc::Status GizmoSQLHealthServiceImpl::Check(
+                       << ", service: "
+                       << (service_name.empty() ? "(empty/all)" : service_name);
+ 
+-  // Perform the health check by calling the provided function
+-  bool is_healthy = false;
+-  try {
+-    is_healthy = health_check_fn_();
+-  } catch (...) {
+-    // If the health check throws, consider the service unhealthy
+-    is_healthy = false;
+-  }
++  bool is_healthy = GetCachedHealth();
+ 
+-  if (is_healthy) {
+-    response->set_status(grpc::health::v1::HealthCheckResponse::SERVING);
+-  } else {
+-    response->set_status(grpc::health::v1::HealthCheckResponse::NOT_SERVING);
+-  }
++  response->set_status(is_healthy ? grpc::health::v1::HealthCheckResponse::SERVING
++                                   : grpc::health::v1::HealthCheckResponse::NOT_SERVING);
+ 
+   GIZMOSQL_LOG(DEBUG) << "Health check result: "
+                       << (is_healthy ? "SERVING" : "NOT_SERVING");
+@@ -69,12 +100,7 @@ grpc::Status GizmoSQLHealthServiceImpl::Watch(
+   // Send the initial status
+   grpc::health::v1::HealthCheckResponse response;
+ 
+-  bool is_healthy = false;
+-  try {
+-    is_healthy = health_check_fn_();
+-  } catch (...) {
+-    is_healthy = false;
+-  }
++  bool is_healthy = GetCachedHealth();
+ 
+   response.set_status(is_healthy ? grpc::health::v1::HealthCheckResponse::SERVING
+                                  : grpc::health::v1::HealthCheckResponse::NOT_SERVING);
+@@ -93,11 +119,7 @@ grpc::Status GizmoSQLHealthServiceImpl::Watch(
+   while (!context->IsCancelled() && !shutdown_.load()) {
+     std::this_thread::sleep_for(std::chrono::seconds(5));
+ 
+-    try {
+-      is_healthy = health_check_fn_();
+-    } catch (...) {
+-      is_healthy = false;
+-    }
++    is_healthy = GetCachedHealth();
+ 
+     // Only send update if status changed
+     if (is_healthy != last_status) {
+diff --git a/src/common/include/detail/health_service.h b/src/common/include/detail/health_service.h
+index 8d93dca..e4bc717 100644
+--- a/src/common/include/detail/health_service.h
++++ b/src/common/include/detail/health_service.h
+@@ -21,6 +21,8 @@
+ #include <functional>
+ #include <memory>
+ #include <string>
++#include <chrono>
++#include <mutex>
+ 
+ #include <grpcpp/grpcpp.h>
+ #include "grpc/health/v1/health.grpc.pb.h"
+@@ -33,17 +35,22 @@ using HealthCheckFn = std::function<bool()>;
+ 
+ /// Custom gRPC Health service implementation for GizmoSQL.
+ /// This service performs a real-time health check by executing "SELECT 1"
+-/// on the underlying database backend on each Check() call.
++/// on the underlying database backend on each Check() call. To avoid
++/// excessive backend load, results are cached for a short duration
++/// (cache_ttl_). This reduces redundant database checks when many
++/// health probes arrive concurrently.
+ class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service {
+  public:
+   /// Construct a health service with the given health check function.
+   /// @param health_check_fn Function that returns true if the service is healthy.
+-  explicit GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn);
++  /// @param cache_ttl Duration to cache health results to avoid frequent backend calls.
++  explicit GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn,
++                                     std::chrono::milliseconds cache_ttl = std::chrono::milliseconds(1000));
+ 
+   ~GizmoSQLHealthServiceImpl() override = default;
+ 
+   /// Perform a synchronous health check.
+-  /// Calls the health_check_fn_ to determine the serving status.
++  /// Calls the health_check_fn_ (subject to caching) to determine the serving status.
+   /// @param context The gRPC server context.
+   /// @param request The health check request (service name is ignored).
+   /// @param response The health check response with serving status.
+@@ -54,8 +61,8 @@ class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service
+ 
+   /// Watch for health status changes (streaming).
+   /// This implementation sends the current health status immediately, then
+-  /// periodically (every 5 seconds) polls the health status and sends updates
+-  /// to the client whenever the status changes, until the context is cancelled.
++  /// periodically (every 5 seconds) polls the health status (using cached results)
++  /// and sends updates to the client whenever the status changes, until the context is cancelled.
+   /// @param context The gRPC server context.
+   /// @param request The health check request (service name is ignored).
+   /// @param writer The response writer for streaming status updates.
+@@ -70,6 +77,18 @@ class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service
+  private:
+   HealthCheckFn health_check_fn_;
+   std::atomic<bool> shutdown_{false};
++
++  // Helper that obtains the cached health status, refreshing when TTL expires.
++  bool GetCachedHealth();
++
++  // Cached health check result to avoid frequent backend calls
++  std::atomic<bool> last_status_{false};
++  // Time of last check in milliseconds since steady_clock epoch
++  std::atomic<long long> last_check_time_ms_{0};
++  // How long to cache results
++  std::chrono::milliseconds cache_ttl_{1000};
++  // Protects concurrent refreshes of the cached value
++  std::mutex check_mutex_;
+ };
+ 
+ }  // namespace gizmosql

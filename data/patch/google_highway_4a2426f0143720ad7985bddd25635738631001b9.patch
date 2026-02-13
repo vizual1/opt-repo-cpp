@@ -1,0 +1,28 @@
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index bf23eb13..557b4033 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -486,16 +486,20 @@ namespace detail {
+ // 32 bit mask is sufficient for lane size >= 2.
+ template <typename T, HWY_IF_NOT_T_SIZE(T, 1)>
+ HWY_INLINE Mask512<T> FirstN(size_t n) {
++  // Avoid using BMI2 BZHI here; on some microarchitectures scalar
++  // operations are faster and produce better codegen. Use portable
++  // scalar arithmetic which the compiler can optimize into immediates
++  // or efficient sequences.
+   Mask512<T> m;
+   const uint32_t all = ~uint32_t{0};
+-  // BZHI only looks at the lower 8 bits of n!
+-  m.raw = static_cast<decltype(m.raw)>((n > 255) ? all : _bzhi_u32(all, n));
++  const uint32_t bits = (n >= 32) ? all : static_cast<uint32_t>((n == 0) ? 0u : ((1u << n) - 1u));
++  m.raw = static_cast<decltype(m.raw)>(bits);
+   return m;
+ }
+ 
+ template <typename T, HWY_IF_T_SIZE(T, 1)>
+ HWY_INLINE Mask512<T> FirstN(size_t n) {
+-  const uint64_t bits = n < 64 ? ((1ULL << n) - 1) : ~uint64_t{0};
++  const uint64_t bits = (n >= 64) ? ~uint64_t{0} : (n == 0 ? 0ULL : ((1ULL << n) - 1ULL));
+   return Mask512<T>{static_cast<__mmask64>(bits)};
+ }
+ 

@@ -1,0 +1,24 @@
+diff --git a/hwy/ops/x86_512-inl.h b/hwy/ops/x86_512-inl.h
+index ee26bdf7..73442793 100644
+--- a/hwy/ops/x86_512-inl.h
++++ b/hwy/ops/x86_512-inl.h
+@@ -2552,10 +2552,19 @@ HWY_API Mask512<T> ExclusiveNeither(Mask512<T> a, Mask512<T> b) {
+ 
+ // ------------------------------ BroadcastSignBit (ShiftRight, compare, mask)
+ 
++#if HWY_TARGET <= HWY_AVX3_DL
++HWY_API Vec512<int8_t> BroadcastSignBit(Vec512<int8_t> v) {
++  // On AVX3_DL, arithmetic right shift by 7 broadcasts the sign bit to all
++  // lanes and is typically faster than comparing to zero and converting to a
++  // mask.
++  return ShiftRight<7>(v);
++}
++#else
+ HWY_API Vec512<int8_t> BroadcastSignBit(Vec512<int8_t> v) {
+   const DFromV<decltype(v)> d;
+   return VecFromMask(v < Zero(d));
+ }
++#endif
+ 
+ HWY_API Vec512<int16_t> BroadcastSignBit(Vec512<int16_t> v) {
+   return ShiftRight<15>(v);

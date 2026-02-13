@@ -1,0 +1,68 @@
+diff --git a/include/xsimd/arch/xsimd_sse2.hpp b/include/xsimd/arch/xsimd_sse2.hpp
+index 63893cd..363ff08 100644
+--- a/include/xsimd/arch/xsimd_sse2.hpp
++++ b/include/xsimd/arch/xsimd_sse2.hpp
+@@ -1071,7 +1071,20 @@ namespace xsimd
+         template <class A, bool... Values, class Mode>
+         XSIMD_INLINE batch<float, A> load_masked(float const* mem, batch_bool_constant<float, A, Values...> mask, Mode, requires_arch<sse2>) noexcept
+         {
+-            XSIMD_IF_CONSTEXPR(mask.countr_one() == 2)
++            XSIMD_IF_CONSTEXPR(mask.countr_one() == 1)
++            {
++                // only the first (lowest-index) element selected -> load scalar into low lane, zeros elsewhere
++                return _mm_move_ss(_mm_setzero_ps(), _mm_load_ss(mem));
++            }
++            else XSIMD_IF_CONSTEXPR(mask.countl_one() == 1)
++            {
++                // only the last (highest-index) element selected -> load scalar and shift to high lane
++                __m128 tmp = _mm_load_ss(mem + 3);
++                __m128i ti = _mm_castps_si128(tmp);
++                ti = _mm_slli_si128(ti, 12); // shift left by 12 bytes to move low float to highest lane
++                return _mm_castsi128_ps(ti);
++            }
++            else XSIMD_IF_CONSTEXPR(mask.countr_one() == 2)
+             {
+                 return _mm_loadl_pi(_mm_setzero_ps(), reinterpret_cast<__m64 const*>(mem));
+             }
+@@ -1105,7 +1118,20 @@ namespace xsimd
+         template <class A, bool... Values, class Mode>
+         XSIMD_INLINE void store_masked(float* mem, batch<float, A> const& src, batch_bool_constant<float, A, Values...> mask, Mode, requires_arch<sse2>) noexcept
+         {
+-            XSIMD_IF_CONSTEXPR(mask.countr_one() == 2)
++            XSIMD_IF_CONSTEXPR(mask.countr_one() == 1)
++            {
++                // only the first (lowest-index) element selected -> store low lane scalar
++                _mm_store_ss(mem, src);
++            }
++            else XSIMD_IF_CONSTEXPR(mask.countl_one() == 1)
++            {
++                // only the last (highest-index) element selected -> shift to low lane and store
++                __m128i ti = _mm_castps_si128(src);
++                ti = _mm_srli_si128(ti, 12); // move highest 4 bytes to lowest
++                __m128 tmp = _mm_castsi128_ps(ti);
++                _mm_store_ss(mem + 3, tmp);
++            }
++            else XSIMD_IF_CONSTEXPR(mask.countr_one() == 2)
+             {
+                 _mm_storel_pi(reinterpret_cast<__m64*>(mem), src);
+             }
+@@ -2173,7 +2199,18 @@ namespace xsimd
+                                        aligned_mode,
+                                        requires_arch<sse2>) noexcept
+         {
+-            XSIMD_IF_CONSTEXPR(mask.countr_one() == 2)
++            XSIMD_IF_CONSTEXPR(mask.countr_one() == 1)
++            {
++                _mm_store_ss(mem, src);
++            }
++            else XSIMD_IF_CONSTEXPR(mask.countl_one() == 1)
++            {
++                __m128i ti = _mm_castps_si128(src);
++                ti = _mm_srli_si128(ti, 12); // move highest 4 bytes to lowest
++                __m128 tmp = _mm_castsi128_ps(ti);
++                _mm_store_ss(mem + 3, tmp);
++            }
++            else XSIMD_IF_CONSTEXPR(mask.countr_one() == 2)
+             {
+                 _mm_storel_pi(reinterpret_cast<__m64*>(mem), src);
+             }

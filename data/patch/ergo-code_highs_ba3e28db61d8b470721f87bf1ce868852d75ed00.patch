@@ -1,0 +1,56 @@
+diff --git a/src/qpsolver/quass.cpp b/src/qpsolver/quass.cpp
+index 216982324..ab00e0ba3 100644
+--- a/src/qpsolver/quass.cpp
++++ b/src/qpsolver/quass.cpp
+@@ -91,10 +91,10 @@ static Vector& computesearchdirection_minor(Runtime& rt, Basis& bas,
+ // VECTOR
+ static Vector& computesearchdirection_major(Runtime& runtime, Basis& basis,
+                                      CholeskyFactor& factor, const Vector& yp,
+-                                     Gradient& gradient, Vector& gyp, Vector& l,
++                                     const Vector& gradVec, Vector& gyp, Vector& l,
+                                      Vector& m, Vector& p) {
+   Vector yyp = yp;
+-  // if (gradient.getGradient().dot(yp) > 0.0) {
++  // if (gradVec.dot(yp) > 0.0) {
+   //   yyp.scale(-1.0);
+   // }
+   runtime.instance.Q.mat_vec(yyp, gyp);
+@@ -105,14 +105,14 @@ static Vector& computesearchdirection_major(Runtime& runtime, Basis& basis,
+     Vector v = l;
+     factor.solveLT(v);
+     basis.Zprod(v, p);
+-    if (gradient.getGradient().dot(yyp) < 0.0) {
++    if (gradVec.dot(yyp) < 0.0) {
+       return p.saxpy(-1.0, 1.0, yyp);
+     } else {
+       return p.saxpy(-1.0, -1.0, yyp);
+     }
+ 
+   } else {
+-    return p.repopulate(yp).scale(-gradient.getGradient().dot(yp));
++    return p.repopulate(yp).scale(-gradVec.dot(yp));
+     // return -yp;
+   }
+ }
+@@ -346,7 +346,7 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim
+ 
+       buffer_l.dim = basis.getnuminactive();
+       buffer_m.dim = basis.getnuminactive();
+-      computesearchdirection_major(runtime, basis, factor, buffer_yp, gradient,
++      computesearchdirection_major(runtime, basis, factor, buffer_yp, gradient.getGradient(),
+                                    buffer_gyp, buffer_l, buffer_m, p);
+       basis.deactivate(minidx);
+       computerowmove(runtime, basis, p, rowmove);
+diff --git a/src/qpsolver/settings.hpp b/src/qpsolver/settings.hpp
+index 59224a8d9..cb00c7306 100644
+--- a/src/qpsolver/settings.hpp
++++ b/src/qpsolver/settings.hpp
+@@ -37,7 +37,7 @@ struct Settings {
+   Eventhandler<Statistics&> endofiterationevent;
+ 
+   HighsInt reinvertfrequency = 100;
+-  HighsInt gradientrecomputefrequency = 1;
++  HighsInt gradientrecomputefrequency = std::numeric_limits<HighsInt>::infinity();
+   HighsInt reducedgradientrecomputefrequency =
+       std::numeric_limits<HighsInt>::infinity();
+   HighsInt reducedhessianrecomputefrequency =

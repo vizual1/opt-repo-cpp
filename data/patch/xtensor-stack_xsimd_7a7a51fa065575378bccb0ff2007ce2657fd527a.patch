@@ -1,0 +1,76 @@
+diff --git a/include/xsimd/arch/xsimd_avx.hpp b/include/xsimd/arch/xsimd_avx.hpp
+index 40b25f6..3e59104 100644
+--- a/include/xsimd/arch/xsimd_avx.hpp
++++ b/include/xsimd/arch/xsimd_avx.hpp
+@@ -24,6 +24,8 @@ namespace xsimd
+     namespace kernel
+     {
+         using namespace types;
++        // AVX integer comparison optimizations applied in AVX2 implementation
++
+ 
+         namespace detail
+         {
+diff --git a/include/xsimd/arch/xsimd_avx2.hpp b/include/xsimd/arch/xsimd_avx2.hpp
+index f6f95da..9f10641 100644
+--- a/include/xsimd/arch/xsimd_avx2.hpp
++++ b/include/xsimd/arch/xsimd_avx2.hpp
+@@ -288,6 +288,58 @@ namespace xsimd
+             }
+         }
+ 
++        // lt
++        template <class A, class T, class = typename std::enable_if<std::is_integral<T>::value, void>::type>
++        inline batch_bool<T, A> lt(batch<T, A> const& self, batch<T, A> const& other, requires_arch<avx2>)
++        {
++            if (std::is_signed<T>::value)
++            {
++                switch (sizeof(T))
++                {
++                case 1:
++                    return _mm256_cmpgt_epi8(other, self);
++                case 2:
++                    return _mm256_cmpgt_epi16(other, self);
++                case 4:
++                    return _mm256_cmpgt_epi32(other, self);
++                case 8:
++                    return _mm256_cmpgt_epi64(other, self);
++                default:
++                    return lt(self, other, avx {});
++                }
++            }
++            else
++            {
++                return lt(self, other, avx {});
++            }
++        }
++
++        // le
++        template <class A, class T, class = typename std::enable_if<std::is_integral<T>::value, void>::type>
++        inline batch_bool<T, A> le(batch<T, A> const& self, batch<T, A> const& other, requires_arch<avx2>)
++        {
++            if (std::is_signed<T>::value)
++            {
++                switch (sizeof(T))
++                {
++                case 1:
++                    return _mm256_or_si256(_mm256_cmpgt_epi8(other, self), _mm256_cmpeq_epi8(self, other));
++                case 2:
++                    return _mm256_or_si256(_mm256_cmpgt_epi16(other, self), _mm256_cmpeq_epi16(self, other));
++                case 4:
++                    return _mm256_or_si256(_mm256_cmpgt_epi32(other, self), _mm256_cmpeq_epi32(self, other));
++                case 8:
++                    return _mm256_or_si256(_mm256_cmpgt_epi64(other, self), _mm256_cmpeq_epi64(self, other));
++                default:
++                    return le(self, other, avx {});
++                }
++            }
++            else
++            {
++                return le(self, other, avx {});
++            }
++        }
++
+         // hadd
+         template <class A, class T, class = typename std::enable_if<std::is_integral<T>::value, void>::type>
+         inline T hadd(batch<T, A> const& self, requires_arch<avx2>)

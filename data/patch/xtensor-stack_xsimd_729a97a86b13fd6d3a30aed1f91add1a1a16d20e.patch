@@ -1,0 +1,62 @@
+diff --git a/include/xsimd/arch/xsimd_neon.hpp b/include/xsimd/arch/xsimd_neon.hpp
+index 4d6bb14..ad9a0d7 100644
+--- a/include/xsimd/arch/xsimd_neon.hpp
++++ b/include/xsimd/arch/xsimd_neon.hpp
+@@ -808,6 +808,19 @@ namespace xsimd
+                 return vcvtq_s32_f32(self);
+             }
+ 
++            template <class A>
++            inline batch<float, A> fast_cast(batch<uint32_t, A> const& v, batch<float, A> const&, requires_arch<neon>) noexcept
++            {
++                // see similar implementations for SSE/AVX: split 32-bit unsigned into hi/lo 16-bit parts
++                const uint32x4_t msk_lo = vdupq_n_u32(0xFFFFu);
++                const uint32x4_t v_lo = vandq_u32(v, msk_lo);
++                const uint32x4_t v_hi = vshrq_n_u32(v, 16);
++                const float32x4_t v_lo_flt = vcvtq_f32_s32(vreinterpretq_s32_u32(v_lo));
++                float32x4_t v_hi_flt = vcvtq_f32_s32(vreinterpretq_s32_u32(v_hi));
++                v_hi_flt = vmulq_n_f32(v_hi_flt, 65536.0f);
++                return vaddq_f32(v_hi_flt, v_lo_flt);
++            }
++
+         }
+ 
+         /******
+diff --git a/include/xsimd/arch/xsimd_neon64.hpp b/include/xsimd/arch/xsimd_neon64.hpp
+index 4ac46e5..f1a3641 100644
+--- a/include/xsimd/arch/xsimd_neon64.hpp
++++ b/include/xsimd/arch/xsimd_neon64.hpp
+@@ -354,6 +354,33 @@ namespace xsimd
+                 return vcvtq_s64_f64(x);
+             }
+ 
++            template <class A>
++            inline batch<double, A> fast_cast(batch<uint64_t, A> const& x, batch<double, A> const&, requires_arch<neon64>) noexcept
++            {
++                // Fallback scalar conversion per lane for unsigned 64-bit to double.
++                // AArch64 intrinsics for direct conversion from uint64 to double are not universally available,
++                // so we do lane-wise conversion using store/load which is portable and correct.
++                uint64_t tmp_u[2];
++                vst1q_u64(tmp_u, x);
++                double tmp_d[2];
++                tmp_d[0] = static_cast<double>(tmp_u[0]);
++                tmp_d[1] = static_cast<double>(tmp_u[1]);
++                return vld1q_f64(tmp_d);
++            }
++
++            template <class A>
++            inline batch<float, A> fast_cast(batch<uint32_t, A> const& v, batch<float, A> const&, requires_arch<neon64>) noexcept
++            {
++                // see similar implementations for SSE/AVX: split 32-bit unsigned into hi/lo 16-bit parts
++                const uint32x4_t msk_lo = vdupq_n_u32(0xFFFFu);
++                const uint32x4_t v_lo = vandq_u32(v, msk_lo);
++                const uint32x4_t v_hi = vshrq_n_u32(v, 16);
++                const float32x4_t v_lo_flt = vcvtq_f32_s32(vreinterpretq_s32_u32(v_lo));
++                float32x4_t v_hi_flt = vcvtq_f32_s32(vreinterpretq_s32_u32(v_hi));
++                v_hi_flt = vmulq_n_f32(v_hi_flt, 65536.0f);
++                return vaddq_f32(v_hi_flt, v_lo_flt);
++            }
++
+         }
+ 
+         /******

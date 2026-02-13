@@ -1,0 +1,71 @@
+diff --git a/Binary_Search/2141.Maximum-Running-Time-of-N-Computers/2141.Maximum-Running-Time-of-N-Computers.cpp b/Binary_Search/2141.Maximum-Running-Time-of-N-Computers/2141.Maximum-Running-Time-of-N-Computers.cpp
+index 69833605..3427e8cc 100644
+--- a/Binary_Search/2141.Maximum-Running-Time-of-N-Computers/2141.Maximum-Running-Time-of-N-Computers.cpp
++++ b/Binary_Search/2141.Maximum-Running-Time-of-N-Computers/2141.Maximum-Running-Time-of-N-Computers.cpp
+@@ -1,36 +1,46 @@
++#include <vector>
++#include <algorithm>
++#include <numeric>
++#include <climits>
++
+ using LL = long long;
+-class Solution {    
++using std::vector;
++
++class Solution {
+ public:
+     long long maxRunTime(int n, vector<int>& batteries) 
+     {
+-        LL left = 0, right = LLONG_MAX/2;
+-        // sort(batteries.rbegin(), batteries.rend());
+-        
++        if (n <= 0) return 0;
++        LL total = std::accumulate(batteries.begin(), batteries.end(), 0LL);
++        LL left = 0;
++        LL right = total / n; // upper bound: average battery per computer
++        if (right == 0) return 0;
++
+         while (left < right)
+         {
+-            LL mid = right-(right-left)/2;
+-            if (checkOK(mid, batteries, n))            
+-                left = mid;                            
++            LL mid = right - (right - left) / 2; // ceil middlex
++            if (checkOK(mid, batteries, n))
++                left = mid;
+             else
+-                right = mid-1;                
++                right = mid - 1;
+         }
+-        return left;                
++        return left;
+     }
+-    
+-    bool checkOK(LL T, vector<int>&nums, int n)
++
++    bool checkOK(LL T, const vector<int>& nums, int n)
+     {
+-        int count = 0;
+-        LL cur = 0;        
+-        for (int i=0; i<nums.size(); i++)
++        if (T == 0) return true;
++        LL count = 0;
++        LL cur = 0;
++        for (int v : nums)
+         {
+-            cur+=min((LL)nums[i], T);
+-            while (cur >= T)
++            cur += std::min((LL)v, T);
++            if (cur >= T)
+             {
+-                count++;
+-                cur-=T;
++                count += cur / T;
++                cur %= T;
++                if (count >= n) return true;
+             }
+-            if (count >= n)
+-                return true;
+         }
+         return false;
+     }

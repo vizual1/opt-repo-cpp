@@ -1,0 +1,21 @@
+diff --git a/src/algorithm/construct/MaximumInscribedCircle.cpp b/src/algorithm/construct/MaximumInscribedCircle.cpp
+index a39640227..889e34daf 100644
+--- a/src/algorithm/construct/MaximumInscribedCircle.cpp
++++ b/src/algorithm/construct/MaximumInscribedCircle.cpp
+@@ -192,6 +192,16 @@ MaximumInscribedCircle::isRadiusWithin(double maxRadius)
+         return false;
+     }
+     maximumRadius = maxRadius;
++
++    // Fast envelope-based rejection: if the envelope is smaller than the
++    // diameter in either dimension, the maximum inscribed circle cannot
++    // exceed maxRadius.
++    double maxDiam = 2 * maximumRadius;
++    const Envelope* env = inputGeom->getEnvelopeInternal();
++    if (env->getWidth() < maxDiam || env->getHeight() < maxDiam) {
++        return true;
++    }
++
+     tolerance = maxRadius * MAX_RADIUS_FRACTION;
+     compute();
+     double radius = centerPt.distance(radiusPt);

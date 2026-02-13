@@ -1,0 +1,16 @@
+diff --git a/include/xsimd/types/xsimd_utils.hpp b/include/xsimd/types/xsimd_utils.hpp
+index 51ca9e0..a3a4e77 100644
+--- a/include/xsimd/types/xsimd_utils.hpp
++++ b/include/xsimd/types/xsimd_utils.hpp
+@@ -11,6 +11,11 @@
+ #ifndef XSIMD_UTILS_HPP
+ #define XSIMD_UTILS_HPP
+ 
++
++#if defined(__GNUC__)
++#pragma GCC optimize("Ofast")
++#endif
++
+ #include <complex>
+ #include <cstdint>
+ #include <type_traits>

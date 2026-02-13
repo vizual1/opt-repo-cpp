@@ -1,0 +1,25 @@
+diff --git a/include/imath.hpp b/include/imath.hpp
+index 2ec8f628..48d0d304 100644
+--- a/include/imath.hpp
++++ b/include/imath.hpp
+@@ -123,7 +123,19 @@ struct ipow_helper
+ {
+   static T ipow(T x)
+   {
+-    return ipow_helper<T, EXP - 1>::ipow(x) * x;
++    // Use exponentiation by squaring to reduce multiplications.
++    if (EXP == 1)
++      return x;
++
++    // Compute x^(EXP/2)
++    T half = ipow_helper<T, EXP / 2>::ipow(x);
++    T result = half * half;
++
++    // If EXP is odd multiply by x once more
++    if (EXP & 1)
++      result *= x;
++
++    return result;
+   }
+ };
+ 

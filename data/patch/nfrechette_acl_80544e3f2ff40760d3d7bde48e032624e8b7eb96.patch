@@ -1,0 +1,38 @@
+diff --git a/external/benchmark b/external/benchmark
+--- a/external/benchmark
++++ b/external/benchmark
+@@ -1 +1 @@
+-Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415
++Subproject commit 0d98dba29d66e93259db7daa53a9327df767a415-dirty
+diff --git a/external/catch2 b/external/catch2
+--- a/external/catch2
++++ b/external/catch2
+@@ -1 +1 @@
+-Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
++Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
+diff --git a/external/rtm b/external/rtm
+--- a/external/rtm
++++ b/external/rtm
+@@ -1 +1 @@
+-Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686
++Subproject commit 2a2ba0f93b5ff034753d068828c6199e19e27686-dirty
+diff --git a/external/sjson-cpp b/external/sjson-cpp
+--- a/external/sjson-cpp
++++ b/external/sjson-cpp
+@@ -1 +1 @@
+-Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6
++Subproject commit 54b3985e8ccc5efb5f24dabf0b4b802a996366e6-dirty
+diff --git a/includes/acl/decompression/impl/steps/animated_unpack_vec3.h b/includes/acl/decompression/impl/steps/animated_unpack_vec3.h
+index 1d0fa653..fc67d545 100644
+--- a/includes/acl/decompression/impl/steps/animated_unpack_vec3.h
++++ b/includes/acl/decompression/impl/steps/animated_unpack_vec3.h
+@@ -70,6 +70,9 @@ namespace acl
+ 			uint32_t animated_track_data_bit_offset = segment_sampling_context.animated_track_data_bit_offset;
+ 
+ 			const uint8_t* clip_range_data = clip_sampling_context.clip_range_data;
++			const uint32_t clip_range_entry_size = 3 * sizeof(float);
++			const uint8_t* clip_range_ptr = clip_range_data;
++			
+ 
+ 			rtm::vector4f* output_scratch_ptr = &output_scratch[0];
+ 

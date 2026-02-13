@@ -1,0 +1,97 @@
+diff --git a/src/lint.cpp b/src/lint.cpp
+index 6058920c..a8d29da6 100644
+--- a/src/lint.cpp
++++ b/src/lint.cpp
+@@ -104,11 +104,13 @@ void global_declared_variable_set::add_predefined_global_variable(
+     const char8 *name, bool is_writable) {
+   this->variables_.emplace_back(global_declared_variable{
+       .name = name, .is_writable = is_writable, .is_shadowable = true});
++  this->variables_map_.clear();
+ }
+ 
+ void global_declared_variable_set::add_global_variable(
+     global_declared_variable global_variable) {
+   this->variables_.emplace_back(global_variable);
++  this->variables_map_.clear();
+ }
+ 
+ std::optional<global_declared_variable> global_declared_variable_set::find(
+@@ -118,6 +120,26 @@ std::optional<global_declared_variable> global_declared_variable_set::find(
+ 
+ std::optional<global_declared_variable> global_declared_variable_set::find(
+     string8_view name) const noexcept {
++  // Ensure the hash map is built.
++  if (this->variables_map_.empty()) {
++    // Exception safety: this function is noexcept, but to_string can throw. We
++    // guard by doing the heavy work in a non-throwing manner: convert keys into
++    // local vector then populate the map. However, since we're not allowed to
++    // change function signatures, we'll keep it simple: attempt to build the
++    // map and fall back to linear search on failure.
++    try {
++      this->rebuild_map();
++    } catch (...) {
++      // If building the map fails for any reason, fall back to linear search.
++    }
++  }
++
++  auto it = this->variables_map_.find(name);
++  if (it != this->variables_map_.end()) {
++    return this->variables_[it->second];
++  }
++
++  // Fallback linear search.
+   for (const global_declared_variable &var : this->variables_) {
+     if (var.name == name) {
+       return var;
+@@ -126,6 +148,14 @@ std::optional<global_declared_variable> global_declared_variable_set::find(
+   return std::nullopt;
+ }
+ 
++void global_declared_variable_set::rebuild_map() const {
++  this->variables_map_.clear();
++  for (std::size_t i = 0; i < this->variables_.size(); ++i) {
++    const global_declared_variable &var = this->variables_[i];
++    this->variables_map_.emplace(var.name, i);
++  }
++}
++
+ linter::linter(error_reporter *error_reporter,
+                const global_declared_variable_set *global_variables)
+     : global_scope_(global_variables), error_reporter_(error_reporter) {}
+diff --git a/src/quick-lint-js/lint.h b/src/quick-lint-js/lint.h
+index f6068b10..91c2c23c 100644
+--- a/src/quick-lint-js/lint.h
++++ b/src/quick-lint-js/lint.h
+@@ -11,6 +11,9 @@
+ #include <quick-lint-js/parse-visitor.h>
+ #include <string>
+ #include <vector>
++#include <unordered_map>
++#include <cstring>
++#include <functional>
+ 
+ namespace quick_lint_js {
+ struct global_declared_variable {
+@@ -31,9 +34,22 @@ class global_declared_variable_set {
+   std::optional<global_declared_variable> find(identifier name) const noexcept;
+   std::optional<global_declared_variable> find(string8_view name) const
+       noexcept;
++  void rebuild_map() const;
+ 
+  private:
+   std::vector<global_declared_variable> variables_;
++  struct string8_view_hash {
++    std::size_t operator()(string8_view sv) const noexcept {
++      return std::hash<std::string_view>()(to_string_view(sv));
++    }
++  };
++  struct string8_view_equal {
++    bool operator()(string8_view a, string8_view b) const noexcept {
++      return a == b;
++    }
++  };
++
++  mutable std::unordered_map<string8_view, std::size_t, string8_view_hash, string8_view_equal> variables_map_;
+ };
+ 
+ // A linter is a parse_visitor which finds non-syntax bugs.

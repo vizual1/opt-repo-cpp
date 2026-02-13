@@ -1,0 +1,29 @@
+diff --git a/capi/geos_ts_c.cpp b/capi/geos_ts_c.cpp
+index e166e112a..7bf38edb3 100644
+--- a/capi/geos_ts_c.cpp
++++ b/capi/geos_ts_c.cpp
+@@ -1494,7 +1494,7 @@ extern "C" {
+     GEOSCoverageUnion_r(GEOSContextHandle_t extHandle, const Geometry* g)
+     {
+         return execute(extHandle, [&]() {
+-            auto g3 = geos::operation::geounion::CoverageUnion::Union(g);
++            auto g3 = geos::operation::overlayng::CoverageUnion::geomunion(g);
+             g3->setSRID(g->getSRID());
+             return g3.release();
+         });
+diff --git a/src/coverage/CoverageUnion.cpp b/src/coverage/CoverageUnion.cpp
+index 4ff5e5fe2..4b49e2df6 100644
+--- a/src/coverage/CoverageUnion.cpp
++++ b/src/coverage/CoverageUnion.cpp
+@@ -36,6 +36,11 @@ CoverageUnion::Union(std::vector<const Geometry*>& coverage)
+     if (coverage.size() == 0)
+         return nullptr;
+ 
++    if (coverage.size() == 1) {
++        // shortcut: single geometry -> return a clone directly without creating a collection
++        return std::unique_ptr<Geometry>(coverage[0]->clone());
++    }
++
+     //TODO? spatial sort polgyons to improve performance
+     // Test results are somewhat inconclusive
+     //shape::fractal::HilbertEncoder::sort(coverage.begin(), coverage.end());

@@ -1,0 +1,26 @@
+diff --git a/src/ccache.cpp b/src/ccache.cpp
+index 7d39e5bb..8410e646 100644
+--- a/src/ccache.cpp
++++ b/src/ccache.cpp
+@@ -398,16 +398,16 @@ do_remember_include_file(Context& ctx,
+     return true;
+   }
+ 
+-  if (ctx.included_files.find(path) != ctx.included_files.end()) {
+-    // Already known include file.
+-    return true;
+-  }
+-
+   // Canonicalize path for comparison; Clang uses ./header.h.
+   if (Util::starts_with(path, "./")) {
+     path.erase(0, 2);
+   }
+ 
++  if (ctx.included_files.find(path) != ctx.included_files.end()) {
++    // Already known include file.
++    return true;
++  }
++
+ #ifdef _WIN32
+   {
+     // stat fails on directories on win32.

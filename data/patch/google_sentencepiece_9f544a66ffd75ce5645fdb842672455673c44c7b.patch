@@ -1,0 +1,15 @@
+diff --git a/src/unigram_model_trainer.cc b/src/unigram_model_trainer.cc
+index e5dc8c0..aeb0d77 100644
+--- a/src/unigram_model_trainer.cc
++++ b/src/unigram_model_trainer.cc
+@@ -119,6 +119,10 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePieces() const {
+         all_chars[string_util::UnicodeCharToUTF8(c)] += w.second;
+       }
+     }
++    // Inserts a sentence boundary marker between sentences. This helps the
++    // suffix-array extraction skip substrings crossing sentence boundaries and
++    // dramatically speeds up training.
++    array.push_back(kSentenceBoundary);
+   }
+ 
+   CHECK_LE(array.size(),

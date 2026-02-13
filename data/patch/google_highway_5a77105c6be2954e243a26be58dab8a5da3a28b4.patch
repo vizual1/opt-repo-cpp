@@ -1,0 +1,27 @@
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index a410da4a..4aefdf81 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -237,8 +237,11 @@ HWY_NOINLINE void PartitionToMultipleOfUnroll(D d, Traits st,
+     readL += N;
+ 
+     const auto comp = st.Compare(d, pivot, vL);
+-    left += CompressBlendedStore(vL, Not(comp), d, keys + left);
++    // First write matching lanes into the temporary buffer (safe to overwrite),
++    // then write the non-matching lanes into the destination without touching
++    // subsequent elements.
+     bufR += CompressStore(vL, comp, d, buf + bufR);
++    left += CompressBlendedStore(vL, Not(comp), d, keys + left);
+   }
+   // Last iteration: only use valid lanes.
+   if (HWY_LIKELY(i != num_rem)) {
+@@ -246,8 +249,8 @@ HWY_NOINLINE void PartitionToMultipleOfUnroll(D d, Traits st,
+     const Vec<D> vL = LoadU(d, keys + readL);
+ 
+     const auto comp = st.Compare(d, pivot, vL);
+-    left += CompressBlendedStore(vL, AndNot(comp, mask), d, keys + left);
+     bufR += CompressStore(vL, And(comp, mask), d, buf + bufR);
++    left += CompressBlendedStore(vL, AndNot(comp, mask), d, keys + left);
+   }
+ 
+   // MSAN seems not to understand CompressStore. buf[0, bufR) are valid.

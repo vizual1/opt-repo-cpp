@@ -661,10 +661,9 @@ class CMakeProcess:
     # set chmod -R 777 to /test_workspace/workspace/new
     # delete /test_workspace/workspace/new
     def _del_new(self) -> bool:
-        cmd = [
-            "chmod", "-R", "777", "/test_workspace/workspace/new", "&&",
-            "rm", "-rf", "/test_workspace/workspace/new"
-        ]
+        cmd = ["chmod", "-R", "777", "/test_workspace/workspace/new"]
+        exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
+        cmd = ["rm", "-rf", "/test_workspace/workspace/new"]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
         if exit_code != 0:
             logging.error(f"Deleting new (patched) commit failed with exit code {exit_code}: {' '.join(map(str, cmd))}")

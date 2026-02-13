@@ -1,0 +1,126 @@
+diff --git a/include/bvh/bottom_up_algorithm.hpp b/include/bvh/bottom_up_algorithm.hpp
+index b8ccdb7..dec0bec 100644
+--- a/include/bvh/bottom_up_algorithm.hpp
++++ b/include/bvh/bottom_up_algorithm.hpp
+@@ -3,6 +3,7 @@
+ 
+ #include <memory>
+ #include <cstddef>
++#include <algorithm>
+ 
+ #include "bvh/bvh.hpp"
+ #include "bvh/platform.hpp"
+@@ -30,6 +31,13 @@ protected:
+         if (MaintainChildIndices)
+             children = std::make_unique<size_t[]>(bvh.node_count);
+ 
++        // Initialize arrays to stable values to avoid undefined behavior and
++        // improve cache behavior during parallel traversal.
++        std::fill_n(parents.get(), bvh.node_count, size_t(0));
++        std::fill_n(flags.get(), bvh.node_count, 0);
++        if (MaintainChildIndices)
++            std::fill_n(children.get(), bvh.node_count, size_t(0));
++
+         parents[0] = 0;
+ 
+         // Compute parent/children indices
+diff --git a/include/bvh/hierarchy_refitter.hpp b/include/bvh/hierarchy_refitter.hpp
+index f1b6b69..95a8b60 100644
+--- a/include/bvh/hierarchy_refitter.hpp
++++ b/include/bvh/hierarchy_refitter.hpp
+@@ -7,31 +7,30 @@
+ namespace bvh {
+ 
+ template <typename Bvh>
+-class HierarchyRefitter : public BottomUpAlgorithm<Bvh> {
+-    using BottomUpAlgorithm<Bvh>::bvh;
+-    using BottomUpAlgorithm<Bvh>::traverse;
++class HierarchyRefitter : public BottomUpAlgorithm<Bvh, true> {
++    using BottomUpAlgorithm<Bvh, true>::bvh;
++    using BottomUpAlgorithm<Bvh, true>::traverse;
+ 
+ public:
+     HierarchyRefitter(Bvh& bvh)
+-        : BottomUpAlgorithm<Bvh>(bvh)
++        : BottomUpAlgorithm<Bvh, true>(bvh)
+     {}
+ 
+     template <typename UpdateLeaf>
+     void refit(const UpdateLeaf& update_leaf) {
+-        #pragma omp parallel
+-        {
+-            // Refit every node of the tree in parallel
+-            traverse(
+-                [&] (size_t i) { update_leaf(bvh.nodes[i]); },
+-                [&] (size_t i) {
+-                    auto& node = bvh.nodes[i];
+-                    auto first_child = node.first_child_or_primitive;
+-                    node.bounding_box_proxy() = bvh.nodes[first_child + 0]
+-                        .bounding_box_proxy()
+-                        .to_bounding_box()
+-                        .extend(bvh.nodes[first_child + 1].bounding_box_proxy());
+-                });
+-        }
++        // Refit every node of the tree in parallel. This function must be called
++        // from within an OpenMP parallel region so that traverse() can use
++        // parallel for without creating nested parallel regions.
++        traverse(
++            [&] (size_t i) { update_leaf(bvh.nodes[i]); },
++            [&] (size_t i) {
++                auto& node = bvh.nodes[i];
++                auto first_child = node.first_child_or_primitive;
++                node.bounding_box_proxy() = bvh.nodes[first_child + 0]
++                    .bounding_box_proxy()
++                    .to_bounding_box()
++                    .extend(bvh.nodes[first_child + 1].bounding_box_proxy());
++            });
+     }
+ };
+ 
+diff --git a/include/bvh/parallel_reinsertion_optimizer.hpp b/include/bvh/parallel_reinsertion_optimizer.hpp
+index 4858768..0bed42f 100644
+--- a/include/bvh/parallel_reinsertion_optimizer.hpp
++++ b/include/bvh/parallel_reinsertion_optimizer.hpp
+@@ -5,6 +5,7 @@
+ 
+ #include "bvh/bvh.hpp"
+ #include "bvh/sah_based_algorithm.hpp"
++#include "bvh/hierarchy_refitter.hpp"
+ 
+ namespace bvh {
+ 
+@@ -160,6 +161,11 @@ public:
+         auto outs  = std::make_unique<Insertion[]>(bvh.node_count);
+ 
+         auto old_cost = compute_cost(bvh);
++        // Create a HierarchyRefitter to perform parallel refits of the tree
++        // after the reinsertions. Construct it outside of the parallel region
++        // (it asserts not in parallel in its constructor).
++        HierarchyRefitter<Bvh> refitter(bvh);
++
+         for (size_t iteration = 0; ; ++iteration) {
+             size_t first_node = iteration % u + 1;
+ 
+@@ -209,14 +215,14 @@ public:
+                         reinsert(i, outs[i].first);
+                 }
+ 
+-                // Refit the nodes that have changed
+-                #pragma omp for
+-                for (size_t i = first_node; i < bvh.node_count; i += u) {
+-                    if (outs[i].second > 0) {
+-                        refit(i);
+-                        refit(outs[i].first);
+-                    }
+-                }
++                // Refit the nodes that have changed. Instead of repeatedly refitting
++                // individual paths, perform a single parallel refit of the hierarchy
++                // which is often faster for many small changes.
++                refitter.refit([&] (auto & /*node*/) {
++                    // No per-leaf update required: reinsert already maintained
++                    // leaf/inner relationships and bounding boxes where necessary.
++                    // Leave empty to avoid extra work.
++                });
+             }
+ 
+             // Compare the old SAH cost to the new one and decrease the number

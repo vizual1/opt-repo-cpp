@@ -1,0 +1,38 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index fda60fe7..781ef3e8 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -63,6 +63,14 @@ public:
+     auto root = pow((double) limit, 1.0 / 2.5);
+     auto u16_max = numeric_limits<uint16_t>::max();
+     max_x_ = min((uint64_t) root, u16_max);
++
++    // Pre-allocate cache vectors to avoid expensive resizing and copies
++    // during recursive calls and parallel regions.
++    if (max_x_ > 0)
++    {
++      for (size_t i = 0; i < cache_.size(); ++i)
++        cache_[i].reserve((size_t) max_x_ + 1);
++    }
+   }
+ 
+   /// Returns a vector with phi(x, i - 1) values such that
+diff --git a/src/phi.cpp b/src/phi.cpp
+index b0c08ef3..7f71597d 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -62,6 +62,14 @@ public:
+     auto root = pow((double) x, 1.0 / 2.5);
+     auto u16_max = numeric_limits<uint16_t>::max();
+     max_x_ = min((uint64_t) root, u16_max);
++
++    // Pre-allocate cache vectors to avoid expensive resizing and copies
++    // during recursive calls and parallel regions.
++    if (max_x_ > 0)
++    {
++      for (size_t i = 0; i < cache_.size(); ++i)
++        cache_[i].assign((size_t) max_x_ + 1, 0);
++    }
+   }
+ 
+   /// Calculate phi(x, a) using the recursive formula:

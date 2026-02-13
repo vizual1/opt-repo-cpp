@@ -149,6 +149,7 @@ class ProcessFilter:
         process.set_flags(flags)
         new = not docker_image
         if self.config.testdocker or self.config.testpatch:
+            process.docker_image = self.config.docker_image
             process.set_docker(container_name, new)
             process.docker.start_docker_container(container_name, cpuset_cpus)
             process.container = process.docker.container

@@ -1,0 +1,142 @@
+diff --git a/src/libprojectM/MilkdropPreset/MilkdropPreset.cpp b/src/libprojectM/MilkdropPreset/MilkdropPreset.cpp
+index 656a7e655..5ebd9e3e8 100755
+--- a/src/libprojectM/MilkdropPreset/MilkdropPreset.cpp
++++ b/src/libprojectM/MilkdropPreset/MilkdropPreset.cpp
+@@ -156,21 +156,7 @@ void MilkdropPreset::RenderFrame(const libprojectM::Audio::FrameAudioData& audio
+         m_flipTexture.Draw(m_framebuffer.GetColorAttachmentTexture(m_previousFrameBuffer, 0), m_framebuffer, m_previousFrameBuffer, true, false);
+     }
+ 
+-    // TEST: Copy result to default framebuffer
+-    m_framebuffer.BindRead(m_previousFrameBuffer);
+-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+-    glReadBuffer(GL_COLOR_ATTACHMENT0);
+-#if USE_GLES
+-    {
+-        GLenum drawBuffers[] = {GL_BACK};
+-        glDrawBuffers(1, drawBuffers);
+-    }
+-#else
+-    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+-#endif
+-    glBlitFramebuffer(0, 0, renderContext.viewportSizeX, renderContext.viewportSizeY,
+-                      0, 0, renderContext.viewportSizeX, renderContext.viewportSizeY,
+-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
++    // Final composited image will be drawn by the higher-level renderer (ProjectM) via a textured draw call.
+ 
+     // Swap framebuffers for the next frame.
+     std::swap(m_currentFrameBuffer, m_previousFrameBuffer);
+diff --git a/src/libprojectM/ProjectM.cpp b/src/libprojectM/ProjectM.cpp
+index 7b965e878..ae1118208 100644
+--- a/src/libprojectM/ProjectM.cpp
++++ b/src/libprojectM/ProjectM.cpp
+@@ -219,7 +219,18 @@ void ProjectM::RenderFrame()
+ 
+     if (m_transition != nullptr && m_transitioningPreset != nullptr)
+     {
++        // Use a textured draw call for the final transition instead of blitting framebuffers.
++        // This avoids an extra fullscreen blit and allows the transition shader to composite directly
++        // onto the default framebuffer.
+         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
++        // Draw active preset's output as the base
++        auto activeTexture = m_activePreset->OutputTexture();
++        if (activeTexture)
++        {
++            m_copyTexture.DrawToScreen(activeTexture, renderContext.viewportSizeX, renderContext.viewportSizeY, true, false);
++        }
++
++        // Let the transition shader draw over the default framebuffer, using the active and transitioning textures
+         m_transition->Draw(*m_activePreset, *m_transitioningPreset, renderContext, audioData);
+     }
+ 
+diff --git a/src/libprojectM/ProjectM.hpp b/src/libprojectM/ProjectM.hpp
+index 8f9b69684..5e8b9cefd 100644
+--- a/src/libprojectM/ProjectM.hpp
++++ b/src/libprojectM/ProjectM.hpp
+@@ -257,6 +257,12 @@ private:
+     std::unique_ptr<Preset> m_transitioningPreset;                      //!< Destination preset when smooth preset switching.
+     std::unique_ptr<PresetTransition> m_transition;                     //!< Transition effect used for blending.
+     std::unique_ptr<TimeKeeper> m_timeKeeper;                           //!< Keeps the different timers used to render and switch presets.
++	std::unique_ptr<PresetTransition> m_transition;                     //!< Transition effect used for blending.
++	std::unique_ptr<TimeKeeper> m_timeKeeper;                           //!< Keeps the different timers used to render and switch presets.
++
++	// Helper used to draw textures to screen without a framebuffer blit
++	CopyTexture m_copyTexture;
++
+ 
+ #if PROJECTM_USE_THREADS
+     mutable std::recursive_mutex m_presetSwitchMutex;   //!< Mutex for locking preset switching while rendering and vice versa.
+diff --git a/src/libprojectM/Renderer/CopyTexture.cpp b/src/libprojectM/Renderer/CopyTexture.cpp
+index ac99cba81..98ea1890e 100644
+--- a/src/libprojectM/Renderer/CopyTexture.cpp
++++ b/src/libprojectM/Renderer/CopyTexture.cpp
+@@ -202,6 +202,41 @@ void CopyTexture::Copy(bool flipVertical, bool flipHorizontal) const
+     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+     glBindVertexArray(0);
+ 
++    glBindTexture(GL_TEXTURE_2D, 0);
++    Sampler::Unbind(0);
++    Shader::Unbind();
++}
++
++void CopyTexture::DrawToScreen(const std::shared_ptr<class Texture>& originalTexture, int width, int height,
++                      bool flipVertical, bool flipHorizontal)
++{
++    if (originalTexture == nullptr)
++    {
++        return;
++    }
++
++    UpdateTextureSize(width, height);
++
++    if (m_width == 0 || m_height == 0)
++    {
++        return;
++    }
++
++    // Bind default framebuffer for drawing
++    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
++    glViewport(0, 0, width, height);
++
++    // Bind texture and draw a fullscreen quad
++    originalTexture->Bind(0);
++    m_shader.Bind();
++    m_shader.SetUniformInt("texture_sampler", 0);
++    m_shader.SetUniformInt2("flip", {flipHorizontal ? 1 : 0, flipVertical ? 1 : 0});
++    m_sampler.Bind(0);
++
++    glBindVertexArray(m_vaoID);
++    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++    glBindVertexArray(0);
++
+     glBindTexture(GL_TEXTURE_2D, 0);
+     Sampler::Unbind(0);
+     Shader::Unbind();
+diff --git a/src/libprojectM/Renderer/CopyTexture.hpp b/src/libprojectM/Renderer/CopyTexture.hpp
+index a2059fdbb..35ac623d8 100644
+--- a/src/libprojectM/Renderer/CopyTexture.hpp
++++ b/src/libprojectM/Renderer/CopyTexture.hpp
+@@ -48,6 +48,18 @@ public:
+      */
+     auto Texture() -> std::shared_ptr<class Texture>;
+ 
++    /**
++     * @brief Draw the given texture directly to the default framebuffer (screen).
++     * This replaces the previous use of glBlitFramebuffer() and performs a textured draw instead.
++     * @param originalTexture The texture to draw to the screen.
++     * @param width The viewport width to draw into.
++     * @param height The viewport height to draw into.
++     * @param flipVertical Flip image on the y axis when drawing.
++     * @param flipHorizontal Flip image on the x axis when drawing.
++     */
++    void DrawToScreen(const std::shared_ptr<class Texture>& originalTexture, int width, int height,
++                      bool flipVertical  = false, bool flipHorizontal = false);
++
+ private:
+     /**
+      * Updates the mesh
+diff --git a/vendor/projectm-eval b/vendor/projectm-eval
+--- a/vendor/projectm-eval
++++ b/vendor/projectm-eval
+@@ -1 +1 @@
+-Subproject commit 4fe4690e07284418d93a139708e8a89bf28720f1
++Subproject commit 4fe4690e07284418d93a139708e8a89bf28720f1-dirty

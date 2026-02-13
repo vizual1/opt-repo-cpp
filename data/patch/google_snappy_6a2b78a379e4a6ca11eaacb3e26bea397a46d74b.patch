@@ -1,0 +1,47 @@
+diff --git a/snappy-internal.h b/snappy-internal.h
+index ae7ab5a..d47e5da 100644
+--- a/snappy-internal.h
++++ b/snappy-internal.h
+@@ -231,7 +231,15 @@ static inline std::pair<size_t, bool> FindMatchLength(const char* s1,
+       int shift = Bits::FindLSBSetNonZero64(xorval);
+       size_t matched_bytes = shift >> 3;
+ #ifndef __x86_64__
+-      *data = UNALIGNED_LOAD64(s2 + matched_bytes);
++      {
++        uint64_t a3 = UNALIGNED_LOAD64(s2 + 4);
++        /* Use a conditional select to encourage ARM backends to emit a csel
++         * instruction instead of a branch. Comparing the lower 32 bits of
++         * xorval matches the original logic (matched_bytes < 4).
++         */
++        a2 = (static_cast<uint32_t>(xorval) == 0) ? a3 : a2;
++        *data = a2 >> (shift & (3 * 8));
++      }
+ #else
+       // Ideally this would just be
+       //
+@@ -271,7 +279,12 @@ static inline std::pair<size_t, bool> FindMatchLength(const char* s1,
+       int shift = Bits::FindLSBSetNonZero64(xorval);
+       size_t matched_bytes = shift >> 3;
+ #ifndef __x86_64__
+-      *data = UNALIGNED_LOAD64(s2 + matched_bytes);
++      {
++        uint64_t a3 = UNALIGNED_LOAD64(s2 + 4);
++        uint64_t mask = -(uint64_t)(((uint32_t)xorval) == 0);
++        a2 = (a2 & ~mask) | (a3 & mask);
++        *data = a2 >> (shift & (3 * 8));
++      }
+ #else
+       uint64_t a3 = UNALIGNED_LOAD64(s2 + 4);
+       asm("testl %k2, %k2\n\t"
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

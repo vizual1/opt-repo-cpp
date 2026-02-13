@@ -1,0 +1,92 @@
+diff --git a/include/bvh/locally_ordered_clustering_builder.hpp b/include/bvh/locally_ordered_clustering_builder.hpp
+index 412c004..9ac64ad 100644
+--- a/include/bvh/locally_ordered_clustering_builder.hpp
++++ b/include/bvh/locally_ordered_clustering_builder.hpp
+@@ -2,6 +2,7 @@
+ #define BVH_LOCALLY_ORDERED_CLUSTERING_BUILDER_HPP
+ 
+ #include <numeric>
++#include <vector>
+ 
+ #include "bvh/morton_code_based_builder.hpp"
+ #include "bvh/prefix_sum.hpp"
+@@ -39,9 +40,24 @@ class LocallyOrderedClusteringBuilder : public MortonCodeBasedBuilder<Bvh, Morto
+         size_t next_begin = 0;
+         size_t next_end   = 0;
+ 
++        size_t n = end - begin;
++        using BBox = BoundingBox<Scalar>;
++
++        // Precompute bounding boxes for the current level to avoid repeated
++        // conversions from bounding_box_proxy() to BoundingBox objects.
++        std::vector<BBox> boxes(n);
++        for (size_t k = begin; k < end; ++k)
++            boxes[k - begin] = input[k].bounding_box_proxy().to_bounding_box();
++
+         #pragma omp parallel if (end - begin > loop_parallel_threshold)
+         {
+-            // Nearest neighbor search
++            const size_t window = search_radius * 2 + 1;
++
++            // Per-thread cache for pairwise distances within the search window.
++            // Indexed as: (i - begin) * window + (j - i + search_radius)
++            std::vector<Scalar> dist_cache(n * window, std::numeric_limits<Scalar>::max());
++
++            // Nearest neighbor search using cached distances and precomputed boxes.
+             #pragma omp for
+             for (size_t i = begin; i < end; ++i) {
+                 size_t search_begin = i > begin + search_radius   ? i - search_radius     : begin;
+@@ -51,11 +67,21 @@ class LocallyOrderedClusteringBuilder : public MortonCodeBasedBuilder<Bvh, Morto
+                 for (size_t j = search_begin; j < search_end; ++j) {
+                     if (j == i)
+                         continue;
+-                    auto distance = input[i]
+-                        .bounding_box_proxy()
+-                        .to_bounding_box()
+-                        .extend(input[j].bounding_box_proxy())
+-                        .half_area();
++                    // Compute index into per-thread cache
++                    size_t off_i = i - begin;
++                    size_t offset = off_i * window + (j - i + search_radius);
++                    Scalar distance = dist_cache[offset];
++                    if (distance == std::numeric_limits<Scalar>::max()) {
++                        // Compute once and store symmetrically (if within window)
++                        distance = boxes[off_i].extend(boxes[j - begin]).half_area();
++                        dist_cache[offset] = distance;
++                        size_t off_j = j - begin;
++                        if (off_j < n) {
++                            size_t offset_sym = off_j * window + (i - j + search_radius);
++                            if (offset_sym < dist_cache.size())
++                                dist_cache[offset_sym] = distance;
++                        }
++                    }
+                     if (distance < best_distance) {
+                         best_distance = distance;
+                         best_neighbor = j;
+@@ -69,7 +95,7 @@ class LocallyOrderedClusteringBuilder : public MortonCodeBasedBuilder<Bvh, Morto
+             #pragma omp for
+             for (size_t i = begin; i < end; ++i) {
+                 auto j = neighbors[i];
+-                bool is_mergeable = neighbors[j] == i;
++                bool is_mergeable = (j < previous_end) && (neighbors[j] == i);
+                 merged_index[i] = i < j && is_mergeable ? 1 : 0;
+             }
+ 
+@@ -92,14 +118,12 @@ class LocallyOrderedClusteringBuilder : public MortonCodeBasedBuilder<Bvh, Morto
+             #pragma omp for nowait
+             for (size_t i = begin; i < end; ++i) {
+                 auto j = neighbors[i];
+-                if (neighbors[j] == i) {
++                if (j < previous_end && neighbors[j] == i) {
+                     if (i < j) {
+                         auto& unmerged_node = output[unmerged_begin + j - begin - merged_index[j]];
+                         auto first_child = children_begin + (merged_index[i] - 1) * 2;
+-                        unmerged_node.bounding_box_proxy() = input[j]
+-                            .bounding_box_proxy()
+-                            .to_bounding_box()
+-                            .extend(input[i].bounding_box_proxy());
++                        // Use precomputed boxes to build parent bounding box.
++                        unmerged_node.bounding_box_proxy() = boxes[j - begin].extend(boxes[i - begin]);
+                         unmerged_node.is_leaf = false;
+                         unmerged_node.first_child_or_primitive = first_child;
+                         output[first_child + 0] = input[i];

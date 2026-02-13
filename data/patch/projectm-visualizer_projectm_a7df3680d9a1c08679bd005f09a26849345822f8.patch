@@ -1,0 +1,138 @@
+diff --git a/src/libprojectM/MilkdropPreset/Border.cpp b/src/libprojectM/MilkdropPreset/Border.cpp
+index 2cebe2a54..ff1844a14 100644
+--- a/src/libprojectM/MilkdropPreset/Border.cpp
++++ b/src/libprojectM/MilkdropPreset/Border.cpp
+@@ -6,12 +6,22 @@ namespace MilkdropPreset {
+ Border::Border(PresetState& presetState)
+     : RenderItem()
+     , m_presetState(presetState)
++    , m_mesh(Renderer::VertexBufferUsage::StreamDraw)
+ {
+     RenderItem::Init();
++
++    // Configure mesh to draw the border ring with a single triangle strip per border.
++    m_mesh.SetRenderPrimitiveType(Renderer::Mesh::PrimitiveType::TriangleStrip);
++    m_mesh.SetUseColor(true);
++    m_mesh.SetVertexCount(8); // 4 corners * (outer, inner)
++
++    // Let Mesh create its GL buffers.
++    m_mesh.Update();
+ }
+ 
+ void Border::InitVertexAttrib()
+ {
++    // Preserve the original RenderItem attribute setup for compatibility.
+     glEnableVertexAttribArray(0);
+     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+     glDisableVertexAttribArray(1);
+@@ -26,9 +36,6 @@ void Border::Draw(const PerFrameContext& presetPerFrameContext)
+     float const outerBorderSize = static_cast<float>(*presetPerFrameContext.ob_size);
+     float const innerBorderSize = static_cast<float>(*presetPerFrameContext.ib_size);
+ 
+-    glBindVertexArray(m_vaoID);
+-    glBindBuffer(GL_ARRAY_BUFFER, m_vboID);
+-
+     // No additive drawing for borders
+     glEnable(GL_BLEND);
+     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+@@ -37,7 +44,7 @@ void Border::Draw(const PerFrameContext& presetPerFrameContext)
+     shader->Bind();
+     shader->SetUniformMat4x4("vertex_transformation", PresetState::orthogonalProjection);
+ 
+-    std::array<Point, 4> vertices{};
++    // Use Mesh to draw each border in a single draw call (triangle strip with 8 vertices)
+     for (int border = 0; border < 2; border++)
+     {
+         float r = (border == 0) ? static_cast<float>(*presetPerFrameContext.ob_r) : static_cast<float>(*presetPerFrameContext.ib_r);
+@@ -47,45 +54,38 @@ void Border::Draw(const PerFrameContext& presetPerFrameContext)
+ 
+         if (a > 0.001f)
+         {
+-            glVertexAttrib4f(1, r, g, b, a);
+-
+             float innerRadius = (border == 0) ? 1.0f - outerBorderSize : 1.0f - outerBorderSize - innerBorderSize;
+             float outerRadius = (border == 0) ? 1.0f : 1.0f - outerBorderSize;
+ 
+-            vertices[0].x = innerRadius;
+-            vertices[1].x = outerRadius;
+-            vertices[2].x = outerRadius;
+-            vertices[3].x = innerRadius;
+-            vertices[0].y = innerRadius;
+-            vertices[1].y = outerRadius;
+-            vertices[2].y = -outerRadius;
+-            vertices[3].y = -innerRadius;
+-
+-            for (int rot = 0; rot < 4; rot++)
++            // Arrange vertices for a triangle strip: outerTR, innerTR, outerTL, innerTL, outerBL, innerBL, outerBR, innerBR
++            std::array<Renderer::Point, 8> verts{
++                Renderer::Point( outerRadius,  outerRadius), // outer TR
++                Renderer::Point( innerRadius,  innerRadius), // inner TR
++                Renderer::Point(-outerRadius,  outerRadius), // outer TL
++                Renderer::Point(-innerRadius,  innerRadius), // inner TL
++                Renderer::Point(-outerRadius, -outerRadius), // outer BL
++                Renderer::Point(-innerRadius, -innerRadius), // inner BL
++                Renderer::Point( outerRadius, -outerRadius), // outer BR
++                Renderer::Point( innerRadius, -innerRadius)  // inner BR
++            };
++
++            // Update mesh vertices and colors
++            for (uint32_t i = 0; i < 8; ++i)
+             {
+-                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Point) * 4, vertices.data());
+-                glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+-
+-                // Rotate 90 degrees
+-                // Milkdrop code calculates cos(PI/2) and sin(PI/2), which is 0 and 1 respectively.
+-                // Our code here simplifies the expressions accordingly.
+-                for (int vertex = 0; vertex < 4; vertex++)
+-                {
+-                    float const x = vertices[vertex].x;
+-                    float const y = vertices[vertex].y;
+-                    vertices[vertex].x = -y; // x * cos(PI/2) - y * sin(PI/2) == x * 0 - y * 1
+-                    vertices[vertex].y = x;  // x * sin(PI/2) + y * cos(PI/2) == x * 1 + y * 0
+-                }
++                m_mesh.SetVertex(i, verts[i]);
++                m_mesh.SetColor(i, Renderer::Color(r, g, b, a));
+             }
++
++            m_mesh.Update();
++            m_mesh.Draw();
+         }
+     }
+ 
+     Renderer::Shader::Unbind();
+ 
+     glDisable(GL_BLEND);
+-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+-    glBindVertexArray(0);
+ }
+ 
+ } // namespace MilkdropPreset
+ } // namespace libprojectM
++
+diff --git a/src/libprojectM/MilkdropPreset/Border.hpp b/src/libprojectM/MilkdropPreset/Border.hpp
+index 8b258f6d0..cac66e56f 100644
+--- a/src/libprojectM/MilkdropPreset/Border.hpp
++++ b/src/libprojectM/MilkdropPreset/Border.hpp
+@@ -4,6 +4,7 @@
+ #include "PresetState.hpp"
+ 
+ #include "Renderer/RenderItem.hpp"
++#include "Renderer/Mesh.hpp"
+ 
+ namespace libprojectM {
+ namespace MilkdropPreset {
+@@ -29,6 +30,7 @@ public:
+ 
+ private:
+     PresetState& m_presetState; //!< The global preset state.
++    Renderer::Mesh m_mesh{Renderer::VertexBufferUsage::StreamDraw}; //!< Mesh used to draw borders with indices.
+ };
+ 
+ } // namespace MilkdropPreset
+diff --git a/vendor/projectm-eval b/vendor/projectm-eval
+--- a/vendor/projectm-eval
++++ b/vendor/projectm-eval
+@@ -1 +1 @@
+-Subproject commit 02900174d9d346c38307937b710e901881bc40ea
++Subproject commit 02900174d9d346c38307937b710e901881bc40ea-dirty

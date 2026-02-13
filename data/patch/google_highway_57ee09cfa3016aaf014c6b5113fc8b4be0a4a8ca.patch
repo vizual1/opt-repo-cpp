@@ -1,0 +1,16 @@
+diff --git a/hwy/contrib/sort/vqsort-inl.h b/hwy/contrib/sort/vqsort-inl.h
+index 02d88bc3..1cc5b578 100644
+--- a/hwy/contrib/sort/vqsort-inl.h
++++ b/hwy/contrib/sort/vqsort-inl.h
+@@ -277,7 +277,10 @@ HWY_INLINE void StoreLeftRight(D d, Traits st, const Vec<D> v,
+   writeL += num_left;
+ 
+   writeR -= (N - num_left);
+-  (void)CompressBlendedStore(v, comp, d, keys + writeR);
++  // Writing the right-side partition can be done with CompressStore into the
++  // starting address, avoiding an extra blend on some targets (notably AVX2
++  // with 64-bit lanes) where blended stores are expensive.
++  (void)CompressStore(v, comp, d, keys + writeR);
+ }
+ 
+ template <class D, class Traits, typename T>

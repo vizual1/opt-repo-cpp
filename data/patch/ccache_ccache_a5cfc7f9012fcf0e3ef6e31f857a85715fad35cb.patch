@@ -1,0 +1,132 @@
+diff --git a/src/core/FileRecompressor.cpp b/src/core/FileRecompressor.cpp
+index da66dc30..602a6a57 100644
+--- a/src/core/FileRecompressor.cpp
++++ b/src/core/FileRecompressor.cpp
+@@ -34,7 +34,7 @@ FileRecompressor::recompress(const DirEntry& dir_entry,
+                              std::optional<int8_t> level,
+                              KeepAtime keep_atime)
+ {
+-  core::CacheEntry::Header header(dir_entry.path().string());
++  core::CacheEntry::Header header(dir_entry.path());
+ 
+   const int8_t wanted_level =
+     level ? (*level == 0 ? core::CacheEntry::default_compression_level : *level)
+@@ -44,8 +44,8 @@ FileRecompressor::recompress(const DirEntry& dir_entry,
+ 
+   if (header.compression_level != wanted_level) {
+     const auto cache_file_data = util::value_or_throw<core::Error>(
+-      util::read_file<util::Bytes>(dir_entry.path().string()),
+-      FMT("Failed to read {}: ", dir_entry.path().string()));
++      util::read_file<util::Bytes>(dir_entry.path()),
++      FMT("Failed to read {}: ", dir_entry.path()));
+     core::CacheEntry cache_entry(cache_file_data);
+     cache_entry.verify_checksum();
+ 
+@@ -54,19 +54,16 @@ FileRecompressor::recompress(const DirEntry& dir_entry,
+       level ? core::CompressionType::zstd : core::CompressionType::none;
+     header.compression_level = wanted_level;
+ 
+-    AtomicFile new_cache_file(dir_entry.path().string(),
+-                              AtomicFile::Mode::binary);
++    AtomicFile new_cache_file(dir_entry.path(), AtomicFile::Mode::binary);
+     new_cache_file.write(
+       core::CacheEntry::serialize(header, cache_entry.payload()));
+     new_cache_file.commit();
+-    new_dir_entry =
+-      DirEntry(dir_entry.path().string(), DirEntry::LogOnError::yes);
++    new_dir_entry = DirEntry(dir_entry.path(), DirEntry::LogOnError::yes);
+   }
+ 
+   // Restore mtime/atime to keep cache LRU cleanup working as expected:
+   if (keep_atime == KeepAtime::yes || new_dir_entry) {
+-    util::set_timestamps(
+-      dir_entry.path().string(), dir_entry.mtime(), dir_entry.atime());
++    util::set_timestamps(dir_entry.path(), dir_entry.mtime(), dir_entry.atime());
+   }
+ 
+   m_content_size += util::likely_size_on_disk(header.entry_size);
+diff --git a/src/core/mainoptions.cpp b/src/core/mainoptions.cpp
+index 37d45fee..6824ebd1 100644
+--- a/src/core/mainoptions.cpp
++++ b/src/core/mainoptions.cpp
+@@ -377,7 +377,7 @@ trim_dir(const std::string& dir,
+       if (final_size <= trim_max_size) {
+         break;
+       }
+-      if (util::remove(file.path().string())) {
++      if (util::remove(file.path())) {
+         ++removed_files;
+         final_size -= file.size_on_disk();
+       }
+diff --git a/src/storage/local/LocalStorage.cpp b/src/storage/local/LocalStorage.cpp
+index 65d1615f..b4689b4d 100644
+--- a/src/storage/local/LocalStorage.cpp
++++ b/src/storage/local/LocalStorage.cpp
+@@ -221,19 +221,17 @@ delete_file(const DirEntry& dir_entry,
+             uint64_t& cache_size,
+             uint64_t& files_in_cache)
+ {
+-  const auto result =
+-    util::remove_nfs_safe(dir_entry.path().string(), util::LogFailure::no);
+-  if (!result && result.error().value() != ENOENT
+-      && result.error().value() != ESTALE) {
+-    LOG("Failed to unlink {} ({})", dir_entry.path().string(), strerror(errno));
+-  } else {
+-    // The counters are intentionally subtracted even if there was no file to
+-    // delete since the final cache size calculation will be incorrect if they
+-    // aren't. (This can happen when there are several parallel ongoing
+-    // cleanups of the same directory.)
+-    cache_size -= dir_entry.size_on_disk();
+-    --files_in_cache;
+-  }
++  const auto result = util::remove_nfs_safe(dir_entry.path(), util::LogFailure::no);
++    if (!result && result.error().value() != ENOENT && result.error().value() != ESTALE) {
++      LOG("Failed to unlink {} ({})", dir_entry.path(), strerror(errno));
++    } else {
++      // The counters are intentionally subtracted even if there was no file to
++      // delete since the final cache size calculation will be incorrect if they
++      // aren't. (This can happen when there are several parallel ongoing
++      // cleanups of the same directory.)
++      cache_size -= dir_entry.size_on_disk();
++      --files_in_cache;
++    }
+ }
+ 
+ #ifdef FILE_CLONING_SUPPORTED
+@@ -352,8 +350,7 @@ clean_dir(
+ 
+     if (namespace_ && file_type_from_path(file.path()) == FileType::raw) {
+       auto path_str = pstr(file.path());
+-      const auto result_filename =
+-        FMT("{}R", path_str.str().substr(0, path_str.str().length() - 2));
++      const auto result_filename = FMT("{}R", path_str.str().substr(0, path_str.str().length() - 2));
+       raw_files_map[result_filename].push_back(pstr(file.path()).str());
+     }
+ 
+@@ -390,7 +387,7 @@ clean_dir(
+ 
+     if (namespace_) {
+       try {
+-        core::CacheEntry::Header header(file.path().string());
++        core::CacheEntry::Header header(file.path());
+         if (header.namespace_ != *namespace_) {
+           continue;
+         }
+@@ -824,7 +821,7 @@ LocalStorage::wipe_all(const ProgressReceiver& progress_receiver)
+           l2_progress_receiver(0.5);
+ 
+           for (size_t i = 0; i < files.size(); ++i) {
+-            util::remove_nfs_safe(files[i].path().string());
++            util::remove_nfs_safe(files[i].path());
+             l2_progress_receiver(0.5 + 0.5 * ratio(i, files.size()));
+           }
+ 
+@@ -856,7 +853,7 @@ LocalStorage::get_compression_statistics(
+           for (size_t i = 0; i < files.size(); ++i) {
+             const auto& cache_file = files[i];
+             try {
+-              core::CacheEntry::Header header(cache_file.path().string());
++              core::CacheEntry::Header header(cache_file.path());
+               cs.actual_size += cache_file.size_on_disk();
+               cs.content_size += util::likely_size_on_disk(header.entry_size);
+             } catch (core::Error&) {

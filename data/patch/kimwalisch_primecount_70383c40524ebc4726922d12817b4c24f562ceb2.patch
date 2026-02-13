@@ -1,0 +1,311 @@
+diff --git a/src/Sieve.cpp b/src/Sieve.cpp
+index a1da9bf1..b5678c5b 100644
+--- a/src/Sieve.cpp
++++ b/src/Sieve.cpp
+@@ -301,274 +301,41 @@ void Sieve::cross_off(uint64_t prime, uint64_t i)
+       return; \
+     }
+ 
+-  switch (wheel.index)
++  static const uint8_t bit_idx[64] = {
++    0,1,2,3,4,5,6,7, 1,5,4,0,7,3,2,6,
++    2,4,0,6,1,7,3,5, 3,0,6,5,2,1,7,4,
++    4,7,1,2,5,6,0,3, 5,3,7,1,6,0,4,2,
++    6,2,3,7,0,4,5,1, 7,6,5,4,3,2,1,0
++  };
++
++  static const uint8_t k[64] = {
++    6,4,2,4,2,4,6,2, 6,4,2,4,2,4,6,2,
++    6,4,2,4,2,4,6,2, 6,4,2,4,2,4,6,2,
++    6,4,2,4,2,4,6,2, 6,4,2,4,2,4,6,2,
++    6,4,2,4,2,4,6,2, 6,4,2,4,2,4,6,2
++  };
++
++  static const uint8_t add[64] = {
++    0,0,0,0,0,0,0,1, 1,1,1,0,1,1,1,1,
++    2,2,0,2,0,2,2,1, 3,1,1,2,1,1,3,1,
++    3,3,1,2,1,3,3,1, 4,2,2,2,2,2,4,1,
++    5,3,1,4,1,3,5,1, 6,4,2,4,2,4,6,1
++  };
++
++  uint8_t idx = wheel.index;
++  while (m < sieve_size)
+   {
+-    for (;;)
+-    {
+-      case 0: check_finished(0);
+-      sieve[m] &= ~(1 << 0); m += prime * 6 + 0;
+-      case 1: check_finished(1);
+-      sieve[m] &= ~(1 << 1); m += prime * 4 + 0;
+-      case 2: check_finished(2);
+-      sieve[m] &= ~(1 << 2); m += prime * 2 + 0;
+-      case 3: check_finished(3);
+-      sieve[m] &= ~(1 << 3); m += prime * 4 + 0;
+-      case 4: check_finished(4);
+-      sieve[m] &= ~(1 << 4); m += prime * 2 + 0;
+-      case 5: check_finished(5);
+-      sieve[m] &= ~(1 << 5); m += prime * 4 + 0;
+-      case 6: check_finished(6);
+-      sieve[m] &= ~(1 << 6); m += prime * 6 + 0;
+-      case 7: check_finished(7);
+-      sieve[m] &= ~(1 << 7); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 < sieve_size)
+-      {
+-        sieve[m + prime *  0] &= ~(1 << 0);
+-        sieve[m + prime *  6] &= ~(1 << 1);
+-        sieve[m + prime * 10] &= ~(1 << 2);
+-        sieve[m + prime * 12] &= ~(1 << 3);
+-        sieve[m + prime * 16] &= ~(1 << 4);
+-        sieve[m + prime * 18] &= ~(1 << 5);
+-        sieve[m + prime * 22] &= ~(1 << 6);
+-        sieve[m + prime * 28] &= ~(1 << 7);
+-        m += prime * 30 + 1;
+-      }
+-    }
+-
+-    for (;;)
+-    {
+-      case  8: check_finished( 8);
+-      sieve[m] &= ~(1 << 1); m += prime * 6 + 1;
+-      case  9: check_finished( 9);
+-      sieve[m] &= ~(1 << 5); m += prime * 4 + 1;
+-      case 10: check_finished(10);
+-      sieve[m] &= ~(1 << 4); m += prime * 2 + 1;
+-      case 11: check_finished(11);
+-      sieve[m] &= ~(1 << 0); m += prime * 4 + 0;
+-      case 12: check_finished(12);
+-      sieve[m] &= ~(1 << 7); m += prime * 2 + 1;
+-      case 13: check_finished(13);
+-      sieve[m] &= ~(1 << 3); m += prime * 4 + 1;
+-      case 14: check_finished(14);
+-      sieve[m] &= ~(1 << 2); m += prime * 6 + 1;
+-      case 15: check_finished(15);
+-      sieve[m] &= ~(1 << 6); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 + 6 < sieve_size)
+-      {
+-        sieve[m + prime *  0 + 0] &= ~(1 << 1);
+-        sieve[m + prime *  6 + 1] &= ~(1 << 5);
+-        sieve[m + prime * 10 + 2] &= ~(1 << 4);
+-        sieve[m + prime * 12 + 3] &= ~(1 << 0);
+-        sieve[m + prime * 16 + 3] &= ~(1 << 7);
+-        sieve[m + prime * 18 + 4] &= ~(1 << 3);
+-        sieve[m + prime * 22 + 5] &= ~(1 << 2);
+-        sieve[m + prime * 28 + 6] &= ~(1 << 6);
+-        m += prime * 30 + 7;
+-      }
+-    }
+-
+-    for (;;)
+-    {
+-      case 16: check_finished(16);
+-      sieve[m] &= ~(1 << 2); m += prime * 6 + 2;
+-      case 17: check_finished(17);
+-      sieve[m] &= ~(1 << 4); m += prime * 4 + 2;
+-      case 18: check_finished(18);
+-      sieve[m] &= ~(1 << 0); m += prime * 2 + 0;
+-      case 19: check_finished(19);
+-      sieve[m] &= ~(1 << 6); m += prime * 4 + 2;
+-      case 20: check_finished(20);
+-      sieve[m] &= ~(1 << 1); m += prime * 2 + 0;
+-      case 21: check_finished(21);
+-      sieve[m] &= ~(1 << 7); m += prime * 4 + 2;
+-      case 22: check_finished(22);
+-      sieve[m] &= ~(1 << 3); m += prime * 6 + 2;
+-      case 23: check_finished(23);
+-      sieve[m] &= ~(1 << 5); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 + 10 < sieve_size)
+-      {
+-        sieve[m + prime *  0 +  0] &= ~(1 << 2);
+-        sieve[m + prime *  6 +  2] &= ~(1 << 4);
+-        sieve[m + prime * 10 +  4] &= ~(1 << 0);
+-        sieve[m + prime * 12 +  4] &= ~(1 << 6);
+-        sieve[m + prime * 16 +  6] &= ~(1 << 1);
+-        sieve[m + prime * 18 +  6] &= ~(1 << 7);
+-        sieve[m + prime * 22 +  8] &= ~(1 << 3);
+-        sieve[m + prime * 28 + 10] &= ~(1 << 5);
+-        m += prime * 30 + 11;
+-      }
+-    }
+-
+-    for (;;)
+-    {
+-      case 24: check_finished(24);
+-      sieve[m] &= ~(1 << 3); m += prime * 6 + 3;
+-      case 25: check_finished(25);
+-      sieve[m] &= ~(1 << 0); m += prime * 4 + 1;
+-      case 26: check_finished(26);
+-      sieve[m] &= ~(1 << 6); m += prime * 2 + 1;
+-      case 27: check_finished(27);
+-      sieve[m] &= ~(1 << 5); m += prime * 4 + 2;
+-      case 28: check_finished(28);
+-      sieve[m] &= ~(1 << 2); m += prime * 2 + 1;
+-      case 29: check_finished(29);
+-      sieve[m] &= ~(1 << 1); m += prime * 4 + 1;
+-      case 30: check_finished(30);
+-      sieve[m] &= ~(1 << 7); m += prime * 6 + 3;
+-      case 31: check_finished(31);
+-      sieve[m] &= ~(1 << 4); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 + 12 < sieve_size)
+-      {
+-        sieve[m + prime *  0 +  0] &= ~(1 << 3);
+-        sieve[m + prime *  6 +  3] &= ~(1 << 0);
+-        sieve[m + prime * 10 +  4] &= ~(1 << 6);
+-        sieve[m + prime * 12 +  5] &= ~(1 << 5);
+-        sieve[m + prime * 16 +  7] &= ~(1 << 2);
+-        sieve[m + prime * 18 +  8] &= ~(1 << 1);
+-        sieve[m + prime * 22 +  9] &= ~(1 << 7);
+-        sieve[m + prime * 28 + 12] &= ~(1 << 4);
+-        m += prime * 30 + 13;
+-      }
+-    }
+-
+-    for (;;)
+-    {
+-      case 32: check_finished(32);
+-      sieve[m] &= ~(1 << 4); m += prime * 6 + 3;
+-      case 33: check_finished(33);
+-      sieve[m] &= ~(1 << 7); m += prime * 4 + 3;
+-      case 34: check_finished(34);
+-      sieve[m] &= ~(1 << 1); m += prime * 2 + 1;
+-      case 35: check_finished(35);
+-      sieve[m] &= ~(1 << 2); m += prime * 4 + 2;
+-      case 36: check_finished(36);
+-      sieve[m] &= ~(1 << 5); m += prime * 2 + 1;
+-      case 37: check_finished(37);
+-      sieve[m] &= ~(1 << 6); m += prime * 4 + 3;
+-      case 38: check_finished(38);
+-      sieve[m] &= ~(1 << 0); m += prime * 6 + 3;
+-      case 39: check_finished(39);
+-      sieve[m] &= ~(1 << 3); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 + 16 < sieve_size)
+-      {
+-        sieve[m + prime *  0 +  0] &= ~(1 << 4);
+-        sieve[m + prime *  6 +  3] &= ~(1 << 7);
+-        sieve[m + prime * 10 +  6] &= ~(1 << 1);
+-        sieve[m + prime * 12 +  7] &= ~(1 << 2);
+-        sieve[m + prime * 16 +  9] &= ~(1 << 5);
+-        sieve[m + prime * 18 + 10] &= ~(1 << 6);
+-        sieve[m + prime * 22 + 13] &= ~(1 << 0);
+-        sieve[m + prime * 28 + 16] &= ~(1 << 3);
+-        m += prime * 30 + 17;
+-      }
+-    }
+-
+-    for (;;)
+-    {
+-      case 40: check_finished(40);
+-      sieve[m] &= ~(1 << 5); m += prime * 6 + 4;
+-      case 41: check_finished(41);
+-      sieve[m] &= ~(1 << 3); m += prime * 4 + 2;
+-      case 42: check_finished(42);
+-      sieve[m] &= ~(1 << 7); m += prime * 2 + 2;
+-      case 43: check_finished(43);
+-      sieve[m] &= ~(1 << 1); m += prime * 4 + 2;
+-      case 44: check_finished(44);
+-      sieve[m] &= ~(1 << 6); m += prime * 2 + 2;
+-      case 45: check_finished(45);
+-      sieve[m] &= ~(1 << 0); m += prime * 4 + 2;
+-      case 46: check_finished(46);
+-      sieve[m] &= ~(1 << 4); m += prime * 6 + 4;
+-      case 47: check_finished(47);
+-      sieve[m] &= ~(1 << 2); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 + 18 < sieve_size)
+-      {
+-        sieve[m + prime *  0 +  0] &= ~(1 << 5);
+-        sieve[m + prime *  6 +  4] &= ~(1 << 3);
+-        sieve[m + prime * 10 +  6] &= ~(1 << 7);
+-        sieve[m + prime * 12 +  8] &= ~(1 << 1);
+-        sieve[m + prime * 16 + 10] &= ~(1 << 6);
+-        sieve[m + prime * 18 + 12] &= ~(1 << 0);
+-        sieve[m + prime * 22 + 14] &= ~(1 << 4);
+-        sieve[m + prime * 28 + 18] &= ~(1 << 2);
+-        m += prime * 30 + 19;
+-      }
+-    }
+-
+-    for (;;)
+-    {
+-      case 48: check_finished(48);
+-      sieve[m] &= ~(1 << 6); m += prime * 6 + 5;
+-      case 49: check_finished(49);
+-      sieve[m] &= ~(1 << 2); m += prime * 4 + 3;
+-      case 50: check_finished(50);
+-      sieve[m] &= ~(1 << 3); m += prime * 2 + 1;
+-      case 51: check_finished(51);
+-      sieve[m] &= ~(1 << 7); m += prime * 4 + 4;
+-      case 52: check_finished(52);
+-      sieve[m] &= ~(1 << 0); m += prime * 2 + 1;
+-      case 53: check_finished(53);
+-      sieve[m] &= ~(1 << 4); m += prime * 4 + 3;
+-      case 54: check_finished(54);
+-      sieve[m] &= ~(1 << 5); m += prime * 6 + 5;
+-      case 55: check_finished(55);
+-      sieve[m] &= ~(1 << 1); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 + 22 < sieve_size)
+-      {
+-        sieve[m + prime *  0 +  0] &= ~(1 << 6);
+-        sieve[m + prime *  6 +  5] &= ~(1 << 2);
+-        sieve[m + prime * 10 +  8] &= ~(1 << 3);
+-        sieve[m + prime * 12 +  9] &= ~(1 << 7);
+-        sieve[m + prime * 16 + 13] &= ~(1 << 0);
+-        sieve[m + prime * 18 + 14] &= ~(1 << 4);
+-        sieve[m + prime * 22 + 17] &= ~(1 << 5);
+-        sieve[m + prime * 28 + 22] &= ~(1 << 1);
+-        m += prime * 30 + 23;
+-      }
+-    }
+-
+-    for (;;)
+-    {
+-      case 56: check_finished(56);
+-      sieve[m] &= ~(1 << 7); m += prime * 6 + 6;
+-      case 57: check_finished(57);
+-      sieve[m] &= ~(1 << 6); m += prime * 4 + 4;
+-      case 58: check_finished(58);
+-      sieve[m] &= ~(1 << 5); m += prime * 2 + 2;
+-      case 59: check_finished(59);
+-      sieve[m] &= ~(1 << 4); m += prime * 4 + 4;
+-      case 60: check_finished(60);
+-      sieve[m] &= ~(1 << 3); m += prime * 2 + 2;
+-      case 61: check_finished(61);
+-      sieve[m] &= ~(1 << 2); m += prime * 4 + 4;
+-      case 62: check_finished(62);
+-      sieve[m] &= ~(1 << 1); m += prime * 6 + 6;
+-      case 63: check_finished(63);
+-      sieve[m] &= ~(1 << 0); m += prime * 2 + 1;
+-
+-      while (m + prime * 28 + 28 < sieve_size)
+-      {
+-        sieve[m + prime *  0 +  0] &= ~(1 << 7);
+-        sieve[m + prime *  6 +  6] &= ~(1 << 6);
+-        sieve[m + prime * 10 + 10] &= ~(1 << 5);
+-        sieve[m + prime * 12 + 12] &= ~(1 << 4);
+-        sieve[m + prime * 16 + 16] &= ~(1 << 3);
+-        sieve[m + prime * 18 + 18] &= ~(1 << 2);
+-        sieve[m + prime * 22 + 22] &= ~(1 << 1);
+-        sieve[m + prime * 28 + 28] &= ~(1 << 0);
+-        m += prime * 30 + 29;
+-      }
+-    }
++    uint8_t b = bit_idx[idx];
++    sieve[m] &= ~(1u << b);
++    uint64_t inc = (uint64_t)k[idx] * prime + (uint64_t)add[idx];
++    m += inc;
++    idx++;
++    if (idx == 64) idx = 0;
+   }
+ 
+-  #undef check_finished
++  wheel.index = idx;
++  wheel.multiple = (uint32_t) (m - sieve_size);
++  return;
+ }
+ 
+ /// Remove the i-th prime and the multiples of the i-th prime

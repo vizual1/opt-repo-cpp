@@ -1,0 +1,30 @@
+diff --git a/src/mem/sizeclasstable.h b/src/mem/sizeclasstable.h
+index 390bce7..5642dab 100644
+--- a/src/mem/sizeclasstable.h
++++ b/src/mem/sizeclasstable.h
+@@ -35,7 +35,11 @@ namespace snmalloc
+     // Table of constants for reciprocal division for each sizeclass.
+     ModArray<NUM_SIZECLASSES, size_t> div_mult;
+     // Table of constants for reciprocal modulus for each sizeclass.
+-    ModArray<NUM_SIZECLASSES, size_t> mod_mult;
++    // We duplicate the mod_mult array to help codegen: by placing a copy
++    // immediately after the original values we can cause the division part
++    // of the reciprocal calculation to overflow in the compiler's view,
++    // enabling a shorter fast-path instruction sequence.
++    ModArray<(NUM_SIZECLASSES * 2), size_t> mod_mult;
+ 
+     constexpr SizeClassTable()
+     : size(),
+@@ -66,6 +70,12 @@ namespace snmalloc
+         if (!bits::is_pow2(size[sizeclass]))
+           mod_mult[sizeclass]++;
+ 
++        // Duplicate the mod multiplier immediately after the primary table.
++        // This creates a second copy in the data layout which helps the
++        // compiler generate a shorter fast-path sequence by allowing the
++        // reciprocal division to overflow in codegen.
++        mod_mult[sizeclass + NUM_SIZECLASSES] = mod_mult[sizeclass];
++
+         if (sizeclass < NUM_SMALL_CLASSES)
+         {
+           for (; curr <= size[sizeclass]; curr += 1 << PTR_BITS)

@@ -1,0 +1,81 @@
+diff --git a/src/mem/freelist.h b/src/mem/freelist.h
+index c19bbda..54afcaa 100644
+--- a/src/mem/freelist.h
++++ b/src/mem/freelist.h
+@@ -291,8 +291,10 @@ namespace snmalloc
+      *
+      * Returns the bottom bit.
+      */
+-    uint32_t next_interleave()
++    SNMALLOC_FAST_PATH uint32_t next_interleave()
+     {
++      // Rotate bits for interleaving. Marked fast-path to encourage inlining
++      // so that the interleave update is efficient on hot paths.
+       uint32_t bottom_bit = interleave & 1;
+       interleave = (bottom_bit << 31) | (interleave >> 1);
+       return bottom_bit;
+diff --git a/src/mem/metaslab.h b/src/mem/metaslab.h
+index 2d7cd9a..30fcc3e 100644
+--- a/src/mem/metaslab.h
++++ b/src/mem/metaslab.h
+@@ -79,8 +79,30 @@ namespace snmalloc
+      *  - was full before the subtraction
+      * this returns true, otherwise returns false.
+      */
+-    bool return_object()
++    bool return_object(Slab* slab, void* p)
+     {
++      // If the slab was previously full (encoded by needed()==1), instead of
++      // waking the superslab immediately on the very first returned object,
++      // only wake when a threshold of objects have accumulated. The
++      // threshold is computed as max(1, capacity/8) but capped at 31 to avoid
++      // wasting too much space for large capacities.
++      if (needed() == 1)
++      {
++        size_t allocated = get_slab_capacity(sizeclass(), Metaslab::is_short(slab));
++        size_t threshold = allocated / 8;
++        if (threshold < 1)
++          threshold = 1;
++        if (threshold > 31)
++          threshold = 31;
++
++        // Initialise the free-list builder so that subsequent add() calls are
++        // valid in the fast path, and set needed so that only when enough
++        // frees have been observed will the slow path be taken.
++        free_queue.open(p);
++        needed() = static_cast<uint16_t>(allocated - threshold);
++        return false;
++      }
++
+       return (--needed()) == 0;
+     }
+ 
+diff --git a/src/mem/slab.h b/src/mem/slab.h
+index f617a3d..816bec4 100644
+--- a/src/mem/slab.h
++++ b/src/mem/slab.h
+@@ -70,7 +70,7 @@ namespace snmalloc
+       Metaslab& meta = super->get_meta(self);
+       SNMALLOC_ASSERT(!meta.is_unused());
+ 
+-      if (unlikely(meta.return_object()))
++      if (unlikely(meta.return_object(self, p)))
+         return false;
+ 
+       // Update the head and the next pointer in the free list.
+diff --git a/src/mem/superslab.h b/src/mem/superslab.h
+index aebc856..daa82b0 100644
+--- a/src/mem/superslab.h
++++ b/src/mem/superslab.h
+@@ -59,8 +59,10 @@ namespace snmalloc
+     ModArray<SLAB_COUNT, Metaslab> meta;
+ 
+     // Used size_t as results in better code in MSVC
+-    size_t slab_to_index(Slab* slab)
++    SNMALLOC_FAST_PATH size_t slab_to_index(Slab* slab)
+     {
++      // Performance-sensitive calculation: compute index of slab within the
++      // superslab. Marked as fast-path to encourage inlining on hot paths.
+       auto res = (pointer_diff(this, slab) >> SLAB_BITS);
+       SNMALLOC_ASSERT(res == static_cast<uint8_t>(res));
+       return static_cast<uint8_t>(res);

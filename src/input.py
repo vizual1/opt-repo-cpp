@@ -66,8 +66,6 @@ def setup_parser() -> argparse.ArgumentParser:
                               help="Minimum star count for popular repos (default: 1000).")
     filter_group.add_argument("--filter", type=str, choices=["simple", "llm", "issue"],
                               default="llm", help="Filter strategy to use (default: llm).")
-    filter_group.add_argument("--analyze", action="store_true",
-                              help="Analyze the given repositories.")
 
     # === Docker / Testing ===
     docker_group = parser.add_argument_group("Docker and Testing Options")

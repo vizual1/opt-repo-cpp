@@ -1,0 +1,55 @@
+diff --git a/src/ccache/util/file.cpp b/src/ccache/util/file.cpp
+index fd49aee9..c49e8a2b 100644
+--- a/src/ccache/util/file.cpp
++++ b/src/ccache/util/file.cpp
+@@ -93,6 +93,50 @@ copy_file(const fs::path& src, const fs::path& dest, ViaTmpFile via_tmp_file)
+ 
+   Fd dest_fd;
+   fs::path tmp_file;
++
++#ifdef _WIN32
++  // Use native CopyFile on Windows for better performance. If via_tmp_file is
++  // requested, copy to a temporary file and rename it later to preserve the
++  // atomic semantics.
++  if (via_tmp_file == ViaTmpFile::yes) {
++    auto temp_file = TemporaryFile::create(dest);
++    if (!temp_file) {
++      return tl::unexpected(temp_file.error());
++    }
++    tmp_file = std::move(temp_file->path);
++    // Close the temporary file descriptor so the native CopyFile API can write
++    // to the path.
++    temp_file->fd.close();
++
++    if (!CopyFileW(src.wstring().c_str(), tmp_file.wstring().c_str(), FALSE)) {
++      return tl::unexpected(FMT("Failed to copy: {} to {}: {}",
++                                src,
++                                tmp_file,
++                                util::win32_error_message(GetLastError())));
++    }
++
++    // Close source fd and rename the temporary file to the destination.
++    src_fd.close();
++    const auto result = fs::rename(tmp_file, dest);
++    if (!result) {
++      return tl::unexpected(FMT("Failed to rename {} to {}: {}",
++                                tmp_file,
++                                dest,
++                                result.error().message()));
++    }
++    return {};
++  } else {
++    if (!CopyFileW(src.wstring().c_str(), dest.wstring().c_str(), FALSE)) {
++      return tl::unexpected(FMT("Failed to copy: {} to {}: {}",
++                                src,
++                                dest,
++                                util::win32_error_message(GetLastError())));
++    }
++    src_fd.close();
++    return {};
++  }
++#endif
++
+   if (via_tmp_file == ViaTmpFile::yes) {
+     auto temp_file = TemporaryFile::create(dest);
+     if (!temp_file) {

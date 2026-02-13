@@ -1,0 +1,24 @@
+diff --git a/src/Sieve_count.cpp b/src/Sieve_count.cpp
+index a898a8cd..3b31375f 100644
+--- a/src/Sieve_count.cpp
++++ b/src/Sieve_count.cpp
+@@ -83,14 +83,17 @@
+ #define SVE_POPCNT_LOOP(sieve64, start_idx, stop_idx)        \
+   uint64_t i = start_idx + 1;                                \
+   svuint64_t vcnt = svdup_u64(0);                            \
++  /* Hoist the all-true predicate to avoid calling svptrue_b64() each loop */ \
++  svbool_t ptrue = svptrue_b64();                            \
+   for (; i < stop_idx; i += svcntd())                        \
+   {                                                          \
+     svbool_t pg = svwhilelt_b64(i, stop_idx);                \
+     svuint64_t vec = svld1_u64(pg, &sieve64[i]);             \
+     vec = svcnt_u64_z(pg, vec);                              \
+-    vcnt = svadd_u64_z(svptrue_b64(), vcnt, vec);            \
++    /* Use the hoisted predicate for the vector add */      \
++    vcnt = svadd_u64_z(ptrue, vcnt, vec);                    \
+   }                                                          \
+-  res += svaddv_u64(svptrue_b64(), vcnt);
++  res += svaddv_u64(ptrue, vcnt);
+ 
+ /// Compute the loop below using AVX512.
+ /// for (i = start_idx + 1; i < stop_idx; i++)

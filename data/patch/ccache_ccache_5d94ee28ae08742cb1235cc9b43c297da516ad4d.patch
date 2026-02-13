@@ -1,0 +1,88 @@
+diff --git a/src/ccache/hashutil.cpp b/src/ccache/hashutil.cpp
+index e783921c..9e594506 100644
+--- a/src/ccache/hashutil.cpp
++++ b/src/ccache/hashutil.cpp
+@@ -25,6 +25,7 @@
+ #include <ccache/execute.hpp>
+ #include <ccache/macroskip.hpp>
+ #include <ccache/util/DirEntry.hpp>
++#include <ccache/util/Bytes.hpp>
+ #include <ccache/util/file.hpp>
+ #include <ccache/util/format.hpp>
+ #include <ccache/util/logging.hpp>
+@@ -194,7 +195,7 @@ do_hash_file(const Context& ctx,
+   (void)ctx;
+ #endif
+ 
+-  const auto data = util::read_file<std::string>(path, size_hint);
++  const auto data = util::read_file<util::Bytes>(path, size_hint);
+   if (!data) {
+     LOG("Failed to read {}: {}", path, data.error());
+     return HashSourceCodeResult(HashSourceCode::error);
+@@ -202,11 +203,12 @@ do_hash_file(const Context& ctx,
+ 
+   HashSourceCodeResult result;
+   if (check_temporal_macros) {
+-    result.insert(check_for_temporal_macros(*data));
++    const std::string_view sv(reinterpret_cast<const char*>(data->data()), data->size());
++    result.insert(check_for_temporal_macros(sv));
+   }
+ 
+   Hash hash;
+-  hash.hash(*data);
++  hash.hash(reinterpret_cast<const char*>(data->data()), data->size());
+   digest = hash.digest();
+ 
+ #ifdef INODE_CACHE_SUPPORTED
+diff --git a/src/ccache/util/file.cpp b/src/ccache/util/file.cpp
+index 13daa537..e885ddb5 100644
+--- a/src/ccache/util/file.cpp
++++ b/src/ccache/util/file.cpp
+@@ -229,20 +229,6 @@ template<typename T>
+ tl::expected<T, std::string>
+ read_file(const fs::path& path, size_t size_hint)
+ {
+-  if (size_hint == 0) {
+-    DirEntry de(path);
+-    if (!de) {
+-      return tl::unexpected(strerror(errno));
+-    }
+-    size_hint = de.size();
+-  }
+-
+-  if (size_hint > std::numeric_limits<size_t>::max() / 4) {
+-    // Too large value on a 32-bit system won't work well, better bail.
+-    return tl::unexpected(
+-      FMT("too large file: {} ({} bytes)", path, size_hint));
+-  }
+-
+   const int open_flags = [] {
+     if constexpr (std::is_same<T, std::string>::value) {
+       return O_RDONLY | O_TEXT;
+@@ -255,6 +241,26 @@ read_file(const fs::path& path, size_t size_hint)
+     return tl::unexpected(strerror(errno));
+   }
+ 
++  if (size_hint == 0) {
++    struct stat st;
++    if (fstat(*fd, &st) == 0) {
++      size_hint = static_cast<size_t>(st.st_size);
++    } else {
++      DirEntry de(path);
++      if (!de) {
++        return tl::unexpected(strerror(errno));
++      }
++      size_hint = de.size();
++    }
++  }
++
++  if (size_hint > std::numeric_limits<size_t>::max() / 4) {
++    // Too large value on a 32-bit system won't work well, better bail.
++    return tl::unexpected(
++      FMT("too large file: {} ({} bytes)", path, size_hint));
++  }
++
++
+   int64_t ret = 0;
+   size_t pos = 0;
+   T result;

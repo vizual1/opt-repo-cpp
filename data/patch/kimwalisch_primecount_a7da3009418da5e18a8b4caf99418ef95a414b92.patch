@@ -1,0 +1,18 @@
+diff --git a/src/phi.cpp b/src/phi.cpp
+index 1735a451..d5d50ff7 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -215,8 +215,11 @@ int64_t phi(int64_t x, int64_t a, int threads)
+   if (x < 1) return 0;
+   if (a < 1) return x;
+ 
+-  // phi(x, a) = 1 if prime[a] >= x
+-  if (x > 0 && a > x / 2)
++  // phi(x, a) = 1 if a >= pi(x).
++  // Simple upper bound: at most one prime is even (2), the rest are odd, so
++  // the number of primes <= x is <= floor((x + 1) / 2). Thus if
++  // a >= floor((x + 1) / 2) then a >= pi(x) and phi(x, a) = 1.
++  if (x > 0 && a >= (x + 1) / 2)
+     return 1;
+ 
+   if (is_phi_tiny(a))

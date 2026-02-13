@@ -1,0 +1,63 @@
+diff --git a/libcaf_core/caf/detail/double_ended_queue.hpp b/libcaf_core/caf/detail/double_ended_queue.hpp
+index 1999f49df..6f82b1193 100644
+--- a/libcaf_core/caf/detail/double_ended_queue.hpp
++++ b/libcaf_core/caf/detail/double_ended_queue.hpp
+@@ -10,6 +10,7 @@
+ #include <cassert>
+ #include <chrono>
+ #include <thread>
++#include <mutex>
+ 
+ // GCC hack
+ #if defined(CAF_GCC) && !defined(_GLIBCXX_USE_SCHED_YIELD)
+@@ -92,8 +93,6 @@ public:
+                 "sizeof(node*) >= CAF_CACHE_LINE_SIZE");
+ 
+   double_ended_queue() {
+-    head_lock_.clear();
+-    tail_lock_.clear();
+     auto ptr = new node(nullptr);
+     head_ = ptr;
+     tail_ = ptr;
+@@ -207,22 +206,18 @@ private:
+   std::atomic<node*> tail_;
+   char pad2_[CAF_CACHE_LINE_SIZE - sizeof(node*)];
+   // enforce exclusive access
+-  std::atomic_flag head_lock_;
+-  std::atomic_flag tail_lock_;
++  std::mutex head_lock_;
++  std::mutex tail_lock_;
+ 
+   class lock_guard {
+   public:
+-    explicit lock_guard(std::atomic_flag& lock) : lock_(lock) {
+-      while (lock.test_and_set(std::memory_order_acquire)) {
+-        std::this_thread::yield();
+-      }
+-    }
+-    ~lock_guard() {
+-      lock_.clear(std::memory_order_release);
++    explicit lock_guard(std::mutex& m) : lk_(m) {
++      // std::unique_lock locks the mutex on construction
+     }
++    ~lock_guard() = default;
+ 
+   private:
+-    std::atomic_flag& lock_;
++    std::unique_lock<std::mutex> lk_;
+   };
+ };
+ 
+diff --git a/libcaf_core/caf/policy/work_stealing.hpp b/libcaf_core/caf/policy/work_stealing.hpp
+index 3d9d4d1a7..c7890f518 100644
+--- a/libcaf_core/caf/policy/work_stealing.hpp
++++ b/libcaf_core/caf/policy/work_stealing.hpp
+@@ -43,7 +43,7 @@ public:
+   struct wait_strategy {
+     std::mutex lock;
+     std::condition_variable cv;
+-    bool sleeping{false};
++    std::atomic<bool> sleeping{false};
+   };
+ 
+   // The coordinator has only a counter for round-robin enqueue to its workers.

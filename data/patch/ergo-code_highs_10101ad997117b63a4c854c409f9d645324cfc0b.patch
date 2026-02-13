@@ -1,0 +1,25 @@
+diff --git a/extern/filereaderlp/builder.hpp b/extern/filereaderlp/builder.hpp
+index dfa37c505..025664f1f 100644
+--- a/extern/filereaderlp/builder.hpp
++++ b/extern/filereaderlp/builder.hpp
+@@ -12,12 +12,15 @@ struct Builder {
+ 
+    Model model;
+ 
+-   std::shared_ptr<Variable> getvarbyname(std::string name) {
+-      if (variables.count(name) == 0) {
+-         variables[name] = std::shared_ptr<Variable>(new Variable(name));
+-         model.variables.push_back(variables[name]);
++   std::shared_ptr<Variable> getvarbyname(const std::string &name) {
++      auto it = variables.find(name);
++      if (it == variables.end()) {
++         auto v = std::make_shared<Variable>(name);
++         model.variables.push_back(v);
++         auto res = variables.emplace(name, v);
++         it = res.first;
+       }
+-      return variables[name];
++      return it->second;
+    }
+ };
+ 

@@ -1,0 +1,83 @@
+diff --git a/include/LoadBalancerS2.hpp b/include/LoadBalancerS2.hpp
+index 9ba4a212..7050966b 100644
+--- a/include/LoadBalancerS2.hpp
++++ b/include/LoadBalancerS2.hpp
+@@ -64,7 +64,7 @@ private:
+   double remaining_secs() const;
+ 
+   int64_t low_ = 0;
+-  int64_t max_low_ = 0;
++  int64_t max_low_ = -1;
+   int64_t sieve_limit_ = 0;
+   int64_t segments_ = 0;
+   int64_t segment_size_ = 0;
+diff --git a/include/primecount-config.hpp b/include/primecount-config.hpp
+index 85403e52..402a3002 100644
+--- a/include/primecount-config.hpp
++++ b/include/primecount-config.hpp
+@@ -34,7 +34,7 @@
+   /// variable) we need to ensure that this mutex is stored on a
+   /// cache line where no other data is stored. We achieve this by
+   /// adding MAX_CACHE_LINE_SIZE bytes before and after the mutex.
+-  #define MAX_CACHE_LINE_SIZE 512
++  #define MAX_CACHE_LINE_SIZE 128
+ #endif
+ 
+ #endif
+diff --git a/src/LoadBalancerS2.cpp b/src/LoadBalancerS2.cpp
+index f44840c9..1372741d 100644
+--- a/src/LoadBalancerS2.cpp
++++ b/src/LoadBalancerS2.cpp
+@@ -99,27 +99,36 @@ maxint_t LoadBalancerS2::get_sum() const
+ 
+ bool LoadBalancerS2::get_work(ThreadData& thread)
+ {
+-  LockGuard lockGuard(lock_);
+-  sum_ += thread.sum;
++  // Capture completed work info (for printing) before we overwrite
++  uint64_t completed_dist = (uint64_t) thread.segment_size * (uint64_t) thread.segments;
++  uint64_t completed_high = (uint64_t) thread.low + completed_dist;
++  bool do_print = is_print_;
+ 
+-  if (is_print_)
++  bool is_work = false;
+   {
+-    uint64_t dist = thread.segment_size * thread.segments;
+-    uint64_t high = thread.low + dist;
+-    status_.print(high, sieve_limit_, sum_, sum_approx_);
+-  }
++    LockGuard lockGuard(lock_);
++
++    // Update global sum with work done by this thread
++    sum_ += thread.sum;
+ 
+-  update_load_balancing(thread);
++    // Update load balancing parameters based on the completed thread
++    update_load_balancing(thread);
+ 
+-  thread.low = low_;
+-  thread.segments = segments_;
+-  thread.segment_size = segment_size_;
+-  thread.sum = 0;
+-  thread.secs = 0;
+-  thread.init_secs = 0;
++    // Assign next work to the thread
++    thread.low = low_;
++    thread.segments = segments_;
++    thread.segment_size = segment_size_;
++    thread.sum = 0;
++    thread.secs = 0;
++    thread.init_secs = 0;
++
++    low_ += segment_size_ * segments_;
++    is_work = thread.low < sieve_limit_;
++  }
+ 
+-  low_ += segment_size_ * segments_;
+-  bool is_work = thread.low < sieve_limit_;
++  // Do printing without holding the lock to reduce contention
++  if (do_print)
++    status_.print(completed_high, sieve_limit_, sum_, sum_approx_);
+ 
+   return is_work;
+ }

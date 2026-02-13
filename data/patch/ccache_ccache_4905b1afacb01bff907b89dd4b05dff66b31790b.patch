@@ -1,0 +1,28 @@
+diff --git a/src/util/file.cpp b/src/util/file.cpp
+index db0f4e83..de11e886 100644
+--- a/src/util/file.cpp
++++ b/src/util/file.cpp
+@@ -320,6 +320,11 @@ write_file(const std::string& path, std::string_view data, InPlace in_place)
+   if (!fd) {
+     return nonstd::make_unexpected(strerror(errno));
+   }
++  // Avoid performing a zero-length write syscall which is unnecessary and can
++  // be slightly expensive in hot paths.
++  if (data.size() == 0) {
++    return {};
++  }
+   return write_fd(*fd, data.data(), data.size());
+ }
+ 
+@@ -335,6 +340,11 @@ write_file(const std::string& path,
+   if (!fd) {
+     return nonstd::make_unexpected(strerror(errno));
+   }
++  // Avoid performing a zero-length write syscall which is unnecessary and can
++  // be slightly expensive in hot paths.
++  if (data.size() == 0) {
++    return {};
++  }
+   return write_fd(*fd, data.data(), data.size());
+ }
+ 

@@ -1,0 +1,84 @@
+diff --git a/Bit_Manipulation/1774.Closest-Dessert-Cost/1774.Closest-Dessert-Cost.cpp b/Bit_Manipulation/1774.Closest-Dessert-Cost/1774.Closest-Dessert-Cost.cpp
+index b8590d08..919753a4 100644
+--- a/Bit_Manipulation/1774.Closest-Dessert-Cost/1774.Closest-Dessert-Cost.cpp
++++ b/Bit_Manipulation/1774.Closest-Dessert-Cost/1774.Closest-Dessert-Cost.cpp
+@@ -1,30 +1,61 @@
++#include <vector>
++#include <algorithm>
++#include <climits>
++#include <cmath>
++#include <unordered_set>
++#include <functional>
++
++using namespace std;
++
+ class Solution {
+ public:
+     int closestCost(vector<int>& baseCosts, vector<int>& toppingCosts, int target) 
+     {
+-        int cost;
++        int cost = INT_MAX;
+         int diff = INT_MAX;
+         int m = toppingCosts.size();
+         
+-        for (int baseCost: baseCosts)
+-        {            
+-            for (int state = 0; state < (1<<(2*m)); state++)
+-            {
+-                int sum = baseCost;
+-                for (int i=0; i<m; i++)
+-                {
+-                    if ((state>>(i*2))&1)
+-                        sum += toppingCosts[i];
+-                    if ((state>>(i*2+1))&1)
+-                        sum += toppingCosts[i];
++        // Generate all unique topping sums (each topping used 0,1,2 times)
++        unordered_set<int> sums_set;
++        function<void(int,int)> gen = [&](int idx, int cur) {
++            if (idx == m) {
++                sums_set.insert(cur);
++                return;
++            }
++            // 0 times
++            gen(idx+1, cur);
++            // 1 time
++            gen(idx+1, cur + toppingCosts[idx]);
++            // 2 times
++            gen(idx+1, cur + 2 * toppingCosts[idx]);
++        };
++        gen(0, 0);
++
++        vector<int> sums(sums_set.begin(), sums_set.end());
++        sort(sums.begin(), sums.end());
++
++        for (int base : baseCosts)
++        {
++            int need = target - base;
++            auto it = lower_bound(sums.begin(), sums.end(), need);
++            if (it != sums.end()) {
++                int total = base + *it;
++                int d = std::abs(total - target);
++                if (d < diff || (d == diff && total < cost)) {
++                    diff = d;
++                    cost = total;
+                 }
+-                if (abs(sum-target)<diff || abs(sum-target)==diff && sum<cost)
+-                {
+-                    diff = abs(sum-target);
+-                    cost = sum;
++            }
++            if (it != sums.begin()) {
++                auto it2 = prev(it);
++                int total = base + *it2;
++                int d = std::abs(total - target);
++                if (d < diff || (d == diff && total < cost)) {
++                    diff = d;
++                    cost = total;
+                 }
+-            }            
+-        }        
++            }
++        }
+         return cost;        
+     }
+ };

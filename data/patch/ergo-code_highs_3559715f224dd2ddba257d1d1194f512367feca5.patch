@@ -1,0 +1,124 @@
+diff --git a/highs/presolve/HPresolve.cpp b/highs/presolve/HPresolve.cpp
+index 431b89ae5..5ebbf9b3c 100644
+--- a/highs/presolve/HPresolve.cpp
++++ b/highs/presolve/HPresolve.cpp
+@@ -128,7 +128,8 @@ bool HPresolve::okSetInput(HighsLp& model_, const HighsOptions& options_,
+   // initialize substitution opportunities
+   for (HighsInt row = 0; row != model->num_row_; ++row) {
+     if (!isDualImpliedFree(row)) continue;
+-    for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
++    storeRow(row);
++    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+       if (isImpliedFree(nonzero.index()))
+         substitutionOpportunities.emplace_back(row, nonzero.index());
+     }
+@@ -171,7 +172,8 @@ bool HPresolve::okSetInput(HighsMipSolver& mipsolver,
+ }
+ 
+ bool HPresolve::rowCoefficientsIntegral(HighsInt row, double scale) const {
+-  for (const HighsSliceNonzero& nz : getRowVector(row)) {
++  getRowPositions(row, rowpositions);
++    for (const HighsSliceNonzero& nz : getStoredRow()) {
+     if (fractionality(nz.value() * scale) > options->small_matrix_value)
+       return false;
+   }
+@@ -547,7 +549,8 @@ double HPresolve::getMaxAbsColVal(HighsInt col) const {
+ double HPresolve::getMaxAbsRowVal(HighsInt row) const {
+   double maxVal = 0.0;
+ 
+-  for (const auto& nz : getRowVector(row))
++  getRowPositions(row, rowpositions);
++    for (const auto& nz : getStoredRow())
+     maxVal = std::max(std::abs(nz.value()), maxVal);
+ 
+   return maxVal;
+@@ -738,7 +741,8 @@ void HPresolve::updateColImpliedBounds(HighsInt row) {
+   // update implied bounds of all columns in given row
+   assert(row >= 0 && row < model->num_row_);
+   if (!checkUpdateColImpliedBounds(row)) return;
+-  for (const HighsSliceNonzero& nonzero : getRowVector(row))
++  getRowPositions(row, rowpositions);
++    for (const HighsSliceNonzero& nonzero : getStoredRow())
+     updateColImpliedBounds(row, nonzero.index(), nonzero.value());
+ }
+ 
+@@ -2116,7 +2120,8 @@ void HPresolve::changeRowDualUpper(HighsInt row, double newUpper) {
+   // printf("tightening upper bound of column %" HIGHSINT_FORMAT " from %.15g to
+   // %.15g\n", col,
+   //        oldUpper, newUpper);
+-  for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
++  getRowPositions(row, rowpositions);
++    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+     impliedDualRowBounds.updatedVarUpper(nonzero.index(), row, nonzero.value(),
+                                          oldUpper);
+     markChangedCol(nonzero.index());
+@@ -2130,7 +2135,8 @@ void HPresolve::changeRowDualLower(HighsInt row, double newLower) {
+   // %.15g\n", col,
+   //        oldLower, newLower);
+ 
+-  for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
++  getRowPositions(row, rowpositions);
++    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+     impliedDualRowBounds.updatedVarLower(nonzero.index(), row, nonzero.value(),
+                                          oldLower);
+     markChangedCol(nonzero.index());
+@@ -2256,7 +2262,8 @@ void HPresolve::changeImplRowDualUpper(HighsInt row, double newUpper,
+   if (!newDualImplied && std::min(oldImplUpper, newUpper) >= rowDualUpper[row])
+     return;
+ 
+-  for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
++  getRowPositions(row, rowpositions);
++    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+     impliedDualRowBounds.updatedImplVarUpper(
+         nonzero.index(), row, nonzero.value(), oldImplUpper, oldUpperSource);
+     markChangedCol(nonzero.index());
+@@ -2297,7 +2304,8 @@ void HPresolve::changeImplRowDualLower(HighsInt row, double newLower,
+   if (!newDualImplied && std::max(oldImplLower, newLower) <= rowDualLower[row])
+     return;
+ 
+-  for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
++  getRowPositions(row, rowpositions);
++    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+     impliedDualRowBounds.updatedImplVarLower(
+         nonzero.index(), row, nonzero.value(), oldImplLower, oldLowerSource);
+     markChangedCol(nonzero.index());
+@@ -3353,7 +3361,8 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
+     // binary variables here (see Suhl, Szymanski: Supernode processing of
+     // mixed-integer models. Comput. Optim. Appl. 3(4): 317-331 (1994)).
+ 
+-    for (const HighsSliceNonzero& nonzero : getRowVector(row)) {
++    getRowPositions(row, rowpositions);
++    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+       // get column index and coefficient
+       HighsInt col = nonzero.index();
+       double val = nonzero.value();
+@@ -4608,7 +4617,8 @@ HPresolve::Result HPresolve::dualFixing(HighsPostsolveStack& postsolve_stack,
+   // lambda for variable substitution
+   auto substituteCol = [&](HighsInt col, HighsInt row, HighsInt direction,
+                            double colBound, double otherColBound) {
+-    for (const auto& rowNz : getRowVector(row)) {
++    getRowPositions(row, rowpositions);
++    for (const auto& rowNz : getStoredRow()) {
+       // skip column index that was passed to this lambda
+       if (rowNz.index() == col) continue;
+ 
+@@ -5156,7 +5166,8 @@ HPresolve::Result HPresolve::removeSlacks(
+     if (cost) {
+       // Cost is (cost * rhs / coeff) + (col_cost - (cost/coeff) row_values)^Tx
+       double multiplier = cost / coeff;
+-      for (const HighsSliceNonzero& nonzero : getRowVector(iRow)) {
++      getRowPositions(iRow, rowpositions);
++    for (const HighsSliceNonzero& nonzero : getStoredRow()) {
+         HighsInt local_iCol = nonzero.index();
+         double local_value = nonzero.value();
+         model->col_cost_[local_iCol] -= multiplier * local_value;
+@@ -5417,7 +5428,8 @@ HPresolve::Result HPresolve::removeDependentEquations(
+     eqSet[i++] = eq;
+ 
+     // add entries of equation
+-    for (const HighsSliceNonzero& nonz : getRowVector(eq)) {
++    getRowPositions(eq, rowpositions);
++    for (const HighsSliceNonzero& nonz : getStoredRow()) {
+       matrix.value_.push_back(nonz.value());
+       matrix.index_.push_back(nonz.index());
+     }

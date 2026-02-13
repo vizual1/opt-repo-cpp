@@ -1,0 +1,47 @@
+diff --git a/include/ruckig/position.hpp b/include/ruckig/position.hpp
+index 5180c95..487ce4a 100644
+--- a/include/ruckig/position.hpp
++++ b/include/ruckig/position.hpp
+@@ -2,6 +2,7 @@
+ 
+ #include <array>
+ #include <optional>
++#include <utility>
+ 
+ 
+ namespace ruckig {
+diff --git a/include/ruckig/roots.hpp b/include/ruckig/roots.hpp
+index 23ba696..c76c8b2 100644
+--- a/include/ruckig/roots.hpp
++++ b/include/ruckig/roots.hpp
+@@ -33,21 +33,26 @@ protected:
+ 
+     Container data;
+     size_t size {0};
++    mutable bool sorted {true};
+ 
+ public:
+-    // Sort when accessing the elements
++    // Sort when accessing the elements; only sort if new elements have been inserted
+     iterator begin() {
+-        std::sort(data.begin(), data.begin() + size);
+-        return data.begin() + 0;
++        if (!sorted) {
++            std::sort(data.begin(), data.begin() + size);
++            sorted = true;
++        }
++        return data.begin();
+     }
+ 
+     iterator end() {
+         return data.begin() + size;
+     }
+ 
+-    inline void insert(T value) {
++    inline void insert(const T& value) {
+         data[size] = value;
+         ++size;
++        sorted = false;
+     }
+ };
+ 

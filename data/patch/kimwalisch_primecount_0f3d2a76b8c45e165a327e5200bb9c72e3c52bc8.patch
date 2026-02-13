@@ -1,0 +1,71 @@
+diff --git a/lib/primesieve/include/primesieve/pod_vector.hpp b/lib/primesieve/include/primesieve/pod_vector.hpp
+index 040c89fe..614a874c 100644
+--- a/lib/primesieve/include/primesieve/pod_vector.hpp
++++ b/lib/primesieve/include/primesieve/pod_vector.hpp
+@@ -17,6 +17,7 @@
+ #include <cstddef>
+ #include <type_traits>
+ #include <utility>
++#include <cstring>
+ 
+ namespace primesieve {
+ 
+@@ -100,7 +101,7 @@ public:
+   {
+     // For performance reasons primesieve is allowed to access
+     // memory with pos > size() but <= capacity().
+-    assert(pos <= capacity());
++    assert(pos <= (std::size_t)(capacity_ - array_));
+     return array_[pos];
+   }
+ 
+@@ -108,7 +109,7 @@ public:
+   {
+     // For performance reasons primesieve is allowed to access
+     // memory with pos > size() but <= capacity().
+-    assert(pos <= capacity());
++    assert(pos <= (std::size_t)(capacity_ - array_));
+     return array_[pos];
+   }
+ 
+@@ -217,7 +218,7 @@ public:
+ 
+       if (old)
+       {
+-        std::copy_n(old, old_size, array_);
++        copy_range(array_, old, old_size);
+         delete [] old;
+       }
+     }
+@@ -259,7 +260,7 @@ public:
+ 
+       if (old)
+       {
+-        std::copy_n(old, old_size, array_);
++        copy_range(array_, old, old_size);
+         delete [] old;
+       }
+     }
+@@ -270,6 +271,22 @@ private:
+   T* end_ = nullptr;
+   T* capacity_ = nullptr;
+ 
++  // Use an optimized copy for POD types to improve runtime performance
++  template <typename U>
++  ALWAYS_INLINE typename std::enable_if<std::is_trivial<U>::value>::type
++  copy_range(U* dest, const U* src, std::size_t n)
++  {
++    if (n > 0)
++      std::memcpy(dest, src, n * sizeof(U));
++  }
++
++  template <typename U>
++  ALWAYS_INLINE typename std::enable_if<!std::is_trivial<U>::value>::type
++  copy_range(U* dest, const U* src, std::size_t n)
++  {
++    std::copy_n(src, n, dest);
++  }
++
+   template <typename U>
+   ALWAYS_INLINE typename std::enable_if<std::is_trivial<U>::value>::type
+   default_initialize_range(U*, U*)

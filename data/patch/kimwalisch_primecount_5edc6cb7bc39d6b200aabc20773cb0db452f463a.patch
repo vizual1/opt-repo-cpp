@@ -1,0 +1,44 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index 9abe576d..ecd42a09 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -184,11 +184,13 @@ private:
+   int64_t phi_cache(uint64_t x, uint64_t a) const
+   {
+     assert(a < sieve_.size());
+-    assert(x / 240 < sieve_[a].size());
++    uint64_t idx = x / 240;
++    assert(idx < sieve_[a].size());
+ 
+-    uint64_t bitmask = unset_larger_[x % 240];
+-    uint64_t bits = sieve_[a][x / 240];
+-    return sieve_counts_[a][x / 240] + popcnt64(bits & bitmask);
++    uint64_t rem = x % 240;
++    uint64_t bitmask = unset_larger_[rem];
++    uint64_t bits = sieve_[a][idx];
++    return sieve_counts_[a][idx] + popcnt64(bits & bitmask);
+   }
+ 
+   /// Cache phi(x, i) results with: x <= max_x && i <= min(a, max_a).
+diff --git a/src/phi.cpp b/src/phi.cpp
+index 76d4c1c2..308c8cc0 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -182,11 +182,13 @@ private:
+   int64_t phi_cache(uint64_t x, uint64_t a) const
+   {
+     assert(a < sieve_.size());
+-    assert(x / 240 < sieve_[a].size());
++    uint64_t idx = x / 240;
++    assert(idx < sieve_[a].size());
+ 
+-    uint64_t bitmask = unset_larger_[x % 240];
+-    uint64_t bits = sieve_[a][x / 240];
+-    return sieve_counts_[a][x / 240] + popcnt64(bits & bitmask);
++    uint64_t rem = x % 240;
++    uint64_t bitmask = unset_larger_[rem];
++    uint64_t bits = sieve_[a][idx];
++    return sieve_counts_[a][idx] + popcnt64(bits & bitmask);
+   }
+ 
+   /// Cache phi(x, i) results with: x <= max_x && i <= min(a, max_a).

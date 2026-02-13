@@ -1,0 +1,15 @@
+diff --git a/src/quick-lint-js/fe/lex.cpp b/src/quick-lint-js/fe/lex.cpp
+index 542e70ae..d7f7c7a7 100644
+--- a/src/quick-lint-js/fe/lex.cpp
++++ b/src/quick-lint-js/fe/lex.cpp
+@@ -2064,7 +2064,9 @@ found_comment_end:
+ found_end_of_file:
+   this->diag_reporter_->report(diag_unclosed_block_comment{
+       .comment_open = source_code_span(&this->input_[0], &this->input_[2])});
+-  this->input_ += strlen(this->input_);
++  /* Avoid scanning the input again with strlen: we already know "c" points at
++     the first NUL found during the earlier scan. Set input_ directly to "c". */
++  this->input_ = c;
+ }
+ 
+ void lexer::skip_line_comment_body() {

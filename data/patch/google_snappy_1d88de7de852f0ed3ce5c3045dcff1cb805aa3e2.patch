@@ -1,0 +1,25 @@
+diff --git a/snappy-internal.h b/snappy-internal.h
+index ae78247..bd868c5 100644
+--- a/snappy-internal.h
++++ b/snappy-internal.h
+@@ -174,7 +174,7 @@ char* CompressFragment(const char* input,
+ // Separate implementation for 64-bit, little-endian cpus.
+ #if !SNAPPY_IS_BIG_ENDIAN && \
+     (defined(__x86_64__) || defined(_M_X64) || defined(ARCH_PPC) || \
+-     defined(ARCH_ARM))
++     defined(ARCH_ARM) || (defined(__riscv) && __riscv_xlen == 64))
+ static inline std::pair<size_t, bool> FindMatchLength(const char* s1,
+                                                       const char* s2,
+                                                       const char* s2_limit,
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit d572f4777349d43653b21d6c2fc63020ab326db2
++Subproject commit d572f4777349d43653b21d6c2fc63020ab326db2-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit b796f7d44681514f58a683a3a71ff17c94edb0c1
++Subproject commit b796f7d44681514f58a683a3a71ff17c94edb0c1-dirty

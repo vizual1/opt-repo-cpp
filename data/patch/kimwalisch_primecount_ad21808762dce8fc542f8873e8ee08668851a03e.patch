@@ -1,0 +1,162 @@
+diff --git a/include/for_atomic_inc.hpp b/include/for_atomic_inc.hpp
+index f992cf8a..4eb16536 100644
+--- a/include/for_atomic_inc.hpp
++++ b/include/for_atomic_inc.hpp
+@@ -17,6 +17,7 @@
+ #define FOR_ATOMIC_INC
+ 
+ #include <atomic>
++#include <omp.h>
+ 
+ /// for_atomic_inc() is a for loop with dynamic thread scheduling for use
+ /// inside of an OpenMP parallel region. We use this instead of OpenMP's
+diff --git a/src/deleglise-rivat/S2_easy.cpp b/src/deleglise-rivat/S2_easy.cpp
+index 2071d736..e034879f 100644
+--- a/src/deleglise-rivat/S2_easy.cpp
++++ b/src/deleglise-rivat/S2_easy.cpp
+@@ -25,6 +25,7 @@
+ #include <print.hpp>
+ #include <Status.hpp>
+ #include <S.hpp>
++#include <for_atomic_inc.hpp>
+ 
+ #include <stdint.h>
+ #include <vector>
+@@ -56,49 +57,52 @@ T S2_easy_OpenMP(T x,
+   int64_t pi_x13 = pi[x13];
+   Status status(x);
+ 
+-  #pragma omp parallel for schedule(dynamic) num_threads(threads) reduction(+: s2_easy)
+-  for (int64_t b = max(c, pi_sqrty) + 1; b <= pi_x13; b++)
++  std::atomic<int64_t> atomic_i(-1);
++  #pragma omp parallel reduction(+: s2_easy) num_threads(threads)
+   {
+-    int64_t prime = primes[b];
+-    T xp = x / prime;
+-    int64_t min_trivial = min(xp / prime, y);
+-    int64_t min_clustered = (int64_t) isqrt(xp);
+-    int64_t min_sparse = z / prime;
+-
+-    min_clustered = in_between(prime, min_clustered, y);
+-    min_sparse = in_between(prime, min_sparse, y);
+-
+-    int64_t l = pi[min_trivial];
+-    int64_t pi_min_clustered = pi[min_clustered];
+-    int64_t pi_min_sparse = pi[min_sparse];
+-
+-    // Find all clustered easy leaves where
+-    // successive leaves are identical.
+-    // pq = primes[b] * primes[l]
+-    // Which satisfy: pq > z && x / pq <= y
+-    // where phi(x / pq, b - 1) = pi(x / pq) - b + 2
+-    while (l > pi_min_clustered)
++    for_atomic_inc(max(c, pi_sqrty) + 1, b <= pi_x13, atomic_i)
+     {
+-      int64_t xpq = fast_div64(xp, primes[l]);
+-      int64_t phi_xpq = pi[xpq] - b + 2;
+-      int64_t xpq2 = fast_div64(xp, primes[b + phi_xpq - 1]);
+-      int64_t l2 = pi[xpq2];
+-      s2_easy += phi_xpq * (l - l2);
+-      l = l2;
++      int64_t prime = primes[b];
++      T xp = x / prime;
++      int64_t min_trivial = min(xp / prime, y);
++      int64_t min_clustered = (int64_t) isqrt(xp);
++      int64_t min_sparse = z / prime;
++
++      min_clustered = in_between(prime, min_clustered, y);
++      min_sparse = in_between(prime, min_sparse, y);
++
++      int64_t l = pi[min_trivial];
++      int64_t pi_min_clustered = pi[min_clustered];
++      int64_t pi_min_sparse = pi[min_sparse];
++
++      // Find all clustered easy leaves where
++      // successive leaves are identical.
++      // pq = primes[b] * primes[l]
++      // Which satisfy: pq > z && x / pq <= y
++      // where phi(x / pq, b - 1) = pi(x / pq) - b + 2
++      while (l > pi_min_clustered)
++      {
++        int64_t xpq = fast_div64(xp, primes[l]);
++        int64_t phi_xpq = pi[xpq] - b + 2;
++        int64_t xpq2 = fast_div64(xp, primes[b + phi_xpq - 1]);
++        int64_t l2 = pi[xpq2];
++        s2_easy += phi_xpq * (l - l2);
++        l = l2;
++      }
++
++      // Find all sparse easy leaves where
++      // successive leaves are different.
++      // pq = primes[b] * primes[l]
++      // Which satisfy: pq > z && x / pq <= y
++      // where phi(x / pq, b - 1) = pi(x / pq) - b + 2
++      for (; l > pi_min_sparse; l--)
++      {
++        int64_t xpq = fast_div64(xp, primes[l]);
++        s2_easy += pi[xpq] - b + 2;
++      }
++
++      status.print(b, pi_x13);
+     }
+-
+-    // Find all sparse easy leaves where
+-    // successive leaves are different.
+-    // pq = primes[b] * primes[l]
+-    // Which satisfy: pq > z && x / pq <= y
+-    // where phi(x / pq, b - 1) = pi(x / pq) - b + 2
+-    for (; l > pi_min_sparse; l--)
+-    {
+-      int64_t xpq = fast_div64(xp, primes[l]);
+-      s2_easy += pi[xpq] - b + 2;
+-    }
+-
+-    status.print(b, pi_x13);
+   }
+ 
+   return s2_easy;
+diff --git a/src/deleglise-rivat/S2_easy_libdivide.cpp b/src/deleglise-rivat/S2_easy_libdivide.cpp
+index 6c62bdef..08054c01 100644
+--- a/src/deleglise-rivat/S2_easy_libdivide.cpp
++++ b/src/deleglise-rivat/S2_easy_libdivide.cpp
+@@ -29,6 +29,7 @@
+ #include <print.hpp>
+ #include <Status.hpp>
+ #include <S.hpp>
++#include <for_atomic_inc.hpp>
+ 
+ #include <libdivide.h>
+ #include <stdint.h>
+@@ -170,18 +171,21 @@ T S2_easy_OpenMP(T x,
+   int64_t pi_x13 = pi[x13];
+   Status status(x);
+ 
+-  #pragma omp parallel for schedule(dynamic) num_threads(threads) reduction(+: s2_easy)
+-  for (int64_t b = max(c, pi_sqrty) + 1; b <= pi_x13; b++)
++  std::atomic<int64_t> atomic_i(-1);
++  #pragma omp parallel reduction(+: s2_easy) num_threads(threads)
+   {
+-    int64_t prime = primes[b];
+-    T xp = x / prime;
+-
+-    if (xp <= numeric_limits<uint64_t>::max())
+-      s2_easy += S2_easy_64(xp, y, z, b, prime, lprimes, pi);
+-    else
+-      s2_easy += S2_easy_128(xp, y, z, b, prime, primes, pi);
+-
+-    status.print(b, pi_x13);
++    for_atomic_inc(max(c, pi_sqrty) + 1, b <= pi_x13, atomic_i)
++    {
++      int64_t prime = primes[b];
++      T xp = x / prime;
++
++      if (xp <= numeric_limits<uint64_t>::max())
++        s2_easy += S2_easy_64(xp, y, z, b, prime, lprimes, pi);
++      else
++        s2_easy += S2_easy_128(xp, y, z, b, prime, primes, pi);
++
++      status.print(b, pi_x13);
++    }
+   }
+ 
+   return s2_easy;

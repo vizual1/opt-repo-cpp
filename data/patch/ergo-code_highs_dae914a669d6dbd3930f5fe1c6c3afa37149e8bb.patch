@@ -1,0 +1,36 @@
+diff --git a/highs/ipm/hipo/ipm/FactorHiGHSSolver.cpp b/highs/ipm/hipo/ipm/FactorHiGHSSolver.cpp
+index cbe311334..9111f5eb6 100644
+--- a/highs/ipm/hipo/ipm/FactorHiGHSSolver.cpp
++++ b/highs/ipm/hipo/ipm/FactorHiGHSSolver.cpp
+@@ -166,7 +166,8 @@ Int FactorHiGHSSolver::buildNEstructure(const HighsSparseMatrix& A,
+   ptrNE_.resize(A.num_row_ + 1, 0);
+ 
+   // keep track if given entry is nonzero, in column considered
+-  std::vector<bool> is_nz(A.num_row_, false);
++  // use a byte vector instead of std::vector<bool> for better performance
++  std::vector<char> is_nz(A.num_row_, 0);
+ 
+   // temporary storage of indices
+   std::vector<Int> temp_index(A.num_row_);
+@@ -259,7 +260,8 @@ Int FactorHiGHSSolver::buildNEstructure_2(const HighsSparseMatrix& A,
+   std::vector<Int> rowsNE;
+ 
+   // keep track if given entry is nonzero, in column considered
+-  std::vector<bool> is_nz(A.num_row_, false);
++  // use a byte vector instead of std::vector<bool> for better performance
++  std::vector<char> is_nz(A.num_row_, 0);
+ 
+   // temporary storage of indices
+   std::vector<Int> temp_index(A.num_row_);
+diff --git a/highs/ipm/hipo/ipm/FactorHiGHSSolver.h b/highs/ipm/hipo/ipm/FactorHiGHSSolver.h
+index f969463ba..4bb79625d 100644
+--- a/highs/ipm/hipo/ipm/FactorHiGHSSolver.h
++++ b/highs/ipm/hipo/ipm/FactorHiGHSSolver.h
+@@ -2,6 +2,7 @@
+ #define HIPO_FACTORHIGHS_SOLVER_H
+ 
+ #include <algorithm>
++#include <vector>
+ 
+ #include "Info.h"
+ #include "IpmData.h"

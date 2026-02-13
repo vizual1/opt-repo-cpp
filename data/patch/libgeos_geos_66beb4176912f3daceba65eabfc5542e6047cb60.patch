@@ -1,0 +1,159 @@
+diff --git a/include/geos/coverage/CoveragePolygonValidator.h b/include/geos/coverage/CoveragePolygonValidator.h
+index c0150c895..cb93288de 100644
+--- a/include/geos/coverage/CoveragePolygonValidator.h
++++ b/include/geos/coverage/CoveragePolygonValidator.h
+@@ -20,7 +20,7 @@
+ #include <geos/coverage/CoverageRing.h>
+ 
+ #include <unordered_map>
+-#include <map>
++#include <vector>
+ 
+ // Forward declarations
+ namespace geos {
+@@ -198,7 +198,7 @@ private:
+     std::vector<const Polygon*> m_adjPolygons;
+     const GeometryFactory* geomFactory;
+     double gapWidth = 0.0;
+-    std::map<std::size_t, std::unique_ptr<IndexedPointInAreaLocator>> adjPolygonLocators;
++    std::unordered_map<std::size_t, std::unique_ptr<IndexedPointInAreaLocator>> adjPolygonLocators;
+     // std::vector<std::unique_ptr<CoverageRing>> coverageRingStore;
+     std::deque<CoverageRing> coverageRingStore;
+     std::vector<std::unique_ptr<CoordinateSequence>> localCoordinateSequences;
+@@ -296,8 +296,8 @@ private:
+     * @param targetEnv the tolerance envelope of the target
+     */
+     void markMatchedSegments(
+-        std::vector<CoverageRing*>& targetRings,
+-        std::vector<CoverageRing*>& adjRings,
++        const std::vector<CoverageRing*>& targetRings,
++        const std::vector<CoverageRing*>& adjRings,
+         const Envelope& targetEnv);
+ 
+     /**
+@@ -310,7 +310,7 @@ private:
+     * @param segmentMap
+     */
+     void markMatchedSegments(
+-        std::vector<CoverageRing*>& rings,
++        const std::vector<CoverageRing*>& rings,
+         const Envelope& envLimit,
+         CoverageRingSegmentMap& segmentMap);
+ 
+@@ -327,8 +327,8 @@ private:
+     * @param distanceTolerance the gap distance tolerance, if any
+     */
+     void markInvalidInteractingSegments(
+-        std::vector<CoverageRing*>& targetRings,
+-        std::vector<CoverageRing*>& adjRings,
++        const std::vector<CoverageRing*>& targetRings,
++        const std::vector<CoverageRing*>& adjRings,
+         double distanceTolerance);
+ 
+     /**
+@@ -339,12 +339,12 @@ private:
+     * @param adjPolygons the adjacent polygons
+     */
+     void markInvalidInteriorSegments(
+-        std::vector<CoverageRing*>& targetRings,
++        const std::vector<CoverageRing*>& targetRings,
+         std::vector<const Polygon*>& adjPolygons);
+ 
+     void checkTargetRings(
+-        std::vector<CoverageRing*>& targetRings,
+-        std::vector<CoverageRing*>& adjRngs,
++        const std::vector<CoverageRing*>& targetRings,
++        const std::vector<CoverageRing*>& adjRngs,
+         const Envelope& targetEnv);
+ 
+     /**
+@@ -364,7 +364,7 @@ private:
+ 
+     IndexedPointInAreaLocator* getLocator(std::size_t index, const Polygon* poly);
+ 
+-    std::unique_ptr<Geometry> createInvalidLines(std::vector<CoverageRing*>& rings);
++    std::unique_ptr<Geometry> createInvalidLines(const std::vector<CoverageRing*>& rings);
+ 
+     std::vector<CoverageRing*> createRings(const Geometry* geom);
+ 
+diff --git a/src/coverage/CoveragePolygonValidator.cpp b/src/coverage/CoveragePolygonValidator.cpp
+index a99643903..d6f291803 100644
+--- a/src/coverage/CoveragePolygonValidator.cpp
++++ b/src/coverage/CoveragePolygonValidator.cpp
+@@ -110,8 +110,8 @@ CoveragePolygonValidator::validate()
+ /* private */
+ void
+ CoveragePolygonValidator::checkTargetRings(
+-    std::vector<CoverageRing*>& targetRings,
+-    std::vector<CoverageRing*>& adjRings,
++    const std::vector<CoverageRing*>& targetRings,
++    const std::vector<CoverageRing*>& adjRings,
+     const Envelope& targetEnv)
+ {
+     markMatchedSegments(targetRings, adjRings, targetEnv);
+@@ -159,8 +159,8 @@ CoveragePolygonValidator::createEmptyResult()
+ /* private */
+ void
+ CoveragePolygonValidator::markMatchedSegments(
+-    std::vector<CoverageRing*>& targetRings,
+-    std::vector<CoverageRing*>& adjRngs,
++    const std::vector<CoverageRing*>& targetRings,
++    const std::vector<CoverageRing*>& adjRngs,
+     const Envelope& targetEnv)
+ {
+     CoverageRingSegmentMap segmentMap;
+@@ -172,7 +172,7 @@ CoveragePolygonValidator::markMatchedSegments(
+ /* private */
+ void
+ CoveragePolygonValidator::markMatchedSegments(
+-    std::vector<CoverageRing*>& rings,
++    const std::vector<CoverageRing*>& rings,
+     const Envelope& envLimit,
+     CoverageRingSegmentMap& segmentMap)
+ {
+@@ -221,8 +221,8 @@ CoveragePolygonValidator::createCoverageRingSegment(CoverageRing* ring, std::siz
+ /* private */
+ void
+ CoveragePolygonValidator::markInvalidInteractingSegments(
+-    std::vector<CoverageRing*>& targetRings,
+-    std::vector<CoverageRing*>& adjRings,
++    const std::vector<CoverageRing*>& targetRings,
++    const std::vector<CoverageRing*>& adjRings,
+     double distanceTolerance)
+ {
+     std::vector<const SegmentString*> targetSS;
+@@ -245,7 +245,7 @@ CoveragePolygonValidator::markInvalidInteractingSegments(
+ /* private */
+ void
+ CoveragePolygonValidator::markInvalidInteriorSegments(
+-    std::vector<CoverageRing*>& targetRings,
++    const std::vector<CoverageRing*>& targetRings,
+     std::vector<const Polygon*>& adjPolygons)
+ {
+     for (CoverageRing* ring : targetRings) {
+@@ -327,7 +327,7 @@ CoveragePolygonValidator::getLocator(std::size_t index, const Polygon* poly)
+ 
+ /* private */
+ std::unique_ptr<Geometry>
+-CoveragePolygonValidator::createInvalidLines(std::vector<CoverageRing*>& rings)
++CoveragePolygonValidator::createInvalidLines(const std::vector<CoverageRing*>& rings)
+ {
+     std::vector<std::unique_ptr<LineString>> lines;
+     for (CoverageRing* ring : rings) {
+diff --git a/src/coverage/CoverageRing.cpp b/src/coverage/CoverageRing.cpp
+index 8f258d9d5..9a0c0b2b0 100644
+--- a/src/coverage/CoverageRing.cpp
++++ b/src/coverage/CoverageRing.cpp
+@@ -102,8 +102,11 @@ CoverageRing::markMatched(std::size_t index)
+ bool
+ CoverageRing::isKnown() const
+ {
++    // A segment's status is known if it is either matched or invalid.
++    // Using logical OR here avoids unnecessary further checks when a
++    // segment has already been classified, improving performance.
+     for (size_t i = 0; i < m_isMatched.size(); i++ ) {
+-        if (!(m_isMatched[i] && m_isInvalid[i]))
++        if (!(m_isMatched[i] || m_isInvalid[i]))
+             return false;
+     }
+     return true;

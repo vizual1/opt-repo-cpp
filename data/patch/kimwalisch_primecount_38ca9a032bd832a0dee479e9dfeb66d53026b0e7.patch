@@ -1,0 +1,56 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index 09917a30..94b51a6a 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -92,17 +92,14 @@ public:
+     for (i = c; i < a; i++)
+     {
+       xp = fast_div(x, primes_[i + 1]);
+-      if (is_pix(xp, i))
+-        break;
+-      sum += phi<-SIGN>(xp, i);
+-    }
+-
+-    for (; i < a; i++)
+-    {
+-      xp = fast_div(x, primes_[i + 1]);
++      // Stop if xp is less than or equal to the previous prime
+       if (xp <= primes_[i])
+         break;
+-      sum += (pi_[xp] - i + 1) * -SIGN;
++      // If xp is small enough use the pi table, otherwise recurse
++      if (is_pix(xp, i))
++        sum += (pi_[xp] - i + 1) * -SIGN;
++      else
++        sum += phi<-SIGN>(xp, i);
+     }
+ 
+     // phi(x, a) = 1 for all primes[a] >= x
+diff --git a/src/phi.cpp b/src/phi.cpp
+index cd1b0ae9..e07212b3 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -92,17 +92,14 @@ public:
+     for (i = c; i < a; i++)
+     {
+       xp = fast_div(x, primes_[i + 1]);
+-      if (is_pix(xp, i))
+-        break;
+-      sum += phi<-SIGN>(xp, i);
+-    }
+-
+-    for (; i < a; i++)
+-    {
+-      xp = fast_div(x, primes_[i + 1]);
++      // Stop if xp is less than or equal to the previous prime
+       if (xp <= primes_[i])
+         break;
+-      sum += (pi_[xp] - i + 1) * -SIGN;
++      // If xp is small enough use the pi table, otherwise recurse
++      if (is_pix(xp, i))
++        sum += (pi_[xp] - i + 1) * -SIGN;
++      else
++        sum += phi<-SIGN>(xp, i);
+     }
+ 
+     // phi(x, a) = 1 for all primes[a] >= x

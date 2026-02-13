@@ -1,0 +1,60 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index 10343d32..35b7df96 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -61,17 +61,17 @@ public:
+     pi_(pi)
+   {
+     // sieve_[a][x] uses at most max_x_bytes
+-    uint64_t max_x_bytes = 128 << 10;
++    // Increase the default sieve buffer from 128 KiB to 2 MiB to allow a
++    // larger caching window which improves performance on medium and
++    // large inputs while keeping initialization overhead reasonable.
++    uint64_t max_x_bytes = 2 << 20; // 2 MiB
+     uint64_t numbers_per_sieve_byte = 16;
+     max_x_ = max_x_bytes * numbers_per_sieve_byte;
+ 
+-    // This cache limit has been tuned for both pi_legendre(x) and
+-    // pi_meissel(x) as these functions are frequently used in primecount.
+-    // The idea is to allocate only a small amount of cache memory for
+-    // tiny computations (because initializing a lot of cache memory is
+-    // slow). On the other hand, for large and long running computations
+-    // we use the maximum amount of cache memory.
+-    uint64_t cache_limit = (uint64_t) pow((double) limit, 1 / 2.5);
++    // Tuned cache limit: use a larger cache for medium/large computations.
++    // Use sqrt(limit) as a heuristic to better balance memory usage and
++    // runtime performance compared to the previous exponent (1/2.5).
++    uint64_t cache_limit = (uint64_t) pow((double) limit, 0.5);
+     max_x_ = min(cache_limit, max_x_);
+     max_x_size_ = ceil_div(max_x_, 128);
+ 
+diff --git a/src/phi.cpp b/src/phi.cpp
+index 48545245..aba60c9f 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -61,17 +61,17 @@ public:
+     pi_(pi)
+   {
+     // sieve_[a][x] uses at most max_x_bytes
+-    uint64_t max_x_bytes = 128 << 10;
++    // Increase the default sieve buffer from 128 KiB to 2 MiB to allow a
++    // larger caching window which improves performance on medium and
++    // large inputs while keeping initialization overhead reasonable.
++    uint64_t max_x_bytes = 2 << 20; // 2 MiB
+     uint64_t numbers_per_sieve_byte = 16;
+     max_x_ = max_x_bytes * numbers_per_sieve_byte;
+ 
+-    // This cache limit has been tuned for both pi_legendre(x) and
+-    // pi_meissel(x) as these functions are frequently used in primecount.
+-    // The idea is to allocate only a small amount of cache memory for
+-    // tiny computations (because initializing a lot of cache memory is
+-    // slow). On the other hand, for large and long running computations
+-    // we use the maximum amount of cache memory.
+-    uint64_t cache_limit = (uint64_t) pow((double) limit, 1 / 2.5);
++    // Tuned cache limit: use a larger cache for medium/large computations.
++    // Use sqrt(limit) as a heuristic to better balance memory usage and
++    // runtime performance compared to the previous exponent (1/2.5).
++    uint64_t cache_limit = (uint64_t) pow((double) limit, 0.5);
+     max_x_ = min(cache_limit, max_x_);
+     max_x_size_ = ceil_div(max_x_, 128);
+ 

@@ -1,0 +1,25 @@
+diff --git a/src/util/HighsHash.h b/src/util/HighsHash.h
+index 87b49c6d9..ce16cade4 100644
+--- a/src/util/HighsHash.h
++++ b/src/util/HighsHash.h
+@@ -999,7 +999,19 @@ class HighsHashTable {
+       u64 capacity = tableSizeMask + 1;
+       for (u64 i = 0; i < capacity; ++i)
+         if (occupied(metadata[i])) entries.get()[i].~Entry();
+-      makeEmptyTable(128);
++
++      // For small tables reuse the existing buffers instead of
++      // deallocating and reallocating them. This avoids the cost of
++      // ::operator new and reduces runtime overhead when clearing
++      // frequently used small hash tables.
++      if (capacity == 128 && metadata && entries) {
++        // Reset metadata bytes to indicate empty slots. The entry objects
++        // have already been destroyed above.
++        std::memset(metadata.get(), 0, capacity * sizeof(u8));
++        numElements = 0;
++      } else {
++        makeEmptyTable(128);
++      }
+     }
+   }
+ 

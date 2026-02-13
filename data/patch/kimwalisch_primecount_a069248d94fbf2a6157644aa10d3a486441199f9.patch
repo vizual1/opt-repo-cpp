@@ -1,0 +1,30 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index 39fb6525..0b551669 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -68,10 +68,12 @@ public:
+     if ((int64_t) primes_[a] > x)
+       a = pi_[x];
+ 
+-    vector<int64_t> phi_vect;
+-    phi_vect.reserve(size);
+-    phi_vect.resize(a + 1, (x > 0) * -1);
+-    phi_vect.resize(size, x > 0);
++    // Create vector with the final size and default values. Then set
++    // entries up to index a to -1 (when x > 0) to match the original
++    // sentinel initialization while avoiding multiple resizes.
++    vector<int64_t> phi_vect(size, x > 0);
++    for (int64_t i = 0; i <= a && i < size; ++i)
++      phi_vect[i] = (x > 0) ? -1 : 0;
+ 
+     if (size > 1)
+     {
+@@ -83,7 +85,7 @@ public:
+         pi_sqrtx = min(pi_[sqrtx] + 1, a);
+ 
+       for (int64_t i = 2; i <= pi_sqrtx; i++)
+-        phi_vect[i] = phi<-1>(x / primes_[i - 1], i - 2);
++        phi_vect[i] = phi<-1>(fast_div(x, primes_[i - 1]), i - 2);
+ 
+       // calculate phi(x, a) using partial results
+       for (int64_t i = 2; i <= a; i++)

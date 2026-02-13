@@ -1,0 +1,444 @@
+diff --git a/include/generate_phi.hpp b/include/generate_phi.hpp
+index 2fa0e66d..1e60fe9f 100644
+--- a/include/generate_phi.hpp
++++ b/include/generate_phi.hpp
+@@ -45,6 +45,7 @@
+ #include <cassert>
+ #include <utility>
+ #include <vector>
++#include <algorithm>
+ 
+ namespace {
+ 
+@@ -63,10 +64,6 @@ public:
+     pi_(pi)
+   {
+     // We cache phi(x, a) if a <= max_a.
+-    // The value max_a = 100 has been determined empirically
+-    // by running benchmarks. Using a smaller or larger
+-    // max_a with the same amount of memory (max_megabytes)
+-    // decreases the performance.
+     uint64_t max_a = 100;
+     uint64_t tiny_a = PhiTiny::max_a();
+ 
+@@ -78,12 +75,9 @@ public:
+       return;
+ 
+     // We cache phi(x, a) if x <= max_x.
+-    // The value max_x = sqrt(x) has been determined by running
+-    // S2_hard(x) and D(x) benchmarks from 1e12 to 1e21.
+     uint64_t max_x = isqrt(x);
+ 
+-    // The cache (i.e. the sieve and sieve_counts arrays)
+-    // uses at most max_megabytes per thread.
++    // The cache uses at most max_megabytes per thread.
+     uint64_t max_megabytes = 16;
+     uint64_t indexes = max_a - tiny_a;
+     uint64_t max_bytes = max_megabytes << 20;
+@@ -97,13 +91,16 @@ public:
+     if (max_x_size_ < 8)
+       return;
+ 
+-    // Make sure that there are no uninitialized
+-    // bits in the last sieve array element.
+     assert(max_x_size_ > 0);
+     max_x_ = max_x_size_ * 240 - 1;
+     max_a_ = max_a;
+-    sieve_.resize(max_a_ + 1);
+-    sieve_counts_.resize(max_a_ + 1);
++
++    // Allocate contiguous storage to improve cache locality and reduce
++    // pointer indirections from vector<vector<...>>.
++    size_t rows = (size_t) max_a_ + 1;
++    size_t cols = (size_t) max_x_size_;
++    sieve_data_.assign(rows * cols, 0ull);
++    sieve_counts_data_.assign(rows * cols, 0u);
+   }
+ 
+   /// Calculate phi(x, a) using the recursive formula:
+@@ -142,12 +139,6 @@ public:
+   
+     for (i = c; i < a; i++)
+     {
+-      // phi(x / prime[i+1], i) = 1 if x / prime[i+1] <= prime[i].
+-      // However we can do slightly better:
+-      // If prime[i+1] > sqrt(x) and prime[i] <= sqrt(x) then
+-      // phi(x / prime[i+1], i) = 1 even if x / prime[i+1] > prime[i].
+-      // This works because in this case there is no other prime
+-      // inside the interval ]prime[i], x / prime[i+1]].
+       if (primes_[i + 1] > sqrtx)
+         break;
+       int64_t xp = fast_div(x, primes_[i + 1]);
+@@ -170,11 +161,23 @@ public:
+   }
+ 
+ private:
+-  /// phi(x, a) counts the numbers <= x that are not divisible by any of
+-  /// the first a primes. If x < prime[a+1]^2 then phi(x, a) counts the
+-  /// number of primes <= x, minus the first a primes, plus the number 1.
+-  /// Hence if x < prime[a+1]^2: phi(x, a) = pi(x) - a + 1.
+-  ///
++  inline uint64_t& sieve_at(uint64_t row, uint64_t col)
++  {
++    return sieve_data_[row * max_x_size_ + col];
++  }
++  inline const uint64_t& sieve_at(uint64_t row, uint64_t col) const
++  {
++    return sieve_data_[row * max_x_size_ + col];
++  }
++  inline uint32_t& sieve_count_at(uint64_t row, uint64_t col)
++  {
++    return sieve_counts_data_[row * max_x_size_ + col];
++  }
++  inline const uint32_t& sieve_count_at(uint64_t row, uint64_t col) const
++  {
++    return sieve_counts_data_[row * max_x_size_ + col];
++  }
++
+   bool is_pix(int64_t x, int64_t a) const
+   {
+     return x < pi_.size() &&
+@@ -189,21 +192,14 @@ private:
+ 
+   int64_t phi_cache(uint64_t x, uint64_t a) const
+   {
+-    assert(a < sieve_.size());
+-    assert(x / 240 < sieve_[a].size());
++    assert(a <= max_a_);
++    assert(x / 240 < max_x_size_);
+ 
+     uint64_t bitmask = unset_larger_[x % 240];
+-    uint64_t bits = sieve_[a][x / 240];
+-    return sieve_counts_[a][x / 240] + popcnt64(bits & bitmask);
++    uint64_t bits = sieve_at(a, x / 240);
++    return (int64_t) sieve_count_at(a, x / 240) + popcnt64(bits & bitmask);
+   }
+ 
+-  /// Cache phi(x, i) results with: x <= max_x && i <= min(a, max_a).
+-  /// Eratosthenes-like sieving algorithm that removes the first a primes
+-  /// and their multiples from the sieve array. Additionally this
+-  /// algorithm counts the numbers that are not divible by any of the
+-  /// first a primes after sieving has completed. The sieve array and the
+-  /// sieve_counts array later serve us as a phi(x, a) cache.
+-  ///
+   void sieve_cache(uint64_t x, uint64_t a)
+   {
+     a = min(a, max_a_);
+@@ -215,42 +211,40 @@ private:
+     uint64_t i = max_a_cached_ + 1;
+     uint64_t tiny_a = PhiTiny::max_a();
+     max_a_cached_ = a;
+-    i = max(i, 3);
++    i = max(i, 3u);
+ 
+     for (; i <= a; i++)
+     {
+-      // Each bit in the sieve array corresponds to an integer that
+-      // is not divisible by 2, 3 and 5. The 8 bits of each byte
+-      // correspond to the offsets { 1, 7, 11, 13, 17, 19, 23, 29 }.
+       if (i == 3)
+-        sieve_[i].resize(max_x_size_, ~0ull);
++      {
++        // Initialize row with all 1 bits
++        for (uint64_t j = 0; j < max_x_size_; ++j)
++          sieve_at(i, j) = ~0ull;
++      }
+       else
+       {
+-        // Initalize phi(x, i) with phi(x, i - 1)
+-        if (i - 1 <= tiny_a)
+-          sieve_[i] = std::move(sieve_[i - 1]);
+-        else
+-          sieve_[i] = sieve_[i - 1];
++        // Initialize phi(x, i) with phi(x, i - 1)
++        uint64_t prev = i - 1;
++        std::copy(&sieve_data_[prev * max_x_size_],
++                  &sieve_data_[prev * max_x_size_] + max_x_size_,
++                  &sieve_data_[i * max_x_size_]);
+ 
+         // Remove prime[i] and its multiples
+         uint64_t prime = primes_[i];
+         if (prime <= max_x_)
+-          sieve_[i][prime / 240] &= unset_bit_[prime % 240];
++          sieve_at(i, prime / 240) &= unset_bit_[prime % 240];
+         for (uint64_t n = prime * prime; n <= max_x_; n += prime * 2)
+-          sieve_[i][n / 240] &= unset_bit_[n % 240];
++          sieve_at(i, n / 240) &= unset_bit_[n % 240];
+ 
+         if (i > tiny_a)
+         {
+-          uint64_t count = 0;
+-          sieve_counts_[i].reserve(max_x_size_);
++          uint32_t count = 0;
+ 
+           // Fill an array with the cumulative 1 bit counts.
+-          // sieve_counts_[i][j] contains the count of numbers < j * 240
+-          // that are not divisible by any of the first i primes.
+           for (uint64_t j = 0; j < max_x_size_; j++)
+           {
+-            sieve_counts_[i].push_back((uint32_t) count);
+-            count += popcnt64(sieve_[i][j]);
++            sieve_count_at(i, j) = count;
++            count += popcnt64(sieve_at(i, j));
+           }
+         }
+       }
+@@ -261,21 +255,13 @@ private:
+   uint64_t max_x_size_ = 0;
+   uint64_t max_a_cached_ = 0;
+   uint64_t max_a_ = 0;
+-  /// sieve_[a] contains only numbers (1 bits) that are
+-  /// not divisible by any of the first a primes.
+-  vector<vector<uint64_t>> sieve_;
+-  /// sieve_counts_[a][i] contains the count of numbers < i * 240 that
+-  /// are not divisible by any of the first a primes.
+-  vector<vector<uint32_t>> sieve_counts_;
++  // Contiguous storage for sieve rows to reduce cache misses.
++  vector<uint64_t> sieve_data_;
++  vector<uint32_t> sieve_counts_data_;
+   const Primes& primes_;
+   const PiTable& pi_;
+ };
+ 
+-/// Returns a vector with phi(x, i - 1) values such that
+-/// phi[i] = phi(x, i - 1) for 1 <= i <= a.
+-/// phi(x, a) counts the numbers <= x that are not
+-/// divisible by any of the first a primes.
+-///
+ template <typename Primes>
+ pod_vector<int64_t>
+ generate_phi(int64_t x,
+@@ -297,15 +283,12 @@ generate_phi(int64_t x,
+     int64_t sqrtx = isqrt(x);
+     PhiCache<Primes> cache(x, a, primes, pi);
+ 
+-    // 2 <= i <= pi(sqrt(x)) + 1
+     for (; i <= a && primes[i - 1] <= sqrtx; i++)
+       phi[i] = phi[i - 1] + cache.template phi<-1>(x / primes[i - 1], i - 2);
+ 
+-    // pi(sqrt(x)) + 1 < i <= a
+     for (; i <= a; i++)
+       phi[i] = phi[i - 1] - (x > 0);
+ 
+-    // a < i < size
+     for (; i < size; i++)
+       phi[i] = x > 0;
+   }
+diff --git a/src/phi.cpp b/src/phi.cpp
+index 2d2c8c54..9ccd94fc 100644
+--- a/src/phi.cpp
++++ b/src/phi.cpp
+@@ -62,10 +62,6 @@ public:
+     pi_(pi)
+   {
+     // We cache phi(x, a) if a <= max_a.
+-    // The value max_a = 100 has been determined empirically
+-    // by running benchmarks. Using a smaller or larger
+-    // max_a with the same amount of memory (max_megabytes)
+-    // decreases the performance.
+     uint64_t max_a = 100;
+     uint64_t tiny_a = PhiTiny::max_a();
+ 
+@@ -77,14 +73,9 @@ public:
+       return;
+ 
+     // We cache phi(x, a) if x <= max_x.
+-    // The value max_x = x^(1/2.3) has been determined by running
+-    // pi_legendre(x) benchmarks from 1e10 to 1e16. On systems
+-    // with few CPU cores max_x = sqrt(x) tends to perform better
+-    // but this causes scaling issues on big servers.
+-    uint64_t max_x = (uint64_t) pow(x, 1 / 2.3);
+-
+-    // The cache (i.e. the sieve and sieve_counts arrays)
+-    // uses at most max_megabytes per thread.
++    uint64_t max_x = isqrt(x);
++
++    // The cache uses at most max_megabytes per thread.
+     uint64_t max_megabytes = 16;
+     uint64_t indexes = max_a - tiny_a;
+     uint64_t max_bytes = max_megabytes << 20;
+@@ -98,18 +89,18 @@ public:
+     if (max_x_size_ < 8)
+       return;
+ 
+-    // Make sure that there are no uninitialized
+-    // bits in the last sieve array element.
+     assert(max_x_size_ > 0);
+     max_x_ = max_x_size_ * 240 - 1;
+     max_a_ = max_a;
+-    sieve_.resize(max_a_ + 1);
+-    sieve_counts_.resize(max_a_ + 1);
++
++    // Allocate contiguous storage to improve cache locality and reduce
++    // pointer indirections from vector<vector<...>>.
++    size_t rows = (size_t) max_a_ + 1;
++    size_t cols = (size_t) max_x_size_;
++    sieve_data_.assign(rows * cols, 0ull);
++    sieve_counts_data_.assign(rows * cols, 0u);
+   }
+ 
+-  /// Calculate phi(x, a) using the recursive formula:
+-  /// phi(x, a) = phi(x, a - 1) - phi(x / primes[a], a - 1)
+-  ///
+   template <int SIGN>
+   int64_t phi(int64_t x, int64_t a)
+   {
+@@ -122,8 +113,6 @@ public:
+     else if (is_cached(x, a))
+       return phi_cache(x, a) * SIGN;
+ 
+-    // Cache all small phi(x, i) results with:
+-    // x <= max_x && i <= min(a, max_a)
+     sieve_cache(x, a);
+ 
+     int64_t sqrtx = isqrt(x);
+@@ -140,15 +129,9 @@ public:
+       assert(larger_c <= a);
+       sum = phi_cache(x, c) * SIGN;
+     }
+-  
++
+     for (i = c; i < a; i++)
+     {
+-      // phi(x / prime[i+1], i) = 1 if x / prime[i+1] <= prime[i].
+-      // However we can do slightly better:
+-      // If prime[i+1] > sqrt(x) and prime[i] <= sqrt(x) then
+-      // phi(x / prime[i+1], i) = 1 even if x / prime[i+1] > prime[i].
+-      // This works because in this case there is no other prime
+-      // inside the interval ]prime[i], x / prime[i+1]].
+       if (primes_[i + 1] > sqrtx)
+         break;
+       int64_t xp = fast_div(x, primes_[i + 1]);
+@@ -165,17 +148,28 @@ public:
+       sum += (pi_[xp] - i + 1) * -SIGN;
+     }
+ 
+-    // phi(x, a) = 1 for all primes[a] >= x
+     sum += (a - i) * -SIGN;
+     return sum;
+   }
+ 
+ private:
+-  /// phi(x, a) counts the numbers <= x that are not divisible by any of
+-  /// the first a primes. If x < prime[a+1]^2 then phi(x, a) counts the
+-  /// number of primes <= x, minus the first a primes, plus the number 1.
+-  /// Hence if x < prime[a+1]^2: phi(x, a) = pi(x) - a + 1.
+-  ///
++  inline uint64_t& sieve_at(uint64_t row, uint64_t col)
++  {
++    return sieve_data_[row * max_x_size_ + col];
++  }
++  inline const uint64_t& sieve_at(uint64_t row, uint64_t col) const
++  {
++    return sieve_data_[row * max_x_size_ + col];
++  }
++  inline uint32_t& sieve_count_at(uint64_t row, uint64_t col)
++  {
++    return sieve_counts_data_[row * max_x_size_ + col];
++  }
++  inline const uint32_t& sieve_count_at(uint64_t row, uint64_t col) const
++  {
++    return sieve_counts_data_[row * max_x_size_ + col];
++  }
++
+   bool is_pix(int64_t x, int64_t a) const
+   {
+     return x < pi_.size() &&
+@@ -190,21 +184,14 @@ private:
+ 
+   int64_t phi_cache(uint64_t x, uint64_t a) const
+   {
+-    assert(a < sieve_.size());
+-    assert(x / 240 < sieve_[a].size());
++    assert(a <= max_a_);
++    assert(x / 240 < max_x_size_);
+ 
+     uint64_t bitmask = unset_larger_[x % 240];
+-    uint64_t bits = sieve_[a][x / 240];
+-    return sieve_counts_[a][x / 240] + popcnt64(bits & bitmask);
++    uint64_t bits = sieve_at(a, x / 240);
++    return (int64_t) sieve_count_at(a, x / 240) + popcnt64(bits & bitmask);
+   }
+ 
+-  /// Cache phi(x, i) results with: x <= max_x && i <= min(a, max_a).
+-  /// Eratosthenes-like sieving algorithm that removes the first a primes
+-  /// and their multiples from the sieve array. Additionally this
+-  /// algorithm counts the numbers that are not divible by any of the
+-  /// first a primes after sieving has completed. The sieve array and the
+-  /// sieve_counts array later serve us as a phi(x, a) cache.
+-  ///
+   void sieve_cache(uint64_t x, uint64_t a)
+   {
+     a = min(a, max_a_);
+@@ -216,42 +203,36 @@ private:
+     uint64_t i = max_a_cached_ + 1;
+     uint64_t tiny_a = PhiTiny::max_a();
+     max_a_cached_ = a;
+-    i = max(i, 3);
++    i = max(i, 3u);
+ 
+     for (; i <= a; i++)
+     {
+-      // Each bit in the sieve array corresponds to an integer that
+-      // is not divisible by 2, 3 and 5. The 8 bits of each byte
+-      // correspond to the offsets { 1, 7, 11, 13, 17, 19, 23, 29 }.
+       if (i == 3)
+-        sieve_[i].resize(max_x_size_, ~0ull);
++      {
++        for (uint64_t j = 0; j < max_x_size_; ++j)
++          sieve_at(i, j) = ~0ull;
++      }
+       else
+       {
+-        // Initalize phi(x, i) with phi(x, i - 1)
+-        if (i - 1 <= tiny_a)
+-          sieve_[i] = std::move(sieve_[i - 1]);
+-        else
+-          sieve_[i] = sieve_[i - 1];
++        uint64_t prev = i - 1;
++        std::copy(&sieve_data_[prev * max_x_size_],
++                  &sieve_data_[prev * max_x_size_] + max_x_size_,
++                  &sieve_data_[i * max_x_size_]);
+ 
+-        // Remove prime[i] and its multiples
+         uint64_t prime = primes_[i];
+         if (prime <= max_x_)
+-          sieve_[i][prime / 240] &= unset_bit_[prime % 240];
++          sieve_at(i, prime / 240) &= unset_bit_[prime % 240];
+         for (uint64_t n = prime * prime; n <= max_x_; n += prime * 2)
+-          sieve_[i][n / 240] &= unset_bit_[n % 240];
++          sieve_at(i, n / 240) &= unset_bit_[n % 240];
+ 
+         if (i > tiny_a)
+         {
+-          uint64_t count = 0;
+-          sieve_counts_[i].reserve(max_x_size_);
++          uint32_t count = 0;
+ 
+-          // Fill an array with the cumulative 1 bit counts.
+-          // sieve_counts_[i][j] contains the count of numbers < j * 240
+-          // that are not divisible by any of the first i primes.
+           for (uint64_t j = 0; j < max_x_size_; j++)
+           {
+-            sieve_counts_[i].push_back((uint32_t) count);
+-            count += popcnt64(sieve_[i][j]);
++            sieve_count_at(i, j) = count;
++            count += popcnt64(sieve_at(i, j));
+           }
+         }
+       }
+@@ -262,12 +243,8 @@ private:
+   uint64_t max_x_size_ = 0;
+   uint64_t max_a_cached_ = 0;
+   uint64_t max_a_ = 0;
+-  /// sieve_[a] contains only numbers (1 bits) that are
+-  /// not divisible by any of the first a primes.
+-  vector<vector<uint64_t>> sieve_;
+-  /// sieve_counts_[a][i] contains the count of numbers < i * 240 that
+-  /// are not divisible by any of the first a primes.
+-  vector<vector<uint32_t>> sieve_counts_;
++  vector<uint64_t> sieve_data_;
++  vector<uint32_t> sieve_counts_data_;
+   const vector<int32_t>& primes_;
+   const PiTable& pi_;
+ };

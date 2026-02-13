@@ -1,0 +1,26 @@
+diff --git a/snappy.cc b/snappy.cc
+index 3f446c6..d9eeb4e 100644
+--- a/snappy.cc
++++ b/snappy.cc
+@@ -1340,6 +1340,9 @@ class SnappyDecompressor {
+           const ptrdiff_t entry = kLengthMinusOffset[c];
+           preload = LittleEndian::Load32(ip);
+           const uint32_t trailer = ExtractLowBytes(preload, c & 3);
++#if defined(__GNUC__) && defined(__x86_64__)
++          asm("") : : "r"(trailer);
++#endif
+           const uint32_t length = entry & 0xff;
+           assert(length > 0);
+ 
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

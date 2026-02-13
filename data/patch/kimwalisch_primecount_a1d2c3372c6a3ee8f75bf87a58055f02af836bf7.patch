@@ -1,0 +1,29 @@
+diff --git a/src/gourdon/LoadBalancerAC.cpp b/src/gourdon/LoadBalancerAC.cpp
+index d4bf8955..832cc39e 100644
+--- a/src/gourdon/LoadBalancerAC.cpp
++++ b/src/gourdon/LoadBalancerAC.cpp
+@@ -72,6 +72,24 @@ bool LoadBalancerAC::get_work(ThreadDataAC& thread)
+   double time = get_time();
+   thread.secs = time - thread.secs;
+ 
++  // Fast-path for single-threaded runs: avoid locking and
++  // dynamic adjustments which are only useful for multi-threading.
++  if (threads_ == 1 && !is_print_)
++  {
++    if (low_ >= sqrtx_)
++      return false;
++    if (low_ == 0)
++      start_time_ = time;
++
++    thread.low = low_;
++    thread.segments = segments_;
++    thread.segment_size = segment_size_;
++    low_ = std::min(low_ + segments_ * segment_size_, sqrtx_);
++    segment_nr_++;
++
++    return thread.low < sqrtx_;
++  }
++
+   LockGuard lockGuard(lock_);
+ 
+   if (low_ >= sqrtx_)

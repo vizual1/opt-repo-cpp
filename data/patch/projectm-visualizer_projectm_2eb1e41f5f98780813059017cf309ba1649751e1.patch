@@ -1,0 +1,76 @@
+diff --git a/src/libprojectM/MilkdropPreset/Border.cpp b/src/libprojectM/MilkdropPreset/Border.cpp
+index 86c8b0cbe..f8de613a9 100644
+--- a/src/libprojectM/MilkdropPreset/Border.cpp
++++ b/src/libprojectM/MilkdropPreset/Border.cpp
+@@ -26,6 +26,9 @@ void Border::Draw(const PerFrameContext& presetPerFrameContext)
+     glBindVertexArray(m_vaoID);
+     glBindBuffer(GL_ARRAY_BUFFER, m_vboID);
+ 
++    // Pre-allocate a small vertex buffer once and reuse it to avoid repeated allocations.
++    glBufferData(GL_ARRAY_BUFFER, sizeof(Point) * 4, nullptr, GL_DYNAMIC_DRAW);
++
+     // No additive drawing for borders
+     glEnable(GL_BLEND);
+     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+@@ -59,7 +62,8 @@ void Border::Draw(const PerFrameContext& presetPerFrameContext)
+ 
+             for (int rot = 0; rot < 4; rot++)
+             {
+-                glBufferData(GL_ARRAY_BUFFER, sizeof(Point) * 4, vertices.data(), GL_DYNAMIC_DRAW);
++                // Update the already-allocated VBO rather than reallocating it each time.
++                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Point) * 4, vertices.data());
+                 glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+ 
+                 // Rotate 90 degrees
+diff --git a/src/libprojectM/MilkdropPreset/FinalComposite.cpp b/src/libprojectM/MilkdropPreset/FinalComposite.cpp
+index 72427cb77..e2a247b34 100644
+--- a/src/libprojectM/MilkdropPreset/FinalComposite.cpp
++++ b/src/libprojectM/MilkdropPreset/FinalComposite.cpp
+@@ -121,7 +121,8 @@ void FinalComposite::Draw(const PresetState& presetState, const PerFrameContext&
+         glDisable(GL_BLEND);
+         glBindVertexArray(m_vaoID);
+         glBindBuffer(GL_ARRAY_BUFFER, m_vboID);
+-        glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * vertexCount, m_vertices.data(), GL_DYNAMIC_DRAW);
++        // Update the pre-allocated buffer instead of reallocating each frame.
++        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(MeshVertex) * vertexCount, m_vertices.data());
+         glBindBuffer(GL_ARRAY_BUFFER, 0);
+ 
+         m_compositeShader->LoadVariables(presetState, perFrameContext);
+@@ -303,7 +304,12 @@ void FinalComposite::InitializeMesh(const PresetState& presetState)
+     // Store indices.
+     // ToDo: Probably don't need to store m_indices
+     glBindVertexArray(m_vaoID);
+-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int) * m_indices.size(), m_indices.data(), GL_STATIC_DRAW);
++    // Ensure the vertex buffer is allocated once so subsequent frames can use glBufferSubData.
++    glBindBuffer(GL_ARRAY_BUFFER, m_vboID);
++    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(MeshVertex) * m_vertices.size()), nullptr, GL_DYNAMIC_DRAW);
++    // Now store the element/index buffer.
++    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_elementBuffer);
++    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(int) * m_indices.size()), m_indices.data(), GL_STATIC_DRAW);
+     glBindVertexArray(0);
+ }
+ 
+diff --git a/src/libprojectM/MilkdropPreset/PerPixelMesh.cpp b/src/libprojectM/MilkdropPreset/PerPixelMesh.cpp
+index 724c4b45c..78bc9fdc4 100644
+--- a/src/libprojectM/MilkdropPreset/PerPixelMesh.cpp
++++ b/src/libprojectM/MilkdropPreset/PerPixelMesh.cpp
+@@ -137,7 +137,12 @@ void PerPixelMesh::InitializeMesh(const PresetState& presetState)
+         // Grid size has changed, reallocate vertex buffers
+         m_vertices.resize((m_gridSizeX + 1) * (m_gridSizeY + 1));
+         m_listIndices.resize(m_gridSizeX * m_gridSizeY * 6);
+-        m_drawVertices.resize(1024 * 3); // Fixed size, may scale it later depending on GPU caps.
++        // Pre-allocate draw buffer to a reasonable size: attempt to fit the whole mesh if possible.
++        int estimatedTriangles = m_gridSizeX * m_gridSizeY * 2; // two triangles per cell
++        int estimatedVertices = estimatedTriangles * 3;
++        // Cap the allocation to avoid excessive memory usage while still improving performance.
++        const int maxReserve = 1024 * 1024; // 1M vertices
++        m_drawVertices.resize(std::min(estimatedVertices, maxReserve));
+     }
+     else if (m_viewportWidth == presetState.renderContext.viewportSizeX &&
+              m_viewportHeight == presetState.renderContext.viewportSizeY)
+diff --git a/vendor/projectm-eval b/vendor/projectm-eval
+--- a/vendor/projectm-eval
++++ b/vendor/projectm-eval
+@@ -1 +1 @@
+-Subproject commit 7cefc94eb2583c5106e022850cfba70d76391015
++Subproject commit 7cefc94eb2583c5106e022850cfba70d76391015-dirty

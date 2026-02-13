@@ -1,0 +1,21 @@
+diff --git a/src/lower/lowerer_impl.cpp b/src/lower/lowerer_impl.cpp
+index bf325437..0f63774b 100644
+--- a/src/lower/lowerer_impl.cpp
++++ b/src/lower/lowerer_impl.cpp
+@@ -1621,9 +1621,13 @@ Stmt LowererImpl::lowerWhere(Where where) {
+     consumer = Block::make(sortCall, consumer);
+   }
+ 
+-  // Now that temporary allocations are hoisted, we always need to emit an initialization loop before entering the
+-  // producer.
+-  if(generateComputeCode() && !isScalar(temporary.getType())) {
++  // Now that temporary allocations are hoisted, we may need to emit an
++  // initialization loop before entering the producer. However, when
++  // accelerating a dense workspace with sparse iteration we construct
++  // and sort an explicit index list and zero-initializing the dense
++  // temporary beforehand is unnecessary and costly. Skip the init loop
++  // in that case.
++  if (generateComputeCode() && !isScalar(temporary.getType()) && !accelarateDenseWorkSpace) {
+     // TODO: We only actually need to do this if:
+     //      1) We use the temporary multiple times
+     //      2) The PRODUCER RHS is sparse(not full). (Guarantees that old values are overwritten before consuming)

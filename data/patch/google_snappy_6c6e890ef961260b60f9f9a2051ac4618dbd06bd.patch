@@ -1,0 +1,106 @@
+diff --git a/snappy-stubs-internal.h b/snappy-stubs-internal.h
+index 7d43c92..7524ec7 100644
+--- a/snappy-stubs-internal.h
++++ b/snappy-stubs-internal.h
+@@ -171,14 +171,21 @@ class LittleEndian {
+  public:
+   // Functions to do unaligned loads and stores in little-endian order.
+   static inline uint16_t Load16(const void *ptr) {
++#if SNAPPY_IS_BIG_ENDIAN
+     const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);
+ 
+     // Compiles to a single mov/str on recent clang and gcc.
+     return (static_cast<uint16_t>(buffer[0])) |
+             (static_cast<uint16_t>(buffer[1]) << 8);
++#else
++    uint16_t v;
++    std::memcpy(&v, ptr, sizeof(v));
++    return v;
++#endif  // SNAPPY_IS_BIG_ENDIAN
+   }
+ 
+   static inline uint32_t Load32(const void *ptr) {
++#if SNAPPY_IS_BIG_ENDIAN
+     const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);
+ 
+     // Compiles to a single mov/str on recent clang and gcc.
+@@ -186,9 +193,15 @@ class LittleEndian {
+             (static_cast<uint32_t>(buffer[1]) << 8) |
+             (static_cast<uint32_t>(buffer[2]) << 16) |
+             (static_cast<uint32_t>(buffer[3]) << 24);
++#else
++    uint32_t v;
++    std::memcpy(&v, ptr, sizeof(v));
++    return v;
++#endif  // SNAPPY_IS_BIG_ENDIAN
+   }
+ 
+   static inline uint64_t Load64(const void *ptr) {
++#if SNAPPY_IS_BIG_ENDIAN
+     const uint8_t* const buffer = reinterpret_cast<const uint8_t*>(ptr);
+ 
+     // Compiles to a single mov/str on recent clang and gcc.
+@@ -200,17 +213,27 @@ class LittleEndian {
+             (static_cast<uint64_t>(buffer[5]) << 40) |
+             (static_cast<uint64_t>(buffer[6]) << 48) |
+             (static_cast<uint64_t>(buffer[7]) << 56);
++#else
++    uint64_t v;
++    std::memcpy(&v, ptr, sizeof(v));
++    return v;
++#endif  // SNAPPY_IS_BIG_ENDIAN
+   }
+ 
+   static inline void Store16(void *dst, uint16_t value) {
++#if SNAPPY_IS_BIG_ENDIAN
+     uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);
+ 
+     // Compiles to a single mov/str on recent clang and gcc.
+     buffer[0] = static_cast<uint8_t>(value);
+     buffer[1] = static_cast<uint8_t>(value >> 8);
++#else
++    std::memcpy(dst, &value, sizeof(value));
++#endif  // SNAPPY_IS_BIG_ENDIAN
+   }
+ 
+   static void Store32(void *dst, uint32_t value) {
++#if SNAPPY_IS_BIG_ENDIAN
+     uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);
+ 
+     // Compiles to a single mov/str on recent clang and gcc.
+@@ -218,9 +241,13 @@ class LittleEndian {
+     buffer[1] = static_cast<uint8_t>(value >> 8);
+     buffer[2] = static_cast<uint8_t>(value >> 16);
+     buffer[3] = static_cast<uint8_t>(value >> 24);
++#else
++    std::memcpy(dst, &value, sizeof(value));
++#endif  // SNAPPY_IS_BIG_ENDIAN
+   }
+ 
+   static void Store64(void* dst, uint64_t value) {
++#if SNAPPY_IS_BIG_ENDIAN
+     uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);
+ 
+     // Compiles to a single mov/str on recent clang and gcc.
+@@ -232,6 +259,9 @@ class LittleEndian {
+     buffer[5] = static_cast<uint8_t>(value >> 40);
+     buffer[6] = static_cast<uint8_t>(value >> 48);
+     buffer[7] = static_cast<uint8_t>(value >> 56);
++#else
++    std::memcpy(dst, &value, sizeof(value));
++#endif  // SNAPPY_IS_BIG_ENDIAN
+   }
+ 
+   static inline constexpr bool IsLittleEndian() {
+diff --git a/third_party/benchmark b/third_party/benchmark
+--- a/third_party/benchmark
++++ b/third_party/benchmark
+@@ -1 +1 @@
+-Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
++Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
+diff --git a/third_party/googletest b/third_party/googletest
+--- a/third_party/googletest
++++ b/third_party/googletest
+@@ -1 +1 @@
+-Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
++Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

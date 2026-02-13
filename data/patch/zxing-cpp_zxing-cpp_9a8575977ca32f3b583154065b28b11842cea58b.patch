@@ -1,0 +1,158 @@
+diff --git a/core/src/BinaryBitmap.cpp b/core/src/BinaryBitmap.cpp
+index 2952f218..731c2816 100644
+--- a/core/src/BinaryBitmap.cpp
++++ b/core/src/BinaryBitmap.cpp
+@@ -19,7 +19,7 @@ struct BinaryBitmap::Cache
+ 
+ BinaryBitmap::BinaryBitmap(const ImageView& buffer) : _cache(new Cache), _buffer(buffer) {}
+ 
+-BinaryBitmap::~BinaryBitmap() = default;
++BinaryBitmap::~BinaryBitmap() noexcept = default;
+ 
+ const BitMatrix* BinaryBitmap::getBitMatrix() const
+ {
+@@ -29,7 +29,7 @@ const BitMatrix* BinaryBitmap::getBitMatrix() const
+ 
+ void BinaryBitmap::invert()
+ {
+-	if (_cache->matrix) {
++	if (_cache && _cache->matrix) {
+ 		auto matrix = const_cast<BitMatrix*>(_cache->matrix.get());
+ 		matrix->flipAll();
+ 	}
+diff --git a/core/src/BinaryBitmap.h b/core/src/BinaryBitmap.h
+index 292b8669..3fdb67d4 100644
+--- a/core/src/BinaryBitmap.h
++++ b/core/src/BinaryBitmap.h
+@@ -41,7 +41,7 @@ protected:
+ 
+ public:
+ 	BinaryBitmap(const ImageView& buffer);
+-	virtual ~BinaryBitmap();
++	virtual ~BinaryBitmap() noexcept;
+ 
+ 	int width() const { return _buffer.width(); }
+ 	int height() const { return _buffer.height(); }
+diff --git a/core/src/GlobalHistogramBinarizer.cpp b/core/src/GlobalHistogramBinarizer.cpp
+index f09d040d..cd61e165 100644
+--- a/core/src/GlobalHistogramBinarizer.cpp
++++ b/core/src/GlobalHistogramBinarizer.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include "BitMatrix.h"
+ #include "ByteArray.h"
++#include "ThresholdBinarizer.h"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -146,12 +147,8 @@ GlobalHistogramBinarizer::getBlackMatrix() const
+ 	// We delay reading the entire image luminance until the black point estimation succeeds.
+ 	// Although we end up reading four rows twice, it is consistent with our motto of
+ 	// "fail quickly" which is necessary for continuous scanning.
+-	auto matrix = std::make_shared<BitMatrix>(width(), height());
+-	for(int y = 0; y < height(); ++y)
+-		for(int x = 0; x < width(); ++x)
+-			matrix->set(x, y, *_buffer.data(x, y) < blackPoint);
+-
+-	return matrix;
++	// Reuse ThresholdBinarizer's vectorizable implementation to speed this up substantially.
++	return ThresholdBinarizer::Binarize(_buffer, static_cast<uint8_t>(blackPoint));
+ }
+ 
+ } // ZXing
+diff --git a/core/src/HybridBinarizer.cpp b/core/src/HybridBinarizer.cpp
+index fe54291c..e835b98a 100644
+--- a/core/src/HybridBinarizer.cpp
++++ b/core/src/HybridBinarizer.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include "BitMatrix.h"
+ #include "Matrix.h"
++#include "ThresholdBinarizer.h"
+ 
+ #include <cstdint>
+ #include <memory>
+diff --git a/core/src/ThresholdBinarizer.h b/core/src/ThresholdBinarizer.h
+index 75ad2a89..2b315311 100644
+--- a/core/src/ThresholdBinarizer.h
++++ b/core/src/ThresholdBinarizer.h
+@@ -51,33 +51,70 @@ public:
+ 
+ 	std::shared_ptr<const BitMatrix> getBlackMatrix() const override
+ 	{
+-		BitMatrix res(width(), height());
++		return Binarize(_buffer, _threshold);
++	}
++
++	// Fast, reusable binarization of a full image using the ThresholdBinarizer implementation.
++	static std::shared_ptr<const BitMatrix> Binarize(const ImageView& buffer, uint8_t threshold)
++	{
++		BitMatrix res(buffer.width(), buffer.height());
+ 
+-		if (_buffer.pixStride() == 1 && _buffer.rowStride() == _buffer.width()) {
++		if (buffer.pixStride() == 1 && buffer.rowStride() == buffer.width()) {
+ 			// Specialize for a packed buffer with pixStride 1 to support auto vectorization (16x speedup on AVX2)
+ 			auto dst = res.row(0).begin();
+-			for (auto src = _buffer.data(0, 0), end = _buffer.data(0, height()); src != end; ++src, ++dst)
+-				*dst = *src <= _threshold;
++			for (auto src = buffer.data(0, 0), end = buffer.data(0, buffer.height()); src != end; ++src, ++dst)
++				*dst = *src <= threshold;
+ 		} else {
+-			auto processLine = [this, &res](int y, const auto* src, const int stride) {
++			auto processLine = [&](int y, const auto* src, const int stride) {
+ 				for (auto& dst : res.row(y)) {
+-					dst = *src <= _threshold;
++					dst = *src <= threshold;
+ 					src += stride;
+ 				}
+ 			};
+ 			for (int y = 0; y < res.height(); ++y) {
+-				auto src = _buffer.data(0, y) + GreenIndex(_buffer.format());
++				auto src = buffer.data(0, y) + GreenIndex(buffer.format());
+ 				// Specialize the inner loop for strides 1 and 4 to support auto vectorization
+-				switch (_buffer.pixStride()) {
++				switch (buffer.pixStride()) {
+ 				case 1: processLine(y, src, 1); break;
+ 				case 4: processLine(y, src, 4); break;
+-				default: processLine(y, src, _buffer.pixStride()); break;
++				default: processLine(y, src, buffer.pixStride()); break;
+ 				}
+ 			}
+ 		}
+ 
+ 		return std::make_shared<const BitMatrix>(std::move(res));
+ 	}
++
++	// Fast, reusable pattern extraction for a single row using a given threshold.
++	static bool GetPatternRow(const ImageView& buffer, int row, int rotation, PatternRow& res, uint8_t threshold)
++	{
++		auto b = buffer.rotated(rotation);
++
++		const int stride = b.pixStride();
++		const uint8_t* begin = b.data(0, row) + GreenIndex(b.format());
++		const uint8_t* end = begin + b.width() * stride;
++
++		auto* lastPos = begin;
++		bool lastVal = false;
++
++		res.clear();
++
++		for (const uint8_t* p = begin; p < end; p += stride) {
++			bool val = *p <= threshold;
++			if (val != lastVal) {
++				res.push_back(narrow_cast<PatternRow::value_type>((p - lastPos) / stride));
++				lastVal = val;
++				lastPos = p;
++			}
++		}
++
++		res.push_back(narrow_cast<PatternRow::value_type>((end - lastPos) / stride));
++
++		if (*(end - stride) <= threshold)
++			res.push_back(0); // last value is number of white pixels, here 0
++
++		return true;
++	}
+ };
+ 
+ } // ZXing

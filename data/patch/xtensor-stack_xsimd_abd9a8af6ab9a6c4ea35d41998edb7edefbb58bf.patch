@@ -1,0 +1,60 @@
+diff --git a/include/xsimd/arch/xsimd_avx512bw.hpp b/include/xsimd/arch/xsimd_avx512bw.hpp
+index 7822a08..83a10a2 100644
+--- a/include/xsimd/arch/xsimd_avx512bw.hpp
++++ b/include/xsimd/arch/xsimd_avx512bw.hpp
+@@ -321,10 +321,12 @@ namespace xsimd
+         {
+             using register_type = typename batch_bool<T, A>::register_type;
+             constexpr auto size = batch_bool<T, A>::size;
+-            __mmask64 mask = size >= 64 ? ~(__mmask64)0 : (1ULL << size) - 1;
+-            __m512i zeros = _mm512_setzero_si512();
+-            __m512i bool_val = _mm512_mask_loadu_epi8(zeros, mask, (void*)mem);
+-            return (register_type)_mm512_cmpgt_epu8_mask(bool_val, zeros);
++            constexpr __mmask64 full_mask = ~(__mmask64)0;
++            __mmask64 mask = size >= 64 ? full_mask : (__mmask64)((uint64_t(1) << size) - 1);
++            // Use zero-masked load to directly obtain a vector with zeros where elements
++            // are out-of-range, then compare against zero to produce the boolean mask.
++            __m512i bool_val = _mm512_maskz_loadu_epi8(mask, (void const*)mem);
++            return (register_type)_mm512_cmpgt_epu8_mask(bool_val, _mm512_setzero_si512());
+         }
+ 
+         // max
+diff --git a/include/xsimd/arch/xsimd_avx512f.hpp b/include/xsimd/arch/xsimd_avx512f.hpp
+index e9a9b73..acc2043 100644
+--- a/include/xsimd/arch/xsimd_avx512f.hpp
++++ b/include/xsimd/arch/xsimd_avx512f.hpp
+@@ -1199,11 +1199,30 @@ namespace xsimd
+         {
+             using register_type = typename batch_bool<T, A>::register_type;
+             constexpr auto size = batch_bool<T, A>::size;
+-            register_type mask = 0;
+-            for (std::size_t i = 0; i < size; ++i)
+-                mask |= (register_type(mem[i] ? 1 : 0) << i);
+ 
+-            return mask;
++            // Fast vectorized path: copy up to 64 bytes into a temporary buffer and use
++            // a 512-bit load + comparison to build the mask. This avoids per-bit
++            // shifting in a loop and leverages AVX-512 instructions available in
++            // avx512f (note: byte-granular masked loads are part of AVX512BW, but
++            // an unmasked 512-bit load is available in AVX512F).
++            unsigned char tmp[64] = {};
++            for (std::size_t i = 0; i < size && i < 64; ++i)
++            {
++                tmp[i] = mem[i] ? 1 : 0;
++            }
++            // Use AVX2 256-bit movemask on two halves to build a 64-bit mask. AVX512F
++            // requires AVX2, so these intrinsics are available without AVX512BW.
++            __m256i zeros256 = _mm256_setzero_si256();
++            __m256i lo = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(tmp));
++            __m256i hi = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(tmp + 32));
++            uint32_t lo_mask = static_cast<uint32_t>(_mm256_movemask_epi8(_mm256_cmpgt_epi8(lo, zeros256)));
++            uint32_t hi_mask = static_cast<uint32_t>(_mm256_movemask_epi8(_mm256_cmpgt_epi8(hi, zeros256)));
++            uint64_t m = (static_cast<uint64_t>(hi_mask) << 32) | lo_mask;
++            if (size < 64)
++            {
++                m &= (uint64_t(1) << size) - 1;
++            }
++            return static_cast<register_type>(m);
+         }
+ 
+         // load_aligned

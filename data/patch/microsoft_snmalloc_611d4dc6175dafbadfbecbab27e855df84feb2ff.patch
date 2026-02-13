@@ -1,0 +1,46 @@
+diff --git a/src/mem/memcpy.h b/src/mem/memcpy.h
+index b28e5e1..44b8227 100644
+--- a/src/mem/memcpy.h
++++ b/src/mem/memcpy.h
+@@ -243,9 +243,41 @@ namespace snmalloc
+   };
+ #endif
+ 
++#if defined(__powerpc64__) || defined(__ppc64__) || defined(__PPC64__)
++  /**
++   * PowerPC64 architecture.  Prefer 16-byte VSX/Altivec vector loads/stores
++   * where possible to increase copy throughput compared to 8-byte copies.
++   */
++  struct PowerPC64Arch
++  {
++    static constexpr size_t LargestRegisterSize = 16;
++
++    static SNMALLOC_FAST_PATH_INLINE void
++    copy(void* dst, const void* src, size_t len)
++    {
++      if (len <= LargestRegisterSize)
++      {
++        small_copies<LargestRegisterSize>(dst, src, len);
++        return;
++      }
++
++      /* Align to cache-line boundaries when possible to enable wider bulk
++       * transfers and reduce unaligned penalties. */
++      unaligned_start<64, LargestRegisterSize>(dst, src, len);
++
++      /* Copy main bulk in LargestRegisterSize-sized chunks and handle the
++       * trailing bytes. */
++      block_copy<LargestRegisterSize>(dst, src, len);
++      copy_end<LargestRegisterSize>(dst, src, len);
++    }
++  };
++#endif
++
+   using DefaultArch =
+ #ifdef __x86_64__
+     X86_64Arch
++#elif defined(__powerpc64__) || defined(__ppc64__) || defined(__PPC64__)
++    PowerPC64Arch
+ #else
+     GenericArch
+ #endif

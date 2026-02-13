@@ -1,0 +1,25 @@
+diff --git a/include/tao/pegtl/contrib/parse_tree.hpp b/include/tao/pegtl/contrib/parse_tree.hpp
+index 79e3f1c3..b9320ee1 100644
+--- a/include/tao/pegtl/contrib/parse_tree.hpp
++++ b/include/tao/pegtl/contrib/parse_tree.hpp
+@@ -12,6 +12,7 @@
+ #include <type_traits>
+ #include <typeindex>
+ #include <utility>
++#include <iterator>
+ #include <vector>
+ 
+ #include "remove_first_state.hpp"
+@@ -255,8 +256,10 @@ namespace TAO_PEGTL_NAMESPACE::parse_tree
+          {
+             auto n = std::move( state.back() );
+             state.pop_back();
+-            for( auto& c : n->children ) {
+-               state.back()->children.emplace_back( std::move( c ) );
++            {
++               auto& dest = state.back()->children;
++               auto& src = n->children;
++               dest.insert( dest.end(), std::make_move_iterator( src.begin() ), std::make_move_iterator( src.end() ) );
+             }
+          }
+ 

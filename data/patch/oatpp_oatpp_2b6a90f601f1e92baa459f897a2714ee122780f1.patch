@@ -1,0 +1,103 @@
+diff --git a/src/oatpp/core/async/Coroutine.hpp b/src/oatpp/core/async/Coroutine.hpp
+index 73bd729b..332d9c77 100644
+--- a/src/oatpp/core/async/Coroutine.hpp
++++ b/src/oatpp/core/async/Coroutine.hpp
+@@ -37,6 +37,7 @@
+ 
+ #include <chrono>
+ #include <exception>
++#include <memory>
+ 
+ namespace oatpp { namespace async {
+ 
+diff --git a/src/oatpp/core/async/Executor.cpp b/src/oatpp/core/async/Executor.cpp
+index 679e1e4b..aa97522d 100644
+--- a/src/oatpp/core/async/Executor.cpp
++++ b/src/oatpp/core/async/Executor.cpp
+@@ -215,7 +215,7 @@ void Executor::linkWorkers(const std::vector<std::shared_ptr<worker::Worker>>& w
+ }
+ 
+ void Executor::join() {
+-  for(auto& worker : m_allWorkers) {
++  for(const auto& worker : m_allWorkers) {
+     worker->join();
+   }
+ }
+diff --git a/src/oatpp/core/data/buffer/Processor.cpp b/src/oatpp/core/data/buffer/Processor.cpp
+index b5db589a..913d78c3 100644
+--- a/src/oatpp/core/data/buffer/Processor.cpp
++++ b/src/oatpp/core/data/buffer/Processor.cpp
+@@ -108,6 +108,9 @@ v_int32 ProcessingPipeline::iterate(data::buffer::InlineReadData& dataIn,
+   v_int32 i = 0;
+   v_int32 res = Error::OK;
+ 
++  const v_int32 numOfProcessors = (v_int32)m_processors.size();
++  const v_int32 numOfIntermediate = (v_int32)m_intermediateData.size();
++
+   while(res == Error::OK) {
+ 
+     auto& p = m_processors[i];
+@@ -118,7 +121,7 @@ v_int32 ProcessingPipeline::iterate(data::buffer::InlineReadData& dataIn,
+     }
+ 
+     data::buffer::InlineReadData* currDataOut = &dataOut;
+-    if(i < (v_int32) m_intermediateData.size()) {
++    if(i < numOfIntermediate) {
+       currDataOut = &m_intermediateData[i];
+     }
+ 
+@@ -126,8 +129,6 @@ v_int32 ProcessingPipeline::iterate(data::buffer::InlineReadData& dataIn,
+       res = p->iterate(*currDataIn, *currDataOut);
+     }
+ 
+-    const v_int32 numOfProcessors = v_int32(m_processors.size());
+-
+     switch (res) {
+       case Error::PROVIDE_DATA_IN:
+         if (i > 0) {
+diff --git a/src/oatpp/web/mime/multipart/Part.cpp b/src/oatpp/web/mime/multipart/Part.cpp
+index 1ad9044c..4364ebc8 100644
+--- a/src/oatpp/web/mime/multipart/Part.cpp
++++ b/src/oatpp/web/mime/multipart/Part.cpp
+@@ -47,6 +47,7 @@ Part::Part(const Headers &headers,
+     oatpp::web::protocol::http::HeaderValueData valueData;
+     oatpp::web::protocol::http::Parser::parseHeaderValueData(valueData, contentDisposition, ';');
+ 
++    // Cache title param values directly instead of repeated lookups
+     m_name = valueData.getTitleParamValue("name");
+     m_filename = valueData.getTitleParamValue("filename");
+ 
+@@ -117,11 +118,11 @@ void Part::setTag(const char* tagName, const std::shared_ptr<oatpp::base::Counta
+   m_tagObject = tagObject;
+ }
+ 
+-const char* Part::getTagName() {
++const char* Part::getTagName() const {
+   return m_tagName;
+ }
+ 
+-std::shared_ptr<oatpp::base::Countable> Part::getTagObject() {
++std::shared_ptr<oatpp::base::Countable> Part::getTagObject() const {
+   return m_tagObject;
+ }
+ 
+diff --git a/src/oatpp/web/mime/multipart/Part.hpp b/src/oatpp/web/mime/multipart/Part.hpp
+index ba0bc9e4..5b7aa8ad 100644
+--- a/src/oatpp/web/mime/multipart/Part.hpp
++++ b/src/oatpp/web/mime/multipart/Part.hpp
+@@ -164,13 +164,13 @@ public:
+    * Get tag name.
+    * @return
+    */
+-  const char* getTagName();
++  const char* getTagName() const;
+ 
+   /**
+    * Get tag object.
+    * @return
+    */
+-  std::shared_ptr<oatpp::base::Countable> getTagObject();
++  std::shared_ptr<oatpp::base::Countable> getTagObject() const;
+ 
+   /**
+    * Clear the tag.

@@ -1,0 +1,48 @@
+diff --git a/core/src/aztec/AZDetector.cpp b/core/src/aztec/AZDetector.cpp
+index 6557b638..c4089a74 100644
+--- a/core/src/aztec/AZDetector.cpp
++++ b/core/src/aztec/AZDetector.cpp
+@@ -23,6 +23,7 @@
+ #include <cmath>
+ #include <optional>
+ #include <vector>
++#include <unordered_map>
+ 
+ namespace ZXing::Aztec {
+ 
+@@ -136,6 +137,12 @@ static std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image,
+ 	std::vector<ConcentricPattern> res;
+ 
+ 	int N = 0;
++	// spatial grid to avoid O(N^2) checks for nearby centers
++	double cellSize = std::max(1.0, double(image.width()) / 50.0);
++	std::unordered_map<long long, std::vector<int>> grid;
++	auto cellKey = [](int cx, int cy) {
++		return (static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy);
++	};
+ 
+ #if 0 // reference algorithm for finding aztec center candidates
+ 	constexpr auto PATTERN = FixedPattern<7, 7>{1, 1, 1, 1, 1, 1, 1};
+@@ -203,6 +210,22 @@ static std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image,
+ #endif
+ 			PointF p(next.pixelsInFront() + next[0] + next[1] + next[2] + next[3] / 2.0, y + 0.5);
+ 
++				// fast spatial pre-check: skip if there's already a detected center nearby in the grid
++				int cx = static_cast<int>(std::floor(p.x / cellSize));
++				int cy = static_cast<int>(std::floor(p.y / cellSize));
++				bool skipCandidate = false;
++				for (int dx = -1; dx <= 1 && !skipCandidate; ++dx) {
++					for (int dy = -1; dy <= 1 && !skipCandidate; ++dy) {
++						auto it = grid.find(cellKey(cx + dx, cy + dy));
++						if (it == grid.end()) continue;
++						for (int idx : it->second) {
++							if (distance(p, res[idx]) < res[idx].size / 2) { skipCandidate = true; break; }
++						}
++					}
++				}
++				if (skipCandidate) { next.skipPair(); next.extend(); continue; }
++
++
+ 			// make sure p is not 'inside' an already found pattern area
+ 			if (FindIf(res, [p](const auto& old) { return distance(p, old) < old.size / 2; }) == res.end()) {
+ 				++N;
