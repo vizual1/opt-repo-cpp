@@ -64,6 +64,7 @@ class CommitTesterPipeline:
 
     def test_commit(self, commits_list: list[Commit] = []) -> None:
         if self.config.docker_image:
+            # owner_name_sha
             owner, name, new_sha = tuple(self.config.docker_image.split("_"))
             repo_id = f"{owner}/{name}"
             old_sha = self.config.git_client.get_repo(repo_id).get_commit(new_sha).parents[0].sha

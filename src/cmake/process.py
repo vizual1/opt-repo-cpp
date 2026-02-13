@@ -690,15 +690,29 @@ class CMakeProcess:
 
     # apply the diff patch to /test_workspace/workspace/new
     def _apply_diff(self) -> bool:
-        with open(self.config.diff, 'r', errors='ignore') as f:
-            diff_text = f.read()
-        cmd = ["patch", "-p1", "-d", "/test_workspace/workspace/new", "<<'EOF'\n" + diff_text + "\nEOF"]
+        container_patch_path = "/tmp/apply.patch"
+        with open(self.config.diff, "rb") as f:
+            data = f.read()
+
+        import io, tarfile
+
+        tarstream = io.BytesIO()
+        with tarfile.open(fileobj=tarstream, mode='w') as tar:
+            tarinfo = tarfile.TarInfo(name="apply.patch")
+            tarinfo.size = len(data)
+            tar.addfile(tarinfo, io.BytesIO(data))
+        tarstream.seek(0)
+
+        if self.docker.container:
+            self.docker.container.put_archive("/tmp", tarstream.read())
+
+        cmd = ["patch", "-p1", "-d", "/test_workspace/workspace/new", "-i", container_patch_path]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
         if exit_code != 0:
             logging.error(f"Diff application failed with exit code {exit_code}: {' '.join(map(str, cmd))}")
             if stdout: logging.info(f"stdout: {stdout}")
             if stderr: logging.warning(f"stderr: {stderr}")
             return False
-        
-        logging.info(f"Diff applied successfully: {' '.join(map(str, cmd))}")
+
+        logging.info("Diff applied successfully")
         return True
