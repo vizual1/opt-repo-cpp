@@ -26,21 +26,14 @@ def delete_image(repo_id: str = "", sha: str = "", other: str = "") -> None:
         logging.info(f"Failed to delete image: {e}")
 
 def check_dockerhub() -> tuple[str, str]:
-    dockerhub_user = os.environ.get("DOCKERHUB_USER")
-    dockerhub_repo = os.environ.get("DOCKERHUB_REPO")
+    dockerhub_user = os.environ.get("DOCKER_HUB_USER")
+    dockerhub_repo = os.environ.get("DOCKER_HUB_REPO")
     if not dockerhub_user:
         raise RuntimeError("DOCKERHUB_USER environment variable is not set")
     if not dockerhub_repo:
         raise RuntimeError("DOCKERHUB_REPO environment variable is not set")
     return dockerhub_user, dockerhub_repo
 
-"""
-def dockerhub_containers() -> list[str]:
-    # url="https://hub.docker.com/v2/repositories/tommyho1999/opt-repo-cpp/tags?page_size=100"; while [ "$url" != "null" ]; do resp=$(curl -s "$url"); echo "$resp" | jq -r '.results[].name'; url=$(echo "$resp" | jq -r '.next'); done | wc -l
-    all_images = subprocess.run()
-    # extract all_images to list[str]
-    return all_images
-"""
 
 def dockerhub_containers(dockerhub_user: str, dockerhub_repo: str) -> list[str]:
     tags = []

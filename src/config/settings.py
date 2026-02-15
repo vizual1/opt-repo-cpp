@@ -6,7 +6,7 @@ from pathlib import Path
 @dataclass
 class LLMSettings:
     """LLM-related configuration."""
-    api_key: str = field(default_factory=lambda: os.getenv('api_key', ''))
+    api_key: str = field(default_factory=lambda: os.getenv('LLM_API_KEY', ''))
     base: bool = True
     base_url: str = "https://openrouter.ai/api/v1"
     model1: str = "openai/gpt-5-mini"
@@ -43,7 +43,7 @@ class TestingSettings:
 @dataclass
 class GitHubSettings:
     """GitHub API configuration."""
-    access_token: str = field(default_factory=lambda: os.getenv('access_token', ''))
+    access_token: str = field(default_factory=lambda: os.getenv('GITHUB_ACCESS_TOKEN', ''))
     
 @dataclass
 class ResourceSettings:

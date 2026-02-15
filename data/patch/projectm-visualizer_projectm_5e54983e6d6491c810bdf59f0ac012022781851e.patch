@@ -134,9 +134,3 @@ index a2059fdbb..35ac623d8 100644
  private:
      /**
       * Updates the mesh
-diff --git a/vendor/projectm-eval b/vendor/projectm-eval
---- a/vendor/projectm-eval
-+++ b/vendor/projectm-eval
-@@ -1 +1 @@
--Subproject commit 4fe4690e07284418d93a139708e8a89bf28720f1
-+Subproject commit 4fe4690e07284418d93a139708e8a89bf28720f1-dirty

@@ -50,15 +50,3 @@ index a8a8e80..92db060 100644
            preload = LittleEndian::Load32(ip);
            const uint32_t trailer = ExtractLowBytes(preload, c & 3);
            const uint32_t length = entry & 0xff;
-diff --git a/third_party/benchmark b/third_party/benchmark
---- a/third_party/benchmark
-+++ b/third_party/benchmark
-@@ -1 +1 @@
--Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
-+Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
-diff --git a/third_party/googletest b/third_party/googletest
---- a/third_party/googletest
-+++ b/third_party/googletest
-@@ -1 +1 @@
--Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
-+Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

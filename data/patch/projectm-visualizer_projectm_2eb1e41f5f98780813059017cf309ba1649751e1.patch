@@ -68,9 +68,3 @@ index 724c4b45c..78bc9fdc4 100644
      }
      else if (m_viewportWidth == presetState.renderContext.viewportSizeX &&
               m_viewportHeight == presetState.renderContext.viewportSizeY)
-diff --git a/vendor/projectm-eval b/vendor/projectm-eval
---- a/vendor/projectm-eval
-+++ b/vendor/projectm-eval
-@@ -1 +1 @@
--Subproject commit 7cefc94eb2583c5106e022850cfba70d76391015
-+Subproject commit 7cefc94eb2583c5106e022850cfba70d76391015-dirty

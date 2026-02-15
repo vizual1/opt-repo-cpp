@@ -1,15 +1,3 @@
-diff --git a/3rdparty/civetweb b/3rdparty/civetweb
---- a/3rdparty/civetweb
-+++ b/3rdparty/civetweb
-@@ -1 +1 @@
--Subproject commit eefb26f82b233268fc98577d265352720d477ba4
-+Subproject commit eefb26f82b233268fc98577d265352720d477ba4-dirty
-diff --git a/3rdparty/googletest b/3rdparty/googletest
---- a/3rdparty/googletest
-+++ b/3rdparty/googletest
-@@ -1 +1 @@
--Subproject commit e2239ee6043f73722e7aa812a459f54a28552929
-+Subproject commit e2239ee6043f73722e7aa812a459f54a28552929-dirty
 diff --git a/core/src/histogram.cc b/core/src/histogram.cc
 index 88038ea..14cec49 100644
 --- a/core/src/histogram.cc

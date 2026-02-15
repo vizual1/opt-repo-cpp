@@ -53,15 +53,3 @@ index 31f1575..6bc7055 100644
  #endif
    return tag_type;
  }
-diff --git a/third_party/benchmark b/third_party/benchmark
---- a/third_party/benchmark
-+++ b/third_party/benchmark
-@@ -1 +1 @@
--Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677
-+Subproject commit bf585a2789e30585b4e3ce6baf11ef2750b54677-dirty
-diff --git a/third_party/googletest b/third_party/googletest
---- a/third_party/googletest
-+++ b/third_party/googletest
-@@ -1 +1 @@
--Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6
-+Subproject commit 18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6-dirty

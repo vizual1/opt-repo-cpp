@@ -130,9 +130,3 @@ index 8b258f6d0..cac66e56f 100644
  };
  
  } // namespace MilkdropPreset
-diff --git a/vendor/projectm-eval b/vendor/projectm-eval
---- a/vendor/projectm-eval
-+++ b/vendor/projectm-eval
-@@ -1 +1 @@
--Subproject commit 02900174d9d346c38307937b710e901881bc40ea
-+Subproject commit 02900174d9d346c38307937b710e901881bc40ea-dirty

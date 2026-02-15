@@ -15,15 +15,3 @@ index 421b335..1d7c72f 100644
      offset = pattern_sizes[offset];
      for (int i = 1; i < 4; i++) {
        std::memcpy(dst + i * 16, dst + i * 16 - offset, 16);
-diff --git a/third_party/benchmark b/third_party/benchmark
---- a/third_party/benchmark
-+++ b/third_party/benchmark
-@@ -1 +1 @@
--Subproject commit d572f4777349d43653b21d6c2fc63020ab326db2
-+Subproject commit d572f4777349d43653b21d6c2fc63020ab326db2-dirty
-diff --git a/third_party/googletest b/third_party/googletest
---- a/third_party/googletest
-+++ b/third_party/googletest
-@@ -1 +1 @@
--Subproject commit b796f7d44681514f58a683a3a71ff17c94edb0c1
-+Subproject commit b796f7d44681514f58a683a3a71ff17c94edb0c1-dirty

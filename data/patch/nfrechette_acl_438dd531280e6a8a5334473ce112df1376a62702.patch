@@ -1,27 +1,3 @@
-diff --git a/external/benchmark b/external/benchmark
---- a/external/benchmark
-+++ b/external/benchmark
-@@ -1 +1 @@
--Subproject commit 8039b4030795b1c9b8cedb78e3a2a6fb89574b6e
-+Subproject commit 8039b4030795b1c9b8cedb78e3a2a6fb89574b6e-dirty
-diff --git a/external/catch2 b/external/catch2
---- a/external/catch2
-+++ b/external/catch2
-@@ -1 +1 @@
--Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
-+Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
-diff --git a/external/rtm b/external/rtm
---- a/external/rtm
-+++ b/external/rtm
-@@ -1 +1 @@
--Subproject commit c1471d7b9be13e27498c0b8a6a347ced060f4816
-+Subproject commit c1471d7b9be13e27498c0b8a6a347ced060f4816-dirty
-diff --git a/external/sjson-cpp b/external/sjson-cpp
---- a/external/sjson-cpp
-+++ b/external/sjson-cpp
-@@ -1 +1 @@
--Subproject commit 294331edbc68a0709c167b2369adbcf3eb430daa
-+Subproject commit 294331edbc68a0709c167b2369adbcf3eb430daa-dirty
 diff --git a/includes/acl/compression/impl/track_array.impl.h b/includes/acl/compression/impl/track_array.impl.h
 index de1771cb..8ee8d01c 100644
 --- a/includes/acl/compression/impl/track_array.impl.h

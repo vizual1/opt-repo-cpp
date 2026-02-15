@@ -1,27 +1,3 @@
-diff --git a/external/benchmark b/external/benchmark
---- a/external/benchmark
-+++ b/external/benchmark
-@@ -1 +1 @@
--Subproject commit 8039b4030795b1c9b8cedb78e3a2a6fb89574b6e
-+Subproject commit 8039b4030795b1c9b8cedb78e3a2a6fb89574b6e-dirty
-diff --git a/external/catch2 b/external/catch2
---- a/external/catch2
-+++ b/external/catch2
-@@ -1 +1 @@
--Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13
-+Subproject commit c4e3767e265808590986d5db6ca1b5532a7f3d13-dirty
-diff --git a/external/rtm b/external/rtm
---- a/external/rtm
-+++ b/external/rtm
-@@ -1 +1 @@
--Subproject commit 27d43ec746fa445fc6fb7f46f8845825d9217a7f
-+Subproject commit 27d43ec746fa445fc6fb7f46f8845825d9217a7f-dirty
-diff --git a/external/sjson-cpp b/external/sjson-cpp
---- a/external/sjson-cpp
-+++ b/external/sjson-cpp
-@@ -1 +1 @@
--Subproject commit 9a58e9ad3a5aafb2bfc8f36cc67e40f0c20b3d04
-+Subproject commit 9a58e9ad3a5aafb2bfc8f36cc67e40f0c20b3d04-dirty
 diff --git a/includes/acl/decompression/impl/transform_animated_track_cache.h b/includes/acl/decompression/impl/transform_animated_track_cache.h
 index 85604258..625ade27 100644
 --- a/includes/acl/decompression/impl/transform_animated_track_cache.h
