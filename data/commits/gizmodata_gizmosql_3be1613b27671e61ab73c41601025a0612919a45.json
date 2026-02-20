@@ -1,0 +1,305 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:21.132197",
+    "repository": "https://github.com/gizmodata/gizmosql",
+    "repository_name": "gizmodata/gizmosql"
+  },
+  "commit_info": {
+    "old_sha": "b84a8c845398cd9278b07c0df0071a15a130c66b",
+    "new_sha": "3be1613b27671e61ab73c41601025a0612919a45",
+    "commit_message": [
+      "Implementing CoPilot recommended improvements"
+    ],
+    "commit_date": "2025-12-16T23:03:24+00:00",
+    "patch": [
+      "--- src/common/gizmosql_library.cpp\n@@ -482,6 +482,13 @@ int RunFlightSQLServer(const BackendType backend, fs::path database_filename,\n     auto server_ptr = create_server_result.ValueOrDie();\n     GIZMOSQL_LOG(INFO) << \"GizmoSQL server - started\";\n     ARROW_CHECK_OK(server_ptr->Serve());\n+\n+    // Gracefully shutdown health service to stop Watch streams\n+    if (gizmosql::g_health_service) {\n+      gizmosql::g_health_service->Shutdown();\n+      GIZMOSQL_LOG(INFO) << \"Health service shutdown complete\";\n+    }\n+\n     return EXIT_SUCCESS;\n   } else {\n     // Handle the error\n--- src/common/health_service.cpp\n@@ -17,34 +17,82 @@\n \n #include \"health_service.h\"\n \n-#include <chrono>\n-#include <thread>\n-\n #include \"gizmosql_logging.h\"\n \n namespace gizmosql {\n \n-GizmoSQLHealthServiceImpl::GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn)\n-    : health_check_fn_(std::move(health_check_fn)) {}\n+GizmoSQLHealthServiceImpl::GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn,\n+                                                     int poll_interval_seconds)\n+    : health_check_fn_(std::move(health_check_fn)),\n+      poll_interval_(poll_interval_seconds) {\n+  // Perform initial health check\n+  try {\n+    cached_status_ = health_check_fn_();\n+  } catch (...) {\n+    cached_status_ = false;\n+  }\n+\n+  // Start background health check thread\n+  health_check_thread_ = std::thread(&GizmoSQLHealthServiceImpl::HealthCheckLoop, this);\n+}\n+\n+GizmoSQLHealthServiceImpl::~GizmoSQLHealthServiceImpl() {\n+  Shutdown();\n+}\n+\n+void GizmoSQLHealthServiceImpl::HealthCheckLoop() {\n+  while (!shutdown_.load()) {\n+    // Wait for poll interval or shutdown\n+    {\n+      std::unique_lock<std::mutex> lock(mutex_);\n+      status_changed_cv_.wait_for(lock, poll_interval_, [this] {\n+        return shutdown_.load();\n+      });\n+    }\n+\n+    if (shutdown_.load()) {\n+      break;\n+    }\n+\n+    // Perform health check\n+    bool new_status = false;\n+    try {\n+      new_status = health_check_fn_();\n+    } catch (...) {\n+      new_status = false;\n+    }\n+\n+    // Update cached status and notify watchers if changed\n+    {\n+      std::lock_guard<std::mutex> lock(mutex_);\n+      if (new_status != cached_status_) {\n+        GIZMOSQL_LOG(DEBUG) << \"Health status changed: \"\n+                            << (new_status ? \"SERVING\" : \"NOT_SERVING\");\n+        cached_status_ = new_status;\n+        ++status_version_;\n+      }\n+    }\n+    // Always notify to allow Watch streams to check for cancellation\n+    status_changed_cv_.notify_all();\n+  }\n+}\n \n grpc::Status GizmoSQLHealthServiceImpl::Check(\n     grpc::ServerContext* context,\n     const grpc::health::v1::HealthCheckRequest* request,\n     grpc::health::v1::HealthCheckResponse* response) {\n   const auto& service_name = request->service();\n+\n+  bool is_healthy;\n+  {\n+    std::lock_guard<std::mutex> lock(mutex_);\n+    is_healthy = cached_status_;\n+  }\n+\n   GIZMOSQL_LOG(DEBUG) << \"Health check request from peer: \" << context->peer()\n                       << \", service: \"\n                       << (service_name.empty() ? \"(empty/all)\" : service_name);\n \n-  // Perform the health check by calling the provided function\n-  bool is_healthy = false;\n-  try {\n-    is_healthy = health_check_fn_();\n-  } catch (...) {\n-    // If the health check throws, consider the service unhealthy\n-    is_healthy = false;\n-  }\n-\n   if (is_healthy) {\n     response->set_status(grpc::health::v1::HealthCheckResponse::SERVING);\n   } else {\n@@ -66,58 +114,80 @@ grpc::Status GizmoSQLHealthServiceImpl::Watch(\n                       << \", service: \"\n                       << (service_name.empty() ? \"(empty/all)\" : service_name);\n \n-  // Send the initial status\n   grpc::health::v1::HealthCheckResponse response;\n-\n-  bool is_healthy = false;\n-  try {\n-    is_healthy = health_check_fn_();\n-  } catch (...) {\n-    is_healthy = false;\n+  bool last_status;\n+  uint64_t last_version;\n+\n+  // Send initial status\n+  {\n+    std::lock_guard<std::mutex> lock(mutex_);\n+    last_status = cached_status_;\n+    last_version = status_version_;\n   }\n \n-  response.set_status(is_healthy ? grpc::health::v1::HealthCheckResponse::SERVING\n-                                 : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n+  response.set_status(last_status ? grpc::health::v1::HealthCheckResponse::SERVING\n+                                  : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n \n   GIZMOSQL_LOG(DEBUG) << \"Health watch initial status: \"\n-                      << (is_healthy ? \"SERVING\" : \"NOT_SERVING\");\n+                      << (last_status ? \"SERVING\" : \"NOT_SERVING\");\n \n   if (!writer->Write(response)) {\n     GIZMOSQL_LOG(DEBUG) << \"Health watch stream ended (write failed)\";\n     return grpc::Status::OK;\n   }\n \n-  // Keep the stream open until cancelled or shutdown\n-  // Periodically check health and send updates on status changes\n-  bool last_status = is_healthy;\n+  // Wait for status changes and send updates\n   while (!context->IsCancelled() && !shutdown_.load()) {\n-    std::this_thread::sleep_for(std::chrono::seconds(5));\n+    bool current_status;\n+    uint64_t current_version;\n+\n+    {\n+      std::unique_lock<std::mutex> lock(mutex_);\n+      // Wait for status change, shutdown, or periodic wake-up to check cancellation\n+      status_changed_cv_.wait_for(lock, poll_interval_, [this, last_version] {\n+        return shutdown_.load() || status_version_ != last_version;\n+      });\n+\n+      current_status = cached_status_;\n+      current_version = status_version_;\n+    }\n \n-    try {\n-      is_healthy = health_check_fn_();\n-    } catch (...) {\n-      is_healthy = false;\n+    if (context->IsCancelled() || shutdown_.load()) {\n+      break;\n     }\n \n     // Only send update if status changed\n-    if (is_healthy != last_status) {\n-      GIZMOSQL_LOG(DEBUG) << \"Health watch status changed: \"\n-                          << (is_healthy ? \"SERVING\" : \"NOT_SERVING\");\n-      response.set_status(is_healthy ? grpc::health::v1::HealthCheckResponse::SERVING\n-                                     : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n+    if (current_version != last_version && current_status != last_status) {\n+      GIZMOSQL_LOG(DEBUG) << \"Health watch sending status change: \"\n+                          << (current_status ? \"SERVING\" : \"NOT_SERVING\");\n+      response.set_status(current_status ? grpc::health::v1::HealthCheckResponse::SERVING\n+                                         : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n       if (!writer->Write(response)) {\n         break;\n       }\n-      last_status = is_healthy;\n+      last_status = current_status;\n     }\n+    last_version = current_version;\n   }\n \n   GIZMOSQL_LOG(DEBUG) << \"Health watch stream ended\";\n   return grpc::Status::OK;\n }\n \n void GizmoSQLHealthServiceImpl::Shutdown() {\n-  shutdown_.store(true);\n+  bool expected = false;\n+  if (!shutdown_.compare_exchange_strong(expected, true)) {\n+    // Already shut down\n+    return;\n+  }\n+\n+  // Wake up the background thread and all watchers\n+  status_changed_cv_.notify_all();\n+\n+  // Wait for background thread to finish\n+  if (health_check_thread_.joinable()) {\n+    health_check_thread_.join();\n+  }\n }\n \n }  // namespace gizmosql\n--- src/common/include/detail/health_service.h\n@@ -18,9 +18,13 @@\n #pragma once\n \n #include <atomic>\n+#include <chrono>\n+#include <condition_variable>\n #include <functional>\n #include <memory>\n+#include <mutex>\n #include <string>\n+#include <thread>\n \n #include <grpcpp/grpcpp.h>\n #include \"grpc/health/v1/health.grpc.pb.h\"\n@@ -32,18 +36,24 @@ namespace gizmosql {\n using HealthCheckFn = std::function<bool()>;\n \n /// Custom gRPC Health service implementation for GizmoSQL.\n-/// This service performs a real-time health check by executing \"SELECT 1\"\n-/// on the underlying database backend on each Check() call.\n+/// Uses a background thread to periodically check health status, ensuring\n+/// that multiple Watch streams share a single health check rather than\n+/// each polling independently.\n class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service {\n  public:\n+  /// Default health check polling interval in seconds.\n+  static constexpr int kDefaultPollIntervalSeconds = 5;\n+\n   /// Construct a health service with the given health check function.\n   /// @param health_check_fn Function that returns true if the service is healthy.\n-  explicit GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn);\n+  /// @param poll_interval_seconds Interval between health checks (default: 5 seconds).\n+  explicit GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn,\n+                                     int poll_interval_seconds = kDefaultPollIntervalSeconds);\n \n-  ~GizmoSQLHealthServiceImpl() override = default;\n+  ~GizmoSQLHealthServiceImpl() override;\n \n   /// Perform a synchronous health check.\n-  /// Calls the health_check_fn_ to determine the serving status.\n+  /// Returns the cached health status from the background poller.\n   /// @param context The gRPC server context.\n   /// @param request The health check request (service name is ignored).\n   /// @param response The health check response with serving status.\n@@ -53,9 +63,9 @@ class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service\n                      grpc::health::v1::HealthCheckResponse* response) override;\n \n   /// Watch for health status changes (streaming).\n-  /// This implementation sends the current health status immediately, then\n-  /// periodically (every 5 seconds) polls the health status and sends updates\n-  /// to the client whenever the status changes, until the context is cancelled.\n+  /// Waits on a shared condition variable for status changes, rather than\n+  /// polling independently. Multiple Watch streams share the same background\n+  /// health checker.\n   /// @param context The gRPC server context.\n   /// @param request The health check request (service name is ignored).\n   /// @param writer The response writer for streaming status updates.\n@@ -64,11 +74,24 @@ class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service\n                      const grpc::health::v1::HealthCheckRequest* request,\n                      grpc::ServerWriter<grpc::health::v1::HealthCheckResponse>* writer) override;\n \n-  /// Signal shutdown to stop any active Watch streams.\n+  /// Signal shutdown to stop the background health checker and any active Watch streams.\n   void Shutdown();\n \n  private:\n+  /// Background thread function that periodically checks health.\n+  void HealthCheckLoop();\n+\n   HealthCheckFn health_check_fn_;\n+  std::chrono::seconds poll_interval_;\n+\n+  // Shared state protected by mutex\n+  std::mutex mutex_;\n+  std::condition_variable status_changed_cv_;\n+  bool cached_status_{false};\n+  uint64_t status_version_{0};  // Incremented on each status change\n+\n+  // Background thread management\n+  std::thread health_check_thread_;\n   std::atomic<bool> shutdown_{false};\n };\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "src/common/gizmosql_library.cpp",
+        "status": "modified",
+        "additions": 7,
+        "deletions": 0,
+        "changes": 7,
+        "patch": "@@ -482,6 +482,13 @@ int RunFlightSQLServer(const BackendType backend, fs::path database_filename,\n     auto server_ptr = create_server_result.ValueOrDie();\n     GIZMOSQL_LOG(INFO) << \"GizmoSQL server - started\";\n     ARROW_CHECK_OK(server_ptr->Serve());\n+\n+    // Gracefully shutdown health service to stop Watch streams\n+    if (gizmosql::g_health_service) {\n+      gizmosql::g_health_service->Shutdown();\n+      GIZMOSQL_LOG(INFO) << \"Health service shutdown complete\";\n+    }\n+\n     return EXIT_SUCCESS;\n   } else {\n     // Handle the error"
+      },
+      {
+        "filename": "src/common/health_service.cpp",
+        "status": "modified",
+        "additions": 109,
+        "deletions": 39,
+        "changes": 148,
+        "patch": "@@ -17,34 +17,82 @@\n \n #include \"health_service.h\"\n \n-#include <chrono>\n-#include <thread>\n-\n #include \"gizmosql_logging.h\"\n \n namespace gizmosql {\n \n-GizmoSQLHealthServiceImpl::GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn)\n-    : health_check_fn_(std::move(health_check_fn)) {}\n+GizmoSQLHealthServiceImpl::GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn,\n+                                                     int poll_interval_seconds)\n+    : health_check_fn_(std::move(health_check_fn)),\n+      poll_interval_(poll_interval_seconds) {\n+  // Perform initial health check\n+  try {\n+    cached_status_ = health_check_fn_();\n+  } catch (...) {\n+    cached_status_ = false;\n+  }\n+\n+  // Start background health check thread\n+  health_check_thread_ = std::thread(&GizmoSQLHealthServiceImpl::HealthCheckLoop, this);\n+}\n+\n+GizmoSQLHealthServiceImpl::~GizmoSQLHealthServiceImpl() {\n+  Shutdown();\n+}\n+\n+void GizmoSQLHealthServiceImpl::HealthCheckLoop() {\n+  while (!shutdown_.load()) {\n+    // Wait for poll interval or shutdown\n+    {\n+      std::unique_lock<std::mutex> lock(mutex_);\n+      status_changed_cv_.wait_for(lock, poll_interval_, [this] {\n+        return shutdown_.load();\n+      });\n+    }\n+\n+    if (shutdown_.load()) {\n+      break;\n+    }\n+\n+    // Perform health check\n+    bool new_status = false;\n+    try {\n+      new_status = health_check_fn_();\n+    } catch (...) {\n+      new_status = false;\n+    }\n+\n+    // Update cached status and notify watchers if changed\n+    {\n+      std::lock_guard<std::mutex> lock(mutex_);\n+      if (new_status != cached_status_) {\n+        GIZMOSQL_LOG(DEBUG) << \"Health status changed: \"\n+                            << (new_status ? \"SERVING\" : \"NOT_SERVING\");\n+        cached_status_ = new_status;\n+        ++status_version_;\n+      }\n+    }\n+    // Always notify to allow Watch streams to check for cancellation\n+    status_changed_cv_.notify_all();\n+  }\n+}\n \n grpc::Status GizmoSQLHealthServiceImpl::Check(\n     grpc::ServerContext* context,\n     const grpc::health::v1::HealthCheckRequest* request,\n     grpc::health::v1::HealthCheckResponse* response) {\n   const auto& service_name = request->service();\n+\n+  bool is_healthy;\n+  {\n+    std::lock_guard<std::mutex> lock(mutex_);\n+    is_healthy = cached_status_;\n+  }\n+\n   GIZMOSQL_LOG(DEBUG) << \"Health check request from peer: \" << context->peer()\n                       << \", service: \"\n                       << (service_name.empty() ? \"(empty/all)\" : service_name);\n \n-  // Perform the health check by calling the provided function\n-  bool is_healthy = false;\n-  try {\n-    is_healthy = health_check_fn_();\n-  } catch (...) {\n-    // If the health check throws, consider the service unhealthy\n-    is_healthy = false;\n-  }\n-\n   if (is_healthy) {\n     response->set_status(grpc::health::v1::HealthCheckResponse::SERVING);\n   } else {\n@@ -66,58 +114,80 @@ grpc::Status GizmoSQLHealthServiceImpl::Watch(\n                       << \", service: \"\n                       << (service_name.empty() ? \"(empty/all)\" : service_name);\n \n-  // Send the initial status\n   grpc::health::v1::HealthCheckResponse response;\n-\n-  bool is_healthy = false;\n-  try {\n-    is_healthy = health_check_fn_();\n-  } catch (...) {\n-    is_healthy = false;\n+  bool last_status;\n+  uint64_t last_version;\n+\n+  // Send initial status\n+  {\n+    std::lock_guard<std::mutex> lock(mutex_);\n+    last_status = cached_status_;\n+    last_version = status_version_;\n   }\n \n-  response.set_status(is_healthy ? grpc::health::v1::HealthCheckResponse::SERVING\n-                                 : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n+  response.set_status(last_status ? grpc::health::v1::HealthCheckResponse::SERVING\n+                                  : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n \n   GIZMOSQL_LOG(DEBUG) << \"Health watch initial status: \"\n-                      << (is_healthy ? \"SERVING\" : \"NOT_SERVING\");\n+                      << (last_status ? \"SERVING\" : \"NOT_SERVING\");\n \n   if (!writer->Write(response)) {\n     GIZMOSQL_LOG(DEBUG) << \"Health watch stream ended (write failed)\";\n     return grpc::Status::OK;\n   }\n \n-  // Keep the stream open until cancelled or shutdown\n-  // Periodically check health and send updates on status changes\n-  bool last_status = is_healthy;\n+  // Wait for status changes and send updates\n   while (!context->IsCancelled() && !shutdown_.load()) {\n-    std::this_thread::sleep_for(std::chrono::seconds(5));\n+    bool current_status;\n+    uint64_t current_version;\n+\n+    {\n+      std::unique_lock<std::mutex> lock(mutex_);\n+      // Wait for status change, shutdown, or periodic wake-up to check cancellation\n+      status_changed_cv_.wait_for(lock, poll_interval_, [this, last_version] {\n+        return shutdown_.load() || status_version_ != last_version;\n+      });\n+\n+      current_status = cached_status_;\n+      current_version = status_version_;\n+    }\n \n-    try {\n-      is_healthy = health_check_fn_();\n-    } catch (...) {\n-      is_healthy = false;\n+    if (context->IsCancelled() || shutdown_.load()) {\n+      break;\n     }\n \n     // Only send update if status changed\n-    if (is_healthy != last_status) {\n-      GIZMOSQL_LOG(DEBUG) << \"Health watch status changed: \"\n-                          << (is_healthy ? \"SERVING\" : \"NOT_SERVING\");\n-      response.set_status(is_healthy ? grpc::health::v1::HealthCheckResponse::SERVING\n-                                     : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n+    if (current_version != last_version && current_status != last_status) {\n+      GIZMOSQL_LOG(DEBUG) << \"Health watch sending status change: \"\n+                          << (current_status ? \"SERVING\" : \"NOT_SERVING\");\n+      response.set_status(current_status ? grpc::health::v1::HealthCheckResponse::SERVING\n+                                         : grpc::health::v1::HealthCheckResponse::NOT_SERVING);\n       if (!writer->Write(response)) {\n         break;\n       }\n-      last_status = is_healthy;\n+      last_status = current_status;\n     }\n+    last_version = current_version;\n   }\n \n   GIZMOSQL_LOG(DEBUG) << \"Health watch stream ended\";\n   return grpc::Status::OK;\n }\n \n void GizmoSQLHealthServiceImpl::Shutdown() {\n-  shutdown_.store(true);\n+  bool expected = false;\n+  if (!shutdown_.compare_exchange_strong(expected, true)) {\n+    // Already shut down\n+    return;\n+  }\n+\n+  // Wake up the background thread and all watchers\n+  status_changed_cv_.notify_all();\n+\n+  // Wait for background thread to finish\n+  if (health_check_thread_.joinable()) {\n+    health_check_thread_.join();\n+  }\n }\n \n }  // namespace gizmosql"
+      },
+      {
+        "filename": "src/common/include/detail/health_service.h",
+        "status": "modified",
+        "additions": 32,
+        "deletions": 9,
+        "changes": 41,
+        "patch": "@@ -18,9 +18,13 @@\n #pragma once\n \n #include <atomic>\n+#include <chrono>\n+#include <condition_variable>\n #include <functional>\n #include <memory>\n+#include <mutex>\n #include <string>\n+#include <thread>\n \n #include <grpcpp/grpcpp.h>\n #include \"grpc/health/v1/health.grpc.pb.h\"\n@@ -32,18 +36,24 @@ namespace gizmosql {\n using HealthCheckFn = std::function<bool()>;\n \n /// Custom gRPC Health service implementation for GizmoSQL.\n-/// This service performs a real-time health check by executing \"SELECT 1\"\n-/// on the underlying database backend on each Check() call.\n+/// Uses a background thread to periodically check health status, ensuring\n+/// that multiple Watch streams share a single health check rather than\n+/// each polling independently.\n class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service {\n  public:\n+  /// Default health check polling interval in seconds.\n+  static constexpr int kDefaultPollIntervalSeconds = 5;\n+\n   /// Construct a health service with the given health check function.\n   /// @param health_check_fn Function that returns true if the service is healthy.\n-  explicit GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn);\n+  /// @param poll_interval_seconds Interval between health checks (default: 5 seconds).\n+  explicit GizmoSQLHealthServiceImpl(HealthCheckFn health_check_fn,\n+                                     int poll_interval_seconds = kDefaultPollIntervalSeconds);\n \n-  ~GizmoSQLHealthServiceImpl() override = default;\n+  ~GizmoSQLHealthServiceImpl() override;\n \n   /// Perform a synchronous health check.\n-  /// Calls the health_check_fn_ to determine the serving status.\n+  /// Returns the cached health status from the background poller.\n   /// @param context The gRPC server context.\n   /// @param request The health check request (service name is ignored).\n   /// @param response The health check response with serving status.\n@@ -53,9 +63,9 @@ class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service\n                      grpc::health::v1::HealthCheckResponse* response) override;\n \n   /// Watch for health status changes (streaming).\n-  /// This implementation sends the current health status immediately, then\n-  /// periodically (every 5 seconds) polls the health status and sends updates\n-  /// to the client whenever the status changes, until the context is cancelled.\n+  /// Waits on a shared condition variable for status changes, rather than\n+  /// polling independently. Multiple Watch streams share the same background\n+  /// health checker.\n   /// @param context The gRPC server context.\n   /// @param request The health check request (service name is ignored).\n   /// @param writer The response writer for streaming status updates.\n@@ -64,11 +74,24 @@ class GizmoSQLHealthServiceImpl final : public grpc::health::v1::Health::Service\n                      const grpc::health::v1::HealthCheckRequest* request,\n                      grpc::ServerWriter<grpc::health::v1::HealthCheckResponse>* writer) override;\n \n-  /// Signal shutdown to stop any active Watch streams.\n+  /// Signal shutdown to stop the background health checker and any active Watch streams.\n   void Shutdown();\n \n  private:\n+  /// Background thread function that periodically checks health.\n+  void HealthCheckLoop();\n+\n   HealthCheckFn health_check_fn_;\n+  std::chrono::seconds poll_interval_;\n+\n+  // Shared state protected by mutex\n+  std::mutex mutex_;\n+  std::condition_variable status_changed_cv_;\n+  bool cached_status_{false};\n+  uint64_t status_version_{0};  // Incremented on each status change\n+\n+  // Background thread management\n+  std::thread health_check_thread_;\n   std::atomic<bool> shutdown_{false};\n };\n "
+      }
+    ],
+    "lines_added": 148,
+    "lines_removed": 48
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9913020954956642,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9965276546648187,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999999990686774,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999896066601089,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.7835058886109184,
+    "relative_improvement": -0.03443526170798898,
+    "absolute_improvement_ms": -8.333333333333304,
+    "old_mean_ms": 241.99999999999994,
+    "new_mean_ms": 250.33333333333323,
+    "old_std_ms": 37.26882768804755,
+    "new_std_ms": 28.825675017766457,
+    "effect_size_cohens_d": -0.2501315693073032,
+    "old_ci95_ms": [
+      228.0835910315028,
+      255.9164089684971
+    ],
+    "new_ci95_ms": [
+      239.5696493855046,
+      261.09701728116187
+    ],
+    "old_ci99_ms": [
+      223.24465208196497,
+      260.7553479180349
+    ],
+    "new_ci99_ms": [
+      235.82695903962815,
+      264.83970762703836
+    ],
+    "new_times_s": [
+      0.26,
+      0.26,
+      0.15,
+      0.15,
+      0.25,
+      0.25,
+      0.25,
+      0.26,
+      0.26,
+      0.26,
+      0.25,
+      0.25,
+      0.26,
+      0.26,
+      0.25,
+      0.25,
+      0.25,
+      0.28,
+      0.28,
+      0.25,
+      0.25,
+      0.24,
+      0.25,
+      0.26,
+      0.26,
+      0.26,
+      0.27,
+      0.25,
+      0.26,
+      0.27,
+      0.27
+    ],
+    "old_times_s": [
+      0.26,
+      0.15,
+      0.15,
+      0.25,
+      0.15,
+      0.26,
+      0.26,
+      0.26,
+      0.25,
+      0.25,
+      0.26,
+      0.15,
+      0.25,
+      0.25,
+      0.25,
+      0.25,
+      0.26,
+      0.26,
+      0.25,
+      0.25,
+      0.26,
+      0.25,
+      0.25,
+      0.25,
+      0.27,
+      0.25,
+      0.27,
+      0.26,
+      0.27,
+      0.26,
+      0.26
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "GizmoSQLServerFixture.ExecuteIngestEndToEnd",
+        "is_significant": false,
+        "p_value": 0.9942707262666987,
+        "is_pair_significant": false,
+        "pair_p_value": 0.99418220803795,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999998919665813,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999522220722462,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.7202101378586292,
+        "relative_improvement": -0.01884057971014491,
+        "absolute_improvement_ms": -4.642857142857171,
+        "old_mean_ms": 246.4285714285714,
+        "new_mean_ms": 251.07142857142856,
+        "old_std_ms": 27.917110870666388,
+        "new_std_ms": 21.660560800216935,
+        "effect_size_cohens_d": -0.18582246784768933,
+        "old_ci95_ms": [
+          235.60344591944934,
+          257.2536969376934
+        ],
+        "new_ci95_ms": [
+          242.6723399140599,
+          259.47051722879723
+        ],
+        "old_ci99_ms": [
+          231.8108968614353,
+          261.04624599570747
+        ],
+        "new_ci99_ms": [
+          239.72974532253878,
+          262.41311182031836
+        ],
+        "new_times": [
+          0.15,
+          0.25,
+          0.24,
+          0.25,
+          0.26,
+          0.26,
+          0.26,
+          0.25,
+          0.25,
+          0.26,
+          0.26,
+          0.25,
+          0.25,
+          0.25,
+          0.27,
+          0.27,
+          0.24,
+          0.25,
+          0.24,
+          0.25,
+          0.25,
+          0.25,
+          0.26,
+          0.27,
+          0.25,
+          0.26,
+          0.26,
+          0.27
+        ],
+        "old_times": [
+          0.24,
+          0.15,
+          0.25,
+          0.25,
+          0.26,
+          0.25,
+          0.25,
+          0.25,
+          0.15,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.26,
+          0.26,
+          0.25,
+          0.25,
+          0.26,
+          0.25,
+          0.25,
+          0.25,
+          0.27,
+          0.25,
+          0.26,
+          0.26,
+          0.26,
+          0.26,
+          0.26
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

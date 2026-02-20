@@ -1,0 +1,291 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:02:11.640868",
+    "repository": "https://github.com/google/snappy",
+    "repository_name": "google/snappy"
+  },
+  "commit_info": {
+    "old_sha": "c8f7641646cd4915f0dc92a81acf09767dfdddca",
+    "new_sha": "f2db8f77ce469ce00e33657b981e41a1bd1daf16",
+    "commit_message": [
+      "Move the extract masks variable out in zippy. I see a consistent 1.5-2% improvement for ARM. Probably because ARM has more relaxed address computation than x86 https://www.godbolt.org/z/bfM1ezx41. I don't think this is a compiler bug or it can do something about it\n\nPiperOrigin-RevId: 387569896"
+    ],
+    "commit_date": "2021-07-29T13:26:45+00:00",
+    "patch": [
+      "--- snappy.cc\n@@ -124,12 +124,8 @@ constexpr std::array<int16_t, 256> MakeTable(index_sequence<seq...>) {\n   return std::array<int16_t, 256>{LengthMinusOffset(seq)...};\n }\n \n-// We maximally co-locate the two tables so that only one register needs to be\n-// reserved for the table address.\n-struct {\n-  alignas(64) const std::array<int16_t, 256> length_minus_offset;\n-  uint32_t extract_masks[4];  // Used for extracting offset based on tag type.\n-} table = {MakeTable(make_index_sequence<256>{}), {0, 0xFF, 0xFFFF, 0}};\n+alignas(64) const std::array<int16_t, 256> kLengthMinusOffset =\n+    MakeTable(make_index_sequence<256>{});\n \n // Any hash function will produce a valid compressed bitstream, but a good\n // hash function reduces the number of collisions and thus yields better\n@@ -1075,7 +1071,20 @@ size_t AdvanceToNextTagX86Optimized(const uint8_t** ip_p, size_t* tag) {\n \n // Extract the offset for copy-1 and copy-2 returns 0 for literals or copy-4.\n inline uint32_t ExtractOffset(uint32_t val, size_t tag_type) {\n-  return val & table.extract_masks[tag_type];\n+  // For x86 non-static storage works better. For ARM static storage is better.\n+  // TODO: Once the array is recognized as a register, improve the\n+  // readability for x86.\n+#if defined(__x86_64__)\n+  constexpr uint64_t kExtractMasksCombined = 0x0000FFFF00FF0000ull;\n+  uint16_t result;\n+  memcpy(&result,\n+         reinterpret_cast<const char*>(&kExtractMasksCombined) + 2 * tag_type,\n+         sizeof(result));\n+  return val & result;\n+#else\n+  static constexpr uint32_t kExtractMasks[4] = {0, 0xFF, 0xFFFF, 0};\n+  return val & kExtractMasks[tag_type];\n+#endif\n };\n \n // Core decompression loop, when there is enough data available.\n@@ -1108,7 +1117,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n         assert(tag == ip[-1]);\n         // For literals tag_type = 0, hence we will always obtain 0 from\n         // ExtractLowBytes. For literals offset will thus be kLiteralOffset.\n-        ptrdiff_t len_min_offset = table.length_minus_offset[tag];\n+        ptrdiff_t len_min_offset = kLengthMinusOffset[tag];\n #if defined(__aarch64__)\n         size_t tag_type = AdvanceToNextTagARMOptimized(&ip, &tag);\n #else\n@@ -1328,7 +1337,7 @@ class SnappyDecompressor {\n \n           if (!writer->AppendFromSelf(copy_offset, length, &op)) goto exit;\n         } else {\n-          const ptrdiff_t entry = table.length_minus_offset[c];\n+          const ptrdiff_t entry = kLengthMinusOffset[c];\n           preload = LittleEndian::Load32(ip);\n           const uint32_t trailer = ExtractLowBytes(preload, c & 3);\n           const uint32_t length = entry & 0xff;"
+    ],
+    "files_changed": [
+      {
+        "filename": "snappy.cc",
+        "status": "modified",
+        "additions": 18,
+        "deletions": 9,
+        "changes": 27,
+        "patch": "@@ -124,12 +124,8 @@ constexpr std::array<int16_t, 256> MakeTable(index_sequence<seq...>) {\n   return std::array<int16_t, 256>{LengthMinusOffset(seq)...};\n }\n \n-// We maximally co-locate the two tables so that only one register needs to be\n-// reserved for the table address.\n-struct {\n-  alignas(64) const std::array<int16_t, 256> length_minus_offset;\n-  uint32_t extract_masks[4];  // Used for extracting offset based on tag type.\n-} table = {MakeTable(make_index_sequence<256>{}), {0, 0xFF, 0xFFFF, 0}};\n+alignas(64) const std::array<int16_t, 256> kLengthMinusOffset =\n+    MakeTable(make_index_sequence<256>{});\n \n // Any hash function will produce a valid compressed bitstream, but a good\n // hash function reduces the number of collisions and thus yields better\n@@ -1075,7 +1071,20 @@ size_t AdvanceToNextTagX86Optimized(const uint8_t** ip_p, size_t* tag) {\n \n // Extract the offset for copy-1 and copy-2 returns 0 for literals or copy-4.\n inline uint32_t ExtractOffset(uint32_t val, size_t tag_type) {\n-  return val & table.extract_masks[tag_type];\n+  // For x86 non-static storage works better. For ARM static storage is better.\n+  // TODO: Once the array is recognized as a register, improve the\n+  // readability for x86.\n+#if defined(__x86_64__)\n+  constexpr uint64_t kExtractMasksCombined = 0x0000FFFF00FF0000ull;\n+  uint16_t result;\n+  memcpy(&result,\n+         reinterpret_cast<const char*>(&kExtractMasksCombined) + 2 * tag_type,\n+         sizeof(result));\n+  return val & result;\n+#else\n+  static constexpr uint32_t kExtractMasks[4] = {0, 0xFF, 0xFFFF, 0};\n+  return val & kExtractMasks[tag_type];\n+#endif\n };\n \n // Core decompression loop, when there is enough data available.\n@@ -1108,7 +1117,7 @@ std::pair<const uint8_t*, ptrdiff_t> DecompressBranchless(\n         assert(tag == ip[-1]);\n         // For literals tag_type = 0, hence we will always obtain 0 from\n         // ExtractLowBytes. For literals offset will thus be kLiteralOffset.\n-        ptrdiff_t len_min_offset = table.length_minus_offset[tag];\n+        ptrdiff_t len_min_offset = kLengthMinusOffset[tag];\n #if defined(__aarch64__)\n         size_t tag_type = AdvanceToNextTagARMOptimized(&ip, &tag);\n #else\n@@ -1328,7 +1337,7 @@ class SnappyDecompressor {\n \n           if (!writer->AppendFromSelf(copy_offset, length, &op)) goto exit;\n         } else {\n-          const ptrdiff_t entry = table.length_minus_offset[c];\n+          const ptrdiff_t entry = kLengthMinusOffset[c];\n           preload = LittleEndian::Load32(ip);\n           const uint32_t trailer = ExtractLowBytes(preload, c & 3);\n           const uint32_t length = entry & 0xff;"
+      }
+    ],
+    "lines_added": 18,
+    "lines_removed": 9
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991771127299,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.9999999983274788,
+    "relative_improvement": -0.004667317920330043,
+    "absolute_improvement_ms": -43.000000000002814,
+    "old_mean_ms": 9212.999999999998,
+    "new_mean_ms": 9256.0,
+    "old_std_ms": 21.196941874421103,
+    "new_std_ms": 31.24982758573123,
+    "effect_size_cohens_d": -1.610440542970434,
+    "old_ci95_ms": [
+      9205.084931823583,
+      9220.915068176411
+    ],
+    "new_ci95_ms": [
+      9244.331122606854,
+      9267.668877393146
+    ],
+    "old_ci99_ms": [
+      9202.332746847289,
+      9223.667253152707
+    ],
+    "new_ci99_ms": [
+      9240.273683260046,
+      9271.726316739954
+    ],
+    "new_times_s": [
+      9.24,
+      9.39,
+      9.24,
+      9.24,
+      9.23,
+      9.25,
+      9.25,
+      9.24,
+      9.24,
+      9.26,
+      9.25,
+      9.31,
+      9.26,
+      9.26,
+      9.26,
+      9.29,
+      9.24,
+      9.23,
+      9.23,
+      9.26,
+      9.26,
+      9.23,
+      9.25,
+      9.25,
+      9.25,
+      9.25,
+      9.27,
+      9.24,
+      9.24,
+      9.23,
+      9.28
+    ],
+    "old_times_s": [
+      9.21,
+      9.22,
+      9.21,
+      9.22,
+      9.27,
+      9.21,
+      9.21,
+      9.21,
+      9.22,
+      9.23,
+      9.2,
+      9.22,
+      9.2,
+      9.22,
+      9.21,
+      9.21,
+      9.21,
+      9.19,
+      9.2,
+      9.22,
+      9.22,
+      9.2,
+      9.22,
+      9.27,
+      9.22,
+      9.19,
+      9.21,
+      9.15,
+      9.21,
+      9.21,
+      9.21
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 1,
+    "significant_mannwhitney_regressions_tests": [
+      "snappy_unittest"
+    ],
+    "tests": [
+      {
+        "test_name": "snappy_unittest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999981485789979,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.9999999928113408,
+        "relative_improvement": -0.004303993796045032,
+        "absolute_improvement_ms": -39.64285714285509,
+        "old_mean_ms": 9210.714285714288,
+        "new_mean_ms": 9250.357142857143,
+        "old_std_ms": 22.265830228563246,
+        "new_std_ms": 19.33757479473036,
+        "effect_size_cohens_d": -1.9010474827778097,
+        "old_ci95_ms": [
+          9202.080498073952,
+          9219.348073354622
+        ],
+        "new_ci95_ms": [
+          9242.858814138073,
+          9257.855471576211
+        ],
+        "old_ci99_ms": [
+          9199.05567742362,
+          9222.372894004955
+        ],
+        "new_ci99_ms": [
+          9240.23179798974,
+          9260.482487724545
+        ],
+        "new_times": [
+          9.24,
+          9.23,
+          9.24,
+          9.25,
+          9.24,
+          9.23,
+          9.26,
+          9.25,
+          9.31,
+          9.25,
+          9.26,
+          9.26,
+          9.29,
+          9.24,
+          9.23,
+          9.23,
+          9.26,
+          9.26,
+          9.23,
+          9.25,
+          9.25,
+          9.24,
+          9.25,
+          9.27,
+          9.24,
+          9.24,
+          9.23,
+          9.28
+        ],
+        "old_times": [
+          9.22,
+          9.27,
+          9.2,
+          9.2,
+          9.2,
+          9.22,
+          9.22,
+          9.2,
+          9.22,
+          9.2,
+          9.22,
+          9.2,
+          9.21,
+          9.2,
+          9.19,
+          9.2,
+          9.22,
+          9.22,
+          9.2,
+          9.22,
+          9.27,
+          9.22,
+          9.19,
+          9.21,
+          9.15,
+          9.21,
+          9.21,
+          9.21
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

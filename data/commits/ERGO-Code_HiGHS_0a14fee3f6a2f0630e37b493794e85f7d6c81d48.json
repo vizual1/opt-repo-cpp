@@ -1,0 +1,297 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:00:25.157743",
+    "repository": "https://github.com/ERGO-Code/HiGHS",
+    "repository_name": "ERGO-Code/HiGHS"
+  },
+  "commit_info": {
+    "old_sha": "5addb609e0d3bce9fe6aebe86dff602e2f51b7c5",
+    "new_sha": "0a14fee3f6a2f0630e37b493794e85f7d6c81d48",
+    "commit_message": [
+      "QUASS: Performance: buffer some Vectors to avoid repeated memory allocation"
+    ],
+    "commit_date": "2024-01-31T00:44:42+00:00",
+    "patch": [
+      "--- src/qpsolver/basis.cpp\n@@ -6,6 +6,7 @@\n Basis::Basis(Runtime& rt, std::vector<HighsInt> active,\n              std::vector<BasisStatus> status, std::vector<HighsInt> inactive)\n     : Ztprod_res(rt.instance.num_var),\n+      buffer_Zprod(rt.instance.num_var),\n       runtime(rt),\n       buffer_column_aq(rt.instance.num_var),\n       buffer_row_ep(rt.instance.num_var) {\n@@ -290,16 +291,17 @@ Vector& Basis::Ztprod(const Vector& rhs, Vector& target, bool buffer,\n }\n \n Vector& Basis::Zprod(const Vector& rhs, Vector& target) {\n-  Vector temp(target.dim);\n+  buffer_Zprod.reset();\n+  buffer_Zprod.dim = target.dim;\n   for (HighsInt i = 0; i < rhs.num_nz; i++) {\n     HighsInt nz = rhs.index[i];\n     HighsInt nonactive = nonactiveconstraintsidx[nz];\n     HighsInt idx = constraintindexinbasisfactor[nonactive];\n-    temp.index[i] = idx;\n-    temp.value[idx] = rhs.value[nz];\n+    buffer_Zprod.index[i] = idx;\n+    buffer_Zprod.value[idx] = rhs.value[nz];\n   }\n-  temp.num_nz = rhs.num_nz;\n-  return btran(temp, target);\n+  buffer_Zprod.num_nz = rhs.num_nz;\n+  return btran(buffer_Zprod, target);\n }\n \n // void Basis::write(std::string filename) {\n--- src/qpsolver/basis.hpp\n@@ -17,6 +17,7 @@\n class Basis {\n   HVector buffer_vec2hvec;\n   Vector Ztprod_res;\n+  Vector buffer_Zprod;\n \n   HVector& vec2hvec(const Vector& vec) {\n     buffer_vec2hvec.clear();"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/qpsolver/basis.cpp",
+        "status": "modified",
+        "additions": 7,
+        "deletions": 5,
+        "changes": 12,
+        "patch": "@@ -6,6 +6,7 @@\n Basis::Basis(Runtime& rt, std::vector<HighsInt> active,\n              std::vector<BasisStatus> status, std::vector<HighsInt> inactive)\n     : Ztprod_res(rt.instance.num_var),\n+      buffer_Zprod(rt.instance.num_var),\n       runtime(rt),\n       buffer_column_aq(rt.instance.num_var),\n       buffer_row_ep(rt.instance.num_var) {\n@@ -290,16 +291,17 @@ Vector& Basis::Ztprod(const Vector& rhs, Vector& target, bool buffer,\n }\n \n Vector& Basis::Zprod(const Vector& rhs, Vector& target) {\n-  Vector temp(target.dim);\n+  buffer_Zprod.reset();\n+  buffer_Zprod.dim = target.dim;\n   for (HighsInt i = 0; i < rhs.num_nz; i++) {\n     HighsInt nz = rhs.index[i];\n     HighsInt nonactive = nonactiveconstraintsidx[nz];\n     HighsInt idx = constraintindexinbasisfactor[nonactive];\n-    temp.index[i] = idx;\n-    temp.value[idx] = rhs.value[nz];\n+    buffer_Zprod.index[i] = idx;\n+    buffer_Zprod.value[idx] = rhs.value[nz];\n   }\n-  temp.num_nz = rhs.num_nz;\n-  return btran(temp, target);\n+  buffer_Zprod.num_nz = rhs.num_nz;\n+  return btran(buffer_Zprod, target);\n }\n \n // void Basis::write(std::string filename) {"
+      },
+      {
+        "filename": "src/qpsolver/basis.hpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "patch": "@@ -17,6 +17,7 @@\n class Basis {\n   HVector buffer_vec2hvec;\n   Vector Ztprod_res;\n+  Vector buffer_Zprod;\n \n   HVector& vec2hvec(const Vector& vec) {\n     buffer_vec2hvec.clear();"
+      }
+    ],
+    "lines_added": 8,
+    "lines_removed": 5
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.7001242091458204,
+    "is_pair_significant": false,
+    "pair_p_value": 0.7315294523599981,
+    "is_binom_significant": false,
+    "binom_p_value": 0.8997557889670134,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.8305974677512276,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.4033421469527937,
+    "relative_improvement": 0.005102040816326535,
+    "absolute_improvement_ms": 1.3333333333332975,
+    "old_mean_ms": 261.3333333333333,
+    "new_mean_ms": 260.0,
+    "old_std_ms": 82.1996448240222,
+    "new_std_ms": 93.44000472366544,
+    "effect_size_cohens_d": 0.015151605108589929,
+    "old_ci95_ms": [
+      230.63948151670724,
+      292.0271851499594
+    ],
+    "new_ci95_ms": [
+      225.10892881747748,
+      294.8910711825226
+    ],
+    "old_ci99_ms": [
+      219.96678029018864,
+      302.69988637647793
+    ],
+    "new_ci99_ms": [
+      212.97679302595245,
+      307.0232069740476
+    ],
+    "new_times_s": [
+      0.2,
+      0.12,
+      0.19,
+      0.37,
+      0.32,
+      0.5,
+      0.18,
+      0.2,
+      0.41,
+      0.22,
+      0.19,
+      0.2,
+      0.18,
+      0.21,
+      0.16,
+      0.27,
+      0.21,
+      0.4,
+      0.2,
+      0.22,
+      0.42,
+      0.21,
+      0.2,
+      0.2,
+      0.4,
+      0.24,
+      0.23,
+      0.27,
+      0.27,
+      0.36,
+      0.25
+    ],
+    "old_times_s": [
+      0.4,
+      0.26,
+      0.4,
+      0.2,
+      0.34,
+      0.36,
+      0.17,
+      0.16,
+      0.23,
+      0.17,
+      0.21,
+      0.2,
+      0.25,
+      0.42,
+      0.18,
+      0.21,
+      0.27,
+      0.22,
+      0.19,
+      0.2,
+      0.45,
+      0.2,
+      0.21,
+      0.4,
+      0.35,
+      0.25,
+      0.33,
+      0.29,
+      0.21,
+      0.26,
+      0.25
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "cxx_examples_call_highs_from_cpp",
+        "is_significant": false,
+        "p_value": 0.8596119294470896,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9111728057940356,
+        "is_binom_significant": false,
+        "binom_p_value": 0.956420723348856,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9419647363645401,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.668504711838371,
+        "relative_improvement": -0.046283309957924276,
+        "absolute_improvement_ms": -11.785714285714288,
+        "old_mean_ms": 254.6428571428571,
+        "new_mean_ms": 266.4285714285714,
+        "old_std_ms": 81.03415570939448,
+        "new_std_ms": 90.80766347633741,
+        "effect_size_cohens_d": -0.13694801922607144,
+        "old_ci95_ms": [
+          223.22109182681766,
+          286.06462245889657
+        ],
+        "new_ci95_ms": [
+          231.21703543276206,
+          301.64010742438074
+        ],
+        "old_ci99_ms": [
+          212.21257406413085,
+          297.0731402215834
+        ],
+        "new_ci99_ms": [
+          218.8807832978928,
+          313.97635955924994
+        ],
+        "new_times": [
+          0.36,
+          0.32,
+          0.5,
+          0.18,
+          0.2,
+          0.41,
+          0.22,
+          0.19,
+          0.2,
+          0.18,
+          0.21,
+          0.16,
+          0.27,
+          0.21,
+          0.4,
+          0.2,
+          0.22,
+          0.41,
+          0.21,
+          0.2,
+          0.2,
+          0.4,
+          0.24,
+          0.23,
+          0.27,
+          0.27,
+          0.36,
+          0.24
+        ],
+        "old_times": [
+          0.2,
+          0.34,
+          0.36,
+          0.16,
+          0.16,
+          0.23,
+          0.17,
+          0.21,
+          0.19,
+          0.25,
+          0.42,
+          0.18,
+          0.21,
+          0.27,
+          0.21,
+          0.19,
+          0.2,
+          0.45,
+          0.2,
+          0.21,
+          0.4,
+          0.35,
+          0.25,
+          0.31,
+          0.29,
+          0.21,
+          0.26,
+          0.25
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

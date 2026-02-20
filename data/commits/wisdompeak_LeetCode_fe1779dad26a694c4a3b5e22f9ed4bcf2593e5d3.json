@@ -1,0 +1,497 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:05:20.149238",
+    "repository": "https://github.com/wisdompeak/LeetCode",
+    "repository_name": "wisdompeak/LeetCode"
+  },
+  "commit_info": {
+    "old_sha": "96355ed9fc49d742c56ec29d4604b596b1d5ec7f",
+    "new_sha": "fe1779dad26a694c4a3b5e22f9ed4bcf2593e5d3",
+    "commit_message": [
+      "Update 315.Count-of-Smaller-Numbers-After-Self.cpp"
+    ],
+    "commit_date": "2022-06-27T00:37:36+00:00",
+    "patch": [
+      "--- Divide_Conquer/315.Count-of-Smaller-Numbers-After-Self/315.Count-of-Smaller-Numbers-After-Self.cpp\n@@ -30,7 +30,6 @@ class Solution {\n         }\n         \n         // \u5c06\u4e24\u6bb5\u5df2\u7ecf\u6709\u5e8f\u7684\u6570\u7ec4\u6bb5start~mid,mid+1~end\u5408\u8d77\u6765\u6392\u5e8f\u3002\n-        // \u5982\u679c\u5199\u5f52\u5e76\u6392\u5e8f\u7684code\u4f1a\u66f4\u5feb\u4e00\u4e9b\u3002\u8fd9\u91cc\u5c31\u5077\u61d2\u4e86\uff0c\u76f4\u63a5\u7528sort\u51fd\u6570\u3002        \n-        sort(sortedNums.begin()+start,sortedNums.begin()+end+1);        \n+        inplace_merge(sortedNums.begin()+start, sortedNums.begin()+mid+1, sortedNums.begin()+end+1);\n     }\n };"
+    ],
+    "files_changed": [
+      {
+        "filename": "Divide_Conquer/315.Count-of-Smaller-Numbers-After-Self/315.Count-of-Smaller-Numbers-After-Self.cpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 2,
+        "changes": 3,
+        "patch": "@@ -30,7 +30,6 @@ class Solution {\n         }\n         \n         // \u5c06\u4e24\u6bb5\u5df2\u7ecf\u6709\u5e8f\u7684\u6570\u7ec4\u6bb5start~mid,mid+1~end\u5408\u8d77\u6765\u6392\u5e8f\u3002\n-        // \u5982\u679c\u5199\u5f52\u5e76\u6392\u5e8f\u7684code\u4f1a\u66f4\u5feb\u4e00\u4e9b\u3002\u8fd9\u91cc\u5c31\u5077\u61d2\u4e86\uff0c\u76f4\u63a5\u7528sort\u51fd\u6570\u3002        \n-        sort(sortedNums.begin()+start,sortedNums.begin()+end+1);        \n+        inplace_merge(sortedNums.begin()+start, sortedNums.begin()+mid+1, sortedNums.begin()+end+1);\n     }\n };"
+      }
+    ],
+    "lines_added": 1,
+    "lines_removed": 2
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": true,
+    "p_value": 6.671738634699632e-78,
+    "is_pair_significant": true,
+    "pair_p_value": 2.331678886034087e-44,
+    "is_binom_significant": true,
+    "binom_p_value": 9.313225746154785e-10,
+    "is_wilcoxon_significant": true,
+    "wilcoxon_p_value": 6.750659341502186e-07,
+    "is_mannwhitney_significant": true,
+    "mannwhitney_p_value": 4.670839373353029e-12,
+    "relative_improvement": 0.5178868552412647,
+    "absolute_improvement_ms": 414.99999999999983,
+    "old_mean_ms": 801.3333333333334,
+    "new_mean_ms": 386.33333333333354,
+    "old_std_ms": 10.080138659874606,
+    "new_std_ms": 8.502873077655142,
+    "effect_size_cohens_d": 44.50443140934843,
+    "old_ci95_ms": [
+      797.5693476983636,
+      805.0973189683031
+    ],
+    "new_ci95_ms": [
+      383.15830834606186,
+      389.5083583206052
+    ],
+    "old_ci99_ms": [
+      796.2605548383817,
+      806.4061118282849
+    ],
+    "new_ci99_ms": [
+      382.0543057178376,
+      390.61236094882946
+    ],
+    "new_times_s": [
+      0.39,
+      0.39,
+      0.39,
+      0.38,
+      0.38,
+      0.38,
+      0.39,
+      0.38,
+      0.42,
+      0.38,
+      0.39,
+      0.39,
+      0.39,
+      0.38,
+      0.38,
+      0.39,
+      0.39,
+      0.38,
+      0.38,
+      0.39,
+      0.39,
+      0.38,
+      0.38,
+      0.38,
+      0.38,
+      0.38,
+      0.38,
+      0.39,
+      0.39,
+      0.4,
+      0.39
+    ],
+    "old_times_s": [
+      0.8,
+      0.81,
+      0.82,
+      0.8,
+      0.8,
+      0.81,
+      0.8,
+      0.79,
+      0.8,
+      0.81,
+      0.8,
+      0.8,
+      0.81,
+      0.8,
+      0.8,
+      0.78,
+      0.8,
+      0.79,
+      0.78,
+      0.8,
+      0.81,
+      0.81,
+      0.8,
+      0.8,
+      0.8,
+      0.83,
+      0.79,
+      0.8,
+      0.8,
+      0.8,
+      0.8
+    ]
+  },
+  "tests": {
+    "total_tests": 3,
+    "significant_improvements": 1,
+    "significant_improvements_tests": [
+      "count_of_smaller_numbers_after_self.benchmark"
+    ],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 1,
+    "significant_pair_improvements_tests": [
+      "count_of_smaller_numbers_after_self.benchmark"
+    ],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 1,
+    "significant_binom_improvements_tests": [
+      "count_of_smaller_numbers_after_self.benchmark"
+    ],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 1,
+    "significant_wilcoxon_improvements_tests": [
+      "count_of_smaller_numbers_after_self.benchmark"
+    ],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "count_of_smaller_numbers_after_self.benchmark"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "escape_a_large_maze_test.III",
+        "is_significant": false,
+        "p_value": 0.5750114407087514,
+        "is_pair_significant": false,
+        "pair_p_value": 0.5798092825166523,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999481420964003,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.978080457918297,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.12123945041065182,
+        "relative_improvement": 0.042553191489361625,
+        "absolute_improvement_ms": 1.3793103448275883,
+        "old_mean_ms": 32.41379310344828,
+        "new_mean_ms": 31.034482758620694,
+        "old_std_ms": 5.766388083288672,
+        "new_std_ms": 4.092525928189876,
+        "effect_size_cohens_d": 0.2758620689655176,
+        "old_ci95_ms": [
+          30.220376382659612,
+          34.607209824236946
+        ],
+        "new_ci95_ms": [
+          29.4777691501198,
+          32.59119636712158
+        ],
+        "old_ci99_ms": [
+          29.45491547113152,
+          35.37267073576504
+        ],
+        "new_ci99_ms": [
+          28.93450557122139,
+          33.134459946019994
+        ],
+        "new_times": [
+          0.04,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.05,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03
+        ],
+        "old_times": [
+          0.05,
+          0.03,
+          0.03,
+          0.03,
+          0.04,
+          0.03,
+          0.03,
+          0.04,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.04,
+          0.05,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03,
+          0.03
+        ]
+      },
+      {
+        "test_name": "count_of_smaller_numbers_after_self.benchmark",
+        "is_significant": true,
+        "p_value": 1.521408496077032e-72,
+        "is_pair_significant": true,
+        "pair_p_value": 6.648248900919702e-51,
+        "is_binom_significant": true,
+        "binom_p_value": 1.862645149230957e-09,
+        "is_wilcoxon_significant": true,
+        "wilcoxon_p_value": 6.563716310035155e-07,
+        "is_mannwhitney_significant": true,
+        "mannwhitney_p_value": 1.3159137924262618e-12,
+        "relative_improvement": 0.6226708074534162,
+        "absolute_improvement_ms": 414.8275862068968,
+        "old_mean_ms": 666.2068965517244,
+        "new_mean_ms": 251.3793103448276,
+        "old_std_ms": 6.768515929047776,
+        "new_std_ms": 3.509312031717985,
+        "effect_size_cohens_d": 76.94663684072728,
+        "old_ci95_ms": [
+          663.6322907847759,
+          668.7815023186729
+        ],
+        "new_ci95_ms": [
+          250.04443943817762,
+          252.71418125147756
+        ],
+        "old_ci99_ms": [
+          662.733802112507,
+          669.6799909909417
+        ],
+        "new_ci99_ms": [
+          249.57859476247495,
+          253.1800259271802
+        ],
+        "new_times": [
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.26,
+          0.25,
+          0.25,
+          0.26,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.26,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.25,
+          0.26,
+          0.25,
+          0.25
+        ],
+        "old_times": [
+          0.67,
+          0.67,
+          0.67,
+          0.67,
+          0.66,
+          0.65,
+          0.67,
+          0.66,
+          0.67,
+          0.67,
+          0.67,
+          0.67,
+          0.67,
+          0.65,
+          0.67,
+          0.66,
+          0.65,
+          0.67,
+          0.67,
+          0.66,
+          0.67,
+          0.67,
+          0.67,
+          0.67,
+          0.66,
+          0.67,
+          0.67,
+          0.67,
+          0.67
+        ]
+      },
+      {
+        "test_name": "edit_distance_72_test.benchmark",
+        "is_significant": false,
+        "p_value": 0.9999999999027452,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999999997066704,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999999981373549,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999978486102682,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.16714290224817413,
+        "relative_improvement": 0.004901960784313621,
+        "absolute_improvement_ms": 0.34482758620690834,
+        "old_mean_ms": 70.34482758620692,
+        "new_mean_ms": 70.0,
+        "old_std_ms": 1.8569533817705177,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": 0.2626128657194542,
+        "old_ci95_ms": [
+          69.6384802959327,
+          71.05117487648113
+        ],
+        "new_ci95_ms": [
+          70.0,
+          70.0
+        ],
+        "old_ci99_ms": [
+          69.39197846363413,
+          71.29767670877969
+        ],
+        "new_ci99_ms": [
+          70.0,
+          70.0
+        ],
+        "new_times": [
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07
+        ],
+        "old_times": [
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.08,
+          0.07,
+          0.07,
+          0.07,
+          0.07,
+          0.07
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

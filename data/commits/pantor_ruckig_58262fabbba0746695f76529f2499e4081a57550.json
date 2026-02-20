@@ -1,0 +1,289 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:04:43.325966",
+    "repository": "https://github.com/pantor/ruckig",
+    "repository_name": "pantor/ruckig"
+  },
+  "commit_info": {
+    "old_sha": "5b568be6feee3a4024f9e4d9211cd830f60e6d0f",
+    "new_sha": "58262fabbba0746695f76529f2499e4081a57550",
+    "commit_message": [
+      "avoid pow completely"
+    ],
+    "commit_date": "2021-10-27T08:12:44+00:00",
+    "patch": [
+      "--- src/position-step2.cpp\n@@ -880,10 +880,11 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double\n \n                 // Single Newton step (regarding pd)\n                 {\n-                    const double h1 = (ad_ad + 2*jMax*(af*t + (jMax*t - a0)*(t - tf) - vd))/2;\n-                    const double h2 = (-ad + jMax*(-2*t + tf));\n-                    const double orig = (af_p3 - a0_p3 + 3*af*jMax*t*(af + jMax*t) + 3*a0_a0*(af + jMax*t) - 3*a0*(af_af + 2*af*jMax*t + jMax_jMax*(t*t - tf_tf)) + 3*jMax_jMax*(-2*pd + jMax*t*(t - tf)*tf + 2*tf*v0))/(6*jMax_jMax) - std::pow(h1,1.5)/(jMax*Abs(jMax)) + ((-ad - jMax*t)*h1)/(jMax_jMax);\n-                    const double deriv = (6*jMax*h2*Sqrt(h1)/Abs(jMax) + 2*(-ad - jMax*tf)*h2 - 2*(3*ad_ad + af*jMax*(8*t - 2*tf) + 4*a0*jMax*(-2*t + tf) + 2*jMax*(jMax*t*(3*t - 2*tf) - vd)))/(4*jMax);\n+                    const double h1 = ad_ad/2 + jMax*(af*t + (jMax*t - a0)*(t - tf) - vd);\n+                    const double h2 = -ad + jMax*(tf - 2*t);\n+                    const double h3 = Sqrt(h1);\n+                    const double orig = (af_p3 - a0_p3 + 3*af*jMax*t*(af + jMax*t) + 3*a0_a0*(af + jMax*t) - 3*a0*(af_af + 2*af*jMax*t + jMax_jMax*(t*t - tf_tf)) + 3*jMax_jMax*(-2*pd + jMax*t*(t - tf)*tf + 2*tf*v0))/(6*jMax_jMax) - h3*h3*h3/(jMax*Abs(jMax)) + ((-ad - jMax*t)*h1)/(jMax_jMax);\n+                    const double deriv = (6*jMax*h2*h3/Abs(jMax) + 2*(-ad - jMax*tf)*h2 - 2*(3*ad_ad + af*jMax*(8*t - 2*tf) + 4*a0*jMax*(-2*t + tf) + 2*jMax*(jMax*t*(3*t - 2*tf) - vd)))/(4*jMax);\n \n                     t -= orig / deriv;\n                 }"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/position-step2.cpp",
+        "status": "modified",
+        "additions": 5,
+        "deletions": 4,
+        "changes": 9,
+        "patch": "@@ -880,10 +880,11 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double\n \n                 // Single Newton step (regarding pd)\n                 {\n-                    const double h1 = (ad_ad + 2*jMax*(af*t + (jMax*t - a0)*(t - tf) - vd))/2;\n-                    const double h2 = (-ad + jMax*(-2*t + tf));\n-                    const double orig = (af_p3 - a0_p3 + 3*af*jMax*t*(af + jMax*t) + 3*a0_a0*(af + jMax*t) - 3*a0*(af_af + 2*af*jMax*t + jMax_jMax*(t*t - tf_tf)) + 3*jMax_jMax*(-2*pd + jMax*t*(t - tf)*tf + 2*tf*v0))/(6*jMax_jMax) - std::pow(h1,1.5)/(jMax*Abs(jMax)) + ((-ad - jMax*t)*h1)/(jMax_jMax);\n-                    const double deriv = (6*jMax*h2*Sqrt(h1)/Abs(jMax) + 2*(-ad - jMax*tf)*h2 - 2*(3*ad_ad + af*jMax*(8*t - 2*tf) + 4*a0*jMax*(-2*t + tf) + 2*jMax*(jMax*t*(3*t - 2*tf) - vd)))/(4*jMax);\n+                    const double h1 = ad_ad/2 + jMax*(af*t + (jMax*t - a0)*(t - tf) - vd);\n+                    const double h2 = -ad + jMax*(tf - 2*t);\n+                    const double h3 = Sqrt(h1);\n+                    const double orig = (af_p3 - a0_p3 + 3*af*jMax*t*(af + jMax*t) + 3*a0_a0*(af + jMax*t) - 3*a0*(af_af + 2*af*jMax*t + jMax_jMax*(t*t - tf_tf)) + 3*jMax_jMax*(-2*pd + jMax*t*(t - tf)*tf + 2*tf*v0))/(6*jMax_jMax) - h3*h3*h3/(jMax*Abs(jMax)) + ((-ad - jMax*t)*h1)/(jMax_jMax);\n+                    const double deriv = (6*jMax*h2*h3/Abs(jMax) + 2*(-ad - jMax*tf)*h2 - 2*(3*ad_ad + af*jMax*(8*t - 2*tf) + 4*a0*jMax*(-2*t + tf) + 2*jMax*(jMax*t*(3*t - 2*tf) - vd)))/(4*jMax);\n \n                     t -= orig / deriv;\n                 }"
+      }
+    ],
+    "lines_added": 5,
+    "lines_removed": 4
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.999999316035478,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.49099113630834085,
+    "relative_improvement": 6.618133686294445e-05,
+    "absolute_improvement_ms": 0.33333333333196435,
+    "old_mean_ms": 5036.666666666666,
+    "new_mean_ms": 5036.333333333334,
+    "old_std_ms": 17.086662137132134,
+    "new_std_ms": 18.285727114117037,
+    "effect_size_cohens_d": 0.01883627253529585,
+    "old_ci95_ms": [
+      5030.286402167949,
+      5043.046931165383
+    ],
+    "new_ci95_ms": [
+      5029.505330613839,
+      5043.16133605283
+    ],
+    "old_ci99_ms": [
+      5028.067890879506,
+      5045.265442453826
+    ],
+    "new_ci99_ms": [
+      5027.131134197098,
+      5045.535532469571
+    ],
+    "new_times_s": [
+      5.02,
+      5.06,
+      5.07,
+      5.03,
+      5.05,
+      5.05,
+      5.05,
+      5.04,
+      5.05,
+      5.0,
+      5.04,
+      5.02,
+      5.06,
+      5.05,
+      5.05,
+      5.01,
+      5.03,
+      5.02,
+      5.05,
+      5.05,
+      5.0,
+      5.05,
+      5.05,
+      5.05,
+      5.02,
+      5.02,
+      5.02,
+      5.03,
+      5.03,
+      5.02,
+      5.02
+    ],
+    "old_times_s": [
+      5.06,
+      5.03,
+      5.04,
+      5.03,
+      5.05,
+      5.07,
+      5.02,
+      5.06,
+      5.06,
+      5.02,
+      5.04,
+      5.04,
+      5.01,
+      5.04,
+      5.05,
+      5.01,
+      5.03,
+      5.06,
+      5.04,
+      5.05,
+      5.0,
+      5.05,
+      5.03,
+      5.03,
+      5.02,
+      5.02,
+      5.03,
+      5.03,
+      5.03,
+      5.06,
+      5.05
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "otg-test",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999982534791759,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.30631254586079393,
+        "relative_improvement": 0.0006387055567383678,
+        "absolute_improvement_ms": 3.214285714285836,
+        "old_mean_ms": 5032.5,
+        "new_mean_ms": 5029.285714285714,
+        "old_std_ms": 19.17270436304154,
+        "new_std_ms": 18.6445447147161,
+        "effect_size_cohens_d": 0.16997388027797655,
+        "old_ci95_ms": [
+          5025.065601360372,
+          5039.934398639628
+        ],
+        "new_ci95_ms": [
+          5022.056114577768,
+          5036.515313993659
+        ],
+        "old_ci99_ms": [
+          5022.460982916562,
+          5042.539017083437
+        ],
+        "new_ci99_ms": [
+          5019.523246802787,
+          5039.0481817686405
+        ],
+        "new_times": [
+          5.03,
+          5.05,
+          5.05,
+          5.05,
+          5.04,
+          5.04,
+          5.0,
+          5.04,
+          5.02,
+          5.05,
+          5.04,
+          5.05,
+          5.0,
+          5.02,
+          5.01,
+          5.05,
+          5.05,
+          4.99,
+          5.04,
+          5.05,
+          5.04,
+          5.01,
+          5.01,
+          5.02,
+          5.02,
+          5.02,
+          5.02,
+          5.01
+        ],
+        "old_times": [
+          5.03,
+          5.05,
+          5.07,
+          5.02,
+          5.06,
+          5.06,
+          5.02,
+          5.03,
+          5.03,
+          5.0,
+          5.03,
+          5.04,
+          5.0,
+          5.02,
+          5.05,
+          5.04,
+          5.05,
+          5.0,
+          5.04,
+          5.03,
+          5.02,
+          5.01,
+          5.01,
+          5.03,
+          5.03,
+          5.03,
+          5.06,
+          5.05
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

@@ -1,0 +1,192 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:33.760166",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "3ddbe5cbd19b2369d3001f8e36c8b75c1d57a32e",
+    "new_sha": "57ee09cfa3016aaf014c6b5113fc8b4be0a4a8ca",
+    "commit_message": [
+      "1.04x AVX2 i64/128 sort speedup: no longer require blending for L partition\n\nPiperOrigin-RevId: 436730713"
+    ],
+    "commit_date": "2022-03-23T14:16:18+00:00",
+    "patch": [
+      "--- hwy/contrib/sort/vqsort-inl.h\n@@ -273,7 +273,7 @@ HWY_INLINE void StoreLeftRight(D d, Traits st, const Vec<D> v,\n   const size_t N = Lanes(d);\n \n   const auto comp = st.Compare(d, pivot, v);\n-  const size_t num_left = CompressBlendedStore(v, Not(comp), d, keys + writeL);\n+  const size_t num_left = CompressStore(v, Not(comp), d, keys + writeL);\n   writeL += num_left;\n \n   writeR -= (N - num_left);"
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/contrib/sort/vqsort-inl.h",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -273,7 +273,7 @@ HWY_INLINE void StoreLeftRight(D d, Traits st, const Vec<D> v,\n   const size_t N = Lanes(d);\n \n   const auto comp = st.Compare(d, pivot, v);\n-  const size_t num_left = CompressBlendedStore(v, Not(comp), d, keys + writeL);\n+  const size_t num_left = CompressStore(v, Not(comp), d, keys + writeL);\n   writeL += num_left;\n \n   writeR -= (N - num_left);"
+      }
+    ],
+    "lines_added": 1,
+    "lines_removed": 1
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.999999163969711,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 9.860729857533877e-11,
+    "relative_improvement": 0.016734758013827747,
+    "absolute_improvement_ms": 142.00000000000125,
+    "old_mean_ms": 8485.333333333336,
+    "new_mean_ms": 8343.333333333334,
+    "old_std_ms": 42.16006717698404,
+    "new_std_ms": 44.04804064947131,
+    "effect_size_cohens_d": 3.293563979996314,
+    "old_ci95_ms": [
+      8469.590505523316,
+      8501.076161143354
+    ],
+    "new_ci95_ms": [
+      8326.88552464265,
+      8359.781142024018
+    ],
+    "old_ci99_ms": [
+      8464.116494028094,
+      8506.550172638576
+    ],
+    "new_ci99_ms": [
+      8321.166380983675,
+      8365.500285682992
+    ],
+    "new_times_s": [
+      8.29,
+      8.29,
+      8.3,
+      8.3,
+      8.27,
+      8.29,
+      8.37,
+      8.35,
+      8.32,
+      8.29,
+      8.5,
+      8.31,
+      8.32,
+      8.4,
+      8.38,
+      8.33,
+      8.33,
+      8.32,
+      8.34,
+      8.37,
+      8.36,
+      8.35,
+      8.36,
+      8.36,
+      8.34,
+      8.33,
+      8.39,
+      8.34,
+      8.35,
+      8.36,
+      8.38
+    ],
+    "old_times_s": [
+      8.45,
+      8.53,
+      8.43,
+      8.44,
+      8.46,
+      8.47,
+      8.45,
+      8.43,
+      8.45,
+      8.44,
+      8.51,
+      8.46,
+      8.48,
+      8.48,
+      8.46,
+      8.41,
+      8.47,
+      8.47,
+      8.48,
+      8.47,
+      8.51,
+      8.59,
+      8.5,
+      8.5,
+      8.5,
+      8.49,
+      8.52,
+      8.58,
+      8.53,
+      8.52,
+      8.53
+    ]
+  },
+  "tests": {
+    "total_tests": 0,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": []
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

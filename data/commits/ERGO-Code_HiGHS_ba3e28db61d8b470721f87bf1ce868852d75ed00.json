@@ -1,0 +1,297 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:00:32.848932",
+    "repository": "https://github.com/ERGO-Code/HiGHS",
+    "repository_name": "ERGO-Code/HiGHS"
+  },
+  "commit_info": {
+    "old_sha": "027ac45c07907909bb855317737cf7c6b099255a",
+    "new_sha": "ba3e28db61d8b470721f87bf1ce868852d75ed00",
+    "commit_message": [
+      "QUASS: Fix/Performance: updating gradient is now working as intended, yielding performance improvement"
+    ],
+    "commit_date": "2024-01-31T00:10:32+00:00",
+    "patch": [
+      "--- src/qpsolver/quass.cpp\n@@ -367,8 +367,8 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim\n       computesearchdirection_minor(runtime, basis, factor, redgrad, p);\n       computerowmove(runtime, basis, p, rowmove);\n       tidyup(p, rowmove, basis, runtime);\n+      runtime.instance.Q.mat_vec(p, buffer_Qp);\n     }\n-\n     if (p.norm2() < runtime.settings.pnorm_zero_threshold ||\n         maxsteplength == 0.0 || (false && fabs(gradient.getGradient().dot(p)) < runtime.settings.improvement_zero_threshold)) {\n       atfsep = true;\n@@ -414,11 +414,11 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim\n         redgrad.update(stepres.alpha, false);\n       }\n \n-      gradient.update(buffer_Qp, stepres.alpha);\n-      redcosts.update();\n-\n       runtime.primal.saxpy(stepres.alpha, p);\n       runtime.rowactivity.saxpy(stepres.alpha, rowmove);\n+\n+      gradient.update(buffer_Qp, stepres.alpha);\n+      redcosts.update();\n     }\n   }\n \n--- src/qpsolver/settings.hpp\n@@ -37,7 +37,7 @@ struct Settings {\n   Eventhandler<Statistics&> endofiterationevent;\n \n   HighsInt reinvertfrequency = 100;\n-  HighsInt gradientrecomputefrequency = 1;\n+  HighsInt gradientrecomputefrequency = 100;\n   HighsInt reducedgradientrecomputefrequency =\n       std::numeric_limits<HighsInt>::infinity();\n   HighsInt reducedhessianrecomputefrequency ="
+    ],
+    "files_changed": [
+      {
+        "filename": "src/qpsolver/quass.cpp",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 4,
+        "changes": 8,
+        "patch": "@@ -367,8 +367,8 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim\n       computesearchdirection_minor(runtime, basis, factor, redgrad, p);\n       computerowmove(runtime, basis, p, rowmove);\n       tidyup(p, rowmove, basis, runtime);\n+      runtime.instance.Q.mat_vec(p, buffer_Qp);\n     }\n-\n     if (p.norm2() < runtime.settings.pnorm_zero_threshold ||\n         maxsteplength == 0.0 || (false && fabs(gradient.getGradient().dot(p)) < runtime.settings.improvement_zero_threshold)) {\n       atfsep = true;\n@@ -414,11 +414,11 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim\n         redgrad.update(stepres.alpha, false);\n       }\n \n-      gradient.update(buffer_Qp, stepres.alpha);\n-      redcosts.update();\n-\n       runtime.primal.saxpy(stepres.alpha, p);\n       runtime.rowactivity.saxpy(stepres.alpha, rowmove);\n+\n+      gradient.update(buffer_Qp, stepres.alpha);\n+      redcosts.update();\n     }\n   }\n "
+      },
+      {
+        "filename": "src/qpsolver/settings.hpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -37,7 +37,7 @@ struct Settings {\n   Eventhandler<Statistics&> endofiterationevent;\n \n   HighsInt reinvertfrequency = 100;\n-  HighsInt gradientrecomputefrequency = 1;\n+  HighsInt gradientrecomputefrequency = 100;\n   HighsInt reducedgradientrecomputefrequency =\n       std::numeric_limits<HighsInt>::infinity();\n   HighsInt reducedhessianrecomputefrequency ="
+      }
+    ],
+    "lines_added": 5,
+    "lines_removed": 5
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.7957677118551643,
+    "is_pair_significant": false,
+    "pair_p_value": 0.7977547348312481,
+    "is_binom_significant": false,
+    "binom_p_value": 0.572232224047184,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.8146019407547652,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.4499164723403978,
+    "relative_improvement": 0.005982053838484419,
+    "absolute_improvement_ms": 1.9999999999999463,
+    "old_mean_ms": 334.3333333333333,
+    "new_mean_ms": 332.33333333333337,
+    "old_std_ms": 65.68909705015261,
+    "new_std_ms": 73.98431023480276,
+    "effect_size_cohens_d": 0.028587863101732128,
+    "old_ci95_ms": [
+      309.8046213767079,
+      358.8620452899587
+    ],
+    "new_ci95_ms": [
+      304.7071378678429,
+      359.95952879882384
+    ],
+    "old_ci99_ms": [
+      301.27562945518594,
+      367.3910372114807
+    ],
+    "new_ci99_ms": [
+      295.10110562431487,
+      369.5655610423519
+    ],
+    "new_times_s": [
+      0.22,
+      0.2,
+      0.44,
+      0.3,
+      0.22,
+      0.21,
+      0.29,
+      0.24,
+      0.31,
+      0.37,
+      0.24,
+      0.45,
+      0.35,
+      0.32,
+      0.26,
+      0.46,
+      0.36,
+      0.32,
+      0.38,
+      0.43,
+      0.38,
+      0.29,
+      0.43,
+      0.34,
+      0.36,
+      0.32,
+      0.38,
+      0.38,
+      0.4,
+      0.28,
+      0.26
+    ],
+    "old_times_s": [
+      0.3,
+      0.23,
+      0.21,
+      0.21,
+      0.24,
+      0.4,
+      0.28,
+      0.41,
+      0.35,
+      0.39,
+      0.32,
+      0.3,
+      0.32,
+      0.35,
+      0.29,
+      0.4,
+      0.25,
+      0.49,
+      0.36,
+      0.37,
+      0.31,
+      0.4,
+      0.33,
+      0.32,
+      0.41,
+      0.37,
+      0.34,
+      0.32,
+      0.36,
+      0.39,
+      0.31
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "cxx_examples_call_highs_from_cpp",
+        "is_significant": false,
+        "p_value": 0.6813279036729774,
+        "is_pair_significant": false,
+        "pair_p_value": 0.6841139480197167,
+        "is_binom_significant": false,
+        "binom_p_value": 0.7142059057950974,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.7599432781237041,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.3140341136994266,
+        "relative_improvement": 0.026205450733752435,
+        "absolute_improvement_ms": 8.928571428571452,
+        "old_mean_ms": 340.7142857142857,
+        "new_mean_ms": 331.7857142857143,
+        "old_std_ms": 61.03602891241226,
+        "new_std_ms": 69.4450793621769,
+        "effect_size_cohens_d": 0.13657283202360726,
+        "old_ci95_ms": [
+          317.0469844446006,
+          364.3815869839709
+        ],
+        "new_ci95_ms": [
+          304.8577236505372,
+          358.71370492089136
+        ],
+        "old_ci99_ms": [
+          308.7552190456275,
+          372.673352382944
+        ],
+        "new_ci99_ms": [
+          295.4235858724954,
+          368.1478426989332
+        ],
+        "new_times": [
+          0.3,
+          0.22,
+          0.21,
+          0.28,
+          0.24,
+          0.31,
+          0.37,
+          0.23,
+          0.45,
+          0.35,
+          0.32,
+          0.26,
+          0.46,
+          0.35,
+          0.32,
+          0.38,
+          0.43,
+          0.38,
+          0.29,
+          0.42,
+          0.34,
+          0.36,
+          0.32,
+          0.38,
+          0.38,
+          0.4,
+          0.28,
+          0.26
+        ],
+        "old_times": [
+          0.21,
+          0.23,
+          0.4,
+          0.28,
+          0.41,
+          0.35,
+          0.39,
+          0.32,
+          0.29,
+          0.32,
+          0.35,
+          0.29,
+          0.4,
+          0.25,
+          0.49,
+          0.35,
+          0.37,
+          0.31,
+          0.4,
+          0.32,
+          0.32,
+          0.41,
+          0.37,
+          0.34,
+          0.31,
+          0.36,
+          0.39,
+          0.31
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

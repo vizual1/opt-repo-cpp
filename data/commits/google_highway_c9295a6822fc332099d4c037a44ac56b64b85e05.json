@@ -1,0 +1,289 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:50.374729",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "524258781107ac55eb8297af690e712062c0b4f2",
+    "new_sha": "c9295a6822fc332099d4c037a44ac56b64b85e05",
+    "commit_message": [
+      "faster AVX3_DL BroadcastSignBit\n\nPiperOrigin-RevId: 568791647"
+    ],
+    "commit_date": "2023-09-27T09:44:54+00:00",
+    "patch": [
+      "--- hwy/ops/x86_512-inl.h\n@@ -2553,8 +2553,13 @@ HWY_API Mask512<T> ExclusiveNeither(Mask512<T> a, Mask512<T> b) {\n // ------------------------------ BroadcastSignBit (ShiftRight, compare, mask)\n \n HWY_API Vec512<int8_t> BroadcastSignBit(Vec512<int8_t> v) {\n+#if HWY_TARGET <= HWY_AVX3_DL\n+  const Repartition<uint64_t, DFromV<decltype(v)>> du64;\n+  return detail::GaloisAffine(v, Set(du64, 0x8080808080808080ull));\n+#else\n   const DFromV<decltype(v)> d;\n   return VecFromMask(v < Zero(d));\n+#endif\n }\n \n HWY_API Vec512<int16_t> BroadcastSignBit(Vec512<int16_t> v) {\n@@ -2566,7 +2571,7 @@ HWY_API Vec512<int32_t> BroadcastSignBit(Vec512<int32_t> v) {\n }\n \n HWY_API Vec512<int64_t> BroadcastSignBit(Vec512<int64_t> v) {\n-  return Vec512<int64_t>{_mm512_srai_epi64(v.raw, 63)};\n+  return ShiftRight<63>(v);\n }\n \n // ------------------------------ Floating-point classification (Not)"
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/ops/x86_512-inl.h",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 1,
+        "changes": 7,
+        "patch": "@@ -2553,8 +2553,13 @@ HWY_API Mask512<T> ExclusiveNeither(Mask512<T> a, Mask512<T> b) {\n // ------------------------------ BroadcastSignBit (ShiftRight, compare, mask)\n \n HWY_API Vec512<int8_t> BroadcastSignBit(Vec512<int8_t> v) {\n+#if HWY_TARGET <= HWY_AVX3_DL\n+  const Repartition<uint64_t, DFromV<decltype(v)>> du64;\n+  return detail::GaloisAffine(v, Set(du64, 0x8080808080808080ull));\n+#else\n   const DFromV<decltype(v)> d;\n   return VecFromMask(v < Zero(d));\n+#endif\n }\n \n HWY_API Vec512<int16_t> BroadcastSignBit(Vec512<int16_t> v) {\n@@ -2566,7 +2571,7 @@ HWY_API Vec512<int32_t> BroadcastSignBit(Vec512<int32_t> v) {\n }\n \n HWY_API Vec512<int64_t> BroadcastSignBit(Vec512<int64_t> v) {\n-  return Vec512<int64_t>{_mm512_srai_epi64(v.raw, 63)};\n+  return ShiftRight<63>(v);\n }\n \n // ------------------------------ Floating-point classification (Not)"
+      }
+    ],
+    "lines_added": 6,
+    "lines_removed": 1
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DHWY_ENABLE_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DHWY_ENABLE_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9999999999817971,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9999999998019647,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999999990686774,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.999999993480742,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.2435145452695292,
+    "relative_improvement": 0.00539287572732857,
+    "absolute_improvement_ms": 114.00000000000077,
+    "old_mean_ms": 21139.0,
+    "new_mean_ms": 21025.0,
+    "old_std_ms": 525.2674195768908,
+    "new_std_ms": 374.8539945650564,
+    "effect_size_cohens_d": 0.24983503469847104,
+    "old_ci95_ms": [
+      20942.861922090895,
+      21335.138077909105
+    ],
+    "new_ci95_ms": [
+      20885.02721804112,
+      21164.972781958877
+    ],
+    "old_ci99_ms": [
+      20874.661843548343,
+      21403.338156451657
+    ],
+    "new_ci99_ms": [
+      20836.3566344136,
+      21213.643365586395
+    ],
+    "new_times_s": [
+      20.07,
+      20.62,
+      20.57,
+      21.3,
+      20.89,
+      20.93,
+      20.61,
+      20.65,
+      20.51,
+      21.53,
+      20.78,
+      21.89,
+      21.39,
+      21.04,
+      21.36,
+      20.62,
+      20.71,
+      21.4,
+      21.26,
+      20.77,
+      20.86,
+      20.57,
+      21.1,
+      21.17,
+      21.87,
+      21.07,
+      21.04,
+      21.24,
+      21.33,
+      20.86,
+      20.81
+    ],
+    "old_times_s": [
+      20.96,
+      20.61,
+      20.37,
+      21.5,
+      21.68,
+      21.55,
+      21.2,
+      20.9,
+      20.78,
+      21.66,
+      20.79,
+      21.31,
+      20.6,
+      21.0,
+      22.28,
+      20.51,
+      20.38,
+      21.47,
+      20.76,
+      20.92,
+      21.14,
+      21.17,
+      20.78,
+      20.61,
+      20.91,
+      21.04,
+      22.14,
+      21.46,
+      20.89,
+      22.27,
+      21.49
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "NanobenchmarkTest.RunAll",
+        "is_significant": false,
+        "p_value": 0.8325082468542333,
+        "is_pair_significant": false,
+        "pair_p_value": 0.8222603315679021,
+        "is_binom_significant": false,
+        "binom_p_value": 0.4252770096063614,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.6998421390758501,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.5587177371419626,
+        "relative_improvement": 0.0036496350364964344,
+        "absolute_improvement_ms": 1.4285714285712792,
+        "old_mean_ms": 391.4285714285714,
+        "new_mean_ms": 390.0000000000001,
+        "old_std_ms": 70.8527051008345,
+        "new_std_ms": 72.16236836057561,
+        "effect_size_cohens_d": 0.019977076508834814,
+        "old_ci95_ms": [
+          363.9547605127273,
+          418.9023823444155
+        ],
+        "new_ci95_ms": [
+          362.0183546872851,
+          417.98164531271516
+        ],
+        "old_ci99_ms": [
+          354.32939629675235,
+          428.5277465603904
+        ],
+        "new_ci99_ms": [
+          352.215072269636,
+          427.78492773036425
+        ],
+        "new_times": [
+          0.34,
+          0.2,
+          0.49,
+          0.47,
+          0.38,
+          0.44,
+          0.31,
+          0.39,
+          0.33,
+          0.31,
+          0.48,
+          0.38,
+          0.36,
+          0.33,
+          0.45,
+          0.4,
+          0.35,
+          0.47,
+          0.35,
+          0.48,
+          0.34,
+          0.49,
+          0.48,
+          0.45,
+          0.3,
+          0.38,
+          0.38,
+          0.39
+        ],
+        "old_times": [
+          0.48,
+          0.37,
+          0.44,
+          0.33,
+          0.49,
+          0.49,
+          0.33,
+          0.26,
+          0.28,
+          0.36,
+          0.29,
+          0.41,
+          0.41,
+          0.34,
+          0.39,
+          0.37,
+          0.45,
+          0.45,
+          0.44,
+          0.31,
+          0.46,
+          0.46,
+          0.29,
+          0.34,
+          0.35,
+          0.47,
+          0.44,
+          0.46
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

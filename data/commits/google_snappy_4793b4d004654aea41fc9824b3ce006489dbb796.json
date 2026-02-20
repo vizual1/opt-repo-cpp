@@ -1,0 +1,289 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:02:03.821788",
+    "repository": "https://github.com/google/snappy",
+    "repository_name": "google/snappy"
+  },
+  "commit_info": {
+    "old_sha": "6af9287fbdb913f0794d0148c6aa43b58e63c8e3",
+    "new_sha": "4793b4d004654aea41fc9824b3ce006489dbb796",
+    "commit_message": [
+      "Merge pull request #210 from anthony-zy/rv_findmatchlenght\n\nUse high-performance FindMatchLength to Optimize Snappy compression s\u2026"
+    ],
+    "commit_date": "2025-07-29T08:44:35+00:00",
+    "patch": [
+      "--- snappy-internal.h\n@@ -174,7 +174,7 @@ char* CompressFragment(const char* input,\n // Separate implementation for 64-bit, little-endian cpus.\n #if !SNAPPY_IS_BIG_ENDIAN && \\\n     (defined(__x86_64__) || defined(_M_X64) || defined(ARCH_PPC) || \\\n-     defined(ARCH_ARM))\n+     defined(ARCH_ARM) || defined(__riscv))\n static inline std::pair<size_t, bool> FindMatchLength(const char* s1,\n                                                       const char* s2,\n                                                       const char* s2_limit,"
+    ],
+    "files_changed": [
+      {
+        "filename": "snappy-internal.h",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -174,7 +174,7 @@ char* CompressFragment(const char* input,\n // Separate implementation for 64-bit, little-endian cpus.\n #if !SNAPPY_IS_BIG_ENDIAN && \\\n     (defined(__x86_64__) || defined(_M_X64) || defined(ARCH_PPC) || \\\n-     defined(ARCH_ARM))\n+     defined(ARCH_ARM) || defined(__riscv))\n static inline std::pair<size_t, bool> FindMatchLength(const char* s1,\n                                                       const char* s2,\n                                                       const char* s2_limit,"
+      }
+    ],
+    "lines_added": 1,
+    "lines_removed": 1
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=ON -DBENCHMARK_USE_BUNDLED_GTEST=ON -DBENCHMARK_ENABLE_GTEST_TESTS=ON -DSNAPPY_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991729258844,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.7092588981175136,
+    "relative_improvement": -0.00028989708653434626,
+    "absolute_improvement_ms": -3.3333333333356308,
+    "old_mean_ms": 11498.333333333332,
+    "new_mean_ms": 11501.666666666666,
+    "old_std_ms": 26.53343152526122,
+    "new_std_ms": 24.64693214921073,
+    "effect_size_cohens_d": -0.1301698928066879,
+    "old_ci95_ms": [
+      11488.425587172549,
+      11508.241079494115
+    ],
+    "new_ci95_ms": [
+      11492.46335094989,
+      11510.869982383443
+    ],
+    "old_ci99_ms": [
+      11484.980518914776,
+      11511.686147751887
+    ],
+    "new_ci99_ms": [
+      11489.263223460996,
+      11514.070109872338
+    ],
+    "new_times_s": [
+      11.49,
+      11.49,
+      11.48,
+      11.48,
+      11.5,
+      11.49,
+      11.52,
+      11.51,
+      11.49,
+      11.46,
+      11.53,
+      11.51,
+      11.51,
+      11.53,
+      11.49,
+      11.53,
+      11.53,
+      11.47,
+      11.48,
+      11.46,
+      11.52,
+      11.47,
+      11.49,
+      11.49,
+      11.51,
+      11.5,
+      11.48,
+      11.54,
+      11.56,
+      11.51,
+      11.52
+    ],
+    "old_times_s": [
+      11.52,
+      11.51,
+      11.5,
+      11.48,
+      11.46,
+      11.49,
+      11.51,
+      11.46,
+      11.51,
+      11.46,
+      11.51,
+      11.51,
+      11.49,
+      11.5,
+      11.54,
+      11.52,
+      11.5,
+      11.46,
+      11.47,
+      11.47,
+      11.52,
+      11.49,
+      11.47,
+      11.49,
+      11.48,
+      11.57,
+      11.52,
+      11.5,
+      11.5,
+      11.52,
+      11.54
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "snappy_unittest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999982082057961,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.80919676150239,
+        "relative_improvement": -0.0004970951005063167,
+        "absolute_improvement_ms": -5.714285714283562,
+        "old_mean_ms": 11495.357142857143,
+        "new_mean_ms": 11501.071428571428,
+        "old_std_ms": 26.314640743515696,
+        "new_std_ms": 25.289331041967976,
+        "effect_size_cohens_d": -0.22142319425640558,
+        "old_ci95_ms": [
+          11485.153390395231,
+          11505.560895319055
+        ],
+        "new_ci95_ms": [
+          11491.26524970717,
+          11510.877607435683
+        ],
+        "old_ci99_ms": [
+          11481.578537451955,
+          11509.135748262333
+        ],
+        "new_ci99_ms": [
+          11487.829685437453,
+          11514.313171705402
+        ],
+        "new_times": [
+          11.47,
+          11.5,
+          11.49,
+          11.52,
+          11.5,
+          11.48,
+          11.46,
+          11.53,
+          11.51,
+          11.51,
+          11.52,
+          11.49,
+          11.53,
+          11.53,
+          11.47,
+          11.48,
+          11.46,
+          11.52,
+          11.47,
+          11.49,
+          11.49,
+          11.5,
+          11.5,
+          11.48,
+          11.54,
+          11.56,
+          11.51,
+          11.52
+        ],
+        "old_times": [
+          11.48,
+          11.46,
+          11.49,
+          11.5,
+          11.46,
+          11.51,
+          11.46,
+          11.51,
+          11.51,
+          11.49,
+          11.5,
+          11.54,
+          11.51,
+          11.5,
+          11.46,
+          11.47,
+          11.46,
+          11.52,
+          11.49,
+          11.47,
+          11.49,
+          11.47,
+          11.56,
+          11.52,
+          11.49,
+          11.5,
+          11.52,
+          11.53
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

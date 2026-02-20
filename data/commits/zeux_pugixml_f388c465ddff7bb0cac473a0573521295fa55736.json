@@ -1,0 +1,192 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:06:15.261394",
+    "repository": "https://github.com/zeux/pugixml",
+    "repository_name": "zeux/pugixml"
+  },
+  "commit_info": {
+    "old_sha": "314baf6605143f1e837209008f490e8559529e1c",
+    "new_sha": "f388c465ddff7bb0cac473a0573521295fa55736",
+    "commit_message": [
+      "Optimize compact mode: reuse access in insert/remove"
+    ],
+    "commit_date": "2022-02-09T06:44:31+00:00",
+    "patch": [
+      "--- src/pugixml.cpp\n@@ -1276,12 +1276,14 @@ PUGI__NS_BEGIN\n \n \t\tchild->parent = parent;\n \n-\t\tif (node->next_sibling)\n-\t\t\tnode->next_sibling->prev_sibling_c = child;\n+\t\txml_node_struct* next = node->next_sibling;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_sibling_c = child;\n \t\telse\n \t\t\tparent->first_child->prev_sibling_c = child;\n \n-\t\tchild->next_sibling = node->next_sibling;\n+\t\tchild->next_sibling = next;\n \t\tchild->prev_sibling_c = node;\n \n \t\tnode->next_sibling = child;\n@@ -1293,12 +1295,14 @@ PUGI__NS_BEGIN\n \n \t\tchild->parent = parent;\n \n-\t\tif (node->prev_sibling_c->next_sibling)\n-\t\t\tnode->prev_sibling_c->next_sibling = child;\n+\t\txml_node_struct* prev = node->prev_sibling_c;\n+\n+\t\tif (prev->next_sibling)\n+\t\t\tprev->next_sibling = child;\n \t\telse\n \t\t\tparent->first_child = child;\n \n-\t\tchild->prev_sibling_c = node->prev_sibling_c;\n+\t\tchild->prev_sibling_c = prev;\n \t\tchild->next_sibling = node;\n \n \t\tnode->prev_sibling_c = child;\n@@ -1308,15 +1312,18 @@ PUGI__NS_BEGIN\n \t{\n \t\txml_node_struct* parent = node->parent;\n \n-\t\tif (node->next_sibling)\n-\t\t\tnode->next_sibling->prev_sibling_c = node->prev_sibling_c;\n+\t\txml_node_struct* next = node->next_sibling;\n+\t\txml_node_struct* prev = node->prev_sibling_c;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_sibling_c = prev;\n \t\telse\n-\t\t\tparent->first_child->prev_sibling_c = node->prev_sibling_c;\n+\t\t\tparent->first_child->prev_sibling_c = prev;\n \n-\t\tif (node->prev_sibling_c->next_sibling)\n-\t\t\tnode->prev_sibling_c->next_sibling = node->next_sibling;\n+\t\tif (prev->next_sibling)\n+\t\t\tprev->next_sibling = next;\n \t\telse\n-\t\t\tparent->first_child = node->next_sibling;\n+\t\t\tparent->first_child = next;\n \n \t\tnode->parent = 0;\n \t\tnode->prev_sibling_c = 0;\n@@ -1360,39 +1367,46 @@ PUGI__NS_BEGIN\n \n \tinline void insert_attribute_after(xml_attribute_struct* attr, xml_attribute_struct* place, xml_node_struct* node)\n \t{\n-\t\tif (place->next_attribute)\n-\t\t\tplace->next_attribute->prev_attribute_c = attr;\n+\t\txml_attribute_struct* next = place->next_attribute;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_attribute_c = attr;\n \t\telse\n \t\t\tnode->first_attribute->prev_attribute_c = attr;\n \n-\t\tattr->next_attribute = place->next_attribute;\n+\t\tattr->next_attribute = next;\n \t\tattr->prev_attribute_c = place;\n \t\tplace->next_attribute = attr;\n \t}\n \n \tinline void insert_attribute_before(xml_attribute_struct* attr, xml_attribute_struct* place, xml_node_struct* node)\n \t{\n-\t\tif (place->prev_attribute_c->next_attribute)\n-\t\t\tplace->prev_attribute_c->next_attribute = attr;\n+\t\txml_attribute_struct* prev = place->prev_attribute_c;\n+\n+\t\tif (prev->next_attribute)\n+\t\t\tprev->next_attribute = attr;\n \t\telse\n \t\t\tnode->first_attribute = attr;\n \n-\t\tattr->prev_attribute_c = place->prev_attribute_c;\n+\t\tattr->prev_attribute_c = prev;\n \t\tattr->next_attribute = place;\n \t\tplace->prev_attribute_c = attr;\n \t}\n \n \tinline void remove_attribute(xml_attribute_struct* attr, xml_node_struct* node)\n \t{\n-\t\tif (attr->next_attribute)\n-\t\t\tattr->next_attribute->prev_attribute_c = attr->prev_attribute_c;\n+\t\txml_attribute_struct* next = attr->next_attribute;\n+\t\txml_attribute_struct* prev = attr->prev_attribute_c;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_attribute_c = prev;\n \t\telse\n-\t\t\tnode->first_attribute->prev_attribute_c = attr->prev_attribute_c;\n+\t\t\tnode->first_attribute->prev_attribute_c = prev;\n \n-\t\tif (attr->prev_attribute_c->next_attribute)\n-\t\t\tattr->prev_attribute_c->next_attribute = attr->next_attribute;\n+\t\tif (prev->next_attribute)\n+\t\t\tprev->next_attribute = next;\n \t\telse\n-\t\t\tnode->first_attribute = attr->next_attribute;\n+\t\t\tnode->first_attribute = next;\n \n \t\tattr->prev_attribute_c = 0;\n \t\tattr->next_attribute = 0;"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/pugixml.cpp",
+        "status": "modified",
+        "additions": 38,
+        "deletions": 24,
+        "changes": 62,
+        "patch": "@@ -1276,12 +1276,14 @@ PUGI__NS_BEGIN\n \n \t\tchild->parent = parent;\n \n-\t\tif (node->next_sibling)\n-\t\t\tnode->next_sibling->prev_sibling_c = child;\n+\t\txml_node_struct* next = node->next_sibling;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_sibling_c = child;\n \t\telse\n \t\t\tparent->first_child->prev_sibling_c = child;\n \n-\t\tchild->next_sibling = node->next_sibling;\n+\t\tchild->next_sibling = next;\n \t\tchild->prev_sibling_c = node;\n \n \t\tnode->next_sibling = child;\n@@ -1293,12 +1295,14 @@ PUGI__NS_BEGIN\n \n \t\tchild->parent = parent;\n \n-\t\tif (node->prev_sibling_c->next_sibling)\n-\t\t\tnode->prev_sibling_c->next_sibling = child;\n+\t\txml_node_struct* prev = node->prev_sibling_c;\n+\n+\t\tif (prev->next_sibling)\n+\t\t\tprev->next_sibling = child;\n \t\telse\n \t\t\tparent->first_child = child;\n \n-\t\tchild->prev_sibling_c = node->prev_sibling_c;\n+\t\tchild->prev_sibling_c = prev;\n \t\tchild->next_sibling = node;\n \n \t\tnode->prev_sibling_c = child;\n@@ -1308,15 +1312,18 @@ PUGI__NS_BEGIN\n \t{\n \t\txml_node_struct* parent = node->parent;\n \n-\t\tif (node->next_sibling)\n-\t\t\tnode->next_sibling->prev_sibling_c = node->prev_sibling_c;\n+\t\txml_node_struct* next = node->next_sibling;\n+\t\txml_node_struct* prev = node->prev_sibling_c;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_sibling_c = prev;\n \t\telse\n-\t\t\tparent->first_child->prev_sibling_c = node->prev_sibling_c;\n+\t\t\tparent->first_child->prev_sibling_c = prev;\n \n-\t\tif (node->prev_sibling_c->next_sibling)\n-\t\t\tnode->prev_sibling_c->next_sibling = node->next_sibling;\n+\t\tif (prev->next_sibling)\n+\t\t\tprev->next_sibling = next;\n \t\telse\n-\t\t\tparent->first_child = node->next_sibling;\n+\t\t\tparent->first_child = next;\n \n \t\tnode->parent = 0;\n \t\tnode->prev_sibling_c = 0;\n@@ -1360,39 +1367,46 @@ PUGI__NS_BEGIN\n \n \tinline void insert_attribute_after(xml_attribute_struct* attr, xml_attribute_struct* place, xml_node_struct* node)\n \t{\n-\t\tif (place->next_attribute)\n-\t\t\tplace->next_attribute->prev_attribute_c = attr;\n+\t\txml_attribute_struct* next = place->next_attribute;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_attribute_c = attr;\n \t\telse\n \t\t\tnode->first_attribute->prev_attribute_c = attr;\n \n-\t\tattr->next_attribute = place->next_attribute;\n+\t\tattr->next_attribute = next;\n \t\tattr->prev_attribute_c = place;\n \t\tplace->next_attribute = attr;\n \t}\n \n \tinline void insert_attribute_before(xml_attribute_struct* attr, xml_attribute_struct* place, xml_node_struct* node)\n \t{\n-\t\tif (place->prev_attribute_c->next_attribute)\n-\t\t\tplace->prev_attribute_c->next_attribute = attr;\n+\t\txml_attribute_struct* prev = place->prev_attribute_c;\n+\n+\t\tif (prev->next_attribute)\n+\t\t\tprev->next_attribute = attr;\n \t\telse\n \t\t\tnode->first_attribute = attr;\n \n-\t\tattr->prev_attribute_c = place->prev_attribute_c;\n+\t\tattr->prev_attribute_c = prev;\n \t\tattr->next_attribute = place;\n \t\tplace->prev_attribute_c = attr;\n \t}\n \n \tinline void remove_attribute(xml_attribute_struct* attr, xml_node_struct* node)\n \t{\n-\t\tif (attr->next_attribute)\n-\t\t\tattr->next_attribute->prev_attribute_c = attr->prev_attribute_c;\n+\t\txml_attribute_struct* next = attr->next_attribute;\n+\t\txml_attribute_struct* prev = attr->prev_attribute_c;\n+\n+\t\tif (next)\n+\t\t\tnext->prev_attribute_c = prev;\n \t\telse\n-\t\t\tnode->first_attribute->prev_attribute_c = attr->prev_attribute_c;\n+\t\t\tnode->first_attribute->prev_attribute_c = prev;\n \n-\t\tif (attr->prev_attribute_c->next_attribute)\n-\t\t\tattr->prev_attribute_c->next_attribute = attr->next_attribute;\n+\t\tif (prev->next_attribute)\n+\t\t\tprev->next_attribute = next;\n \t\telse\n-\t\t\tnode->first_attribute = attr->next_attribute;\n+\t\t\tnode->first_attribute = next;\n \n \t\tattr->prev_attribute_c = 0;\n \t\tattr->next_attribute = 0;"
+      }
+    ],
+    "lines_added": 38,
+    "lines_removed": 24
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPUGIXML_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPUGIXML_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9997529790970331,
+    "is_pair_significant": false,
+    "pair_p_value": 0.999994219046561,
+    "is_binom_significant": false,
+    "binom_p_value": 0.99997026193887,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999715699899363,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.6336855873256899,
+    "relative_improvement": -0.0074005550416281285,
+    "absolute_improvement_ms": -5.333333333332968,
+    "old_mean_ms": 720.6666666666667,
+    "new_mean_ms": 725.9999999999998,
+    "old_std_ms": 40.50826508541048,
+    "new_std_ms": 47.604694060058044,
+    "effect_size_cohens_d": -0.12066602129587807,
+    "old_ci95_ms": [
+      705.5406318943507,
+      735.7927014389829
+    ],
+    "new_ci95_ms": [
+      708.2241150994822,
+      743.7758849005173
+    ],
+    "old_ci99_ms": [
+      700.2810883599867,
+      741.0522449733469
+    ],
+    "new_ci99_ms": [
+      702.0431799169698,
+      749.9568200830297
+    ],
+    "new_times_s": [
+      0.66,
+      0.66,
+      0.69,
+      0.65,
+      0.69,
+      0.73,
+      0.76,
+      0.79,
+      0.71,
+      0.66,
+      0.76,
+      0.73,
+      0.69,
+      0.67,
+      0.7,
+      0.7,
+      0.69,
+      0.73,
+      0.69,
+      0.76,
+      0.73,
+      0.71,
+      0.72,
+      0.73,
+      0.74,
+      0.74,
+      0.76,
+      0.86,
+      0.8,
+      0.72,
+      0.81
+    ],
+    "old_times_s": [
+      0.68,
+      0.69,
+      0.68,
+      0.73,
+      0.69,
+      0.75,
+      0.73,
+      0.71,
+      0.7,
+      0.71,
+      0.73,
+      0.71,
+      0.69,
+      0.67,
+      0.69,
+      0.7,
+      0.71,
+      0.66,
+      0.77,
+      0.67,
+      0.77,
+      0.65,
+      0.75,
+      0.7,
+      0.72,
+      0.73,
+      0.78,
+      0.79,
+      0.8,
+      0.76,
+      0.78
+    ]
+  },
+  "tests": {
+    "total_tests": 0,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": []
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

@@ -1,0 +1,305 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:04:45.131005",
+    "repository": "https://github.com/projectM-visualizer/projectm",
+    "repository_name": "projectM-visualizer/projectm"
+  },
+  "commit_info": {
+    "old_sha": "fcafa568cd10355d9e263f999611f4de0cbe8365",
+    "new_sha": "2eb1e41f5f98780813059017cf309ba1649751e1",
+    "commit_message": [
+      "Pre-allocate vertex buffers for warp/comp meshes and borders"
+    ],
+    "commit_date": "2024-02-12T15:39:18+00:00",
+    "patch": [
+      "--- src/libprojectM/MilkdropPreset/Border.cpp\n@@ -15,6 +15,9 @@ void Border::InitVertexAttrib()\n     glEnableVertexAttribArray(0);\n     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);\n     glDisableVertexAttribArray(1);\n+\n+    std::array<Point, 4> vertices{};\n+    glBufferData(GL_ARRAY_BUFFER, sizeof(Point) * 4, vertices.data(), GL_STREAM_DRAW);\n }\n \n void Border::Draw(const PerFrameContext& presetPerFrameContext)\n@@ -59,7 +62,7 @@ void Border::Draw(const PerFrameContext& presetPerFrameContext)\n \n             for (int rot = 0; rot < 4; rot++)\n             {\n-                glBufferData(GL_ARRAY_BUFFER, sizeof(Point) * 4, vertices.data(), GL_DYNAMIC_DRAW);\n+                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Point) * 4, vertices.data());\n                 glDrawArrays(GL_TRIANGLE_FAN, 0, 4);\n \n                 // Rotate 90 degrees\n--- src/libprojectM/MilkdropPreset/FinalComposite.cpp\n@@ -32,6 +32,10 @@ void FinalComposite::InitVertexAttrib()\n     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, r)));      // Colors\n     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, u)));      // Textures\n     glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, radius))); // Radius/Angle\n+\n+    // Pre-allocate vertex and index buffers\n+    glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * vertexCount, m_vertices.data(), GL_STREAM_DRAW);\n+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int) * m_indices.size(), m_indices.data(), GL_STREAM_DRAW);\n }\n \n void FinalComposite::LoadCompositeShader(const PresetState& presetState)\n@@ -121,7 +125,7 @@ void FinalComposite::Draw(const PresetState& presetState, const PerFrameContext&\n         glDisable(GL_BLEND);\n         glBindVertexArray(m_vaoID);\n         glBindBuffer(GL_ARRAY_BUFFER, m_vboID);\n-        glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * vertexCount, m_vertices.data(), GL_DYNAMIC_DRAW);\n+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(MeshVertex) * vertexCount, m_vertices.data());\n         glBindBuffer(GL_ARRAY_BUFFER, 0);\n \n         m_compositeShader->LoadVariables(presetState, perFrameContext);\n@@ -303,7 +307,7 @@ void FinalComposite::InitializeMesh(const PresetState& presetState)\n     // Store indices.\n     // ToDo: Probably don't need to store m_indices\n     glBindVertexArray(m_vaoID);\n-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int) * m_indices.size(), m_indices.data(), GL_STATIC_DRAW);\n+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(int) * m_indices.size(), m_indices.data());\n     glBindVertexArray(0);\n }\n \n--- src/libprojectM/MilkdropPreset/PerPixelMesh.cpp\n@@ -16,6 +16,8 @@\n namespace libprojectM {\n namespace MilkdropPreset {\n \n+static constexpr uint32_t VerticesPerDrawCall = 1024 * 3;\n+\n PerPixelMesh::PerPixelMesh()\n     : RenderItem()\n {\n@@ -28,6 +30,8 @@ PerPixelMesh::PerPixelMesh()\n \n void PerPixelMesh::InitVertexAttrib()\n {\n+    m_drawVertices.resize(VerticesPerDrawCall); // Fixed size, may scale it later depending on GPU caps.\n+\n     glGenVertexArrays(1, &m_vaoID);\n     glGenBuffers(1, &m_vboID);\n \n@@ -49,6 +53,9 @@ void PerPixelMesh::InitVertexAttrib()\n     glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, distanceX))); // Distance\n     glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, stretchX)));  // Stretch\n \n+    // Pre-allocate vertex buffer\n+    glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * m_drawVertices.size(), m_drawVertices.data(), GL_STREAM_DRAW);\n+\n     glBindVertexArray(0);\n     glBindBuffer(GL_ARRAY_BUFFER, 0);\n }\n@@ -137,7 +144,6 @@ void PerPixelMesh::InitializeMesh(const PresetState& presetState)\n         // Grid size has changed, reallocate vertex buffers\n         m_vertices.resize((m_gridSizeX + 1) * (m_gridSizeY + 1));\n         m_listIndices.resize(m_gridSizeX * m_gridSizeY * 6);\n-        m_drawVertices.resize(1024 * 3); // Fixed size, may scale it later depending on GPU caps.\n     }\n     else if (m_viewportWidth == presetState.renderContext.viewportSizeX &&\n              m_viewportHeight == presetState.renderContext.viewportSizeY)\n@@ -381,7 +387,7 @@ void PerPixelMesh::WarpedBlit(const PresetState& presetState,\n \n         if (trianglesQueued > 0)\n         {\n-            glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * trianglesQueued * 3, m_drawVertices.data(), GL_DYNAMIC_DRAW);\n+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(MeshVertex) * trianglesQueued * 3, m_drawVertices.data());\n             glDrawArrays(GL_TRIANGLES, 0, trianglesQueued * 3);\n         }\n     }"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/libprojectM/MilkdropPreset/Border.cpp",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 1,
+        "changes": 5,
+        "patch": "@@ -15,6 +15,9 @@ void Border::InitVertexAttrib()\n     glEnableVertexAttribArray(0);\n     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);\n     glDisableVertexAttribArray(1);\n+\n+    std::array<Point, 4> vertices{};\n+    glBufferData(GL_ARRAY_BUFFER, sizeof(Point) * 4, vertices.data(), GL_STREAM_DRAW);\n }\n \n void Border::Draw(const PerFrameContext& presetPerFrameContext)\n@@ -59,7 +62,7 @@ void Border::Draw(const PerFrameContext& presetPerFrameContext)\n \n             for (int rot = 0; rot < 4; rot++)\n             {\n-                glBufferData(GL_ARRAY_BUFFER, sizeof(Point) * 4, vertices.data(), GL_DYNAMIC_DRAW);\n+                glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Point) * 4, vertices.data());\n                 glDrawArrays(GL_TRIANGLE_FAN, 0, 4);\n \n                 // Rotate 90 degrees"
+      },
+      {
+        "filename": "src/libprojectM/MilkdropPreset/FinalComposite.cpp",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 2,
+        "changes": 8,
+        "patch": "@@ -32,6 +32,10 @@ void FinalComposite::InitVertexAttrib()\n     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, r)));      // Colors\n     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, u)));      // Textures\n     glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, radius))); // Radius/Angle\n+\n+    // Pre-allocate vertex and index buffers\n+    glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * vertexCount, m_vertices.data(), GL_STREAM_DRAW);\n+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int) * m_indices.size(), m_indices.data(), GL_STREAM_DRAW);\n }\n \n void FinalComposite::LoadCompositeShader(const PresetState& presetState)\n@@ -121,7 +125,7 @@ void FinalComposite::Draw(const PresetState& presetState, const PerFrameContext&\n         glDisable(GL_BLEND);\n         glBindVertexArray(m_vaoID);\n         glBindBuffer(GL_ARRAY_BUFFER, m_vboID);\n-        glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * vertexCount, m_vertices.data(), GL_DYNAMIC_DRAW);\n+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(MeshVertex) * vertexCount, m_vertices.data());\n         glBindBuffer(GL_ARRAY_BUFFER, 0);\n \n         m_compositeShader->LoadVariables(presetState, perFrameContext);\n@@ -303,7 +307,7 @@ void FinalComposite::InitializeMesh(const PresetState& presetState)\n     // Store indices.\n     // ToDo: Probably don't need to store m_indices\n     glBindVertexArray(m_vaoID);\n-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(int) * m_indices.size(), m_indices.data(), GL_STATIC_DRAW);\n+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(int) * m_indices.size(), m_indices.data());\n     glBindVertexArray(0);\n }\n "
+      },
+      {
+        "filename": "src/libprojectM/MilkdropPreset/PerPixelMesh.cpp",
+        "status": "modified",
+        "additions": 8,
+        "deletions": 2,
+        "changes": 10,
+        "patch": "@@ -16,6 +16,8 @@\n namespace libprojectM {\n namespace MilkdropPreset {\n \n+static constexpr uint32_t VerticesPerDrawCall = 1024 * 3;\n+\n PerPixelMesh::PerPixelMesh()\n     : RenderItem()\n {\n@@ -28,6 +30,8 @@ PerPixelMesh::PerPixelMesh()\n \n void PerPixelMesh::InitVertexAttrib()\n {\n+    m_drawVertices.resize(VerticesPerDrawCall); // Fixed size, may scale it later depending on GPU caps.\n+\n     glGenVertexArrays(1, &m_vaoID);\n     glGenBuffers(1, &m_vboID);\n \n@@ -49,6 +53,9 @@ void PerPixelMesh::InitVertexAttrib()\n     glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, distanceX))); // Distance\n     glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), reinterpret_cast<void*>(offsetof(MeshVertex, stretchX)));  // Stretch\n \n+    // Pre-allocate vertex buffer\n+    glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * m_drawVertices.size(), m_drawVertices.data(), GL_STREAM_DRAW);\n+\n     glBindVertexArray(0);\n     glBindBuffer(GL_ARRAY_BUFFER, 0);\n }\n@@ -137,7 +144,6 @@ void PerPixelMesh::InitializeMesh(const PresetState& presetState)\n         // Grid size has changed, reallocate vertex buffers\n         m_vertices.resize((m_gridSizeX + 1) * (m_gridSizeY + 1));\n         m_listIndices.resize(m_gridSizeX * m_gridSizeY * 6);\n-        m_drawVertices.resize(1024 * 3); // Fixed size, may scale it later depending on GPU caps.\n     }\n     else if (m_viewportWidth == presetState.renderContext.viewportSizeX &&\n              m_viewportHeight == presetState.renderContext.viewportSizeY)\n@@ -381,7 +387,7 @@ void PerPixelMesh::WarpedBlit(const PresetState& presetState,\n \n         if (trianglesQueued > 0)\n         {\n-            glBufferData(GL_ARRAY_BUFFER, sizeof(MeshVertex) * trianglesQueued * 3, m_drawVertices.data(), GL_DYNAMIC_DRAW);\n+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(MeshVertex) * trianglesQueued * 3, m_drawVertices.data());\n             glDrawArrays(GL_TRIANGLES, 0, trianglesQueued * 3);\n         }\n     }"
+      }
+    ],
+    "lines_added": 18,
+    "lines_removed": 5
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.980323101705138,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9752489115485791,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999999990686774,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.999998699808437,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.16685534787178302,
+    "relative_improvement": 0.016393442622950834,
+    "absolute_improvement_ms": 0.3333333333333313,
+    "old_mean_ms": 20.333333333333336,
+    "new_mean_ms": 20.000000000000004,
+    "old_std_ms": 1.8257418583505538,
+    "new_std_ms": 3.5287580338023136e-15,
+    "effect_size_cohens_d": 0.25819888974715954,
+    "old_ci95_ms": [
+      19.6515901192891,
+      21.01507654737757
+    ],
+    "new_ci95_ms": [
+      20.000000000000004,
+      20.000000000000004
+    ],
+    "old_ci99_ms": [
+      19.41453803210989,
+      21.25212863455678
+    ],
+    "new_ci99_ms": [
+      20.0,
+      20.000000000000007
+    ],
+    "new_times_s": [
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02
+    ],
+    "old_times_s": [
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.03,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02,
+      0.02
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "projectM-unittest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999393422746,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.0,
+        "new_mean_ms": 10.0,
+        "old_std_ms": 0.0,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": "NaN",
+        "old_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

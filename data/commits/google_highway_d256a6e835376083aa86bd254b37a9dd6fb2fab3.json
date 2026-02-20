@@ -1,0 +1,289 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:51.665054",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "42d766b5364f184694ad8be46a91760781e05181",
+    "new_sha": "d256a6e835376083aa86bd254b37a9dd6fb2fab3",
+    "commit_message": [
+      "Added prefetch prior to store for Stream operation on AArch64\n\nAArch64 has support for a non-temporal prefetch for store via the prfm PSTL1STRM, memory_location instruction, and GCC/Clang/MSVC all have intrinsics for the non-temporal prefetch for store operation.\r\n\r\n__builtin_prefetch(aligned, 1, 0) is also already there before the store in the PPC8/PPC9/PPC10 implementation of the Stream operation, which compiles to a dcbtst instruction."
+    ],
+    "commit_date": "2023-02-28T14:44:39+00:00",
+    "patch": [
+      "--- hwy/ops/arm_neon-inl.h\n@@ -2993,6 +2993,13 @@ HWY_API void BlendedStore(VFromD<D> v, MFromD<D> m, D d,\n \n template <class D>\n HWY_API void Stream(const VFromD<D> v, D d, TFromD<D>* HWY_RESTRICT aligned) {\n+#if HWY_ARCH_ARM_A64\n+#if HWY_COMPILER_GCC\n+  __builtin_prefetch(aligned, 1, 0);\n+#elif HWY_COMPILER_MSVC\n+  __prefetch2(aligned, 0x11);\n+#endif\n+#endif\n   Store(v, d, aligned);\n }\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/ops/arm_neon-inl.h",
+        "status": "modified",
+        "additions": 7,
+        "deletions": 0,
+        "changes": 7,
+        "patch": "@@ -2993,6 +2993,13 @@ HWY_API void BlendedStore(VFromD<D> v, MFromD<D> m, D d,\n \n template <class D>\n HWY_API void Stream(const VFromD<D> v, D d, TFromD<D>* HWY_RESTRICT aligned) {\n+#if HWY_ARCH_ARM_A64\n+#if HWY_COMPILER_GCC\n+  __builtin_prefetch(aligned, 1, 0);\n+#elif HWY_COMPILER_MSVC\n+  __prefetch2(aligned, 0x11);\n+#endif\n+#endif\n   Store(v, d, aligned);\n }\n "
+      }
+    ],
+    "lines_added": 7,
+    "lines_removed": 0
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9999999999984425,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999999990686774,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999989373398133,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.5646141759119995,
+    "relative_improvement": -0.00030551142612729085,
+    "absolute_improvement_ms": -5.000000000002558,
+    "old_mean_ms": 16366.0,
+    "new_mean_ms": 16371.000000000002,
+    "old_std_ms": 274.37201023428037,
+    "new_std_ms": 276.99558069423773,
+    "effect_size_cohens_d": -0.018136515383795092,
+    "old_ci95_ms": [
+      16263.547807623861,
+      16468.45219237614
+    ],
+    "new_ci95_ms": [
+      16267.568150313899,
+      16474.431849686105
+    ],
+    "old_ci99_ms": [
+      16227.923681796814,
+      16504.076318203184
+    ],
+    "new_ci99_ms": [
+      16231.603383311018,
+      16510.396616688988
+    ],
+    "new_times_s": [
+      15.93,
+      16.19,
+      16.68,
+      16.26,
+      16.07,
+      16.16,
+      16.16,
+      16.32,
+      16.02,
+      15.91,
+      16.45,
+      16.79,
+      16.05,
+      16.04,
+      16.42,
+      16.13,
+      16.21,
+      16.31,
+      16.64,
+      16.4,
+      16.45,
+      16.6,
+      17.04,
+      16.44,
+      16.61,
+      16.51,
+      16.09,
+      16.92,
+      16.55,
+      16.42,
+      16.29
+    ],
+    "old_times_s": [
+      16.27,
+      16.45,
+      15.94,
+      16.44,
+      16.24,
+      15.97,
+      16.56,
+      16.04,
+      16.22,
+      16.11,
+      16.3,
+      16.37,
+      16.85,
+      16.3,
+      16.01,
+      17.01,
+      16.13,
+      16.38,
+      16.47,
+      16.37,
+      16.56,
+      16.38,
+      16.2,
+      16.12,
+      16.99,
+      16.45,
+      16.18,
+      16.27,
+      16.42,
+      16.75,
+      16.5
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "NanobenchmarkTest.RunAll",
+        "is_significant": false,
+        "p_value": 0.7929042457645958,
+        "is_pair_significant": false,
+        "pair_p_value": 0.7822935880051861,
+        "is_binom_significant": false,
+        "binom_p_value": 0.5747229903936386,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.7154376064971804,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.3590411835509896,
+        "relative_improvement": 0.00816326530612242,
+        "absolute_improvement_ms": 3.5714285714286143,
+        "old_mean_ms": 437.5,
+        "new_mean_ms": 433.9285714285714,
+        "old_std_ms": 80.5823710157409,
+        "new_std_ms": 89.37392467995579,
+        "effect_size_cohens_d": 0.041971494805786796,
+        "old_ci95_ms": [
+          406.2534184998847,
+          468.7465815001153
+        ],
+        "new_ci95_ms": [
+          399.2729813001561,
+          468.58416155698666
+        ],
+        "old_ci99_ms": [
+          395.30627584231814,
+          479.69372415768186
+        ],
+        "new_ci99_ms": [
+          387.13150307104115,
+          480.7256397861016
+        ],
+        "new_times": [
+          0.59,
+          0.4,
+          0.47,
+          0.47,
+          0.47,
+          0.31,
+          0.51,
+          0.36,
+          0.37,
+          0.44,
+          0.35,
+          0.33,
+          0.46,
+          0.52,
+          0.54,
+          0.34,
+          0.45,
+          0.44,
+          0.43,
+          0.58,
+          0.35,
+          0.59,
+          0.43,
+          0.42,
+          0.42,
+          0.44,
+          0.47,
+          0.2
+        ],
+        "old_times": [
+          0.34,
+          0.51,
+          0.43,
+          0.5,
+          0.46,
+          0.54,
+          0.42,
+          0.42,
+          0.24,
+          0.47,
+          0.53,
+          0.48,
+          0.49,
+          0.44,
+          0.51,
+          0.43,
+          0.45,
+          0.53,
+          0.3,
+          0.51,
+          0.39,
+          0.31,
+          0.29,
+          0.49,
+          0.42,
+          0.52,
+          0.45,
+          0.38
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

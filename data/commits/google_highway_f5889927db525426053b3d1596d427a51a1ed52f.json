@@ -1,0 +1,307 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:56.658082",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "78696bc1b574b38604249351608f9bb3f0de3411",
+    "new_sha": "f5889927db525426053b3d1596d427a51a1ed52f",
+    "commit_message": [
+      "enable constant-propagation for Shift*Same with constant arg\n\nPiperOrigin-RevId: 516800273"
+    ],
+    "commit_date": "2023-03-15T12:42:16+00:00",
+    "patch": [
+      "--- hwy/ops/x86_128-inl.h\n@@ -2876,34 +2876,64 @@ HWY_API Vec128<T, N> IfNegativeThenElse(Vec128<T, N> v, Vec128<T, N> yes,\n template <size_t N>\n HWY_API Vec128<uint16_t, N> ShiftLeftSame(const Vec128<uint16_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint16_t, N>{_mm_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint32_t, N> ShiftLeftSame(const Vec128<uint32_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint32_t, N>{_mm_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint64_t, N> ShiftLeftSame(const Vec128<uint64_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint64_t, N>{_mm_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int16_t, N> ShiftLeftSame(const Vec128<int16_t, N> v,\n                                          const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int16_t, N>{_mm_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int32_t, N> ShiftLeftSame(const Vec128<int32_t, N> v,\n                                          const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int32_t, N>{_mm_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int64_t, N> ShiftLeftSame(const Vec128<int64_t, N> v,\n                                          const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int64_t, N>{_mm_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -2921,16 +2951,31 @@ HWY_API Vec128<T, N> ShiftLeftSame(const Vec128<T, N> v, const int bits) {\n template <size_t N>\n HWY_API Vec128<uint16_t, N> ShiftRightSame(const Vec128<uint16_t, N> v,\n                                            const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint16_t, N>{_mm_srli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint16_t, N>{_mm_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint32_t, N> ShiftRightSame(const Vec128<uint32_t, N> v,\n                                            const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint32_t, N>{_mm_srli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint32_t, N>{_mm_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint64_t, N> ShiftRightSame(const Vec128<uint64_t, N> v,\n                                            const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint64_t, N>{_mm_srli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint64_t, N>{_mm_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -2947,18 +2992,33 @@ HWY_API Vec128<uint8_t, N> ShiftRightSame(Vec128<uint8_t, N> v,\n template <size_t N>\n HWY_API Vec128<int16_t, N> ShiftRightSame(const Vec128<int16_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int16_t, N>{_mm_srai_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int16_t, N>{_mm_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int32_t, N> ShiftRightSame(const Vec128<int32_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int32_t, N>{_mm_srai_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int32_t, N>{_mm_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<int64_t, N> ShiftRightSame(const Vec128<int64_t, N> v,\n                                           const int bits) {\n #if HWY_TARGET <= HWY_AVX3\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int64_t, N>{_mm_srai_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int64_t, N>{_mm_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n #else\n   const DFromV<decltype(v)> di;\n--- hwy/ops/x86_256-inl.h\n@@ -1857,26 +1857,56 @@ HWY_API Vec256<T> IfNegativeThenElse(Vec256<T> v, Vec256<T> yes, Vec256<T> no) {\n \n HWY_API Vec256<uint16_t> ShiftLeftSame(const Vec256<uint16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint16_t>{_mm256_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint16_t>{_mm256_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint32_t> ShiftLeftSame(const Vec256<uint32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint32_t>{_mm256_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint32_t>{_mm256_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint64_t> ShiftLeftSame(const Vec256<uint64_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint64_t>{_mm256_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint64_t>{_mm256_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int16_t> ShiftLeftSame(const Vec256<int16_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int16_t>{_mm256_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int16_t>{_mm256_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int32_t> ShiftLeftSame(const Vec256<int32_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int32_t>{_mm256_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int32_t>{_mm256_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int64_t> ShiftLeftSame(const Vec256<int64_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int64_t>{_mm256_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int64_t>{_mm256_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1892,14 +1922,29 @@ HWY_API Vec256<T> ShiftLeftSame(const Vec256<T> v, const int bits) {\n \n HWY_API Vec256<uint16_t> ShiftRightSame(const Vec256<uint16_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint16_t>{_mm256_srli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint16_t>{_mm256_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint32_t> ShiftRightSame(const Vec256<uint32_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint32_t>{_mm256_srli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint32_t>{_mm256_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint64_t> ShiftRightSame(const Vec256<uint64_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint64_t>{_mm256_srli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint64_t>{_mm256_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1912,16 +1957,31 @@ HWY_API Vec256<uint8_t> ShiftRightSame(Vec256<uint8_t> v, const int bits) {\n \n HWY_API Vec256<int16_t> ShiftRightSame(const Vec256<int16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int16_t>{_mm256_srai_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int16_t>{_mm256_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int32_t> ShiftRightSame(const Vec256<int32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int32_t>{_mm256_srai_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int32_t>{_mm256_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<int64_t> ShiftRightSame(const Vec256<int64_t> v,\n                                        const int bits) {\n #if HWY_TARGET <= HWY_AVX3\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int64_t>{_mm256_srai_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int64_t>{_mm256_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n #else\n   const Full256<int64_t> di;\n--- hwy/ops/x86_512-inl.h\n@@ -973,26 +973,56 @@ HWY_API Vec512<uint64_t> RotateRight(const Vec512<uint64_t> v) {\n \n HWY_API Vec512<uint16_t> ShiftLeftSame(const Vec512<uint16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint16_t>{_mm512_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint16_t>{_mm512_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint32_t> ShiftLeftSame(const Vec512<uint32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint32_t>{_mm512_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint32_t>{_mm512_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint64_t> ShiftLeftSame(const Vec512<uint64_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint64_t>{_mm512_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint64_t>{_mm512_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int16_t> ShiftLeftSame(const Vec512<int16_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int16_t>{_mm512_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int16_t>{_mm512_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int32_t> ShiftLeftSame(const Vec512<int32_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int32_t>{_mm512_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int32_t>{_mm512_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int64_t> ShiftLeftSame(const Vec512<int64_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int64_t>{_mm512_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int64_t>{_mm512_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1008,14 +1038,29 @@ HWY_API Vec512<T> ShiftLeftSame(const Vec512<T> v, const int bits) {\n \n HWY_API Vec512<uint16_t> ShiftRightSame(const Vec512<uint16_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint16_t>{_mm512_srli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint16_t>{_mm512_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint32_t> ShiftRightSame(const Vec512<uint32_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint32_t>{_mm512_srli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint32_t>{_mm512_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint64_t> ShiftRightSame(const Vec512<uint64_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint64_t>{_mm512_srli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint64_t>{_mm512_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1028,15 +1073,30 @@ HWY_API Vec512<uint8_t> ShiftRightSame(Vec512<uint8_t> v, const int bits) {\n \n HWY_API Vec512<int16_t> ShiftRightSame(const Vec512<int16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int16_t>{_mm512_srai_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int16_t>{_mm512_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int32_t> ShiftRightSame(const Vec512<int32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int32_t>{_mm512_srai_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int32_t>{_mm512_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<int64_t> ShiftRightSame(const Vec512<int64_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int64_t>{_mm512_srai_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int64_t>{_mm512_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/ops/x86_128-inl.h",
+        "status": "modified",
+        "additions": 60,
+        "deletions": 0,
+        "changes": 60,
+        "patch": "@@ -2876,34 +2876,64 @@ HWY_API Vec128<T, N> IfNegativeThenElse(Vec128<T, N> v, Vec128<T, N> yes,\n template <size_t N>\n HWY_API Vec128<uint16_t, N> ShiftLeftSame(const Vec128<uint16_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint16_t, N>{_mm_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint32_t, N> ShiftLeftSame(const Vec128<uint32_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint32_t, N>{_mm_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint64_t, N> ShiftLeftSame(const Vec128<uint64_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint64_t, N>{_mm_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int16_t, N> ShiftLeftSame(const Vec128<int16_t, N> v,\n                                          const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int16_t, N>{_mm_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int16_t, N>{_mm_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int32_t, N> ShiftLeftSame(const Vec128<int32_t, N> v,\n                                          const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int32_t, N>{_mm_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int32_t, N>{_mm_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int64_t, N> ShiftLeftSame(const Vec128<int64_t, N> v,\n                                          const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int64_t, N>{_mm_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int64_t, N>{_mm_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -2921,16 +2951,31 @@ HWY_API Vec128<T, N> ShiftLeftSame(const Vec128<T, N> v, const int bits) {\n template <size_t N>\n HWY_API Vec128<uint16_t, N> ShiftRightSame(const Vec128<uint16_t, N> v,\n                                            const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint16_t, N>{_mm_srli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint16_t, N>{_mm_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint32_t, N> ShiftRightSame(const Vec128<uint32_t, N> v,\n                                            const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint32_t, N>{_mm_srli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint32_t, N>{_mm_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<uint64_t, N> ShiftRightSame(const Vec128<uint64_t, N> v,\n                                            const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<uint64_t, N>{_mm_srli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<uint64_t, N>{_mm_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -2947,18 +2992,33 @@ HWY_API Vec128<uint8_t, N> ShiftRightSame(Vec128<uint8_t, N> v,\n template <size_t N>\n HWY_API Vec128<int16_t, N> ShiftRightSame(const Vec128<int16_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int16_t, N>{_mm_srai_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int16_t, N>{_mm_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n template <size_t N>\n HWY_API Vec128<int32_t, N> ShiftRightSame(const Vec128<int32_t, N> v,\n                                           const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int32_t, N>{_mm_srai_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int32_t, N>{_mm_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n template <size_t N>\n HWY_API Vec128<int64_t, N> ShiftRightSame(const Vec128<int64_t, N> v,\n                                           const int bits) {\n #if HWY_TARGET <= HWY_AVX3\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec128<int64_t, N>{_mm_srai_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec128<int64_t, N>{_mm_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n #else\n   const DFromV<decltype(v)> di;"
+      },
+      {
+        "filename": "hwy/ops/x86_256-inl.h",
+        "status": "modified",
+        "additions": 60,
+        "deletions": 0,
+        "changes": 60,
+        "patch": "@@ -1857,26 +1857,56 @@ HWY_API Vec256<T> IfNegativeThenElse(Vec256<T> v, Vec256<T> yes, Vec256<T> no) {\n \n HWY_API Vec256<uint16_t> ShiftLeftSame(const Vec256<uint16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint16_t>{_mm256_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint16_t>{_mm256_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint32_t> ShiftLeftSame(const Vec256<uint32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint32_t>{_mm256_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint32_t>{_mm256_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint64_t> ShiftLeftSame(const Vec256<uint64_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint64_t>{_mm256_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint64_t>{_mm256_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int16_t> ShiftLeftSame(const Vec256<int16_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int16_t>{_mm256_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int16_t>{_mm256_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int32_t> ShiftLeftSame(const Vec256<int32_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int32_t>{_mm256_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int32_t>{_mm256_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int64_t> ShiftLeftSame(const Vec256<int64_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int64_t>{_mm256_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int64_t>{_mm256_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1892,14 +1922,29 @@ HWY_API Vec256<T> ShiftLeftSame(const Vec256<T> v, const int bits) {\n \n HWY_API Vec256<uint16_t> ShiftRightSame(const Vec256<uint16_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint16_t>{_mm256_srli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint16_t>{_mm256_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint32_t> ShiftRightSame(const Vec256<uint32_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint32_t>{_mm256_srli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint32_t>{_mm256_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<uint64_t> ShiftRightSame(const Vec256<uint64_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<uint64_t>{_mm256_srli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<uint64_t>{_mm256_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1912,16 +1957,31 @@ HWY_API Vec256<uint8_t> ShiftRightSame(Vec256<uint8_t> v, const int bits) {\n \n HWY_API Vec256<int16_t> ShiftRightSame(const Vec256<int16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int16_t>{_mm256_srai_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int16_t>{_mm256_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec256<int32_t> ShiftRightSame(const Vec256<int32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int32_t>{_mm256_srai_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int32_t>{_mm256_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec256<int64_t> ShiftRightSame(const Vec256<int64_t> v,\n                                        const int bits) {\n #if HWY_TARGET <= HWY_AVX3\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec256<int64_t>{_mm256_srai_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec256<int64_t>{_mm256_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n #else\n   const Full256<int64_t> di;"
+      },
+      {
+        "filename": "hwy/ops/x86_512-inl.h",
+        "status": "modified",
+        "additions": 60,
+        "deletions": 0,
+        "changes": 60,
+        "patch": "@@ -973,26 +973,56 @@ HWY_API Vec512<uint64_t> RotateRight(const Vec512<uint64_t> v) {\n \n HWY_API Vec512<uint16_t> ShiftLeftSame(const Vec512<uint16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint16_t>{_mm512_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint16_t>{_mm512_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint32_t> ShiftLeftSame(const Vec512<uint32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint32_t>{_mm512_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint32_t>{_mm512_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint64_t> ShiftLeftSame(const Vec512<uint64_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint64_t>{_mm512_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint64_t>{_mm512_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int16_t> ShiftLeftSame(const Vec512<int16_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int16_t>{_mm512_slli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int16_t>{_mm512_sll_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int32_t> ShiftLeftSame(const Vec512<int32_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int32_t>{_mm512_slli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int32_t>{_mm512_sll_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int64_t> ShiftLeftSame(const Vec512<int64_t> v, const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int64_t>{_mm512_slli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int64_t>{_mm512_sll_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1008,14 +1038,29 @@ HWY_API Vec512<T> ShiftLeftSame(const Vec512<T> v, const int bits) {\n \n HWY_API Vec512<uint16_t> ShiftRightSame(const Vec512<uint16_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint16_t>{_mm512_srli_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint16_t>{_mm512_srl_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint32_t> ShiftRightSame(const Vec512<uint32_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint32_t>{_mm512_srli_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint32_t>{_mm512_srl_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<uint64_t> ShiftRightSame(const Vec512<uint64_t> v,\n                                         const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<uint64_t>{_mm512_srli_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<uint64_t>{_mm512_srl_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n@@ -1028,15 +1073,30 @@ HWY_API Vec512<uint8_t> ShiftRightSame(Vec512<uint8_t> v, const int bits) {\n \n HWY_API Vec512<int16_t> ShiftRightSame(const Vec512<int16_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int16_t>{_mm512_srai_epi16(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int16_t>{_mm512_sra_epi16(v.raw, _mm_cvtsi32_si128(bits))};\n }\n \n HWY_API Vec512<int32_t> ShiftRightSame(const Vec512<int32_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int32_t>{_mm512_srai_epi32(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int32_t>{_mm512_sra_epi32(v.raw, _mm_cvtsi32_si128(bits))};\n }\n HWY_API Vec512<int64_t> ShiftRightSame(const Vec512<int64_t> v,\n                                        const int bits) {\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(bits)) {\n+    return Vec512<int64_t>{_mm512_srai_epi64(v.raw, bits)};\n+  }\n+#endif\n   return Vec512<int64_t>{_mm512_sra_epi64(v.raw, _mm_cvtsi32_si128(bits))};\n }\n "
+      }
+    ],
+    "lines_added": 180,
+    "lines_removed": 0
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9999907977235951,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9999607747737346,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999999990686774,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999857898075477,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.2697438890784656,
+    "relative_improvement": 0.0009182342441301766,
+    "absolute_improvement_ms": 106.99999999999932,
+    "old_mean_ms": 116527.99999999999,
+    "new_mean_ms": 116420.99999999999,
+    "old_std_ms": 5452.85018796719,
+    "new_std_ms": 4227.721608620891,
+    "effect_size_cohens_d": 0.0219312018591431,
+    "old_ci95_ms": [
+      114491.87227699047,
+      118564.1277230095
+    ],
+    "new_ci95_ms": [
+      114842.34280683612,
+      117999.65719316386
+    ],
+    "old_ci99_ms": [
+      113783.88088586305,
+      119272.11911413693
+    ],
+    "new_ci99_ms": [
+      114293.42061022195,
+      118548.57938977804
+    ],
+    "new_times_s": [
+      115.58,
+      115.3,
+      115.7,
+      115.18,
+      115.57,
+      115.44,
+      115.36,
+      114.89,
+      114.73,
+      114.66,
+      114.99,
+      115.89,
+      115.03,
+      114.79,
+      114.81,
+      114.75,
+      120.5,
+      128.03,
+      115.06,
+      134.36,
+      115.77,
+      115.13,
+      114.92,
+      115.27,
+      115.17,
+      115.33,
+      115.68,
+      115.5,
+      114.71,
+      115.2,
+      114.91
+    ],
+    "old_times_s": [
+      115.35,
+      115.86,
+      115.29,
+      116.11,
+      115.31,
+      115.26,
+      115.81,
+      115.84,
+      114.7,
+      114.6,
+      114.24,
+      114.66,
+      115.1,
+      115.34,
+      114.88,
+      115.14,
+      119.19,
+      115.47,
+      119.23,
+      116.39,
+      144.8,
+      114.97,
+      115.44,
+      115.3,
+      115.64,
+      115.55,
+      115.11,
+      115.7,
+      114.72,
+      114.65,
+      115.54
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "NanobenchmarkTest.RunAll"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "NanobenchmarkTest.RunAll",
+        "is_significant": false,
+        "p_value": 0.11459054178417895,
+        "is_pair_significant": false,
+        "pair_p_value": 0.1576131221820218,
+        "is_binom_significant": false,
+        "binom_p_value": 0.17246422544121742,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.14223623516437522,
+        "is_mannwhitney_significant": true,
+        "mannwhitney_p_value": 0.008873437076002813,
+        "relative_improvement": 0.10730593607305937,
+        "absolute_improvement_ms": 50.357142857142826,
+        "old_mean_ms": 469.2857142857143,
+        "new_mean_ms": 418.92857142857144,
+        "old_std_ms": 80.82576465957024,
+        "new_std_ms": 88.24793715831784,
+        "effect_size_cohens_d": 0.5951095891541848,
+        "old_ci95_ms": [
+          437.9447545831129,
+          500.62667398831553
+        ],
+        "new_ci95_ms": [
+          384.7095936809969,
+          453.14754917614596
+        ],
+        "old_ci99_ms": [
+          426.96454681580394,
+          511.6068817556245
+        ],
+        "new_ci99_ms": [
+          372.721081241727,
+          465.1360616154159
+        ],
+        "new_times": [
+          0.54,
+          0.09,
+          0.38,
+          0.27,
+          0.51,
+          0.45,
+          0.44,
+          0.47,
+          0.51,
+          0.39,
+          0.44,
+          0.48,
+          0.46,
+          0.4,
+          0.39,
+          0.44,
+          0.44,
+          0.45,
+          0.53,
+          0.41,
+          0.45,
+          0.32,
+          0.41,
+          0.33,
+          0.41,
+          0.46,
+          0.42,
+          0.44
+        ],
+        "old_times": [
+          0.33,
+          0.54,
+          0.52,
+          0.53,
+          0.47,
+          0.37,
+          0.42,
+          0.36,
+          0.28,
+          0.54,
+          0.58,
+          0.59,
+          0.48,
+          0.46,
+          0.5,
+          0.43,
+          0.56,
+          0.54,
+          0.5,
+          0.49,
+          0.48,
+          0.53,
+          0.33,
+          0.43,
+          0.52,
+          0.39,
+          0.45,
+          0.52
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

@@ -1,0 +1,395 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:06:21.284096",
+    "repository": "https://github.com/zxing-cpp/zxing-cpp",
+    "repository_name": "zxing-cpp/zxing-cpp"
+  },
+  "commit_info": {
+    "old_sha": "d98bd6e9d8026a49708b6576227fb7b5b6c41145",
+    "new_sha": "820fda69d7e1843f79b1389aba6e8d292d6a5436",
+    "commit_message": [
+      "PatternRow: don't reallocate local object for every row"
+    ],
+    "commit_date": "2023-03-14T12:02:46+00:00",
+    "patch": [
+      "--- core/src/aztec/AZDetector.cpp\n@@ -178,9 +178,10 @@ static std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image,\n \tint skip = tryHarder ? 1 : std::clamp(image.height() / 2 / 100, 1, 5);\n \tint margin = tryHarder ? 5 : image.height() / 4;\n \n+\tPatternRow row;\n+\n \tfor (int y = margin; y < image.height() - margin; y += skip)\n \t{\n-\t\tPatternRow row;\n \t\tGetPatternRow(image, y, row, false);\n \t\tPatternView next = row;\n \t\tnext.shift(1); // the center pattern we are looking for starts with white and is 7 wide (compact code)\n--- core/src/qrcode/QRDetector.cpp\n@@ -52,9 +52,9 @@ std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image, bool t\n \t\tskip = MIN_SKIP;\n \n \tstd::vector<ConcentricPattern> res;\n+\tPatternRow row;\n \n \tfor (int y = skip - 1; y < height; y += skip) {\n-\t\tPatternRow row;\n \t\tGetPatternRow(image, y, row, false);\n \t\tPatternView next = row;\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "core/src/aztec/AZDetector.cpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 1,
+        "changes": 3,
+        "patch": "@@ -178,9 +178,10 @@ static std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image,\n \tint skip = tryHarder ? 1 : std::clamp(image.height() / 2 / 100, 1, 5);\n \tint margin = tryHarder ? 5 : image.height() / 4;\n \n+\tPatternRow row;\n+\n \tfor (int y = margin; y < image.height() - margin; y += skip)\n \t{\n-\t\tPatternRow row;\n \t\tGetPatternRow(image, y, row, false);\n \t\tPatternView next = row;\n \t\tnext.shift(1); // the center pattern we are looking for starts with white and is 7 wide (compact code)"
+      },
+      {
+        "filename": "core/src/qrcode/QRDetector.cpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -52,9 +52,9 @@ std::vector<ConcentricPattern> FindFinderPatterns(const BitMatrix& image, bool t\n \t\tskip = MIN_SKIP;\n \n \tstd::vector<ConcentricPattern> res;\n+\tPatternRow row;\n \n \tfor (int y = skip - 1; y < height; y += skip) {\n-\t\tPatternRow row;\n \t\tGetPatternRow(image, y, row, false);\n \t\tPatternView next = row;\n "
+      }
+    ],
+    "lines_added": 3,
+    "lines_removed": 2
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9999999647682608,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9999998941329384,
+    "is_binom_significant": false,
+    "binom_p_value": 0.99997026193887,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999938357715071,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 3.7741818201897843e-07,
+    "relative_improvement": 0.02483289144478895,
+    "absolute_improvement_ms": 221.66666666666578,
+    "old_mean_ms": 8926.333333333334,
+    "new_mean_ms": 8704.666666666668,
+    "old_std_ms": 124.38769573625325,
+    "new_std_ms": 157.73686804368177,
+    "effect_size_cohens_d": 1.5605450107021477,
+    "old_ci95_ms": [
+      8879.886204408218,
+      8972.78046225845
+    ],
+    "new_ci95_ms": [
+      8645.766752146155,
+      8763.56658118718
+    ],
+    "old_ci99_ms": [
+      8863.735858312559,
+      8988.93080835411
+    ],
+    "new_ci99_ms": [
+      8625.286390355772,
+      8784.046942977564
+    ],
+    "new_times_s": [
+      8.8,
+      8.48,
+      8.87,
+      8.72,
+      8.74,
+      8.64,
+      8.82,
+      8.81,
+      8.52,
+      8.69,
+      8.44,
+      8.65,
+      8.75,
+      8.76,
+      8.48,
+      8.67,
+      8.67,
+      8.84,
+      8.55,
+      8.71,
+      8.69,
+      8.84,
+      8.63,
+      9.0,
+      8.88,
+      8.82,
+      8.32,
+      8.58,
+      8.93,
+      8.75,
+      8.89
+    ],
+    "old_times_s": [
+      8.94,
+      8.66,
+      8.78,
+      8.95,
+      8.9,
+      8.98,
+      8.94,
+      8.99,
+      9.0,
+      8.78,
+      8.8,
+      9.17,
+      8.89,
+      8.89,
+      8.91,
+      8.99,
+      9.01,
+      8.92,
+      9.04,
+      8.68,
+      8.88,
+      8.92,
+      8.99,
+      8.85,
+      8.96,
+      8.94,
+      8.83,
+      9.07,
+      9.09,
+      8.79,
+      9.19
+    ]
+  },
+  "tests": {
+    "total_tests": 2,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "UnitTest"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "ZXingWriterTest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999393422746,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.0,
+        "new_mean_ms": 10.0,
+        "old_std_ms": 0.0,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": "NaN",
+        "old_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      },
+      {
+        "test_name": "UnitTest",
+        "is_significant": false,
+        "p_value": 0.9999998758008085,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999995165175946,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999100044369698,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999846527302241,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0154173521420557e-07,
+        "relative_improvement": 0.026321052842113734,
+        "absolute_improvement_ms": 234.99999999999943,
+        "old_mean_ms": 8928.214285714284,
+        "new_mean_ms": 8693.214285714286,
+        "old_std_ms": 112.21848964403974,
+        "new_std_ms": 153.02029813136443,
+        "effect_size_cohens_d": 1.751387104462915,
+        "old_ci95_ms": [
+          8884.70049804232,
+          8971.728073386248
+        ],
+        "new_ci95_ms": [
+          8633.879208370883,
+          8752.549363057688
+        ],
+        "old_ci99_ms": [
+          8869.455577851153,
+          8986.972993577416
+        ],
+        "new_ci99_ms": [
+          8613.091348544569,
+          8773.337222884002
+        ],
+        "new_times": [
+          8.71,
+          8.73,
+          8.62,
+          8.81,
+          8.8,
+          8.51,
+          8.68,
+          8.43,
+          8.64,
+          8.73,
+          8.75,
+          8.47,
+          8.66,
+          8.65,
+          8.83,
+          8.54,
+          8.7,
+          8.68,
+          8.82,
+          8.62,
+          8.98,
+          8.86,
+          8.81,
+          8.3,
+          8.57,
+          8.91,
+          8.73,
+          8.87
+        ],
+        "old_times": [
+          8.93,
+          8.89,
+          8.96,
+          8.93,
+          8.97,
+          8.99,
+          8.77,
+          8.79,
+          9.16,
+          8.88,
+          8.87,
+          8.9,
+          8.98,
+          9.0,
+          8.91,
+          9.02,
+          8.67,
+          8.87,
+          8.91,
+          8.98,
+          8.84,
+          8.95,
+          8.92,
+          8.82,
+          9.06,
+          9.07,
+          8.78,
+          9.17
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

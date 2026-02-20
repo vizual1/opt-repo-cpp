@@ -1,0 +1,289 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:04:38.883254",
+    "repository": "https://github.com/odygrd/quill",
+    "repository_name": "odygrd/quill"
+  },
+  "commit_info": {
+    "old_sha": "6e68619bd45659dd815a10e8ece2cfe03c5f7c2c",
+    "new_sha": "6248396b433bda060320eca0e9d181bb82f74d22",
+    "commit_message": [
+      "eliminate unnecessary copy in the backend thread"
+    ],
+    "commit_date": "2020-04-30T17:34:15+00:00",
+    "patch": [
+      "--- quill/include/quill/detail/record/LogRecord.h\n@@ -71,7 +71,8 @@ class LogRecord final : public RecordBase\n     {\n       // lambda to unpack the tuple args stored in the LogRecord (the arguments that were passed by\n       // the user) We also capture all additional information we need to create the log message\n-      auto forward_tuple_args_to_formatter = [this, log_record_timestamp, thread_id, handler](auto... tuple_args) {\n+      auto forward_tuple_args_to_formatter = [this, log_record_timestamp, thread_id,\n+                                              handler](auto const&... tuple_args) {\n         handler->formatter().format(log_record_timestamp, thread_id, _logger_details->name(),\n                                     *_log_line_info, tuple_args...);\n       };"
+    ],
+    "files_changed": [
+      {
+        "filename": "quill/include/quill/detail/record/LogRecord.h",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 1,
+        "changes": 3,
+        "patch": "@@ -71,7 +71,8 @@ class LogRecord final : public RecordBase\n     {\n       // lambda to unpack the tuple args stored in the LogRecord (the arguments that were passed by\n       // the user) We also capture all additional information we need to create the log message\n-      auto forward_tuple_args_to_formatter = [this, log_record_timestamp, thread_id, handler](auto... tuple_args) {\n+      auto forward_tuple_args_to_formatter = [this, log_record_timestamp, thread_id,\n+                                              handler](auto const&... tuple_args) {\n         handler->formatter().format(log_record_timestamp, thread_id, _logger_details->name(),\n                                     *_log_line_info, tuple_args...);\n       };"
+      }
+    ],
+    "lines_added": 2,
+    "lines_removed": 1
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUILL_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUILL_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9742261268106407,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9950796318159041,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9998375428840518,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9984199164185578,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.2209835874928504,
+    "relative_improvement": 0.0064966149216987455,
+    "absolute_improvement_ms": 94.99999999999709,
+    "old_mean_ms": 14622.999999999998,
+    "new_mean_ms": 14528.0,
+    "old_std_ms": 1207.9882107211886,
+    "new_std_ms": 1323.8512261449614,
+    "effect_size_cohens_d": 0.07496579780944547,
+    "old_ci95_ms": [
+      14171.929788985268,
+      15074.070211014727
+    ],
+    "new_ci95_ms": [
+      14033.665828002737,
+      15022.334171997263
+    ],
+    "old_ci99_ms": [
+      14015.086078945098,
+      15230.913921054896
+    ],
+    "new_ci99_ms": [
+      13861.778605919797,
+      15194.221394080203
+    ],
+    "new_times_s": [
+      15.33,
+      15.57,
+      14.11,
+      15.69,
+      16.82,
+      17.01,
+      18.27,
+      15.73,
+      15.87,
+      13.41,
+      13.63,
+      14.03,
+      13.86,
+      15.02,
+      13.36,
+      14.48,
+      13.24,
+      14.02,
+      14.2,
+      13.93,
+      13.94,
+      13.45,
+      13.48,
+      12.92,
+      13.45,
+      14.61,
+      13.98,
+      13.51,
+      13.62,
+      14.08,
+      16.55
+    ],
+    "old_times_s": [
+      17.9,
+      14.78,
+      18.38,
+      15.86,
+      15.88,
+      16.47,
+      15.74,
+      17.24,
+      14.65,
+      14.48,
+      13.5,
+      13.34,
+      14.53,
+      13.71,
+      13.56,
+      13.95,
+      13.71,
+      15.42,
+      14.38,
+      13.53,
+      14.14,
+      13.52,
+      14.18,
+      14.7,
+      13.76,
+      13.56,
+      15.21,
+      13.82,
+      13.94,
+      13.94,
+      14.81
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "TEST_quill",
+        "is_significant": false,
+        "p_value": 0.9894213090140901,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9997296970095616,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999100044369698,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9994798667000159,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.26672340445380127,
+        "relative_improvement": -0.00165248489332844,
+        "absolute_improvement_ms": -23.928571428571743,
+        "old_mean_ms": 14480.357142857143,
+        "new_mean_ms": 14504.285714285714,
+        "old_std_ms": 1011.1507274639093,
+        "new_std_ms": 1355.42921607451,
+        "effect_size_cohens_d": -0.02001142659819706,
+        "old_ci95_ms": [
+          14088.273822195975,
+          14872.440463518311
+        ],
+        "new_ci95_ms": [
+          13978.70513215769,
+          15029.86629641374
+        ],
+        "old_ci99_ms": [
+          13950.908650107809,
+          15009.805635606475
+        ],
+        "new_ci99_ms": [
+          13794.569609666016,
+          15214.001818905412
+        ],
+        "new_times": [
+          15.69,
+          16.82,
+          17.01,
+          18.27,
+          15.73,
+          15.87,
+          13.41,
+          13.63,
+          14.02,
+          13.85,
+          15.02,
+          13.36,
+          14.48,
+          13.24,
+          14.01,
+          14.2,
+          13.93,
+          13.94,
+          13.44,
+          13.48,
+          12.92,
+          13.45,
+          14.61,
+          13.98,
+          13.51,
+          13.62,
+          14.08,
+          16.55
+        ],
+        "old_times": [
+          15.86,
+          15.88,
+          16.47,
+          15.74,
+          17.24,
+          14.65,
+          14.48,
+          13.5,
+          13.34,
+          14.52,
+          13.71,
+          13.56,
+          13.95,
+          13.71,
+          15.41,
+          14.37,
+          13.53,
+          14.14,
+          13.52,
+          14.17,
+          14.69,
+          13.76,
+          13.56,
+          15.2,
+          13.82,
+          13.94,
+          13.93,
+          14.8
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

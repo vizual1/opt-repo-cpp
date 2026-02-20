@@ -1,0 +1,387 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:06:21.792896",
+    "repository": "https://github.com/zxing-cpp/zxing-cpp",
+    "repository_name": "zxing-cpp/zxing-cpp"
+  },
+  "commit_info": {
+    "old_sha": "21fbbe616592626fadcba0756c5dd82a0aa118fe",
+    "new_sha": "85705c2446c08f031ff30c2ee8c7423f7864edcf",
+    "commit_message": [
+      "DMDetector: reduce overhead of c++-20 builds by around 50%\n\nThis significantly speeds up the position-independent DataMatrix detection\nthat is enabled in c++-20 build mode. The total falsepositives runtime is\nreduced by around 15%."
+    ],
+    "commit_date": "2023-03-24T14:38:36+00:00",
+    "patch": [
+      "--- core/src/datamatrix/DMDetector.cpp\n@@ -656,17 +656,31 @@ class EdgeTracer : public BitMatrixCursorF\n \n \t\treturn isIn(corner) && isIn(p);\n \t}\n+\n+\tbool moveToNextWhiteAfterBlack()\n+\t{\n+\t\tassert(std::abs(d.x + d.y) == 1);\n+\n+\t\tFastEdgeToEdgeCounter e2e(BitMatrixCursorI(*img, PointI(p), PointI(d)));\n+\t\tint steps = e2e.stepToNextEdge(INT_MAX);\n+\t\tif (!steps)\n+\t\t\treturn false;\n+\t\tstep(steps);\n+\t\tif(isWhite())\n+\t\t\treturn true;\n+\n+\t\tsteps = e2e.stepToNextEdge(INT_MAX);\n+\t\tif (!steps)\n+\t\t\treturn false;\n+\t\treturn step(steps);\n+\t}\n };\n \n static DetectorResult Scan(EdgeTracer& startTracer, std::array<DMRegressionLine, 4>& lines)\n {\n-\twhile (startTracer.step()) {\n+\twhile (startTracer.moveToNextWhiteAfterBlack()) {\n \t\tlog(startTracer.p);\n \n-\t\t// continue until we cross from black into white\n-\t\tif (!startTracer.edgeAtBack().isWhite())\n-\t\t\tcontinue;\n-\n \t\tPointF tl, bl, br, tr;\n \t\tauto& [lineL, lineB, lineR, lineT] = lines;\n \n@@ -822,8 +836,8 @@ static DetectorResults DetectNew(const BitMatrix& image, bool tryHarder, bool tr\n \n \tconstexpr int minSymbolSize = 8 * 2; // minimum realistic size in pixel: 8 modules x 2 pixels per module\n \n-\tfor (auto dir : {PointF(-1, 0), PointF(1, 0), PointF(0, -1), PointF(0, 1)}) {\n-\t\tauto center = PointF(image.width() / 2, image.height() / 2);\n+\tfor (auto dir : {PointF{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {\n+\t\tauto center = PointI(image.width() / 2, image.height() / 2);\n \t\tauto startPos = centered(center - center * dir + minSymbolSize / 2 * dir);\n \n \t\thistory.clear();"
+    ],
+    "files_changed": [
+      {
+        "filename": "core/src/datamatrix/DMDetector.cpp",
+        "status": "modified",
+        "additions": 21,
+        "deletions": 7,
+        "changes": 28,
+        "patch": "@@ -656,17 +656,31 @@ class EdgeTracer : public BitMatrixCursorF\n \n \t\treturn isIn(corner) && isIn(p);\n \t}\n+\n+\tbool moveToNextWhiteAfterBlack()\n+\t{\n+\t\tassert(std::abs(d.x + d.y) == 1);\n+\n+\t\tFastEdgeToEdgeCounter e2e(BitMatrixCursorI(*img, PointI(p), PointI(d)));\n+\t\tint steps = e2e.stepToNextEdge(INT_MAX);\n+\t\tif (!steps)\n+\t\t\treturn false;\n+\t\tstep(steps);\n+\t\tif(isWhite())\n+\t\t\treturn true;\n+\n+\t\tsteps = e2e.stepToNextEdge(INT_MAX);\n+\t\tif (!steps)\n+\t\t\treturn false;\n+\t\treturn step(steps);\n+\t}\n };\n \n static DetectorResult Scan(EdgeTracer& startTracer, std::array<DMRegressionLine, 4>& lines)\n {\n-\twhile (startTracer.step()) {\n+\twhile (startTracer.moveToNextWhiteAfterBlack()) {\n \t\tlog(startTracer.p);\n \n-\t\t// continue until we cross from black into white\n-\t\tif (!startTracer.edgeAtBack().isWhite())\n-\t\t\tcontinue;\n-\n \t\tPointF tl, bl, br, tr;\n \t\tauto& [lineL, lineB, lineR, lineT] = lines;\n \n@@ -822,8 +836,8 @@ static DetectorResults DetectNew(const BitMatrix& image, bool tryHarder, bool tr\n \n \tconstexpr int minSymbolSize = 8 * 2; // minimum realistic size in pixel: 8 modules x 2 pixels per module\n \n-\tfor (auto dir : {PointF(-1, 0), PointF(1, 0), PointF(0, -1), PointF(0, 1)}) {\n-\t\tauto center = PointF(image.width() / 2, image.height() / 2);\n+\tfor (auto dir : {PointF{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {\n+\t\tauto center = PointI(image.width() / 2, image.height() / 2);\n \t\tauto startPos = centered(center - center * dir + minSymbolSize / 2 * dir);\n \n \t\thistory.clear();"
+      }
+    ],
+    "lines_added": 21,
+    "lines_removed": 7
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9999999999999999,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991338918834,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.9936902617891651,
+    "relative_improvement": -0.008014142604596203,
+    "absolute_improvement_ms": -67.99999999999784,
+    "old_mean_ms": 8485.000000000002,
+    "new_mean_ms": 8552.999999999998,
+    "old_std_ms": 100.5073337519755,
+    "new_std_ms": 105.5412976859833,
+    "effect_size_cohens_d": -0.6598414653840842,
+    "old_ci95_ms": [
+      8447.46994478782,
+      8522.530055212183
+    ],
+    "new_ci95_ms": [
+      8513.59023176264,
+      8592.409768237358
+    ],
+    "old_ci99_ms": [
+      8434.420195649544,
+      8535.579804350458
+    ],
+    "new_ci99_ms": [
+      8499.886878911504,
+      8606.113121088494
+    ],
+    "new_times_s": [
+      8.51,
+      8.41,
+      8.62,
+      8.59,
+      8.4,
+      8.41,
+      8.55,
+      8.41,
+      8.51,
+      8.52,
+      8.59,
+      8.61,
+      8.66,
+      8.43,
+      8.53,
+      8.66,
+      8.49,
+      8.62,
+      8.38,
+      8.67,
+      8.48,
+      8.6,
+      8.64,
+      8.57,
+      8.64,
+      8.67,
+      8.61,
+      8.78,
+      8.41,
+      8.46,
+      8.67
+    ],
+    "old_times_s": [
+      8.56,
+      8.79,
+      8.52,
+      8.53,
+      8.64,
+      8.4,
+      8.54,
+      8.41,
+      8.35,
+      8.54,
+      8.43,
+      8.58,
+      8.27,
+      8.46,
+      8.46,
+      8.44,
+      8.32,
+      8.47,
+      8.52,
+      8.48,
+      8.58,
+      8.39,
+      8.53,
+      8.49,
+      8.53,
+      8.52,
+      8.41,
+      8.54,
+      8.53,
+      8.5,
+      8.38
+    ]
+  },
+  "tests": {
+    "total_tests": 2,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 1,
+    "significant_mannwhitney_regressions_tests": [
+      "UnitTest"
+    ],
+    "tests": [
+      {
+        "test_name": "ZXingWriterTest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999393422746,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.0,
+        "new_mean_ms": 10.0,
+        "old_std_ms": 0.0,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": "NaN",
+        "old_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      },
+      {
+        "test_name": "UnitTest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999981106592539,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.9980586612016036,
+        "relative_improvement": -0.009750126625021114,
+        "absolute_improvement_ms": -82.49999999999957,
+        "old_mean_ms": 8461.428571428572,
+        "new_mean_ms": 8543.92857142857,
+        "old_std_ms": 85.36259418956578,
+        "new_std_ms": 103.72111059504124,
+        "effect_size_cohens_d": -0.8685451775730755,
+        "old_ci95_ms": [
+          8428.328412885403,
+          8494.52872997174
+        ],
+        "new_ci95_ms": [
+          8503.709723377335,
+          8584.147419479807
+        ],
+        "old_ci99_ms": [
+          8416.731875275078,
+          8506.125267582065
+        ],
+        "new_ci99_ms": [
+          8489.619175035648,
+          8598.237967821495
+        ],
+        "new_times": [
+          8.57,
+          8.39,
+          8.4,
+          8.54,
+          8.4,
+          8.5,
+          8.51,
+          8.58,
+          8.6,
+          8.65,
+          8.42,
+          8.52,
+          8.64,
+          8.48,
+          8.61,
+          8.37,
+          8.66,
+          8.47,
+          8.59,
+          8.63,
+          8.56,
+          8.62,
+          8.65,
+          8.59,
+          8.77,
+          8.4,
+          8.45,
+          8.66
+        ],
+        "old_times": [
+          8.52,
+          8.63,
+          8.39,
+          8.52,
+          8.39,
+          8.34,
+          8.53,
+          8.42,
+          8.57,
+          8.26,
+          8.45,
+          8.44,
+          8.43,
+          8.31,
+          8.46,
+          8.51,
+          8.47,
+          8.57,
+          8.37,
+          8.52,
+          8.48,
+          8.52,
+          8.51,
+          8.4,
+          8.53,
+          8.52,
+          8.49,
+          8.37
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

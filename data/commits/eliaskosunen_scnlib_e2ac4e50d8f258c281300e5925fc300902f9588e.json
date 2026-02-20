@@ -1,0 +1,391 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:00:23.276381",
+    "repository": "https://github.com/eliaskosunen/scnlib",
+    "repository_name": "eliaskosunen/scnlib"
+  },
+  "commit_info": {
+    "old_sha": "1557d45e07faee0bd82292f273dd2550feffd37c",
+    "new_sha": "e2ac4e50d8f258c281300e5925fc300902f9588e",
+    "commit_message": [
+      "Reduce number of virtual calls in erased_range"
+    ],
+    "commit_date": "2023-11-11T02:09:45+00:00",
+    "patch": [
+      "--- include/scn/detail/erased_range.h\n@@ -21,8 +21,8 @@\n #include <scn/util/meta.h>\n #include <scn/util/span.h>\n \n-#include <memory>\n #include <array>\n+#include <memory>\n \n namespace scn {\n     SCN_BEGIN_NAMESPACE\n@@ -48,113 +48,146 @@ namespace scn {\n             erased_range_impl_base& operator=(erased_range_impl_base&&) =\n                 delete;\n \n-            std::ptrdiff_t get_current_index() const\n-            {\n-                return do_get_current_index();\n-            }\n+            virtual void reset_current_to_begin() = 0;\n \n-            void increment_current(std::ptrdiff_t n = 1)\n+            SCN_NODISCARD std::ptrdiff_t get_current_index() const\n             {\n-                SCN_EXPECT(!is_current_at_end());\n-                return do_increment_current(n);\n-            }\n-            void reset_current_to_begin()\n-            {\n-                return do_reset_current_to_begin();\n+                return m_current_index;\n             }\n \n-            bool is_current_at_end() const\n+            SCN_NODISCARD std::ptrdiff_t get_end_index() const\n             {\n-                return is_index_at_end(get_current_index());\n-            }\n-            bool is_index_at_end(std::ptrdiff_t i) const\n-            {\n-                return do_is_index_at_end(i);\n+                return m_end_index;\n             }\n \n         protected:\n-            virtual std::ptrdiff_t do_get_current_index() const = 0;\n-\n-            virtual void do_increment_current(std::ptrdiff_t n) = 0;\n-            virtual void do_reset_current_to_begin() = 0;\n-\n-            SCN_NODISCARD virtual bool do_is_index_at_end(\n-                std::ptrdiff_t) const = 0;\n+            mutable std::ptrdiff_t m_current_index{-1}, m_end_index{-1};\n         };\n \n         template <typename CharT>\n         class basic_erased_range_impl_base : public erased_range_impl_base {\n         public:\n-            CharT get_current()\n+            SCN_NODISCARD virtual std::optional<CharT> prime_first_element()\n+                const = 0;\n+            SCN_NODISCARD virtual std::optional<CharT>\n+            increment_single_and_check_end() = 0;\n+            SCN_NODISCARD virtual std::optional<CharT>\n+            increment_multiple_and_check_end(std::ptrdiff_t n) = 0;\n+\n+            SCN_NODISCARD std::optional<CharT> get_cached_current() const\n             {\n-                SCN_EXPECT(!is_current_at_end());\n-                return do_get_current();\n+                return m_cached_current;\n+            }\n+\n+            void increment_until_index(std::ptrdiff_t i)\n+            {\n+                if (this->m_current_index < 0) {\n+                    prime_first_element();\n+                }\n+                if (i > this->m_current_index) {\n+                    (void)increment_multiple_and_check_end(\n+                        i - this->m_current_index);\n+                }\n+            }\n+\n+            CharT deref_at_index(std::ptrdiff_t i)\n+            {\n+                if (i == this->m_current_index) {\n+                    SCN_EXPECT(m_cached_current);\n+                    return *m_cached_current;\n+                }\n+\n+                if (i < this->m_current_index) {\n+                    this->reset_current_to_begin();\n+                }\n+                increment_until_index(i);\n+                SCN_EXPECT(m_cached_current);\n+                return *m_cached_current;\n             }\n \n         protected:\n-            virtual CharT do_get_current() = 0;\n+            mutable std::optional<CharT> m_cached_current{std::nullopt};\n         };\n \n-        template <typename Range, typename CharT>\n-        class basic_erased_range_impl\n-            : public basic_erased_range_impl_base<CharT> {\n-            using base = basic_erased_range_impl_base<CharT>;\n+        template <typename Range>\n+        class basic_erased_range_impl : public basic_erased_range_impl_base<\n+                                            ranges::range_value_t<Range>> {\n+            using base =\n+                basic_erased_range_impl_base<ranges::range_value_t<Range>>;\n+\n+            static_assert(ranges::forward_range<Range>);\n \n         public:\n-            using char_type = CharT;\n             using range_type = Range;\n-            using range_nocvref_type = remove_cvref_t<range_type>;\n+            using char_type = ranges::range_value_t<Range>;\n             using iterator = ranges::iterator_t<range_type>;\n             using sentinel = ranges::sentinel_t<range_type>;\n \n-            basic_erased_range_impl(Range r)\n+            template <typename R>\n+            basic_erased_range_impl(R&& r)\n                 : m_range(SCN_FWD(r)), m_current(ranges::begin(m_range))\n             {\n             }\n \n-        private:\n-            std::ptrdiff_t do_get_current_index() const override\n+            void reset_current_to_begin() override\n             {\n-                return m_current_index;\n+                m_current = ranges::begin(m_range);\n+                this->m_current_index = -1;\n+                this->m_cached_current.reset();\n             }\n \n-            CharT do_get_current() override\n+            SCN_NODISCARD std::optional<char_type> prime_first_element()\n+                const override\n             {\n-                return *m_current;\n+                SCN_EXPECT(this->m_current_index < 0);\n+                SCN_EXPECT(m_current == ranges::begin(m_range));\n+                SCN_EXPECT(!this->m_cached_current);\n+\n+                this->m_current_index = 0;\n+                if (m_current != ranges::end(m_range)) {\n+                    this->m_cached_current = *m_current;\n+                }\n+                else {\n+                    this->m_end_index = 0;\n+                }\n+                return this->m_cached_current;\n             }\n-            void do_increment_current(std::ptrdiff_t n) override\n+\n+            SCN_NODISCARD std::optional<char_type>\n+            increment_single_and_check_end() override\n             {\n-                SCN_EXPECT(n >= 0);\n-                std::advance(m_current, n);\n-                m_current_index += n;\n+                SCN_EXPECT(m_current != ranges::end(m_range));\n+                ++m_current;\n+                ++this->m_current_index;\n+                return _deref_current();\n             }\n-            void do_reset_current_to_begin() override\n+\n+            SCN_NODISCARD std::optional<char_type>\n+            increment_multiple_and_check_end(std::ptrdiff_t n) override\n             {\n-                m_current = ranges::begin(m_range);\n-                m_current_index = 0;\n+                SCN_EXPECT(n >= 0);\n+                SCN_EXPECT(m_current != ranges::end(m_range));\n+                ranges::advance(m_current, n);\n+                this->m_current_index += n;\n+                return _deref_current();\n             }\n \n-            SCN_NODISCARD bool do_is_index_at_end(\n-                std::ptrdiff_t i) const override\n+        private:\n+            SCN_NODISCARD std::optional<char_type> _deref_current() const\n             {\n-                SCN_EXPECT(i >= 0);\n-                if (i < m_current_index) {\n-                    return false;\n+                if (m_current == ranges::end(m_range)) {\n+                    this->m_cached_current = std::nullopt;\n+                    this->m_end_index = this->m_current_index;\n+                    return std::nullopt;\n                 }\n-                return m_current == ranges::end(m_range);\n+\n+                this->m_cached_current = *m_current;\n+                return this->m_cached_current;\n             }\n \n-            ranges_polyfill::views::all_t<Range> m_range;\n+            Range m_range;\n             iterator m_current;\n-            std::ptrdiff_t m_current_index{0};\n         };\n-\n-        template <typename CharT, typename Range>\n-        auto make_unique_erased_range_impl(Range&& r)\n-        {\n-            return std::make_unique<basic_erased_range_impl<Range, CharT>>(\n-                SCN_FWD(r));\n-        }\n     }  // namespace detail\n \n     /**\n@@ -175,23 +208,21 @@ namespace scn {\n         template <typename Range>\n         explicit basic_erased_range(Range&& range)\n         {\n-            if constexpr (sizeof(\n-                              detail::basic_erased_range_impl<Range, CharT>) >\n-                          small_buffer_size) {\n-                m_ptr = new detail::basic_erased_range_impl<Range, CharT>(\n-                    SCN_FWD(range));\n+            using erased_impl_type = detail::basic_erased_range_impl<\n+                ranges_polyfill::views::all_t<Range&&>>;\n+            if constexpr (sizeof(erased_impl_type) > small_buffer_size) {\n+                m_ptr = new erased_impl_type(SCN_FWD(range));\n                 m_destroy = [](impl_base* ptr) {\n                     SCN_EXPECT(ptr);\n                     delete ptr;\n                 };\n             }\n             else {\n-                using type = detail::basic_erased_range_impl<Range, CharT>;\n                 m_ptr = ::new (static_cast<void*>(m_memory.data()))\n-                    type(SCN_FWD(range));\n+                    erased_impl_type(SCN_FWD(range));\n                 m_destroy = [](impl_base* ptr) {\n                     SCN_EXPECT(ptr);\n-                    static_cast<type*>(ptr)->~type();\n+                    static_cast<erased_impl_type*>(ptr)->~erased_impl_type();\n                 };\n             }\n         }\n@@ -231,6 +262,9 @@ namespace scn {\n         destroy_t m_destroy;\n     };\n \n+    template <typename R>\n+    basic_erased_range(R) -> basic_erased_range<detail::char_t<R>>;\n+\n     template <typename CharT>\n     class basic_erased_range<CharT>::iterator {\n     public:\n@@ -252,10 +286,8 @@ namespace scn {\n         iterator& operator++()\n         {\n             SCN_EXPECT(m_impl);\n-\n             ++m_current;\n-            advance_until_index(m_current);\n-\n+            m_impl->increment_until_index(m_current);\n             return *this;\n         }\n \n@@ -269,9 +301,7 @@ namespace scn {\n         CharT operator*() const\n         {\n             SCN_EXPECT(m_impl);\n-\n-            advance_until_index(m_current);\n-            return m_impl->get_current();\n+            return m_impl->deref_at_index(m_current);\n         }\n \n         friend bool operator==(const iterator& x,\n@@ -340,43 +370,20 @@ namespace scn {\n \n     private:\n         iterator(detail::basic_erased_range_impl_base<char_type>* impl)\n-            SCN_NOEXCEPT : m_impl(impl)\n-        {\n-            if (m_impl) {\n-                impl->reset_current_to_begin();\n-            }\n-        }\n-\n-        iterator(detail::basic_erased_range_impl_base<char_type>* impl,\n-                 std::ptrdiff_t current) SCN_NOEXCEPT : m_impl(impl),\n-                                                        m_current(current)\n-        {\n-            if (m_impl) {\n-                advance_until_index(m_current);\n-            }\n-        }\n-\n-        void advance_until_index(std::ptrdiff_t i) const\n+            : m_impl(impl)\n         {\n-            if (i == m_impl->get_current_index()) {\n-                return;\n-            }\n-\n-            if (i > m_impl->get_current_index()) {\n-                return m_impl->increment_current(i -\n-                                                 m_impl->get_current_index());\n-            }\n-\n-            m_impl->reset_current_to_begin();\n-            return m_impl->increment_current(i);\n+            SCN_EXPECT(impl);\n         }\n \n         bool _is_end() const\n         {\n             if (m_impl == nullptr) {\n                 return true;\n             }\n-            return m_impl->is_index_at_end(m_current);\n+            if (m_impl->get_current_index() < 0) {\n+                (void)m_impl->prime_first_element();\n+            }\n+            return m_current == m_impl->get_end_index();\n         }\n \n         detail::basic_erased_range_impl_base<char_type>* m_impl{nullptr};"
+    ],
+    "files_changed": [
+      {
+        "filename": "include/scn/detail/erased_range.h",
+        "status": "modified",
+        "additions": 113,
+        "deletions": 106,
+        "changes": 219,
+        "patch": "@@ -21,8 +21,8 @@\n #include <scn/util/meta.h>\n #include <scn/util/span.h>\n \n-#include <memory>\n #include <array>\n+#include <memory>\n \n namespace scn {\n     SCN_BEGIN_NAMESPACE\n@@ -48,113 +48,146 @@ namespace scn {\n             erased_range_impl_base& operator=(erased_range_impl_base&&) =\n                 delete;\n \n-            std::ptrdiff_t get_current_index() const\n-            {\n-                return do_get_current_index();\n-            }\n+            virtual void reset_current_to_begin() = 0;\n \n-            void increment_current(std::ptrdiff_t n = 1)\n+            SCN_NODISCARD std::ptrdiff_t get_current_index() const\n             {\n-                SCN_EXPECT(!is_current_at_end());\n-                return do_increment_current(n);\n-            }\n-            void reset_current_to_begin()\n-            {\n-                return do_reset_current_to_begin();\n+                return m_current_index;\n             }\n \n-            bool is_current_at_end() const\n+            SCN_NODISCARD std::ptrdiff_t get_end_index() const\n             {\n-                return is_index_at_end(get_current_index());\n-            }\n-            bool is_index_at_end(std::ptrdiff_t i) const\n-            {\n-                return do_is_index_at_end(i);\n+                return m_end_index;\n             }\n \n         protected:\n-            virtual std::ptrdiff_t do_get_current_index() const = 0;\n-\n-            virtual void do_increment_current(std::ptrdiff_t n) = 0;\n-            virtual void do_reset_current_to_begin() = 0;\n-\n-            SCN_NODISCARD virtual bool do_is_index_at_end(\n-                std::ptrdiff_t) const = 0;\n+            mutable std::ptrdiff_t m_current_index{-1}, m_end_index{-1};\n         };\n \n         template <typename CharT>\n         class basic_erased_range_impl_base : public erased_range_impl_base {\n         public:\n-            CharT get_current()\n+            SCN_NODISCARD virtual std::optional<CharT> prime_first_element()\n+                const = 0;\n+            SCN_NODISCARD virtual std::optional<CharT>\n+            increment_single_and_check_end() = 0;\n+            SCN_NODISCARD virtual std::optional<CharT>\n+            increment_multiple_and_check_end(std::ptrdiff_t n) = 0;\n+\n+            SCN_NODISCARD std::optional<CharT> get_cached_current() const\n             {\n-                SCN_EXPECT(!is_current_at_end());\n-                return do_get_current();\n+                return m_cached_current;\n+            }\n+\n+            void increment_until_index(std::ptrdiff_t i)\n+            {\n+                if (this->m_current_index < 0) {\n+                    prime_first_element();\n+                }\n+                if (i > this->m_current_index) {\n+                    (void)increment_multiple_and_check_end(\n+                        i - this->m_current_index);\n+                }\n+            }\n+\n+            CharT deref_at_index(std::ptrdiff_t i)\n+            {\n+                if (i == this->m_current_index) {\n+                    SCN_EXPECT(m_cached_current);\n+                    return *m_cached_current;\n+                }\n+\n+                if (i < this->m_current_index) {\n+                    this->reset_current_to_begin();\n+                }\n+                increment_until_index(i);\n+                SCN_EXPECT(m_cached_current);\n+                return *m_cached_current;\n             }\n \n         protected:\n-            virtual CharT do_get_current() = 0;\n+            mutable std::optional<CharT> m_cached_current{std::nullopt};\n         };\n \n-        template <typename Range, typename CharT>\n-        class basic_erased_range_impl\n-            : public basic_erased_range_impl_base<CharT> {\n-            using base = basic_erased_range_impl_base<CharT>;\n+        template <typename Range>\n+        class basic_erased_range_impl : public basic_erased_range_impl_base<\n+                                            ranges::range_value_t<Range>> {\n+            using base =\n+                basic_erased_range_impl_base<ranges::range_value_t<Range>>;\n+\n+            static_assert(ranges::forward_range<Range>);\n \n         public:\n-            using char_type = CharT;\n             using range_type = Range;\n-            using range_nocvref_type = remove_cvref_t<range_type>;\n+            using char_type = ranges::range_value_t<Range>;\n             using iterator = ranges::iterator_t<range_type>;\n             using sentinel = ranges::sentinel_t<range_type>;\n \n-            basic_erased_range_impl(Range r)\n+            template <typename R>\n+            basic_erased_range_impl(R&& r)\n                 : m_range(SCN_FWD(r)), m_current(ranges::begin(m_range))\n             {\n             }\n \n-        private:\n-            std::ptrdiff_t do_get_current_index() const override\n+            void reset_current_to_begin() override\n             {\n-                return m_current_index;\n+                m_current = ranges::begin(m_range);\n+                this->m_current_index = -1;\n+                this->m_cached_current.reset();\n             }\n \n-            CharT do_get_current() override\n+            SCN_NODISCARD std::optional<char_type> prime_first_element()\n+                const override\n             {\n-                return *m_current;\n+                SCN_EXPECT(this->m_current_index < 0);\n+                SCN_EXPECT(m_current == ranges::begin(m_range));\n+                SCN_EXPECT(!this->m_cached_current);\n+\n+                this->m_current_index = 0;\n+                if (m_current != ranges::end(m_range)) {\n+                    this->m_cached_current = *m_current;\n+                }\n+                else {\n+                    this->m_end_index = 0;\n+                }\n+                return this->m_cached_current;\n             }\n-            void do_increment_current(std::ptrdiff_t n) override\n+\n+            SCN_NODISCARD std::optional<char_type>\n+            increment_single_and_check_end() override\n             {\n-                SCN_EXPECT(n >= 0);\n-                std::advance(m_current, n);\n-                m_current_index += n;\n+                SCN_EXPECT(m_current != ranges::end(m_range));\n+                ++m_current;\n+                ++this->m_current_index;\n+                return _deref_current();\n             }\n-            void do_reset_current_to_begin() override\n+\n+            SCN_NODISCARD std::optional<char_type>\n+            increment_multiple_and_check_end(std::ptrdiff_t n) override\n             {\n-                m_current = ranges::begin(m_range);\n-                m_current_index = 0;\n+                SCN_EXPECT(n >= 0);\n+                SCN_EXPECT(m_current != ranges::end(m_range));\n+                ranges::advance(m_current, n);\n+                this->m_current_index += n;\n+                return _deref_current();\n             }\n \n-            SCN_NODISCARD bool do_is_index_at_end(\n-                std::ptrdiff_t i) const override\n+        private:\n+            SCN_NODISCARD std::optional<char_type> _deref_current() const\n             {\n-                SCN_EXPECT(i >= 0);\n-                if (i < m_current_index) {\n-                    return false;\n+                if (m_current == ranges::end(m_range)) {\n+                    this->m_cached_current = std::nullopt;\n+                    this->m_end_index = this->m_current_index;\n+                    return std::nullopt;\n                 }\n-                return m_current == ranges::end(m_range);\n+\n+                this->m_cached_current = *m_current;\n+                return this->m_cached_current;\n             }\n \n-            ranges_polyfill::views::all_t<Range> m_range;\n+            Range m_range;\n             iterator m_current;\n-            std::ptrdiff_t m_current_index{0};\n         };\n-\n-        template <typename CharT, typename Range>\n-        auto make_unique_erased_range_impl(Range&& r)\n-        {\n-            return std::make_unique<basic_erased_range_impl<Range, CharT>>(\n-                SCN_FWD(r));\n-        }\n     }  // namespace detail\n \n     /**\n@@ -175,23 +208,21 @@ namespace scn {\n         template <typename Range>\n         explicit basic_erased_range(Range&& range)\n         {\n-            if constexpr (sizeof(\n-                              detail::basic_erased_range_impl<Range, CharT>) >\n-                          small_buffer_size) {\n-                m_ptr = new detail::basic_erased_range_impl<Range, CharT>(\n-                    SCN_FWD(range));\n+            using erased_impl_type = detail::basic_erased_range_impl<\n+                ranges_polyfill::views::all_t<Range&&>>;\n+            if constexpr (sizeof(erased_impl_type) > small_buffer_size) {\n+                m_ptr = new erased_impl_type(SCN_FWD(range));\n                 m_destroy = [](impl_base* ptr) {\n                     SCN_EXPECT(ptr);\n                     delete ptr;\n                 };\n             }\n             else {\n-                using type = detail::basic_erased_range_impl<Range, CharT>;\n                 m_ptr = ::new (static_cast<void*>(m_memory.data()))\n-                    type(SCN_FWD(range));\n+                    erased_impl_type(SCN_FWD(range));\n                 m_destroy = [](impl_base* ptr) {\n                     SCN_EXPECT(ptr);\n-                    static_cast<type*>(ptr)->~type();\n+                    static_cast<erased_impl_type*>(ptr)->~erased_impl_type();\n                 };\n             }\n         }\n@@ -231,6 +262,9 @@ namespace scn {\n         destroy_t m_destroy;\n     };\n \n+    template <typename R>\n+    basic_erased_range(R) -> basic_erased_range<detail::char_t<R>>;\n+\n     template <typename CharT>\n     class basic_erased_range<CharT>::iterator {\n     public:\n@@ -252,10 +286,8 @@ namespace scn {\n         iterator& operator++()\n         {\n             SCN_EXPECT(m_impl);\n-\n             ++m_current;\n-            advance_until_index(m_current);\n-\n+            m_impl->increment_until_index(m_current);\n             return *this;\n         }\n \n@@ -269,9 +301,7 @@ namespace scn {\n         CharT operator*() const\n         {\n             SCN_EXPECT(m_impl);\n-\n-            advance_until_index(m_current);\n-            return m_impl->get_current();\n+            return m_impl->deref_at_index(m_current);\n         }\n \n         friend bool operator==(const iterator& x,\n@@ -340,43 +370,20 @@ namespace scn {\n \n     private:\n         iterator(detail::basic_erased_range_impl_base<char_type>* impl)\n-            SCN_NOEXCEPT : m_impl(impl)\n-        {\n-            if (m_impl) {\n-                impl->reset_current_to_begin();\n-            }\n-        }\n-\n-        iterator(detail::basic_erased_range_impl_base<char_type>* impl,\n-                 std::ptrdiff_t current) SCN_NOEXCEPT : m_impl(impl),\n-                                                        m_current(current)\n-        {\n-            if (m_impl) {\n-                advance_until_index(m_current);\n-            }\n-        }\n-\n-        void advance_until_index(std::ptrdiff_t i) const\n+            : m_impl(impl)\n         {\n-            if (i == m_impl->get_current_index()) {\n-                return;\n-            }\n-\n-            if (i > m_impl->get_current_index()) {\n-                return m_impl->increment_current(i -\n-                                                 m_impl->get_current_index());\n-            }\n-\n-            m_impl->reset_current_to_begin();\n-            return m_impl->increment_current(i);\n+            SCN_EXPECT(impl);\n         }\n \n         bool _is_end() const\n         {\n             if (m_impl == nullptr) {\n                 return true;\n             }\n-            return m_impl->is_index_at_end(m_current);\n+            if (m_impl->get_current_index() < 0) {\n+                (void)m_impl->prime_first_element();\n+            }\n+            return m_current == m_impl->get_end_index();\n         }\n \n         detail::basic_erased_range_impl_base<char_type>* m_impl{nullptr};"
+      }
+    ],
+    "lines_added": 113,
+    "lines_removed": 106
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.999961447367628,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9999423748363524,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999999990686774,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999967808335363,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.9988058817908106,
+    "relative_improvement": -0.11258278145695375,
+    "absolute_improvement_ms": -5.666666666666667,
+    "old_mean_ms": 50.33333333333335,
+    "new_mean_ms": 56.000000000000014,
+    "old_std_ms": 1.8257418583505527,
+    "new_std_ms": 9.684683962230045,
+    "effect_size_cohens_d": -0.8131561225769738,
+    "old_ci95_ms": [
+      49.65159011928912,
+      51.01507654737758
+    ],
+    "new_ci95_ms": [
+      52.38367957594057,
+      59.61632042405946
+    ],
+    "old_ci99_ms": [
+      49.4145380321099,
+      51.25212863455679
+    ],
+    "new_ci99_ms": [
+      51.12623206964756,
+      60.87376793035247
+    ],
+    "new_times_s": [
+      0.06,
+      0.05,
+      0.05,
+      0.06,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.08,
+      0.06,
+      0.07,
+      0.07,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.08,
+      0.05,
+      0.05,
+      0.05,
+      0.07,
+      0.07,
+      0.05,
+      0.06,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.06
+    ],
+    "old_times_s": [
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.06,
+      0.05,
+      0.05,
+      0.05,
+      0.05,
+      0.05
+    ]
+  },
+  "tests": {
+    "total_tests": 2,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 1,
+    "significant_regressions_tests": [
+      "scn_impl_tests"
+    ],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 1,
+    "significant_pair_regressions_tests": [
+      "scn_impl_tests"
+    ],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 1,
+    "significant_mannwhitney_regressions_tests": [
+      "scn_impl_tests"
+    ],
+    "tests": [
+      {
+        "test_name": "scn_tests",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999393422746,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.0,
+        "new_mean_ms": 10.0,
+        "old_std_ms": 0.0,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": "NaN",
+        "old_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      },
+      {
+        "test_name": "scn_impl_tests",
+        "is_significant": false,
+        "p_value": 0.9999604820945508,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999604820945508,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999992455058049,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.9994170321691626,
+        "relative_improvement": -0.13392857142857134,
+        "absolute_improvement_ms": -5.357142857142866,
+        "old_mean_ms": 40.0,
+        "new_mean_ms": 45.35714285714287,
+        "old_std_ms": 0.0,
+        "new_std_ms": 8.380817098475259,
+        "effect_size_cohens_d": -0.9039863291515978,
+        "old_ci95_ms": [
+          40.0,
+          40.0
+        ],
+        "new_ci95_ms": [
+          42.10740124239299,
+          48.60688447189274
+        ],
+        "old_ci99_ms": [
+          40.0,
+          40.0
+        ],
+        "new_ci99_ms": [
+          40.968864373751344,
+          49.74542134053439
+        ],
+        "new_times": [
+          0.05,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.06,
+          0.05,
+          0.06,
+          0.06,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.06,
+          0.04,
+          0.04,
+          0.04,
+          0.06,
+          0.06,
+          0.04,
+          0.05,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04
+        ],
+        "old_times": [
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04,
+          0.04
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

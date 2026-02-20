@@ -1,0 +1,291 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:02:00.259570",
+    "repository": "https://github.com/google/sentencepiece",
+    "repository_name": "google/sentencepiece"
+  },
+  "commit_info": {
+    "old_sha": "a3f42beb50fa3391e0586b48ed0b7ed1d00172bb",
+    "new_sha": "1cd0c5965d4163bb65cc626083c5f7b727c36b8c",
+    "commit_message": [
+      "unigram: prune using token-normalized F = freq[i]/sum; remove per-sentence normalization and inverted references"
+    ],
+    "commit_date": "2025-08-14T10:33:58+00:00",
+    "patch": [
+      "--- src/unigram_model_trainer.cc\n@@ -431,23 +431,16 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n     }\n   }\n \n-  // Second, segments all sentences to compute likelihood\n-  // with a unigram language model. inverted[i] stores\n-  // the set of sentence index where the sentencepieces[i] appears.\n-  float vsum = 0.0;\n+  // Second, segment all sentences to compute token frequencies\n+  // with a unigram language model using the Viterbi path.\n   std::vector<float> freq(sentencepieces.size(), 0.0);\n-  std::vector<std::vector<int>> inverted(sentencepieces.size());\n   {\n-    std::vector<float> vsums(trainer_spec_.num_threads(), 0.0);\n     std::vector<std::vector<float>> freqs(trainer_spec_.num_threads());\n-    std::vector<std::vector<std::vector<int>>> inverteds(\n-        trainer_spec_.num_threads());\n \n     auto pool = std::make_unique<ThreadPool>(trainer_spec_.num_threads());\n     pool->StartWorkers();\n     for (int n = 0; n < trainer_spec_.num_threads(); ++n) {\n       freqs[n].resize(sentencepieces.size(), 0.0);\n-      inverteds[n].resize(sentencepieces.size());\n \n       pool->Schedule([&, n]() {\n         Lattice lattice;\n@@ -456,11 +449,9 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n           const auto &w = sentences_[i];\n           lattice.SetSentence(w.first);\n           model.PopulateNodes(&lattice);\n-          vsums[n] += w.second;\n           for (const auto *node : lattice.Viterbi().first) {\n             if (node->id >= 0) {\n               freqs[n][node->id] += w.second;\n-              inverteds[n][node->id].push_back(i);\n             }\n           }\n         }\n@@ -469,11 +460,8 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n     pool.reset(nullptr);\n \n     for (int n = 0; n < trainer_spec_.num_threads(); ++n) {\n-      vsum += vsums[n];\n       for (size_t i = 0; i < sentencepieces.size(); ++i) {\n         freq[i] += freqs[n][i];\n-        std::copy(inverteds[n][i].begin(), inverteds[n][i].end(),\n-                  std::back_inserter(inverted[i]));\n       }\n     }\n   }\n@@ -496,12 +484,6 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n       // no alternatives. Keeps this entry.\n       new_sentencepieces.push_back(sentencepieces[i]);\n     } else {\n-      float F = 0.0;  // the frequency of sentencepieces[i].\n-      for (const int n : inverted[i]) {\n-        F += sentences_[n].second;\n-      }\n-      F /= vsum;  // normalizes by all sentence frequency.\n-\n       // The logprob with the sentencepiece[i].\n       const float logprob_sp = std::log(static_cast<double>(freq[i])) - logsum;\n \n@@ -520,6 +502,7 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n       }\n \n       // loss: the diff of likelihood after removing the sentencepieces[i].\n+      float F = freq[i] / sum;  // normalized token frequency\n       const float loss = F * (logprob_sp - logprob_alt);\n       candidates.emplace_back(i, loss);\n     }"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/unigram_model_trainer.cc",
+        "status": "modified",
+        "additions": 3,
+        "deletions": 20,
+        "changes": 23,
+        "patch": "@@ -431,23 +431,16 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n     }\n   }\n \n-  // Second, segments all sentences to compute likelihood\n-  // with a unigram language model. inverted[i] stores\n-  // the set of sentence index where the sentencepieces[i] appears.\n-  float vsum = 0.0;\n+  // Second, segment all sentences to compute token frequencies\n+  // with a unigram language model using the Viterbi path.\n   std::vector<float> freq(sentencepieces.size(), 0.0);\n-  std::vector<std::vector<int>> inverted(sentencepieces.size());\n   {\n-    std::vector<float> vsums(trainer_spec_.num_threads(), 0.0);\n     std::vector<std::vector<float>> freqs(trainer_spec_.num_threads());\n-    std::vector<std::vector<std::vector<int>>> inverteds(\n-        trainer_spec_.num_threads());\n \n     auto pool = std::make_unique<ThreadPool>(trainer_spec_.num_threads());\n     pool->StartWorkers();\n     for (int n = 0; n < trainer_spec_.num_threads(); ++n) {\n       freqs[n].resize(sentencepieces.size(), 0.0);\n-      inverteds[n].resize(sentencepieces.size());\n \n       pool->Schedule([&, n]() {\n         Lattice lattice;\n@@ -456,11 +449,9 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n           const auto &w = sentences_[i];\n           lattice.SetSentence(w.first);\n           model.PopulateNodes(&lattice);\n-          vsums[n] += w.second;\n           for (const auto *node : lattice.Viterbi().first) {\n             if (node->id >= 0) {\n               freqs[n][node->id] += w.second;\n-              inverteds[n][node->id].push_back(i);\n             }\n           }\n         }\n@@ -469,11 +460,8 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n     pool.reset(nullptr);\n \n     for (int n = 0; n < trainer_spec_.num_threads(); ++n) {\n-      vsum += vsums[n];\n       for (size_t i = 0; i < sentencepieces.size(); ++i) {\n         freq[i] += freqs[n][i];\n-        std::copy(inverteds[n][i].begin(), inverteds[n][i].end(),\n-                  std::back_inserter(inverted[i]));\n       }\n     }\n   }\n@@ -496,12 +484,6 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n       // no alternatives. Keeps this entry.\n       new_sentencepieces.push_back(sentencepieces[i]);\n     } else {\n-      float F = 0.0;  // the frequency of sentencepieces[i].\n-      for (const int n : inverted[i]) {\n-        F += sentences_[n].second;\n-      }\n-      F /= vsum;  // normalizes by all sentence frequency.\n-\n       // The logprob with the sentencepiece[i].\n       const float logprob_sp = std::log(static_cast<double>(freq[i])) - logsum;\n \n@@ -520,6 +502,7 @@ TrainerModel::SentencePieces Trainer::PruneSentencePieces(\n       }\n \n       // loss: the diff of likelihood after removing the sentencepieces[i].\n+      float F = freq[i] / sum;  // normalized token frequency\n       const float loss = F * (logprob_sp - logprob_alt);\n       candidates.emplace_back(i, loss);\n     }"
+      }
+    ],
+    "lines_added": 3,
+    "lines_removed": 20
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPM_BUILD_TEST=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPM_BUILD_TEST=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991398702668,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 4.1311949319118e-10,
+    "relative_improvement": 0.010788839823364186,
+    "absolute_improvement_ms": 214.99999999999986,
+    "old_mean_ms": 19928.0,
+    "new_mean_ms": 19713.0,
+    "old_std_ms": 86.876845056071,
+    "new_std_ms": 87.18391183445856,
+    "effect_size_cohens_d": 2.4703979148757536,
+    "old_ci95_ms": [
+      19895.559652913882,
+      19960.44034708612
+    ],
+    "new_ci95_ms": [
+      19680.444992294437,
+      19745.555007705567
+    ],
+    "old_ci99_ms": [
+      19884.279669736694,
+      19971.72033026331
+    ],
+    "new_ci99_ms": [
+      19669.125139942757,
+      19756.874860057243
+    ],
+    "new_times_s": [
+      19.67,
+      19.75,
+      19.72,
+      19.77,
+      19.81,
+      19.65,
+      19.69,
+      19.69,
+      19.76,
+      19.69,
+      19.66,
+      19.69,
+      19.64,
+      19.65,
+      19.71,
+      19.49,
+      19.63,
+      19.77,
+      19.71,
+      19.74,
+      19.52,
+      19.75,
+      19.86,
+      19.85,
+      19.73,
+      19.82,
+      19.77,
+      19.84,
+      19.6,
+      19.75,
+      19.68
+    ],
+    "old_times_s": [
+      19.92,
+      19.95,
+      19.9,
+      20.03,
+      19.8,
+      19.9,
+      19.84,
+      19.89,
+      19.97,
+      19.71,
+      19.99,
+      19.94,
+      19.86,
+      19.75,
+      19.88,
+      19.9,
+      19.88,
+      19.9,
+      19.89,
+      19.96,
+      19.92,
+      19.89,
+      20.05,
+      20.01,
+      20.03,
+      19.99,
+      19.98,
+      20.01,
+      19.98,
+      20.11,
+      19.93
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "sentencepiece_test"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "sentencepiece_test",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999981147524429,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.70340761455521e-09,
+        "relative_improvement": 0.010861382944402729,
+        "absolute_improvement_ms": 216.42857142856897,
+        "old_mean_ms": 19926.42857142857,
+        "new_mean_ms": 19710.0,
+        "old_std_ms": 90.07051910974205,
+        "new_std_ms": 90.34911711224929,
+        "effect_size_cohens_d": 2.399165832826293,
+        "old_ci95_ms": [
+          19891.502870178476,
+          19961.354272678665
+        ],
+        "new_ci95_ms": [
+          19674.966269722197,
+          19745.033730277803
+        ],
+        "old_ci99_ms": [
+          19879.266759357874,
+          19973.590383499268
+        ],
+        "new_ci99_ms": [
+          19662.692311267692,
+          19757.30768873231
+        ],
+        "new_times": [
+          19.77,
+          19.81,
+          19.65,
+          19.69,
+          19.69,
+          19.76,
+          19.69,
+          19.66,
+          19.69,
+          19.64,
+          19.65,
+          19.71,
+          19.49,
+          19.63,
+          19.77,
+          19.71,
+          19.74,
+          19.51,
+          19.75,
+          19.86,
+          19.85,
+          19.73,
+          19.82,
+          19.77,
+          19.83,
+          19.6,
+          19.74,
+          19.67
+        ],
+        "old_times": [
+          20.03,
+          19.8,
+          19.9,
+          19.84,
+          19.89,
+          19.97,
+          19.71,
+          19.99,
+          19.94,
+          19.86,
+          19.75,
+          19.87,
+          19.9,
+          19.87,
+          19.9,
+          19.88,
+          19.96,
+          19.92,
+          19.89,
+          20.05,
+          20.01,
+          20.03,
+          19.99,
+          19.98,
+          20.0,
+          19.98,
+          20.11,
+          19.92
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

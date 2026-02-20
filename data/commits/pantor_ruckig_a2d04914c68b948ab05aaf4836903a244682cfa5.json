@@ -1,0 +1,299 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:04:43.866840",
+    "repository": "https://github.com/pantor/ruckig",
+    "repository_name": "pantor/ruckig"
+  },
+  "commit_info": {
+    "old_sha": "94f779984bd1d73335a0aa17e23873816f85c1e6",
+    "new_sha": "a2d04914c68b948ab05aaf4836903a244682cfa5",
+    "commit_message": [
+      "performance improvements"
+    ],
+    "commit_date": "2021-09-28T05:33:47+00:00",
+    "patch": [
+      "--- include/ruckig/position.hpp\n@@ -41,9 +41,9 @@ class PositionStep1 {\n     void time_none_two_step(Profile& profile, double vMax, double vMin, double aMax, double aMin, double jMax);\n \n \n-    inline void add_profile(Profile profile, double jMax) {\n-        profile.direction = (jMax > 0) ? Profile::Direction::UP : Profile::Direction::DOWN;\n+    inline void add_profile(const Profile& profile, double jMax) {\n         valid_profiles[valid_profile_counter] = profile;\n+        valid_profiles[valid_profile_counter].direction = (jMax > 0) ? Profile::Direction::UP : Profile::Direction::DOWN;\n         ++valid_profile_counter;\n     }\n \n--- include/ruckig/roots.hpp\n@@ -68,9 +68,6 @@ class PositiveSet: public Set<T, N> {\n inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n     PositiveSet<double, 3> roots;\n \n-    constexpr double cos120 = -0.50;\n-    constexpr double sin120 = 0.866025403784438646764;\n-\n     if (std::abs(d) < DBL_EPSILON) {\n         // First solution is x = 0\n         roots.insert(0.0);\n@@ -105,10 +102,13 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n         const double inva = 1.0 / a;\n         const double invaa = inva * inva;\n         const double bb = b * b;\n-        const double bover3a = b * (1.0 / 3.0) * inva;\n-        const double p = (3.0 * a * c - bb) * (1.0 / 3.0) * invaa;\n-        const double halfq = (2 * bb * b - 9.0 * a * b * c + 27.0 * a * a * d) * (0.5 / 27.0) * invaa * inva;\n-        const double yy = p * p * p / 27.0 + halfq * halfq;\n+        const double bover3a = b * inva / 3;\n+        const double p = (a * c - bb / 3) * invaa;\n+        const double halfq = (2 * bb * b - 9 * a * b * c + 27 * a * a * d) * (0.5 / 27) * invaa * inva;\n+        const double yy = p * p * p / 27 + halfq * halfq;\n+\n+        constexpr double cos120 = -0.50;\n+        constexpr double sin120 = 0.866025403784438646764;\n \n         if (yy > DBL_EPSILON) {\n             // Sqrt is positive: one real solution\n@@ -117,15 +117,14 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n             const double vvv = -halfq - y;\n             const double www = std::abs(uuu) > std::abs(vvv) ? uuu : vvv;\n             const double w = std::cbrt(www);\n-            roots.insert(w - p / (3.0 * w) - bover3a);\n+            roots.insert(w - p / (3 * w) - bover3a);\n         } else if (yy < -DBL_EPSILON) {\n             // Sqrt is negative: three real solutions\n             const double x = -halfq;\n             const double y = std::sqrt(-yy);\n             double theta;\n             double r;\n-            double ux;\n-            double uyi;\n+\n             // Convert to polar form\n             if (std::abs(x) > DBL_EPSILON) {\n                 theta = (x > 0.0) ? std::atan(y / x) : (std::atan(y / x) + M_PI);\n@@ -136,25 +135,22 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n                 r = y;\n             }\n             // Calculate cube root\n-            theta /= 3.0;\n-            r = std::cbrt(r);\n+            theta /= 3;\n+            r = 2 * std::cbrt(r);\n             // Convert to complex coordinate\n-            ux = std::cos(theta) * r;\n-            uyi = std::sin(theta) * r;\n-            // First solution\n-            roots.insert(ux + ux - bover3a);\n-            // Second solution, rotate +120 degrees\n-            roots.insert(2 * (ux * cos120 - uyi * sin120) - bover3a);\n-            // Third solution, rotate -120 degrees\n-            roots.insert(2 * (ux * cos120 + uyi * sin120) - bover3a);\n+            const double ux = std::cos(theta) * r;\n+            const double uyi = std::sin(theta) * r;\n+\n+            roots.insert(ux - bover3a);\n+            roots.insert(ux * cos120 - uyi * sin120 - bover3a);\n+            roots.insert(ux * cos120 + uyi * sin120 - bover3a);\n         } else {\n             // Sqrt is zero: two real solutions\n             const double www = -halfq;\n-            const double w = std::cbrt(www);\n-            // First solution\n-            roots.insert(w + w - bover3a);\n-            // Second solution, rotate +120 degrees\n-            roots.insert(2 * w * cos120 - bover3a);\n+            const double w = 2 * std::cbrt(www);\n+\n+            roots.insert(w - bover3a);\n+            roots.insert(w * cos120 - bover3a);\n         }\n     }\n     return roots;\n@@ -164,9 +160,13 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n // The input x must be of length 3\n // Number of zeros are returned\n inline int solveResolvent(double *x, double a, double b, double c) {\n+    constexpr double cos120 = -0.50;\n+    constexpr double sin120 = 0.866025403784438646764;\n+    \n+    const double aover3 = a / 3;\n     const double a2 = a * a;\n-    double q = (a2 - 3.0 * b) / 9.0;\n-    const double r = (a * (2 * a2 - 9.0 * b) + 27.0 * c) / 54.0;\n+    double q = (a2 - 3 * b) / 9;\n+    const double r = a * (2 * a2 - 9 * b) / 54 + c / 2;\n     const double r2 = r * r;\n     const double q3 = q * q * q;\n     double A, B;\n@@ -179,12 +179,14 @@ inline int solveResolvent(double *x, double a, double b, double c) {\n         if (t > 1.0) {\n             t = 1.0;\n         }\n-        t = std::acos(t);\n-        a /= 3.0;\n         q = -2 * std::sqrt(q);\n-        x[0] = q * std::cos(t / 3.0) - a;\n-        x[1] = q * std::cos((t + M_PI * 2) / 3.0) - a;\n-        x[2] = q * std::cos((t - M_PI * 2) / 3.0) - a;\n+\n+        const double theta = std::acos(t) / 3;\n+        const double ux = std::cos(theta) * q;\n+        const double uyi = std::sin(theta) * q;\n+        x[0] = ux - aover3;\n+        x[1] = ux * cos120 - uyi * sin120 - aover3;\n+        x[2] = ux * cos120 + uyi * sin120 - aover3;\n         return 3;\n \n     } else {\n@@ -194,10 +196,9 @@ inline int solveResolvent(double *x, double a, double b, double c) {\n         }\n         B = (0.0 == A ? 0.0 : q / A);\n \n-        a /= 3.0;\n-        x[0] = (A + B) - a;\n-        x[1] = -0.5 * (A + B) - a;\n-        x[2] = 0.5 * std::sqrt(3.0) * (A - B);\n+        x[0] = (A + B) - aover3;\n+        x[1] = -(A + B) / 2 - aover3;\n+        x[2] = std::sqrt(3) * (A - B) / 2;\n         if (std::abs(x[2]) < DBL_EPSILON) {\n             x[2] = x[1];\n             return 2;\n@@ -215,24 +216,24 @@ inline PositiveSet<double, 4> solveQuartMonic(double a, double b, double c, doub\n \n     if (std::abs(a) < DBL_EPSILON && std::abs(b) < DBL_EPSILON_SQRT && std::abs(c) < DBL_EPSILON_SQRT && std::abs(d) < DBL_EPSILON) {\n         const double e0 = std::cbrt(c * c);\n-        const double e1 = (b * b + 12 * d)/(9*e0);\n-        const double q1 = -(4 * b)/3 - e0 - e1;\n+        const double e1 = (b * b + 12 * d) / (9 * e0);\n+        const double q1 = -(4 * b) / 3 - e0 - e1;\n         const double p1 = std::sqrt(-q1 - 2 * b);\n         const double q2 = 2 * c / p1;\n         double D, sqrtD;\n \n         D = q1 - q2;\n         if (D > 0.0) {\n             sqrtD = std::sqrt(D);\n-            roots.insert((p1 + sqrtD) * 0.5);\n-            roots.insert((p1 - sqrtD) * 0.5);\n+            roots.insert((p1 + sqrtD) / 2);\n+            roots.insert((p1 - sqrtD) / 2);\n         }\n \n         D = q1 + q2;\n         if (D > 0.0) {\n             sqrtD = std::sqrt(D);\n-            roots.insert((-p1 + sqrtD) * 0.5);\n-            roots.insert((-p1 - sqrtD) * 0.5);\n+            roots.insert((-p1 + sqrtD) / 2);\n+            roots.insert((-p1 - sqrtD) / 2);\n         }\n         return roots;\n     }\n@@ -275,20 +276,20 @@ inline PositiveSet<double, 4> solveQuartMonic(double a, double b, double c, doub\n     // h1 + h2 = y && h1*h2 = d  <=>  h^2 - y*h + d = 0    (h === q)\n     D = y * y - 4 * d;\n     if (std::abs(D) < DBL_EPSILON) {\n-        q1 = q2 = y * 0.5;\n+        q1 = q2 = y / 2;\n         // g1 + g2 = a && g1 + g2 = b - y   <=>   g^2 - a*g + b - y = 0    (p === g)\n-        D = a * a - 4.0 * (b - y);\n+        D = a * a - 4 * (b - y);\n         if (std::abs(D) < DBL_EPSILON) {\n-            p1 = p2 = a * 0.5;\n+            p1 = p2 = a / 2;\n         } else {\n             sqrtD = std::sqrt(D);\n-            p1 = (a + sqrtD) * 0.5;\n-            p2 = (a - sqrtD) * 0.5;\n+            p1 = (a + sqrtD) / 2;\n+            p2 = (a - sqrtD) / 2;\n         }\n     } else {\n         sqrtD = std::sqrt(D);\n-        q1 = (y + sqrtD) * 0.5;\n-        q2 = (y - sqrtD) * 0.5;\n+        q1 = (y + sqrtD) / 2;\n+        q2 = (y - sqrtD) / 2;\n         // g1 + g2 = a && g1*h2 + g2*h1 = c   ( && g === p )  Krammer\n         p1 = (a * q1 - c) / (q1 - q2);\n         p2 = (c - a * q2) / (q1 - q2);\n@@ -299,21 +300,21 @@ inline PositiveSet<double, 4> solveQuartMonic(double a, double b, double c, doub\n     // Solve the quadratic equation: x^2 + p1*x + q1 = 0\n     D = p1 * p1 - 4 * q1;\n     if (std::abs(D) < eps) {\n-        roots.insert(-p1 * 0.5);\n+        roots.insert(-p1 / 2);\n     } else if (D > 0.0) {\n         sqrtD = std::sqrt(D);\n-        roots.insert((-p1 + sqrtD) * 0.5);\n-        roots.insert((-p1 - sqrtD) * 0.5);\n+        roots.insert((-p1 + sqrtD) / 2);\n+        roots.insert((-p1 - sqrtD) / 2);\n     }\n \n     // Solve the quadratic equation: x^2 + p2*x + q2 = 0\n     D = p2 * p2 - 4 * q2;\n     if (std::abs(D) < eps) {\n-        roots.insert(-p2 * 0.5);\n+        roots.insert(-p2 / 2);\n     } else if (D > 0.0) {\n         sqrtD = std::sqrt(D);\n-        roots.insert((-p2 + sqrtD) * 0.5);\n-        roots.insert((-p2 - sqrtD) * 0.5);\n+        roots.insert((-p2 + sqrtD) / 2);\n+        roots.insert((-p2 - sqrtD) / 2);\n     }\n \n     return roots;\n@@ -327,7 +328,7 @@ inline PositiveSet<double, 4> solveQuartMonic(const std::array<double, 5>& polyn\n \n //! Evaluate a polynomial of order N at x\n template<size_t N>\n-inline double polyEval(std::array<double, N> p, double x) {\n+inline double polyEval(const std::array<double, N>& p, double x) {\n     double retVal = 0.0;\n \n     if constexpr (N > 0) {\n@@ -390,7 +391,7 @@ inline double shrinkInterval(const std::array<double, N>& p, double l, double h)\n         std::swap(l, h);\n     }\n \n-    double rts = 0.5 * (l + h);\n+    double rts = (l + h) / 2;\n     double dxold = std::abs(h - l);\n     double dx = dxold;\n     double f = polyEval(p, rts);\n@@ -399,7 +400,7 @@ inline double shrinkInterval(const std::array<double, N>& p, double l, double h)\n     for (size_t j = 0; j < maxIts; j++) {\n         if ((((rts - h) * df - f) * ((rts - l) * df - f) > 0.0) || (std::abs(2 * f) > std::abs(dxold * df))) {\n             dxold = dx;\n-            dx = 0.5 * (h - l);\n+            dx = (h - l) / 2;\n             rts = l + dx;\n             if (l == rts) {\n                 break;"
+    ],
+    "files_changed": [
+      {
+        "filename": "include/ruckig/position.hpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 2,
+        "changes": 4,
+        "patch": "@@ -41,9 +41,9 @@ class PositionStep1 {\n     void time_none_two_step(Profile& profile, double vMax, double vMin, double aMax, double aMin, double jMax);\n \n \n-    inline void add_profile(Profile profile, double jMax) {\n-        profile.direction = (jMax > 0) ? Profile::Direction::UP : Profile::Direction::DOWN;\n+    inline void add_profile(const Profile& profile, double jMax) {\n         valid_profiles[valid_profile_counter] = profile;\n+        valid_profiles[valid_profile_counter].direction = (jMax > 0) ? Profile::Direction::UP : Profile::Direction::DOWN;\n         ++valid_profile_counter;\n     }\n "
+      },
+      {
+        "filename": "include/ruckig/roots.hpp",
+        "status": "modified",
+        "additions": 59,
+        "deletions": 58,
+        "changes": 117,
+        "patch": "@@ -68,9 +68,6 @@ class PositiveSet: public Set<T, N> {\n inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n     PositiveSet<double, 3> roots;\n \n-    constexpr double cos120 = -0.50;\n-    constexpr double sin120 = 0.866025403784438646764;\n-\n     if (std::abs(d) < DBL_EPSILON) {\n         // First solution is x = 0\n         roots.insert(0.0);\n@@ -105,10 +102,13 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n         const double inva = 1.0 / a;\n         const double invaa = inva * inva;\n         const double bb = b * b;\n-        const double bover3a = b * (1.0 / 3.0) * inva;\n-        const double p = (3.0 * a * c - bb) * (1.0 / 3.0) * invaa;\n-        const double halfq = (2 * bb * b - 9.0 * a * b * c + 27.0 * a * a * d) * (0.5 / 27.0) * invaa * inva;\n-        const double yy = p * p * p / 27.0 + halfq * halfq;\n+        const double bover3a = b * inva / 3;\n+        const double p = (a * c - bb / 3) * invaa;\n+        const double halfq = (2 * bb * b - 9 * a * b * c + 27 * a * a * d) * (0.5 / 27) * invaa * inva;\n+        const double yy = p * p * p / 27 + halfq * halfq;\n+\n+        constexpr double cos120 = -0.50;\n+        constexpr double sin120 = 0.866025403784438646764;\n \n         if (yy > DBL_EPSILON) {\n             // Sqrt is positive: one real solution\n@@ -117,15 +117,14 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n             const double vvv = -halfq - y;\n             const double www = std::abs(uuu) > std::abs(vvv) ? uuu : vvv;\n             const double w = std::cbrt(www);\n-            roots.insert(w - p / (3.0 * w) - bover3a);\n+            roots.insert(w - p / (3 * w) - bover3a);\n         } else if (yy < -DBL_EPSILON) {\n             // Sqrt is negative: three real solutions\n             const double x = -halfq;\n             const double y = std::sqrt(-yy);\n             double theta;\n             double r;\n-            double ux;\n-            double uyi;\n+\n             // Convert to polar form\n             if (std::abs(x) > DBL_EPSILON) {\n                 theta = (x > 0.0) ? std::atan(y / x) : (std::atan(y / x) + M_PI);\n@@ -136,25 +135,22 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n                 r = y;\n             }\n             // Calculate cube root\n-            theta /= 3.0;\n-            r = std::cbrt(r);\n+            theta /= 3;\n+            r = 2 * std::cbrt(r);\n             // Convert to complex coordinate\n-            ux = std::cos(theta) * r;\n-            uyi = std::sin(theta) * r;\n-            // First solution\n-            roots.insert(ux + ux - bover3a);\n-            // Second solution, rotate +120 degrees\n-            roots.insert(2 * (ux * cos120 - uyi * sin120) - bover3a);\n-            // Third solution, rotate -120 degrees\n-            roots.insert(2 * (ux * cos120 + uyi * sin120) - bover3a);\n+            const double ux = std::cos(theta) * r;\n+            const double uyi = std::sin(theta) * r;\n+\n+            roots.insert(ux - bover3a);\n+            roots.insert(ux * cos120 - uyi * sin120 - bover3a);\n+            roots.insert(ux * cos120 + uyi * sin120 - bover3a);\n         } else {\n             // Sqrt is zero: two real solutions\n             const double www = -halfq;\n-            const double w = std::cbrt(www);\n-            // First solution\n-            roots.insert(w + w - bover3a);\n-            // Second solution, rotate +120 degrees\n-            roots.insert(2 * w * cos120 - bover3a);\n+            const double w = 2 * std::cbrt(www);\n+\n+            roots.insert(w - bover3a);\n+            roots.insert(w * cos120 - bover3a);\n         }\n     }\n     return roots;\n@@ -164,9 +160,13 @@ inline PositiveSet<double, 3> solveCub(double a, double b, double c, double d) {\n // The input x must be of length 3\n // Number of zeros are returned\n inline int solveResolvent(double *x, double a, double b, double c) {\n+    constexpr double cos120 = -0.50;\n+    constexpr double sin120 = 0.866025403784438646764;\n+    \n+    const double aover3 = a / 3;\n     const double a2 = a * a;\n-    double q = (a2 - 3.0 * b) / 9.0;\n-    const double r = (a * (2 * a2 - 9.0 * b) + 27.0 * c) / 54.0;\n+    double q = (a2 - 3 * b) / 9;\n+    const double r = a * (2 * a2 - 9 * b) / 54 + c / 2;\n     const double r2 = r * r;\n     const double q3 = q * q * q;\n     double A, B;\n@@ -179,12 +179,14 @@ inline int solveResolvent(double *x, double a, double b, double c) {\n         if (t > 1.0) {\n             t = 1.0;\n         }\n-        t = std::acos(t);\n-        a /= 3.0;\n         q = -2 * std::sqrt(q);\n-        x[0] = q * std::cos(t / 3.0) - a;\n-        x[1] = q * std::cos((t + M_PI * 2) / 3.0) - a;\n-        x[2] = q * std::cos((t - M_PI * 2) / 3.0) - a;\n+\n+        const double theta = std::acos(t) / 3;\n+        const double ux = std::cos(theta) * q;\n+        const double uyi = std::sin(theta) * q;\n+        x[0] = ux - aover3;\n+        x[1] = ux * cos120 - uyi * sin120 - aover3;\n+        x[2] = ux * cos120 + uyi * sin120 - aover3;\n         return 3;\n \n     } else {\n@@ -194,10 +196,9 @@ inline int solveResolvent(double *x, double a, double b, double c) {\n         }\n         B = (0.0 == A ? 0.0 : q / A);\n \n-        a /= 3.0;\n-        x[0] = (A + B) - a;\n-        x[1] = -0.5 * (A + B) - a;\n-        x[2] = 0.5 * std::sqrt(3.0) * (A - B);\n+        x[0] = (A + B) - aover3;\n+        x[1] = -(A + B) / 2 - aover3;\n+        x[2] = std::sqrt(3) * (A - B) / 2;\n         if (std::abs(x[2]) < DBL_EPSILON) {\n             x[2] = x[1];\n             return 2;\n@@ -215,24 +216,24 @@ inline PositiveSet<double, 4> solveQuartMonic(double a, double b, double c, doub\n \n     if (std::abs(a) < DBL_EPSILON && std::abs(b) < DBL_EPSILON_SQRT && std::abs(c) < DBL_EPSILON_SQRT && std::abs(d) < DBL_EPSILON) {\n         const double e0 = std::cbrt(c * c);\n-        const double e1 = (b * b + 12 * d)/(9*e0);\n-        const double q1 = -(4 * b)/3 - e0 - e1;\n+        const double e1 = (b * b + 12 * d) / (9 * e0);\n+        const double q1 = -(4 * b) / 3 - e0 - e1;\n         const double p1 = std::sqrt(-q1 - 2 * b);\n         const double q2 = 2 * c / p1;\n         double D, sqrtD;\n \n         D = q1 - q2;\n         if (D > 0.0) {\n             sqrtD = std::sqrt(D);\n-            roots.insert((p1 + sqrtD) * 0.5);\n-            roots.insert((p1 - sqrtD) * 0.5);\n+            roots.insert((p1 + sqrtD) / 2);\n+            roots.insert((p1 - sqrtD) / 2);\n         }\n \n         D = q1 + q2;\n         if (D > 0.0) {\n             sqrtD = std::sqrt(D);\n-            roots.insert((-p1 + sqrtD) * 0.5);\n-            roots.insert((-p1 - sqrtD) * 0.5);\n+            roots.insert((-p1 + sqrtD) / 2);\n+            roots.insert((-p1 - sqrtD) / 2);\n         }\n         return roots;\n     }\n@@ -275,20 +276,20 @@ inline PositiveSet<double, 4> solveQuartMonic(double a, double b, double c, doub\n     // h1 + h2 = y && h1*h2 = d  <=>  h^2 - y*h + d = 0    (h === q)\n     D = y * y - 4 * d;\n     if (std::abs(D) < DBL_EPSILON) {\n-        q1 = q2 = y * 0.5;\n+        q1 = q2 = y / 2;\n         // g1 + g2 = a && g1 + g2 = b - y   <=>   g^2 - a*g + b - y = 0    (p === g)\n-        D = a * a - 4.0 * (b - y);\n+        D = a * a - 4 * (b - y);\n         if (std::abs(D) < DBL_EPSILON) {\n-            p1 = p2 = a * 0.5;\n+            p1 = p2 = a / 2;\n         } else {\n             sqrtD = std::sqrt(D);\n-            p1 = (a + sqrtD) * 0.5;\n-            p2 = (a - sqrtD) * 0.5;\n+            p1 = (a + sqrtD) / 2;\n+            p2 = (a - sqrtD) / 2;\n         }\n     } else {\n         sqrtD = std::sqrt(D);\n-        q1 = (y + sqrtD) * 0.5;\n-        q2 = (y - sqrtD) * 0.5;\n+        q1 = (y + sqrtD) / 2;\n+        q2 = (y - sqrtD) / 2;\n         // g1 + g2 = a && g1*h2 + g2*h1 = c   ( && g === p )  Krammer\n         p1 = (a * q1 - c) / (q1 - q2);\n         p2 = (c - a * q2) / (q1 - q2);\n@@ -299,21 +300,21 @@ inline PositiveSet<double, 4> solveQuartMonic(double a, double b, double c, doub\n     // Solve the quadratic equation: x^2 + p1*x + q1 = 0\n     D = p1 * p1 - 4 * q1;\n     if (std::abs(D) < eps) {\n-        roots.insert(-p1 * 0.5);\n+        roots.insert(-p1 / 2);\n     } else if (D > 0.0) {\n         sqrtD = std::sqrt(D);\n-        roots.insert((-p1 + sqrtD) * 0.5);\n-        roots.insert((-p1 - sqrtD) * 0.5);\n+        roots.insert((-p1 + sqrtD) / 2);\n+        roots.insert((-p1 - sqrtD) / 2);\n     }\n \n     // Solve the quadratic equation: x^2 + p2*x + q2 = 0\n     D = p2 * p2 - 4 * q2;\n     if (std::abs(D) < eps) {\n-        roots.insert(-p2 * 0.5);\n+        roots.insert(-p2 / 2);\n     } else if (D > 0.0) {\n         sqrtD = std::sqrt(D);\n-        roots.insert((-p2 + sqrtD) * 0.5);\n-        roots.insert((-p2 - sqrtD) * 0.5);\n+        roots.insert((-p2 + sqrtD) / 2);\n+        roots.insert((-p2 - sqrtD) / 2);\n     }\n \n     return roots;\n@@ -327,7 +328,7 @@ inline PositiveSet<double, 4> solveQuartMonic(const std::array<double, 5>& polyn\n \n //! Evaluate a polynomial of order N at x\n template<size_t N>\n-inline double polyEval(std::array<double, N> p, double x) {\n+inline double polyEval(const std::array<double, N>& p, double x) {\n     double retVal = 0.0;\n \n     if constexpr (N > 0) {\n@@ -390,7 +391,7 @@ inline double shrinkInterval(const std::array<double, N>& p, double l, double h)\n         std::swap(l, h);\n     }\n \n-    double rts = 0.5 * (l + h);\n+    double rts = (l + h) / 2;\n     double dxold = std::abs(h - l);\n     double dx = dxold;\n     double f = polyEval(p, rts);\n@@ -399,7 +400,7 @@ inline double shrinkInterval(const std::array<double, N>& p, double l, double h)\n     for (size_t j = 0; j < maxIts; j++) {\n         if ((((rts - h) * df - f) * ((rts - l) * df - f) > 0.0) || (std::abs(2 * f) > std::abs(dxold * df))) {\n             dxold = dx;\n-            dx = 0.5 * (h - l);\n+            dx = (h - l) / 2;\n             rts = l + dx;\n             if (l == rts) {\n                 break;"
+      }
+    ],
+    "lines_added": 61,
+    "lines_removed": 60
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991597270896,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.003013993955082531,
+    "relative_improvement": 0.004713902385959659,
+    "absolute_improvement_ms": 21.666666666665613,
+    "old_mean_ms": 4596.333333333333,
+    "new_mean_ms": 4574.666666666667,
+    "old_std_ms": 31.675437381878904,
+    "new_std_ms": 27.003618318641138,
+    "effect_size_cohens_d": 0.73615094934199,
+    "old_ci95_ms": [
+      4584.505530630443,
+      4608.161136036223
+    ],
+    "new_ci95_ms": [
+      4564.583349871813,
+      4584.749983461522
+    ],
+    "old_ci99_ms": [
+      4580.392830628881,
+      4612.273836037785
+    ],
+    "new_ci99_ms": [
+      4561.077233136554,
+      4588.25610019678
+    ],
+    "new_times_s": [
+      4.59,
+      4.6,
+      4.64,
+      4.58,
+      4.57,
+      4.62,
+      4.56,
+      4.58,
+      4.55,
+      4.55,
+      4.57,
+      4.56,
+      4.57,
+      4.57,
+      4.55,
+      4.57,
+      4.61,
+      4.55,
+      4.58,
+      4.54,
+      4.54,
+      4.57,
+      4.58,
+      4.57,
+      4.54,
+      4.57,
+      4.59,
+      4.56,
+      4.62,
+      4.63,
+      4.55
+    ],
+    "old_times_s": [
+      4.57,
+      4.68,
+      4.55,
+      4.59,
+      4.59,
+      4.6,
+      4.59,
+      4.56,
+      4.63,
+      4.6,
+      4.62,
+      4.59,
+      4.58,
+      4.57,
+      4.59,
+      4.57,
+      4.57,
+      4.56,
+      4.61,
+      4.57,
+      4.62,
+      4.62,
+      4.56,
+      4.58,
+      4.63,
+      4.6,
+      4.54,
+      4.64,
+      4.63,
+      4.61,
+      4.64
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "otg-test"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "otg-test",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999981472356109,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.0005283697983704172,
+        "relative_improvement": 0.005518849591916113,
+        "absolute_improvement_ms": 25.357142857141746,
+        "old_mean_ms": 4594.642857142857,
+        "new_mean_ms": 4569.285714285715,
+        "old_std_ms": 27.552259147427176,
+        "new_std_ms": 25.952745009824593,
+        "effect_size_cohens_d": 0.9474186618893935,
+        "old_ci95_ms": [
+          4583.959206362785,
+          4605.326507922929
+        ],
+        "new_ci95_ms": [
+          4559.222290339766,
+          4579.349138231664
+        ],
+        "old_ci99_ms": [
+          4580.2162225361335,
+          4609.069491749579
+        ],
+        "new_ci99_ms": [
+          4555.69660105566,
+          4582.87482751577
+        ],
+        "new_times": [
+          4.58,
+          4.57,
+          4.62,
+          4.56,
+          4.57,
+          4.55,
+          4.54,
+          4.56,
+          4.55,
+          4.57,
+          4.57,
+          4.55,
+          4.57,
+          4.61,
+          4.55,
+          4.58,
+          4.53,
+          4.54,
+          4.57,
+          4.58,
+          4.57,
+          4.53,
+          4.57,
+          4.59,
+          4.56,
+          4.62,
+          4.63,
+          4.55
+        ],
+        "old_times": [
+          4.59,
+          4.59,
+          4.6,
+          4.59,
+          4.56,
+          4.63,
+          4.6,
+          4.62,
+          4.59,
+          4.58,
+          4.57,
+          4.59,
+          4.57,
+          4.56,
+          4.56,
+          4.61,
+          4.57,
+          4.62,
+          4.62,
+          4.56,
+          4.58,
+          4.63,
+          4.6,
+          4.54,
+          4.64,
+          4.63,
+          4.61,
+          4.64
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

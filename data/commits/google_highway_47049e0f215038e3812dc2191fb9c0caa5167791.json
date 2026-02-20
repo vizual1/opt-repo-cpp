@@ -1,0 +1,307 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:29.981692",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "ac92cdaf2f9b0cb3932c5ad091359f8e23f93e39",
+    "new_sha": "47049e0f215038e3812dc2191fb9c0caa5167791",
+    "commit_message": [
+      "remove unnecessary masks in ConcatEven/Odd, thanks @ag01. Fixes #1146\n\nPiperOrigin-RevId: 511734168"
+    ],
+    "commit_date": "2023-02-23T10:42:05+00:00",
+    "patch": [
+      "--- hwy/ops/x86_256-inl.h\n@@ -3380,9 +3380,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n   alignas(32) static constexpr uint8_t kIdx[32] = {\n       1,  3,  5,  7,  9,  11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31,\n       33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63};\n-  return BitCast(d, Vec256<uint16_t>{_mm256_mask2_permutex2var_epi8(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint16_t>{_mm256_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Unsigned 8-bit shift so we can pack.\n@@ -3399,9 +3399,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   alignas(32) static constexpr uint16_t kIdx[16] = {\n       1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31};\n-  return BitCast(d, Vec256<uint16_t>{_mm256_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint16_t>{_mm256_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Unsigned 16-bit shift so we can pack.\n@@ -3417,9 +3417,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(32) static constexpr uint32_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<float> v3131{_mm256_shuffle_ps(\n@@ -3434,8 +3434,8 @@ HWY_API Vec256<float> ConcatOdd(D d, Vec256<float> hi, Vec256<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(32) static constexpr uint32_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return Vec256<float>{_mm256_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask8{0xFF}, hi.raw)};\n+  return Vec256<float>{\n+      _mm256_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   const Vec256<float> v3131{\n       _mm256_shuffle_ps(lo.raw, hi.raw, _MM_SHUFFLE(3, 1, 3, 1))};\n@@ -3449,9 +3449,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint64_t kIdx[4] = {1, 3, 5, 7};\n-  return BitCast(d, Vec256<uint64_t>{_mm256_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint64_t>{_mm256_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<double> v31{\n@@ -3466,8 +3466,8 @@ HWY_API Vec256<double> ConcatOdd(D d, Vec256<double> hi, Vec256<double> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[4] = {1, 3, 5, 7};\n-  return Vec256<double>{_mm256_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec256<double>{\n+      _mm256_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   (void)d;\n   const Vec256<double> v31{_mm256_shuffle_pd(lo.raw, hi.raw, 15)};\n@@ -3485,9 +3485,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n   alignas(64) static constexpr uint8_t kIdx[32] = {\n       0,  2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,\n       32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi8(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Isolate lower 8 bits per u16 so we can pack.\n@@ -3505,9 +3505,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint16_t kIdx[16] = {\n       0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Isolate lower 16 bits per u32 so we can pack.\n@@ -3524,9 +3524,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint32_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<float> v2020{_mm256_shuffle_ps(\n@@ -3542,8 +3542,8 @@ HWY_API Vec256<float> ConcatEven(D d, Vec256<float> hi, Vec256<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint32_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return Vec256<float>{_mm256_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask8{0xFF}, hi.raw)};\n+  return Vec256<float>{\n+      _mm256_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   const Vec256<float> v2020{\n       _mm256_shuffle_ps(lo.raw, hi.raw, _MM_SHUFFLE(2, 0, 2, 0))};\n@@ -3558,9 +3558,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint64_t kIdx[4] = {0, 2, 4, 6};\n-  return BitCast(d, Vec256<uint64_t>{_mm256_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint64_t>{_mm256_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<double> v20{\n@@ -3576,8 +3576,8 @@ HWY_API Vec256<double> ConcatEven(D d, Vec256<double> hi, Vec256<double> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[4] = {0, 2, 4, 6};\n-  return Vec256<double>{_mm256_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec256<double>{\n+      _mm256_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   (void)d;\n   const Vec256<double> v20{_mm256_shuffle_pd(lo.raw, hi.raw, 0)};\n--- hwy/ops/x86_512-inl.h\n@@ -2843,10 +2843,9 @@ HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n       53,  55,  57,  59,  61,  63,  65,  67,  69,  71,  73,  75,  77,\n       79,  81,  83,  85,  87,  89,  91,  93,  95,  97,  99,  101, 103,\n       105, 107, 109, 111, 113, 115, 117, 119, 121, 123, 125, 127};\n-  return BitCast(d,\n-                 Vec512<uint8_t>{_mm512_mask2_permutex2var_epi8(\n-                     BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                     __mmask64{0xFFFFFFFFFFFFFFFFull}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint8_t>{_mm512_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Right-shift 8 bits per u16 so we can pack.\n@@ -2866,45 +2865,45 @@ HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n   alignas(64) static constexpr uint16_t kIdx[32] = {\n       1,  3,  5,  7,  9,  11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31,\n       33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63};\n-  return BitCast(d, Vec512<uint16_t>{_mm512_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint16_t>{_mm512_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 4)>\n HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31};\n-  return BitCast(d, Vec512<uint32_t>{_mm512_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<float> ConcatOdd(D d, Vec512<float> hi, Vec512<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31};\n-  return Vec512<float>{_mm512_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask16{0xFFFF}, hi.raw)};\n+  return Vec512<float>{\n+      _mm512_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 8)>\n HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return BitCast(d, Vec512<uint64_t>{_mm512_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint64_t>{_mm512_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<double> ConcatOdd(D d, Vec512<double> hi, Vec512<double> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return Vec512<double>{_mm512_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec512<double>{\n+      _mm512_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n // ------------------------------ ConcatEven\n@@ -2919,10 +2918,9 @@ HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n       52,  54,  56,  58,  60,  62,  64,  66,  68,  70,  72,  74,  76,\n       78,  80,  82,  84,  86,  88,  90,  92,  94,  96,  98,  100, 102,\n       104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 124, 126};\n-  return BitCast(d,\n-                 Vec512<uint32_t>{_mm512_mask2_permutex2var_epi8(\n-                     BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                     __mmask64{0xFFFFFFFFFFFFFFFFull}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Isolate lower 8 bits per u16 so we can pack.\n@@ -2943,45 +2941,45 @@ HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n   alignas(64) static constexpr uint16_t kIdx[32] = {\n       0,  2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,\n       32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62};\n-  return BitCast(d, Vec512<uint32_t>{_mm512_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 4)>\n HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30};\n-  return BitCast(d, Vec512<uint32_t>{_mm512_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<float> ConcatEven(D d, Vec512<float> hi, Vec512<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30};\n-  return Vec512<float>{_mm512_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask16{0xFFFF}, hi.raw)};\n+  return Vec512<float>{\n+      _mm512_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 8)>\n HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return BitCast(d, Vec512<uint64_t>{_mm512_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint64_t>{_mm512_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<double> ConcatEven(D d, Vec512<double> hi, Vec512<double> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return Vec512<double>{_mm512_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec512<double>{\n+      _mm512_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n // ------------------------------ DupEven (InterleaveLower)"
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/ops/x86_256-inl.h",
+        "status": "modified",
+        "additions": 32,
+        "deletions": 32,
+        "changes": 64,
+        "patch": "@@ -3380,9 +3380,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n   alignas(32) static constexpr uint8_t kIdx[32] = {\n       1,  3,  5,  7,  9,  11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31,\n       33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63};\n-  return BitCast(d, Vec256<uint16_t>{_mm256_mask2_permutex2var_epi8(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint16_t>{_mm256_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Unsigned 8-bit shift so we can pack.\n@@ -3399,9 +3399,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   alignas(32) static constexpr uint16_t kIdx[16] = {\n       1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31};\n-  return BitCast(d, Vec256<uint16_t>{_mm256_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint16_t>{_mm256_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Unsigned 16-bit shift so we can pack.\n@@ -3417,9 +3417,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(32) static constexpr uint32_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<float> v3131{_mm256_shuffle_ps(\n@@ -3434,8 +3434,8 @@ HWY_API Vec256<float> ConcatOdd(D d, Vec256<float> hi, Vec256<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(32) static constexpr uint32_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return Vec256<float>{_mm256_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask8{0xFF}, hi.raw)};\n+  return Vec256<float>{\n+      _mm256_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   const Vec256<float> v3131{\n       _mm256_shuffle_ps(lo.raw, hi.raw, _MM_SHUFFLE(3, 1, 3, 1))};\n@@ -3449,9 +3449,9 @@ HWY_API Vec256<T> ConcatOdd(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint64_t kIdx[4] = {1, 3, 5, 7};\n-  return BitCast(d, Vec256<uint64_t>{_mm256_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint64_t>{_mm256_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<double> v31{\n@@ -3466,8 +3466,8 @@ HWY_API Vec256<double> ConcatOdd(D d, Vec256<double> hi, Vec256<double> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[4] = {1, 3, 5, 7};\n-  return Vec256<double>{_mm256_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec256<double>{\n+      _mm256_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   (void)d;\n   const Vec256<double> v31{_mm256_shuffle_pd(lo.raw, hi.raw, 15)};\n@@ -3485,9 +3485,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n   alignas(64) static constexpr uint8_t kIdx[32] = {\n       0,  2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,\n       32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi8(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Isolate lower 8 bits per u16 so we can pack.\n@@ -3505,9 +3505,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint16_t kIdx[16] = {\n       0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Isolate lower 16 bits per u32 so we can pack.\n@@ -3524,9 +3524,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint32_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return BitCast(d, Vec256<uint32_t>{_mm256_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint32_t>{_mm256_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<float> v2020{_mm256_shuffle_ps(\n@@ -3542,8 +3542,8 @@ HWY_API Vec256<float> ConcatEven(D d, Vec256<float> hi, Vec256<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint32_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return Vec256<float>{_mm256_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask8{0xFF}, hi.raw)};\n+  return Vec256<float>{\n+      _mm256_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   const Vec256<float> v2020{\n       _mm256_shuffle_ps(lo.raw, hi.raw, _MM_SHUFFLE(2, 0, 2, 0))};\n@@ -3558,9 +3558,9 @@ HWY_API Vec256<T> ConcatEven(D d, Vec256<T> hi, Vec256<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n #if HWY_TARGET <= HWY_AVX3\n   alignas(64) static constexpr uint64_t kIdx[4] = {0, 2, 4, 6};\n-  return BitCast(d, Vec256<uint64_t>{_mm256_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec256<uint64_t>{_mm256_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RebindToFloat<decltype(d)> df;\n   const Vec256<double> v20{\n@@ -3576,8 +3576,8 @@ HWY_API Vec256<double> ConcatEven(D d, Vec256<double> hi, Vec256<double> lo) {\n #if HWY_TARGET <= HWY_AVX3\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[4] = {0, 2, 4, 6};\n-  return Vec256<double>{_mm256_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec256<double>{\n+      _mm256_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n #else\n   (void)d;\n   const Vec256<double> v20{_mm256_shuffle_pd(lo.raw, hi.raw, 0)};"
+      },
+      {
+        "filename": "hwy/ops/x86_512-inl.h",
+        "status": "modified",
+        "additions": 32,
+        "deletions": 34,
+        "changes": 66,
+        "patch": "@@ -2843,10 +2843,9 @@ HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n       53,  55,  57,  59,  61,  63,  65,  67,  69,  71,  73,  75,  77,\n       79,  81,  83,  85,  87,  89,  91,  93,  95,  97,  99,  101, 103,\n       105, 107, 109, 111, 113, 115, 117, 119, 121, 123, 125, 127};\n-  return BitCast(d,\n-                 Vec512<uint8_t>{_mm512_mask2_permutex2var_epi8(\n-                     BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                     __mmask64{0xFFFFFFFFFFFFFFFFull}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint8_t>{_mm512_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Right-shift 8 bits per u16 so we can pack.\n@@ -2866,45 +2865,45 @@ HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n   alignas(64) static constexpr uint16_t kIdx[32] = {\n       1,  3,  5,  7,  9,  11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31,\n       33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63};\n-  return BitCast(d, Vec512<uint16_t>{_mm512_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint16_t>{_mm512_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 4)>\n HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31};\n-  return BitCast(d, Vec512<uint32_t>{_mm512_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<float> ConcatOdd(D d, Vec512<float> hi, Vec512<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31};\n-  return Vec512<float>{_mm512_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask16{0xFFFF}, hi.raw)};\n+  return Vec512<float>{\n+      _mm512_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 8)>\n HWY_API Vec512<T> ConcatOdd(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return BitCast(d, Vec512<uint64_t>{_mm512_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint64_t>{_mm512_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<double> ConcatOdd(D d, Vec512<double> hi, Vec512<double> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {1, 3, 5, 7, 9, 11, 13, 15};\n-  return Vec512<double>{_mm512_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec512<double>{\n+      _mm512_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n // ------------------------------ ConcatEven\n@@ -2919,10 +2918,9 @@ HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n       52,  54,  56,  58,  60,  62,  64,  66,  68,  70,  72,  74,  76,\n       78,  80,  82,  84,  86,  88,  90,  92,  94,  96,  98,  100, 102,\n       104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 124, 126};\n-  return BitCast(d,\n-                 Vec512<uint32_t>{_mm512_mask2_permutex2var_epi8(\n-                     BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                     __mmask64{0xFFFFFFFFFFFFFFFFull}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi8(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n #else\n   const RepartitionToWide<decltype(du)> dw;\n   // Isolate lower 8 bits per u16 so we can pack.\n@@ -2943,45 +2941,45 @@ HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n   alignas(64) static constexpr uint16_t kIdx[32] = {\n       0,  2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,\n       32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62};\n-  return BitCast(d, Vec512<uint32_t>{_mm512_mask2_permutex2var_epi16(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask32{0xFFFFFFFFu}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi16(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 4)>\n HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30};\n-  return BitCast(d, Vec512<uint32_t>{_mm512_mask2_permutex2var_epi32(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw,\n-                        __mmask16{0xFFFF}, BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint32_t>{_mm512_permutex2var_epi32(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<float> ConcatEven(D d, Vec512<float> hi, Vec512<float> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint32_t kIdx[16] = {\n       0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30};\n-  return Vec512<float>{_mm512_mask2_permutex2var_ps(lo.raw, Load(du, kIdx).raw,\n-                                                    __mmask16{0xFFFF}, hi.raw)};\n+  return Vec512<float>{\n+      _mm512_permutex2var_ps(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n template <class D, typename T = TFromD<D>, HWY_IF_T_SIZE(T, 8)>\n HWY_API Vec512<T> ConcatEven(D d, Vec512<T> hi, Vec512<T> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return BitCast(d, Vec512<uint64_t>{_mm512_mask2_permutex2var_epi64(\n-                        BitCast(du, lo).raw, Load(du, kIdx).raw, __mmask8{0xFF},\n-                        BitCast(du, hi).raw)});\n+  return BitCast(\n+      d, Vec512<uint64_t>{_mm512_permutex2var_epi64(\n+             BitCast(du, lo).raw, Load(du, kIdx).raw, BitCast(du, hi).raw)});\n }\n \n template <class D>\n HWY_API Vec512<double> ConcatEven(D d, Vec512<double> hi, Vec512<double> lo) {\n   const RebindToUnsigned<decltype(d)> du;\n   alignas(64) static constexpr uint64_t kIdx[8] = {0, 2, 4, 6, 8, 10, 12, 14};\n-  return Vec512<double>{_mm512_mask2_permutex2var_pd(lo.raw, Load(du, kIdx).raw,\n-                                                     __mmask8{0xFF}, hi.raw)};\n+  return Vec512<double>{\n+      _mm512_permutex2var_pd(lo.raw, Load(du, kIdx).raw, hi.raw)};\n }\n \n // ------------------------------ DupEven (InterleaveLower)"
+      }
+    ],
+    "lines_added": 64,
+    "lines_removed": 66
+  },
+  "issues": [
+    {
+      "number": 1146,
+      "url": "https://github.com/google/highway/issues/1146",
+      "title": "Use of masked variant of permute instructions on AVX2/AVX512 in ConcatEven/Odd functions",
+      "body": "Hi,\r\n\r\nI see that the ConcatEven/Odd implementations in AVX2/AVX512 use the masked variant of the permute intrinsic (e.g. _mm512_mask2_permute_*) - with the mask used simply containing all 1s.\r\n\r\nUsing GCC 7.5 - this results in extra instructions for setting up and using the mask register, see here: https://godbolt.org/z/j9bhc3oer\r\n\r\nThis doesn't seem to occur using GCC 8 and above (as I presume it is optimised away, and the non-masked variant is used).\r\n\r\nI'd be interested to know if there was any reason for the implementation using the masked variant.\r\n\r\nMany thanks\r\n",
+      "created_at": "2023-02-22T10:18:28+00:00"
+    }
+  ],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DHWY_ENABLE_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DHWY_ENABLE_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991344368026,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.2208471099761486,
+    "relative_improvement": 0.0004768321758059877,
+    "absolute_improvement_ms": 7.666666666668931,
+    "old_mean_ms": 16078.333333333334,
+    "new_mean_ms": 16070.666666666664,
+    "old_std_ms": 152.63396226522357,
+    "new_std_ms": 186.56483264969617,
+    "effect_size_cohens_d": 0.044980077139979334,
+    "old_ci95_ms": [
+      16021.338875145793,
+      16135.327791520873
+    ],
+    "new_ci95_ms": [
+      16001.002213252019,
+      16140.33112008131
+    ],
+    "old_ci99_ms": [
+      16001.521068392933,
+      16155.145598273733
+    ],
+    "new_ci99_ms": [
+      15976.778863838426,
+      16164.554469494902
+    ],
+    "new_times_s": [
+      16.17,
+      16.14,
+      16.0,
+      16.16,
+      16.27,
+      15.92,
+      16.35,
+      16.17,
+      15.97,
+      15.9,
+      15.96,
+      16.0,
+      15.89,
+      16.29,
+      16.06,
+      15.9,
+      15.93,
+      16.0,
+      15.83,
+      16.05,
+      15.96,
+      16.02,
+      16.04,
+      16.0,
+      16.26,
+      16.03,
+      16.7,
+      15.99,
+      15.97,
+      16.4,
+      15.96
+    ],
+    "old_times_s": [
+      15.95,
+      16.05,
+      16.19,
+      16.18,
+      16.6,
+      16.15,
+      16.28,
+      16.16,
+      16.11,
+      15.87,
+      15.85,
+      15.81,
+      16.1,
+      16.12,
+      15.92,
+      15.99,
+      15.96,
+      16.03,
+      16.07,
+      16.13,
+      15.96,
+      16.13,
+      16.04,
+      16.17,
+      16.17,
+      16.09,
+      16.17,
+      15.88,
+      16.12,
+      15.94,
+      16.11
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "NanobenchmarkTest.RunAll",
+        "is_significant": false,
+        "p_value": 0.5572537066406218,
+        "is_pair_significant": false,
+        "pair_p_value": 0.5553671872145426,
+        "is_binom_significant": false,
+        "binom_p_value": 0.644464448094368,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.598207607959954,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.21810904630779665,
+        "relative_improvement": 0.04245640636846086,
+        "absolute_improvement_ms": 19.310344827586256,
+        "old_mean_ms": 454.8275862068966,
+        "new_mean_ms": 435.51724137931035,
+        "old_std_ms": 94.36330588495163,
+        "new_std_ms": 90.97041147288937,
+        "effect_size_cohens_d": 0.20834967366039844,
+        "old_ci95_ms": [
+          418.9337042885458,
+          490.72146812524744
+        ],
+        "new_ci95_ms": [
+          400.91394747338546,
+          470.12053528523523
+        ],
+        "old_ci99_ms": [
+          406.40741901356927,
+          503.247753400224
+        ],
+        "new_ci99_ms": [
+          388.83805298235603,
+          482.1964297762647
+        ],
+        "new_times": [
+          0.43,
+          0.56,
+          0.32,
+          0.46,
+          0.57,
+          0.33,
+          0.45,
+          0.18,
+          0.53,
+          0.48,
+          0.49,
+          0.52,
+          0.48,
+          0.35,
+          0.45,
+          0.45,
+          0.3,
+          0.5,
+          0.38,
+          0.54,
+          0.52,
+          0.47,
+          0.47,
+          0.41,
+          0.39,
+          0.46,
+          0.37,
+          0.48,
+          0.29
+        ],
+        "old_times": [
+          0.45,
+          0.51,
+          0.58,
+          0.49,
+          0.54,
+          0.53,
+          0.42,
+          0.4,
+          0.48,
+          0.43,
+          0.56,
+          0.27,
+          0.41,
+          0.54,
+          0.28,
+          0.55,
+          0.37,
+          0.6,
+          0.23,
+          0.45,
+          0.41,
+          0.45,
+          0.51,
+          0.48,
+          0.46,
+          0.32,
+          0.51,
+          0.41,
+          0.55
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

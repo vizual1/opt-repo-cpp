@@ -1,0 +1,301 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:32.403348",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "bc2aa5ca851d1dbcdd3d3f36cebeedd2f16e6bfb",
+    "new_sha": "4a2426f0143720ad7985bddd25635738631001b9",
+    "commit_message": [
+      "FirstN codegen improvement by @johnplatts, fixes #947\n\nPiperOrigin-RevId: 519156083"
+    ],
+    "commit_date": "2023-03-24T15:56:13+00:00",
+    "patch": [
+      "--- hwy/ops/x86_512-inl.h\n@@ -493,12 +493,55 @@ HWY_INLINE Mask512<T> FirstN(size_t n) {\n   return m;\n }\n \n-template <typename T, HWY_IF_T_SIZE(T, 1)>\n+#if HWY_COMPILER_MSVC >= 1920 || HWY_COMPILER_GCC_ACTUAL >= 900 || \\\n+    HWY_COMPILER_CLANG || HWY_COMPILER_ICC\n+template <typename T, HWY_IF_LANE_SIZE(T, 1)>\n+HWY_INLINE Mask512<T> FirstN(size_t n) {\n+  uint32_t loMask;\n+  uint32_t hiMask;\n+  uint32_t hiMaskOutLen;\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(n >= 32) && n >= 32) {\n+    if (__builtin_constant_p(n >= 64) && n >= 64) {\n+      hiMaskOutLen = 32u;\n+    } else {\n+      hiMaskOutLen = ((n <= 287) ? static_cast<uint32_t>(n) : 287u) - 32u;\n+    }\n+    loMask = hiMask = 0xFFFFFFFFu;\n+  } else\n+#endif\n+  {\n+    const uint32_t maskOutLen = (n <= 255) ? static_cast<uint32_t>(n) : 255u;\n+    loMask = _bzhi_u32(0xFFFFFFFFu, maskOutLen);\n+\n+#if HWY_COMPILER_GCC\n+    if (__builtin_constant_p(maskOutLen <= 32) && maskOutLen <= 32) {\n+      return Mask512<T>{static_cast<__mmask64>(loMask)};\n+    }\n+#endif\n+\n+    _addcarry_u32(_subborrow_u32(0, maskOutLen, 32u, &hiMaskOutLen),\n+                  0xFFFFFFFFu, 0u, &hiMask);\n+  }\n+  hiMask = _bzhi_u32(hiMask, hiMaskOutLen);\n+#if HWY_COMPILER_GCC && !HWY_COMPILER_ICC\n+  if (__builtin_constant_p((static_cast<uint64_t>(hiMask) << 32) | loMask))\n+#endif\n+    return Mask512<T>{\n+        static_cast<__mmask64>((static_cast<uint64_t>(hiMask) << 32) | loMask)};\n+#if HWY_COMPILER_GCC && !HWY_COMPILER_ICC\n+  else\n+    return Mask512<T>{_mm512_kunpackd(static_cast<__mmask64>(hiMask),\n+                                      static_cast<__mmask64>(loMask))};\n+#endif\n+}\n+#else\n+template <typename T, HWY_IF_LANE_SIZE(T, 1)>\n HWY_INLINE Mask512<T> FirstN(size_t n) {\n   const uint64_t bits = n < 64 ? ((1ULL << n) - 1) : ~uint64_t{0};\n   return Mask512<T>{static_cast<__mmask64>(bits)};\n }\n-\n+#endif\n }  // namespace detail\n #endif  // HWY_ARCH_X86_32\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/ops/x86_512-inl.h",
+        "status": "modified",
+        "additions": 45,
+        "deletions": 2,
+        "changes": 47,
+        "patch": "@@ -493,12 +493,55 @@ HWY_INLINE Mask512<T> FirstN(size_t n) {\n   return m;\n }\n \n-template <typename T, HWY_IF_T_SIZE(T, 1)>\n+#if HWY_COMPILER_MSVC >= 1920 || HWY_COMPILER_GCC_ACTUAL >= 900 || \\\n+    HWY_COMPILER_CLANG || HWY_COMPILER_ICC\n+template <typename T, HWY_IF_LANE_SIZE(T, 1)>\n+HWY_INLINE Mask512<T> FirstN(size_t n) {\n+  uint32_t loMask;\n+  uint32_t hiMask;\n+  uint32_t hiMaskOutLen;\n+#if HWY_COMPILER_GCC\n+  if (__builtin_constant_p(n >= 32) && n >= 32) {\n+    if (__builtin_constant_p(n >= 64) && n >= 64) {\n+      hiMaskOutLen = 32u;\n+    } else {\n+      hiMaskOutLen = ((n <= 287) ? static_cast<uint32_t>(n) : 287u) - 32u;\n+    }\n+    loMask = hiMask = 0xFFFFFFFFu;\n+  } else\n+#endif\n+  {\n+    const uint32_t maskOutLen = (n <= 255) ? static_cast<uint32_t>(n) : 255u;\n+    loMask = _bzhi_u32(0xFFFFFFFFu, maskOutLen);\n+\n+#if HWY_COMPILER_GCC\n+    if (__builtin_constant_p(maskOutLen <= 32) && maskOutLen <= 32) {\n+      return Mask512<T>{static_cast<__mmask64>(loMask)};\n+    }\n+#endif\n+\n+    _addcarry_u32(_subborrow_u32(0, maskOutLen, 32u, &hiMaskOutLen),\n+                  0xFFFFFFFFu, 0u, &hiMask);\n+  }\n+  hiMask = _bzhi_u32(hiMask, hiMaskOutLen);\n+#if HWY_COMPILER_GCC && !HWY_COMPILER_ICC\n+  if (__builtin_constant_p((static_cast<uint64_t>(hiMask) << 32) | loMask))\n+#endif\n+    return Mask512<T>{\n+        static_cast<__mmask64>((static_cast<uint64_t>(hiMask) << 32) | loMask)};\n+#if HWY_COMPILER_GCC && !HWY_COMPILER_ICC\n+  else\n+    return Mask512<T>{_mm512_kunpackd(static_cast<__mmask64>(hiMask),\n+                                      static_cast<__mmask64>(loMask))};\n+#endif\n+}\n+#else\n+template <typename T, HWY_IF_LANE_SIZE(T, 1)>\n HWY_INLINE Mask512<T> FirstN(size_t n) {\n   const uint64_t bits = n < 64 ? ((1ULL << n) - 1) : ~uint64_t{0};\n   return Mask512<T>{static_cast<__mmask64>(bits)};\n }\n-\n+#endif\n }  // namespace detail\n #endif  // HWY_ARCH_X86_32\n "
+      }
+    ],
+    "lines_added": 45,
+    "lines_removed": 2
+  },
+  "issues": [
+    {
+      "number": 947,
+      "url": "https://github.com/google/highway/issues/947",
+      "title": "Optimizations to FirstN for the lane size == 1, vector size == 512 case on 32-bit AVX-512 targets",
+      "body": "Here is the current implementation of FirstN for 32-bit AVX-512 targets for the lane size == 1, vector size == 512 bits case:\r\nhttps://github.com/google/highway/blob/22e3d7276f4157d4a47586ba9fd91dd6303f441a/hwy/ops/x86_512-inl.h#L476-L480\r\n\r\nHere is a better FirstN implementation of the above function for 32-bit AVX-512 targets:\r\n```\r\n#if HWY_COMPILER_MSVC >= 1920 || HWY_COMPILER_GCC >= 900 || HWY_COMPILER_CLANG || HWY_COMPILER_ICC\r\ntemplate <typename T, HWY_IF_LANE_SIZE(T, 1)> \r\nHWY_INLINE Mask512<T> FirstN(size_t n) {\r\n  uint32_t loMask;\r\n  uint32_t hiMask;\r\n  uint32_t hiMaskOutLen;\r\n  #if HWY_COMPILER_GCC || HWY_COMPILER_CLANG\r\n  if(__builtin_constant_p(n >= 32) && n >= 32) {\r\n    if(__builtin_constant_p(n >= 64) && n >= 64)\r\n      hiMaskOutLen = 32u;\r\n    else\r\n      hiMaskOutLen = ((n <= 287) ? static_cast<uint32_t>(n) : 287u) - 32u;\r\n    \r\n    loMask = hiMask = 0xFFFFFFFFu;\r\n  } else\r\n  #endif\r\n  {\r\n    const uint32_t maskOutLen = (n <= 255) ? static_cast<uint32_t>(n) : 255u;\r\n    loMask = _bzhi_u32(0xFFFFFFFFu, maskOutLen);\r\n    \r\n    #if HWY_COMPILER_GCC || HWY_COMPILER_CLANG\r\n    if(__builtin_constant_p(maskOutLen <= 32) && maskOutLen <= 32)\r\n      return Mask512<T>{static_cast<__mmask64>(loMask)};\r\n    #endif\r\n    \r\n    _addcarry_u32(_subborrow_u32(0, maskOutLen, 32u, &hiMaskOutLen),\r\n      0xFFFFFFFFu, 0u, &hiMask);\r\n  }\r\n  hiMask = _bzhi_u32(hiMask, hiMaskOutLen);\r\n  #if (HWY_COMPILER_GCC && !HWY_COMPILER_ICC) || HWY_COMPILER_CLANG\r\n  if(__builtin_constant_p((static_cast<uint64_t>(hiMask) << 32) | loMask))\r\n  #endif\r\n   return Mask512<T>{static_cast<__mmask64>((static_cast<uint64_t>(hiMask) << 32) | loMask)};\r\n  #if (HWY_COMPILER_GCC && !HWY_COMPILER_ICC) || HWY_COMPILER_CLANG\r\n  else\r\n    return Mask512<T>{_mm512_kunpackd(static_cast<__mmask64>(hiMask), static_cast<__mmask64>(loMask))};\r\n  #endif\r\n}\r\n#else\r\n template <typename T, HWY_IF_LANE_SIZE(T, 1)> \r\n HWY_INLINE Mask512<T> FirstN(size_t n) { \r\n   const uint64_t bits = n < 64 ? ((1ULL << n) - 1) : ~uint64_t{0}; \r\n   return Mask512<T>{static_cast<__mmask64>(bits)}; \r\n } \r\n#endif\r\n```\r\n\r\nThe second implementation of FirstN for the lane size == 1, vector size == 512 bits case generates fewer instructions on AVX-512 targets than the current implementation at the -O2 optimization level.\r\n\r\nThe second implementation of FirstN should not be used if `HWY_COMPILER_MSVC && HWY_COMPILER_MSVC < 1920` is true as x86 Visual C++ compiler versions earlier than 19.20 have a compiler bug that generates incorrect code.\r\n\r\nThe second implementation of FirstN also requires the `_addcarry_u32` and `_subborrow_u32` intrinsics that are available on Visual C++ 2015 or later, GCC 9.0 or later, ICC, or Clang 3.6 or later.\r\n\r\nIn the second implementation of FirstN for the lane size == 1, vector size == 512 bits case on AVX-512 targets:\r\n- `hiMaskOutLen` (which is equal to `maskOutLen - 32`) is computed using the `_subborrow_u32` intrinsic as we want to compute the carry flag of `maskOutLen - 32` (which is 1 if `maskOutLen < 32` is true and 0 if `maskOutLen >= 32` is true) in addition to `maskOutLen - 32`\r\n- `hiMask` is initialized using the `_addcarry_u32` intrinsic, which will initialize `hiMask` to 0xFFFFFFFF if `maskOutLen >= 32` is true and will set `hiMask` to 0 if `maskOutLen < 32` is true\r\n- We only care about the value of `hiMaskOutLen` if `maskOutLen < 32` is true as `hiMask` will be initialized to 0 if `maskOutLen < 32` is true\r\n- `hiMask = _bzhi_u32(hiMask, hiMaskOutLen)` behaves as follows:\r\n  - If `maskOutLen < 32` is true, `hiMask == 0` will still be true\r\n  - If `maskOutLen >= 32 && maskOutLen < 64` is true, then `hiMask` will now be equal to `(1ULL << (maskOutLen - 32)) - 1`\r\n  - If `maskOutLen >= 64` is true, then `hiMask == 0xFFFFFFFF` will still be true\r\n- `__builtin_constant_p` is used on GCC, Clang, and ICC to facilitate additional optimizations when optimizations are enabled",
+      "created_at": "2022-08-25T15:26:40+00:00"
+    }
+  ],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DHWY_ENABLE_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DHWY_ENABLE_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991344368026,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.7154140685801529,
+    "relative_improvement": -0.0005450392774337381,
+    "absolute_improvement_ms": -63.0000000000166,
+    "old_mean_ms": 115588.0,
+    "new_mean_ms": 115651.00000000001,
+    "old_std_ms": 550.7324276784052,
+    "new_std_ms": 530.0966079811335,
+    "effect_size_cohens_d": -0.11655593709368853,
+    "old_ci95_ms": [
+      115382.35313179319,
+      115793.6468682068
+    ],
+    "new_ci95_ms": [
+      115453.05867350519,
+      115848.94132649482
+    ],
+    "old_ci99_ms": [
+      115310.84670778186,
+      115865.15329221812
+    ],
+    "new_ci99_ms": [
+      115384.23157905381,
+      115917.7684209462
+    ],
+    "new_times_s": [
+      115.74,
+      115.82,
+      115.81,
+      116.46,
+      117.2,
+      116.17,
+      116.21,
+      116.39,
+      116.51,
+      116.23,
+      115.77,
+      115.5,
+      115.46,
+      115.22,
+      115.53,
+      115.09,
+      115.48,
+      115.62,
+      114.89,
+      115.24,
+      115.23,
+      115.34,
+      115.58,
+      115.06,
+      115.49,
+      115.42,
+      114.88,
+      115.43,
+      115.59,
+      115.31,
+      115.6
+    ],
+    "old_times_s": [
+      116.16,
+      115.51,
+      115.59,
+      115.83,
+      117.5,
+      116.27,
+      116.38,
+      116.32,
+      116.11,
+      115.86,
+      116.01,
+      115.72,
+      115.81,
+      115.18,
+      115.43,
+      115.18,
+      115.29,
+      115.03,
+      115.35,
+      115.31,
+      114.87,
+      114.93,
+      115.02,
+      115.54,
+      115.37,
+      114.86,
+      115.45,
+      115.48,
+      115.52,
+      115.61,
+      115.31
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 1,
+    "significant_mannwhitney_regressions_tests": [
+      "NanobenchmarkTest.RunAll"
+    ],
+    "tests": [
+      {
+        "test_name": "NanobenchmarkTest.RunAll",
+        "is_significant": false,
+        "p_value": 0.9994456189298264,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9971766506946431,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9988421499729156,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9970850648360835,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.972352871629588,
+        "relative_improvement": -0.09269893355209195,
+        "absolute_improvement_ms": -38.96551724137931,
+        "old_mean_ms": 420.3448275862069,
+        "new_mean_ms": 459.3103448275862,
+        "old_std_ms": 69.71793982186311,
+        "new_std_ms": 66.5974599731615,
+        "effect_size_cohens_d": -0.5715467487405824,
+        "old_ci95_ms": [
+          393.82554155560047,
+          446.8641136168133
+        ],
+        "new_ci95_ms": [
+          433.97802585125453,
+          484.6426638039179
+        ],
+        "old_ci99_ms": [
+          384.5708127730264,
+          456.11884239938746
+        ],
+        "new_ci99_ms": [
+          425.13752609990263,
+          493.48316355526975
+        ],
+        "new_times": [
+          0.46,
+          0.55,
+          0.41,
+          0.55,
+          0.49,
+          0.4,
+          0.36,
+          0.51,
+          0.37,
+          0.42,
+          0.48,
+          0.49,
+          0.45,
+          0.43,
+          0.41,
+          0.55,
+          0.41,
+          0.31,
+          0.48,
+          0.47,
+          0.37,
+          0.56,
+          0.57,
+          0.49,
+          0.42,
+          0.52,
+          0.42,
+          0.51,
+          0.46
+        ],
+        "old_times": [
+          0.5,
+          0.38,
+          0.44,
+          0.43,
+          0.4,
+          0.42,
+          0.36,
+          0.42,
+          0.54,
+          0.43,
+          0.18,
+          0.53,
+          0.4,
+          0.45,
+          0.48,
+          0.42,
+          0.43,
+          0.45,
+          0.49,
+          0.37,
+          0.48,
+          0.41,
+          0.34,
+          0.43,
+          0.42,
+          0.47,
+          0.35,
+          0.33,
+          0.44
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}
