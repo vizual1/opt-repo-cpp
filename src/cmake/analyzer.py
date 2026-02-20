@@ -9,7 +9,6 @@ class CMakeAnalyzer:
         self.parser = CMakeParser(self.root)
 
     def reset(self) -> None:
-        self.root = self.root
         self.parser = CMakeParser(self.root)
 
     def has_root_cmake(self) -> bool:

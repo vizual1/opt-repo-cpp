@@ -46,7 +46,7 @@ class CommitHandler:
     
     def get_paths(self, file_prefix: str, sha: str) -> tuple[Path, Path]:
         """
-        Returns paths for {old,new|patch} commit directories to be tested.
+        Returns paths for {old,new} commit directories to be tested.
         Example: data/commits/<file_prefix>_<sha>/{old,new}
         """
         output = Path(self.output_path)

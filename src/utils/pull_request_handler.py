@@ -9,9 +9,9 @@ from src.core.filter.commit_filter import CommitFilter
 # Helpful script to handle pull requests for commits
 # Merge commits that are linked to the same PR
 
-TOKEN = os.getenv("access_token")
+TOKEN = os.getenv("GITHUB_ACCESS_TOKEN", "")
 if not TOKEN:
-    raise RuntimeError("access_token not set")
+    raise RuntimeError("GITHUB_ACCESS_TOKEN not set")
 
 auth = Auth.Token(TOKEN)
 g = Github(auth=auth)
@@ -79,76 +79,3 @@ def get_pr_chain_msg(repo: Repository, commit: Commit, is_issue: bool):
     patched_commit = pr.head.sha
 
     return f"{repo.full_name} | {patched_commit} | {original_commit}\n"
-
-def main() -> None:
-    INPUT_FILE = "data/collect/final.txt"
-    ALREADY_DONE = "data/collect/pr_filtered.txt"
-    OUTPUT_FILE = "data/collect/pr.txt"
-
-    already_done = [] # already checked the pull requests for these commits
-    with open(ALREADY_DONE, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            already_done.append(line)
-
-    output_lines = [] # already filtered pull requests
-    with open(OUTPUT_FILE, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            output_lines.append(line)
-
-    config = Config()
-    with open(INPUT_FILE, "r") as f:
-        for line in tqdm(f, desc="Handle Pull Requests"):
-            line = line.strip()
-            if not line or line in already_done:
-                continue
-
-            repo_full, new_sha, old_sha = parse_line(line)
-            repo = get_repo(repo_full)
-
-            pr_number = get_pr_for_commit(repo, repo_full, new_sha)
-            if pr_number is None:
-                # Not a PR commit, emit as usual
-                output_lines.append(f"{repo_full} | {new_sha} | {old_sha}")
-                continue
-
-            pr = repo.get_pull(pr_number)
-
-            comparison = repo.compare(pr.base.sha, pr.head.sha)
-            original_commit = comparison.merge_base_commit.sha
-            patched_commit = pr.head.sha
-
-            if f"{repo_full} | {patched_commit} | {original_commit}" in output_lines:
-                continue
-
-            commits_in_pr = comparison.commits
-
-            skip_pr = False
-            for commit in commits_in_pr:
-                if not CommitFilter(commit, config, repo).only_cpp_source_modified:
-                    skip_pr = True
-                    break
-
-            if skip_pr:
-                # Skip PR with non-C++ file modifications
-                continue
-
-            # Emit one line per PR (base and head)
-            output_lines.append(f"{repo_full} | {patched_commit} | {original_commit}")
-
-    messages = list(set(output_lines))
-    messages.sort(key=str.casefold)
-
-    with open(OUTPUT_FILE, "w") as f:
-        for line in messages:
-            f.write(line + "\n")
-
-    print(f"Wrote {len(messages)} lines to {OUTPUT_FILE}")
-
-if __name__ == '__main__':
-    main()

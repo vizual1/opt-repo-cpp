@@ -1,4 +1,4 @@
-import argparse
+import argparse, sys
 from src.core.controller import Controller
 from src.config.config import Config
 
@@ -46,7 +46,7 @@ def setup_parser() -> argparse.ArgumentParser:
     io_group = parser.add_argument_group("Input / Output Options")
     io_group.add_argument("--input", type=str,
                           help="Path to input file (e.g., crawl.txt).")
-    io_group.add_argument("--output", type=str, default="data/results.txt",
+    io_group.add_argument("--output", type=str,
                           help="Output file path (default: data/results.txt).")
     io_group.add_argument("--repo", type=str,
                           help="Repository URL or repo full name (e.g., owner/repo).")
@@ -77,12 +77,18 @@ def setup_parser() -> argparse.ArgumentParser:
                               help="Mounts a folder to the docker container.")
     docker_group.add_argument("--diff", type=str,
                               help="Applies the diff patch to the old (original) commit in the docker container.")
+    docker_group.add_argument("--check_dockerhub", action="store_true",
+                              help="Checks if the image is already uploaded to dockerhub. Used in --pushimages")
     return parser
 
 
 def create_config(args: argparse.Namespace) -> Config:
     """Create a Config object from argparse arguments."""
-    cfg = Config(**vars(args))
+    try:
+        cfg = Config(**vars(args))
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        sys.exit(2)
     return cfg
 
 

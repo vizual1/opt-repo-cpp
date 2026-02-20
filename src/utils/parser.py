@@ -18,11 +18,6 @@ def parse_framework_output(output: str, framework: str, test_name: str) -> float
             return float(match.group(1))
         return -1.0
     elif framework == "doctest":
-        #pattern = rf"\[{re.escape(test_name)}\]\s+passed\s+in\s+(\d+\.\d+)s"
-        #pattern = rf"{re.escape(test_name)}.*\((\d+\.\d+)s\)"
-        #match = re.search(pattern, output)
-        #if match:
-        #    return float(match.group(1))
         if "Status:" in output and "SUCCESS" in output:
             return 0.0
         else:
@@ -115,7 +110,6 @@ def parse_single_ctest_output(output: str, previous_results: dict[str, dict[str,
     for pattern in patterns:
         for match in re.finditer(pattern, output):
             if pattern == patterns[1]:
-                # pattern 2 swaps order: time, then test name
                 time = float(match.group(1))
                 test_name = match.group(2)
             else:

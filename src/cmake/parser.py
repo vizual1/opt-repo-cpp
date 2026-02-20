@@ -56,7 +56,7 @@ class CMakeParser:
             arg_str = str(arg)
             version_match = re.search(r'(\d+\.\d+(?:\.\d+)*)', arg_str)
             if version_match:
-                logging.info(f"cmake_minimum_required found: {version_match.group()}")
+                logging.info(f"cmake_minimum_required found: {version_match.group(1)}")
                 return version_match.group(1)
         
         logging.warning("No cmake_minimum_required found, using default 3.16")
@@ -126,7 +126,7 @@ class CMakeParser:
             "GTest::gtest", "GTest::gtest_main", "GTest::gmock", "GTest::gmock_main", 
             "gtest", "gtest_main", "gmock", "gmock_main",
             "Catch2::Catch2", "Catch::Main",
-            "Catch2::Catch2WithMain", "Catch2::Catch2WithMainNoExit", "Catch2::Catch2WithRunner"
+            "Catch2::Catch2WithMain", "Catch2::Catch2WithMainNoExit", "Catch2::Catch2WithRunner",
             "doctest", "doctest::doctest", "doctest::doctest_main",
             "Boost::unit_test_framework", "boost_unit_test_framework",
             "Qt::Test", "Qt5::Test", "Qt6::Test"

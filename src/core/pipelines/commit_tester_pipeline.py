@@ -14,14 +14,11 @@ def run_one_commit(repo_id: str, new_sha: str, old_sha: str, config: Config, cpu
             return
 
         commit = CommitHandler("", config.storage_paths["clones"])
-        file = commit.get_file_prefix(repo_id)
-
-        # commits are cloned into these paths
-        new_path, old_path = commit.get_paths(file, new_sha)
-
         repo = config.git_client.get_repo(repo_id)
-        docker = DockerTester(repo, config)
-        docker.run_commit_pair(new_sha, old_sha, new_path, old_path, cpuset_cpus)
+        file = commit.get_file_prefix(repo_id)
+        new_path, old_path = commit.get_paths(file, new_sha)
+        docker = DockerTester(config)
+        docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path, cpuset_cpus)
 
     except Exception as e:
         logging.exception(f"[{repo_id}] Error testing commits: {e}")
@@ -36,11 +33,12 @@ class CommitTesterPipeline:
 
     def test_commit(self, commits_list: list[Commit] = []) -> None:
         if self.config.docker_image:
-            # owner_name_sha
-            owner, name, new_sha = tuple(self.config.docker_image.split("_"))
+            # owner_name_sha or dockerhub_owner/dockerhub_name:owner_name_sha
+            owner, name, new_sha = tuple(self.config.docker_image.split(":")[-1].split("_"))
             repo_id = f"{owner}/{name}"
             old_sha = self.config.git_client.get_repo(repo_id).get_commit(new_sha).parents[0].sha
             commits = [(repo_id, new_sha, old_sha)]
+            # commits = [("", "", "")]
         else:
             commits = self.commit.get_commits(commits_list)
         if len(commits) > 0:
@@ -70,4 +68,4 @@ class CommitTesterPipeline:
             for future in tqdm(as_completed(futures), total=len(futures)):
                 future.result()
 
-        
+            

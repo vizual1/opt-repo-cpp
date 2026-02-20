@@ -74,7 +74,7 @@ class Config:
     min_exec_time_improvement: float = 0.05
     min_p_value: float = 0.05
     overall_decline_limit: float = -0.01
-    max_test_time: int = 600 # in seconds
+    max_test_time: int = 1800 # in seconds
     min_stars: int = 20
     
     # Runtime objects

@@ -8,5 +8,9 @@ def main() -> None:
     logging.info("Pipeline finished successfully.")
 
 if __name__ == '__main__':
-    logging_setup()
-    main()
+    try:
+        logging_setup()
+        main()
+    except KeyboardInterrupt:
+        logging.warning("Interrupted by user")
+        raise

@@ -45,6 +45,7 @@ docker pull docker.openhands.dev/openhands/openhands:1.3
 # openhands runtime image (can use different ones, defined in src/config/settings.py)
 docker pull ghcr.io/openhands/runtime:oh_v1.3.0_odjrubqcfxjb4y1s_kxyxnblfp0d1rp6p
 ```
+Note: OpenHands commit patches can be found in ```data/patches/``` as ```*.patch``` files.
 
 ---
 
@@ -157,6 +158,10 @@ python3 main.py --testpatch --docker=owner_repo_newsha --diff=/path/to/diff.patc
 When running tests in Docker, the container has the following structure:
 - ```/test_workspace/workspace/old``` - Original commit
 - ```/test_workspace/workspace/new``` - Patched commit
+- ```/test_workspace/old_build.sh```  - Original build script
+- ```/test_workspace/new_build.sh```  - Patched build script
+- ```/test_workspace/old_test.sh```   - Original test script
+- ```/test_workspace/new_test.sh```   - Patched test script
 
 ---
 

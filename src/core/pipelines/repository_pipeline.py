@@ -33,13 +33,13 @@ class RepositoryPipeline:
             return
 
         logging.info(f"Found {len(repo_ids)} repositories.")
+        structure = StructureFilter(self.config)
+        process = ProcessFilter(self.config)
         for repo_id in tqdm(repo_ids, total=len(repo_ids), desc=f"Testing repositories...", mininterval=5):
             repo = self.config.git_client.get_repo(repo_id)
-            structure = StructureFilter(repo, self.config)
-            process = ProcessFilter(repo, self.config)
-
+            
             try:
-                if structure.is_valid() and process.valid_run("_".join(repo.full_name.split("/"))):
+                if structure.is_valid(repo) and process.valid_run("_".join(repo.full_name.split("/")), repo):
                     self.valid_repos.append(repo)
                     if self.config.collect or self.config.output_file:
                         Writer(repo_id, self.config.output_file or self.config.storage_paths['testcollect']).write_repo()

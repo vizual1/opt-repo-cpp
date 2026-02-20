@@ -12,43 +12,38 @@ class DockerManager:
         self.docker_image = docker_image
         self.new = new
         self.docker_test_dir = docker_test_dir
+        self.client: Optional[docker.DockerClient] = None
+        self.container: Optional[docker.models.containers.Container] = None # type: ignore
 
-    def stop_container(self, repo_id: str) -> None:
+    def stop_container(self, msg: str) -> None:
         if self.container:
             try:
                 self.container.stop()
                 self.container.remove()
                 self.container = None
-                logging.info(f"[{repo_id}] Stopped the container")
+                logging.info(f"[{msg}] Stopped the container")
             except Exception as e:
-                logging.warning(f"[{repo_id}] Failed to stop container: {e}")
+                logging.warning(f"[{msg}] Failed to stop container: {e}")
 
     def start_docker_container(self, container_name: str, cpuset_cpus: str = "") -> None:
         self.client = docker.from_env()
         try:
-            try:
-                c = self.client.containers.get(container_name)
-                c.reload()
+            self.container = self.client.containers.get(container_name)
+            if self.container and self.container.status != "running":
+                logging.info(f"Container {container_name} exists but is {self.container.status}, removing")
+                self.container.remove(force=True)
+                self.container = None
+        except docker.errors.NotFound: # type: ignore
+            self.container = None
 
-                if c.status != "running":
-                    logging.info(
-                        f"Container {container_name} exists but is {c.status}, recreating"
-                    )
-                    c.remove(force=True)
-                    raise docker.errors.NotFound(container_name) # type: ignore
-
-                logging.info(f"Reusing running container {container_name}")
-                self.container = c
-                return
-
-            except docker.errors.NotFound: # type: ignore
-                pass
-            
+        try:
             if not check_and_fix_path_permissions(self.mount):
                 return
 
             logging.info(f"Run docker image ({self.docker_image}) mounted on {str(self.mount)}.")
-            mounts = [Mount(target="/workspace", source=str(self.mount), type="bind", read_only=False)]
+            mounts = []
+            if self.mount:
+                mounts.append(Mount(target="/workspace", source=str(self.mount), type="bind", read_only=False))
             if self.config.mount:
                 mounts.append(Mount(target="/test_workspace/workspace/new", source=self.config.mount, type="bind", read_only=False))
             self.container = self.client.containers.run(
@@ -60,13 +55,14 @@ class DockerManager:
                 detach=True,
                 tty=True,
                 remove=False,
-
                 cpuset_cpus=cpuset_cpus or self.config.resources.cpuset_cpus,
                 mem_limit=self.config.resources.mem_limit,
                 memswap_limit=self.config.resources.memswap_limit,
                 cpu_quota=self.config.resources.cpu_quota,
                 cpu_period=self.config.resources.cpu_period
             )
+            if not self.container:
+                raise ValueError("Docker Container did not execute")
             mkdir_cmd = ["mkdir", "-p", f"{self.docker_test_dir}"]
             self.container.exec_run(mkdir_cmd)
             mkdir_cmd = ["mkdir", "-p", f"{self.docker_test_dir}/logs"]
@@ -108,6 +104,11 @@ class DockerManager:
         if not self.container:
             logging.error(f"No docker container started")
             return 1, "", "", -1.0
+
+        test_cmd = ["test", "-d", container_workdir]
+        exit_code, _ = self.container.exec_run(test_cmd)
+        if exit_code != 0:
+            container_workdir = "/workspace"
 
         cmd = [str(x) for x in cmd]
         if timeout > 0:

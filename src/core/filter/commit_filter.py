@@ -9,10 +9,11 @@ from src.config.config import Config
 from github.GithubException import UnknownObjectException
 
 class CommitFilter:
-    def __init__(self, commit: Commit, config: Config, repo: Repository):
+    def __init__(self, repo: Repository, commit: Commit, config: Config):
+        self.repo = repo
         self.commit = commit
         self.config = config
-        self.repo = repo
+        
         self.cache: dict[str, dict[str, dict[str, bool]]] = self._load_cache()
         self.is_issue: bool = False
 
@@ -88,8 +89,8 @@ class CommitFilter:
 
         diff_text = None
 
-        # ============ STAGE 1.5: Diff Verification ============
-        if stage1_answer == "maybe":
+        # ============ STAGE 2: Diff Verification ============
+        if stage1_answer == "maybe" or stage1_answer == "yes":
             logging.info(f"[{self.repo.full_name}] Stage 1 uncertain, checking file diffs...")
             
             any_file_performance = False
@@ -102,8 +103,8 @@ class CommitFilter:
                 files_checked += 1
                 
                 patch = f.patch
-                if len(patch) > 8000:
-                    patch = patch[:8000] + "\n... [diff truncated] ..."
+                if len(patch) > 10000:
+                    patch = patch[:10000] + "\n... [diff truncated] ..."
                 
                 diff_text = f"File: {f.filename}\n{patch}"
 
@@ -119,7 +120,7 @@ class CommitFilter:
                     f"Repository: {self.repo.full_name}\n"
                     f"Commit Message:\n###MESSAGE START###{msg}\n###MESSAGE END###\n"
                     f"One of the patched files (diff):###DIFF START###\n{diff_text}\n###DIFF END###\n"
-                    f"Question: Does this diff show a test measureable runtime performance improvement?"
+                    f"Question: Does this diff improve test measureable runtime performance?"
                 )
                 
                 p = Prompt([
@@ -143,41 +144,6 @@ class CommitFilter:
             if not any_file_performance:
                 logging.info(f"[{self.repo.full_name}] No files indicate performance improvement ({files_checked} checked)")
                 return False
-        
-        # ============ STAGE 2: Full Context Verification ============        
-        logging.info(f"[{self.repo.full_name}] Proceeding to Stage 2 verification")
-
-        diff_text = self.get_diff()
-        
-        stage2_system = (
-            "You are a strict binary classifier. "
-            "Determine if the commit improves runtime performance (makes code execute faster). "
-            "Do not count bug fixes, correctness changes, refactoring, or style cleanups. "
-            "Respond ONLY in JSON: {\"answer\": \"yes\"} or {\"answer\": \"no\"}."
-            "If you do not have enough information to decide, say {\"answer\": \"no\"}."
-        )
-            
-        stage2_prompt = (
-            f"Repository: {self.repo.full_name}\n"
-            f"Commit Message:\n###MESSAGE START###{msg}\n###MESSAGE END###\n"
-            f"Code Changes:###DIFF START###\n{diff_text}\n###DIFF END###\n"
-            f"Question: Does this commit improve test measurable runtime performance?"
-        )
-        
-        p = Prompt([
-            Prompt.Message("system", stage2_system),
-            Prompt.Message("user", stage2_prompt)
-        ])
-        
-        if self.config.llm.ollama_enabled:
-            self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
-        else:
-            self.llm2 = OpenRouterLLM(self.config, self.config.llm.model2)
-        logging.info(f"[{self.repo.full_name}] Second LLM prompt: {p.messages[1].content}")
-        res = self.llm2.generate(p)
-        logging.info(f"[{self.repo.full_name}] Second LLM returned: {res}")
-        if 'yes' in res.lower() and "no" not in res.lower():
-            return True
             
         return False
     
@@ -436,8 +402,6 @@ class CommitFilter:
                 for match in closing_pattern.finditer(pr.body):
                     closed_issues.add(int(match.group(1)))
             
-            # Use GitHub's timeline API to get linked issues
-            # This captures issues linked via the UI
             try:
                 events = pr.get_issue_events()
                 for event in events:

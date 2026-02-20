@@ -7,6 +7,7 @@ def check_and_fix_path_permissions(target_path: Path) -> bool:
     
     for part in parts[1:]:
         current_path = current_path / part
+        current_path.mkdir(0o711, exist_ok=True)
         
         try:
             st = current_path.stat()

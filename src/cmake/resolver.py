@@ -280,20 +280,19 @@ class DependencyResolver:
             result: dict[str, str] = {"out": ""}
 
             res_user = (
-                """You are an expert in CMake, Ubuntu, and vcpkg. 
+                """You are an expert in CMake and Ubuntu. 
 
                 Given one or more missing dependency names, return a single JSON object where each key is a <dependency>:
                 {{
                 "<dependency>": {{
-                    "apt": "<Ubuntu 24.04 packages or libraries>",
-                    "vcpkg": "<vcpkg port>"
+                    "apt": "<Ubuntu 24.04 packages or libraries>"
                 }}
                 }}
                 Rules:
                 1. Use correct libraries and package names for Ubuntu 24.04 if possible otherwise for Ubuntu 22.02.
                 2. If there are multiple possible libraries and packages, then put them into an array ["library1", "library2", ...].
                 3. Output only valid JSON (no text)
-                4. For unknown deps, set "<Ubuntu 24.04 packages or libraries>" and "<vcpkg port>" to "".
+                4. For unknown deps, set "<Ubuntu 24.04 packages or libraries>" to "".
                 5. Generate it for all <dependency> in <deps>.
                 """
             )
@@ -308,6 +307,7 @@ class DependencyResolver:
                     result["out"] = self._clean_json_output(llm_output)
                 except Exception as e:
                     logging.warning(f"LLM call failed {e}")
+                    result["out"] = ""
 
             t = threading.Thread(target=run_llm, daemon=True)
             t.start()

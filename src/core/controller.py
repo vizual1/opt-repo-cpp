@@ -68,6 +68,7 @@ class Controller:
                 
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
+            raise
 
         finally:
             logging.info("Controller execution completed.")

@@ -50,7 +50,7 @@ class CommitPipeline:
         filtered_commits: list[str] = []
         for commit in tqdm(self.commits, desc=f"{repo.full_name} commits", position=1, leave=False, mininterval=5):
             stats.num_commits += 1
-            perf_improv_filter = CommitFilter(commit, self.config, repo)
+            perf_improv_filter = CommitFilter(repo, commit, self.config)
             if not perf_improv_filter.accept():
                 continue
             
@@ -63,7 +63,7 @@ class CommitPipeline:
         self._rewrite_commits()
         stats.write_final_log()
 
-    def filter_commits(self, commits: list[Commit], repo: Repository) -> None:
+    def filter_commits(self, repo: Repository, commits: list[Commit]) -> None:
         if not commits:
             logging.warning(f"[{repo.full_name}] No commits found")
             return
@@ -72,7 +72,7 @@ class CommitPipeline:
         filtered_commits: list[str] = []
         for commit in tqdm(commits, desc=f"{repo.full_name} commits", position=1, leave=False, mininterval=5):
             stats.num_commits += 1
-            perf_improv_filter = CommitFilter(commit, self.config, repo)
+            perf_improv_filter = CommitFilter(repo, commit, self.config)
             if not perf_improv_filter.accept():
                 continue
             

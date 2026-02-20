@@ -1,4 +1,4 @@
-import logging, subprocess, tempfile, json
+import logging, subprocess, tempfile, json, io, tarfile
 from pathlib import Path
 from src.cmake.analyzer import CMakeAnalyzer
 from src.cmake.resolver import DependencyResolver
@@ -13,28 +13,24 @@ class CMakeProcess:
     """Class configures, builds, tests, and clones commits."""
     def __init__(
         self, 
-        repo_id: str,
         config: Config,
         root: Path, 
         enable_testing_path: Optional[Path], 
         flags: list[str], 
         analyzer: CMakeAnalyzer, 
         package_manager: str,
-        jobs: int = 1,
-        docker_test_dir: str = ""
+        jobs: int = 1
     ):
         self.config = config
-        self.repo_id = repo_id
-        self.project_root = Path(__file__).resolve().parents[2]
-        self.root = (self.project_root / root).resolve() if not root.is_absolute() else root.resolve()
-        self.docker_test_dir = docker_test_dir.replace("\\", "/")
+        self.root = root.resolve()
+        #self.project_root = Path(__file__).resolve().parents[2]
+        #self.root = (self.project_root / root).resolve() if not root.is_absolute() else root.resolve()
         self.build_path = Path(self.to_container_path(self.root / "build"))
         self.test_path = self.build_path / (enable_testing_path if enable_testing_path else "")
         
         self.flags: list[str] = flags
         self.analyzer = analyzer
         self.package_manager = package_manager
-        self.jobs = jobs
 
         self.container = None
         self.docker_image: str = ""
@@ -66,12 +62,8 @@ class CMakeProcess:
     def set_flags(self, flags: list[str]) -> None:
         self.flags = flags
 
-    def set_docker(self, docker_image: str, new: bool):
-        if self.config.docker_image and self.config.mount:
-            mount_path = Path(self.config.mount).resolve()
-            self.docker = DockerManager(self.config, mount_path, docker_image, self.docker_test_dir, new)
-        else:
-            self.docker = DockerManager(self.config, self.root.parent, docker_image, self.docker_test_dir, new)
+    def set_docker(self, docker_image: str, new: bool) -> None:
+        self.docker = DockerManager(self.config, self.root.parent, docker_image, self.config.testing.docker_test_dir, new)
 
     def start_docker_image(self, container_name: str, new: bool = True, cpuset_cpus: str = "") -> None:
         if not self.docker_image:
@@ -82,7 +74,8 @@ class CMakeProcess:
         self.docker.start_docker_container(container_name, cpuset_cpus)
         self.container = self.docker.container
 
-        copy_cmd = ["cp", "-r", "/workspace", self.docker_test_dir]
+        # copy the cloned commits into the docker container docker_test_dir
+        copy_cmd = ["cp", "-r", "/workspace", self.config.testing.docker_test_dir]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(copy_cmd, self.root, check=False)
         if exit_code != 0:
             logging.error(f"Copy files failed with exit code {exit_code}: {' '.join(map(str, copy_cmd))}")
@@ -182,7 +175,7 @@ class CMakeProcess:
                     json.dump(results, tmp_file, indent=4)
                 tmp_path = Path(tmp_file.name)
 
-                dest_path = f"{container_id}:{self.docker_test_dir}/logs/{n}{data_type}"
+                dest_path = f"{container_id}:{self.config.testing.docker_test_dir}/logs/{n}{data_type}"
                 check_and_fix_path_permissions(self.root)
                 result = subprocess.run(["docker", "cp", str(tmp_path), dest_path],
                                         capture_output=True, text=True)
@@ -191,6 +184,100 @@ class CMakeProcess:
                     logging.error(f"Copying log file failed: {result.stderr}")
                 else:
                     logging.info(f"Copied log file to {dest_path}")
+
+    def get_commands_in_docker(self, startup: bool) -> bool:
+        if startup:
+            commands = [["cat", "/test_workspace/new_build.sh"], ["cat", "/test_workspace/new_test.sh"]]
+        else:
+            commands = [["cat", "/test_workspace/old_build.sh"], ["cat", "/test_workspace/old_test.sh"]]
+        for cmd, scmd in zip(commands, [self.build_commands, self.test_commands]):
+            exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(["chmod", "777", cmd[1]], self.root, check=False)
+            exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
+            if exit_code != 0:
+                logging.error(f"Failed command exit code {exit_code}: {' '.join(map(str, cmd))}")
+                if stdout: logging.info(f"stdout: {stdout}")
+                if stderr: logging.warning(f"stderr: {stderr}")
+                return False
+            
+            for line in stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if line.endswith(" ms"):
+                    continue
+                scmd.append(line.split(" ", 1))
+
+        if len(self.test_commands) > 1: 
+            if any("--gtest_print_time" in t[1] for t in self.test_commands if len(t) > 1):
+                self.framework = "gtest"
+                for t in self.test_commands:
+                    if len(t) > 1:
+                        exe_path = t[0]
+                        test_name = t[1].removeprefix("--gtest_filter=").removesuffix(" --gtest_print_time")
+                        self.per_test_times[test_name] = {"parsed": [], "time": []}
+                        self.unit_tests_map[" ".join(t)] = {"name": test_name, "exe": exe_path}
+            elif any("--durations" in t[1] for t in self.test_commands if len(t) > 1):
+                self.framework = "catch"
+                for t in self.test_commands:
+                    if len(t) > 1:
+                        exe_path = t[0]
+                        test_name = t[1].removesuffix(" --durations yes")
+                        self.per_test_times[test_name] = {"parsed": [], "time": []}
+                        self.unit_tests_map[" ".join(t)] = {"name": test_name, "exe": exe_path}
+            elif any("--test-case=" in t[1] for t in self.test_commands if len(t) > 1):
+                self.framework = "doctest"
+                for t in self.test_commands:
+                    if len(t) > 1:
+                        exe_path = t[0]
+                        test_name = t[1].removeprefix("--test-case=")
+                        self.per_test_times[test_name] = {"parsed": [], "time": []}
+                        self.unit_tests_map[" ".join(t)] = {"name": test_name, "exe": exe_path}
+        return True
+    
+    def build_in_docker(self) -> bool:
+        """
+        Build commands example:
+            apt-get update
+            <package installs>
+            cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON
+            cmake --build /test_workspace/workspace/old/build -- -j 1
+        """
+        for cmd in self.build_commands[:-2]:
+            logging.info(" ".join(map(str, cmd)))
+            cmd = [s for c in cmd for s in c.split(" ")]
+            exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
+
+        config_cmd = self.build_commands[-2]
+        config_cmd = [s for c in config_cmd for s in c.split(" ")]
+        logging.info(" ".join(map(str, config_cmd)))
+        exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(config_cmd, self.root, check=False)
+        if exit_code == 0:
+            logging.info(f"CMake configuration successful for {self.build_path}")
+            logging.debug(f"Output:\n{stdout}")
+        else:
+            logging.error(f"CMake configuration failed for {self.build_path} (return code {exit_code})", exc_info=True)
+            self.config_stdout = stdout
+            self.config_stderr = stderr
+            if stdout: logging.error(f"Output (stdout):\n{stdout}")
+            if stderr: logging.error(f"Error (stderr):\n{stderr}")
+            return False
+        
+        build_cmd = self.build_commands[-1]
+        build_cmd = [s for c in build_cmd for s in c.split(" ")]
+        logging.info(" ".join(map(str, build_cmd)))
+        exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(build_cmd, self.root, check=False)
+        self.cmake_build_output.append(stdout)
+        if exit_code == 0:
+            logging.info(f"CMake build completed for {self.root}")
+            logging.debug(f"Output:\n{stdout}")
+            return True
+        else:
+            logging.error(f"CMake build failed for {self.root} (return code {exit_code})", exc_info=True)
+            self.build_stdout = stdout
+            self.build_stderr = stderr
+            if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
+            if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
+            return False
 
 ############### RUNNING ###############
 
@@ -203,8 +290,8 @@ class CMakeProcess:
     def build(self) -> bool:
         return self._configure_with_retries() #and self._build()
     
-    def test(self, cmd: list[str], has_list_args: bool) -> bool:
-        return self._ctest(cmd, has_list_args)
+    def test(self, cmd: list[str], has_test_framework: bool) -> bool:
+        return self._ctest(cmd, has_test_framework)
 
     def collect_tests(self) -> bool:
         return self._ctest_collection()
@@ -295,7 +382,7 @@ class CMakeProcess:
         return False
     
 
-    def _configure(self, commands: list[str] = []) -> bool:
+    def _configure(self, command: list[str] = []) -> bool:
         cmd = [
             #'cmake', 
             #'-E', 'env', 
@@ -381,12 +468,6 @@ class CMakeProcess:
             self.config_stderr = stderr
             if stdout: logging.error(f"Output (stdout):\n{stdout}")
             if stderr: logging.error(f"Error (stderr):\n{stderr}")
-            #remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
-            #self.docker.run_command_in_docker(remove_build, self.root, check=False)
-            #if not commands:
-            #    for flag in self.test_flags:
-            #        cmd.append(flag)
-            #    return self._configure(cmd)
             return False
         
         if not self._build():
@@ -396,15 +477,18 @@ class CMakeProcess:
         return True
         
     def to_container_path(self, path: Path) -> str:
-        rel = path.relative_to(self.root.parent)
-        return f"{self.docker_test_dir}/workspace/{rel.as_posix()}"
+        try:
+            rel = path.relative_to(self.root.parent)
+        except Exception:
+            rel = Path(path.name)
+        return f"{self.config.testing.docker_test_dir}/workspace/{rel.as_posix()}"
     
 ############### BUILDING ###############
 
     def _build(self) -> bool:
         cmd = ['cmake', '--build', str(self.build_path).replace("\\", "/"), '--']
-        if self.jobs > 0:
-            cmd += ['-j', str(self.jobs)]
+        if self.config.resources.jobs > 0:
+            cmd += ['-j', str(self.config.resources.jobs)]
 
         logging.info(" ".join(map(str, cmd)))
 
@@ -434,7 +518,7 @@ class CMakeProcess:
         if test_exec_flag and not self._individual_tests_collection(test_exec_flag):
             return False
 
-        logging.info(f"Commands: {self.test_commands}")
+        logging.info(f"Test commands: {self.test_commands}")
         if len(self.test_commands) == 0: # no test commands
             root = ['cd', str(self.test_path)]
             self.test_commands.append(list(map(str, root)))
@@ -444,10 +528,10 @@ class CMakeProcess:
     def _individual_tests_collection(self, test_exec_flag: list[tuple[str, str]]) -> bool:
         framework, test_flag = test_exec_flag[0]
 
-        path = str(self.docker_test_dir / self.test_path / 'CTestTestfile.cmake').replace("\\", "/")
+        path = str(self.config.testing.docker_test_dir / self.test_path / 'CTestTestfile.cmake').replace("\\", "/")
         cmd = ["cat", f"{path}"]
         exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-            cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+            cmd, self.root, workdir=self.config.testing.docker_test_dir/self.test_path, check=False
         )
 
         logging.debug(f"CTestTestfile.cmake output:\n{stdout}")
@@ -456,10 +540,10 @@ class CMakeProcess:
         # collect path from subdirs(path) in CTestTestfile.cmake files
         subdirs = self.analyzer.parse_subdirs(stdout)
         for subdir in subdirs:
-            path = str(self.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
+            path = str(self.config.testing.docker_test_dir / self.test_path / subdir / 'CTestTestfile.cmake').replace("\\", "/")
             cmd = ["cat", f"{path}"]
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+                cmd, self.root, workdir=self.config.testing.docker_test_dir/self.test_path, check=False
             )
             logging.debug(f"CTestTestfile.cmake output:\n{stdout}")
             test_exec |= set(self.analyzer.parse_ctest_file(stdout))
@@ -473,7 +557,7 @@ class CMakeProcess:
             cmd = [exe_path, test_flag]
             logging.debug(' '.join(map(str, cmd)))
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                cmd, self.root, workdir=self.docker_test_dir/self.test_path, check=False
+                cmd, self.root, workdir=self.config.testing.docker_test_dir/self.test_path, check=False
             )
             tests = self.analyzer.extract_unit_tests(stdout, framework)
             logging.info(f"{test_flag} ({framework}) output:\n{stdout}")
@@ -543,9 +627,9 @@ class CMakeProcess:
 
 ############### TESTING ###############
 
-    def _ctest(self, command: list[str], has_list_args: bool) -> bool:
-        if has_list_args and self._individual_ctest(command):
-            return True
+    def _ctest(self, command: list[str], has_test_framework: bool) -> bool:
+        if has_test_framework:
+            return self._individual_ctest(command)
         
         if 0.0 not in self.test_time['parsed'] or 0.0 not in self.test_time['time']:
             # too many tests
@@ -554,7 +638,7 @@ class CMakeProcess:
         try:
             logging.info(f"{' '.join(command)} in {self.test_path}")
             exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-                command, self.root, workdir=self.docker_test_dir/self.test_path, check=False, timeout=self.config.max_test_time, log=False,
+                command, self.root, workdir=self.config.testing.docker_test_dir/self.test_path, check=False, timeout=self.config.max_test_time, log=False,
             )
 
             # parse the times returned
@@ -569,12 +653,13 @@ class CMakeProcess:
             self.ctest_output.append(stdout)
             self.per_test_times = parse_single_ctest_output(stdout, self.per_test_times)
 
-            if exit_code == 0 or (elapsed != 0.0 and stats['passed'] > 0):
+            if exit_code == 0 and stats['total'] > 0:
                 logging.info(f"CTest passed for {self.test_path}")
                 logging.debug(f"Output:\n{stdout}")
                 logging.info(f"Tests run: {stats['total']}, Failures: {stats['failed']}, Skipped: {stats['skipped']}, Time elapsed: {elapsed or time} s")
             else:
                 logging.error(f"CTest failed for {self.test_path} (return code {exit_code}) with command {' '.join(command)}", exc_info=True)
+                logging.info(f"Tests run: {stats['total']}, Failures: {stats['failed']}, Skipped: {stats['skipped']}, Time elapsed: {elapsed or time} s")
                 if stdout: logging.error(f"Output (stdout):\n{stdout}", exc_info=True)
                 if stderr: logging.error(f"Error (stderr):\n{stderr}", exc_info=True)
                 return False
@@ -591,6 +676,7 @@ class CMakeProcess:
         
 
     def _individual_ctest(self, command: list[str], extra: list[str] = []) -> bool:
+        """Runs individual tests from test frameworks (gtest, catch, doctest)"""
         try:
             unit_map = self.unit_tests_map[" ".join(command)]
             test_name = unit_map['name']
@@ -615,9 +701,7 @@ class CMakeProcess:
             return False
         
         if elapsed == 0.0:
-            test_exec_flag = self.analyzer.get_list_test_arg()
-            framework, _ = test_exec_flag[0]
-            if framework == "gtest" and not extra:
+            if self.framework == "gtest" and not extra:
                 return self._individual_ctest(command, ["--gtest_repeat=100"])
             elapsed = parse_usr_bin_time(stdout)
 
@@ -628,11 +712,11 @@ class CMakeProcess:
         self.test_time['time'][ntest] += time
 
         if exit_code == 0:
-            logging.debug(f"CTest passed for {self.test_path}")
+            logging.info(f"Individual CTest passed for {self.test_path}")
             logging.debug(f"Output:\n{stdout}")
             logging.debug(f"[{test_name}] Time elapsed: {elapsed or time} s")
         else:
-            logging.error(f"CTest failed for {self.test_path} (return code {exit_code}) with command {' '.join(command)}", exc_info=True)
+            logging.error(f"Individual CTest failed for {self.test_path} (return code {exit_code}) with command {' '.join(command)}", exc_info=True)
             logging.error(f"Output (stdout):\n{stdout[:10000]}", exc_info=True)
             logging.error(f"Error (stderr):\n{stderr[:10000]}", exc_info=True)
             return False
@@ -640,11 +724,11 @@ class CMakeProcess:
         self.ctest_output.append(stdout)
         return True
     
-############### DIFF ###############
-    # /test_workspace/workspace/old should clean the build folder (generated by cmake build)
-    # and other artifacts
+
+############### DIFF APPLICATION ###############
+
     def _clean_old(self) -> bool:
-        #remove_build = ["rm", "-rf", str(self.build_path).replace("\\", "/")]
+        """Cleans /test_workspace/workspace/old commit inside the docker container"""
         remove_old_build = ["rm", "-rf", "/test_workspace/workspace/old/build", "/test_workspace/workspace/old/CMakeCache.txt", "/test_workspace/workspace/old/CMakeFiles"]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(remove_old_build, self.root, check=False)
         
@@ -657,10 +741,8 @@ class CMakeProcess:
         logging.info(f"Old (original) commit cleaned: {' '.join(map(str, remove_old_build))}")
         return True
 
-    # diff patch needs to be applied to old (original) commit
-    # set chmod -R 777 to /test_workspace/workspace/new
-    # delete /test_workspace/workspace/new
     def _del_new(self) -> bool:
+        """Deletes the /test_workspace/workspace/new commit inside the docker container"""
         cmd = ["chmod", "-R", "777", "/test_workspace/workspace/new"]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
         cmd = ["rm", "-rf", "/test_workspace/workspace/new"]
@@ -674,9 +756,8 @@ class CMakeProcess:
         logging.info(f"New (patched) commit deleted: {' '.join(map(str, cmd))}")
         return True
 
-    # copy /test_workspace/workspace/old into /test_workspace/workspace/new to be
-    # able to apply the diff patch
     def _copy_old(self) -> bool:
+        """Copy /test_workspace/workspace/old commit to /test_workspace/workspace/new commit"""
         cmd = ["cp", "-a", "/test_workspace/workspace/old", "/test_workspace/workspace/new"]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
         if exit_code != 0:
@@ -688,14 +769,13 @@ class CMakeProcess:
         logging.info(f"Old (original) commit copied: {' '.join(map(str, cmd))}")
         return True
 
-    # apply the diff patch to /test_workspace/workspace/new
     def _apply_diff(self) -> bool:
+        """Applies given diff patch to /test_workspace/workspace/new commit"""
         container_patch_path = "/tmp/apply.patch"
         with open(self.config.diff, "rb") as f:
             data = f.read()
 
-        import io, tarfile
-
+        # copies diff patch into the docker container
         tarstream = io.BytesIO()
         with tarfile.open(fileobj=tarstream, mode='w') as tar:
             tarinfo = tarfile.TarInfo(name="apply.patch")
@@ -703,9 +783,11 @@ class CMakeProcess:
             tar.addfile(tarinfo, io.BytesIO(data))
         tarstream.seek(0)
 
-        if self.docker.container:
-            self.docker.container.put_archive("/tmp", tarstream.read())
+        if self.docker.container and not self.docker.container.put_archive("/tmp", tarstream.read()):
+            logging.error(f"Moving /tmp/apply.patch into docker container failed.")
+            return False
 
+        # apply diff patch to /test_workspace/workspace/new (should be a copy of /test_workspace/workspace/old)
         cmd = ["patch", "-p1", "-d", "/test_workspace/workspace/new", "-i", container_patch_path]
         exit_code, stdout, stderr, _ = self.docker.run_command_in_docker(cmd, self.root, check=False)
         if exit_code != 0:

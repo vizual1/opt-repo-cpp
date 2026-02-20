@@ -8,19 +8,17 @@ from github.ContentFile import ContentFile
 from github.GithubException import GithubException, RateLimitExceededException
 from src.config.config import Config
 from src.cmake.analyzer import CMakeAnalyzer
-from src.cmake.process import CMakeProcess
-from src.gh.clone import GitHandler
 from src.utils.stats import RepoStats
 
 class StructureFilter:
     """
     This class analyses and filters the structure of a repository.
     """
-    def __init__(self, repo: Repository, config: Config, root: Optional[Path] = None, sha: str = ""):
+    def __init__(self, config: Config, root: Optional[Path] = None):
         self.config = config
-        self.repo = repo
+        #self.repo = repo
         self.root = root
-        self.sha = sha if sha else self.repo.get_commits()[0].sha
+        #self.sha = sha if sha else self.repo.get_commits()[0].sha
 
         if root:
             self.analyzer = CMakeAnalyzer(root)
@@ -28,64 +26,64 @@ class StructureFilter:
         self.stats = RepoStats()
         self.testing_flags: dict = {}
 
-    def is_valid(self, without_pkg_manager: bool = True) -> bool:
-        self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
+    def is_valid(self, repo: Repository, sha: str = "", without_pkg_manager: bool = True) -> bool:
+        sha = sha if sha else repo.get_commits()[0].sha
+        self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree(repo, sha)
         self.root_files = {item.path for item in self.tree if item.type == "blob"}
 
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 
         if not self._has_root_cmake() or not (without_pkg_manager or vcpkg or conan):
-            logging.warning(f"[{self.repo.full_name}] no CMakeLists.txt at root found")
+            logging.warning(f"[{repo.full_name}] no CMakeLists.txt at root found")
             return False
         
-        logging.info(f"[{self.repo.full_name}] CMakeLists.txt at root found")
+        logging.info(f"[{repo.full_name}] CMakeLists.txt at root found")
 
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as tmpdir:
             tmpdir = Path(tmpdir)
-            self._get_cmake_lists(tmpdir)
+            self._get_cmake_lists(tmpdir, repo, sha)
             analyzer = CMakeAnalyzer(tmpdir)
             analyzer.reset()
 
             if not analyzer.has_testing(nolist=self.config.testing.no_list_testing):
-                logging.warning(f"[{self.repo.full_name}] invalid ctest")
+                logging.warning(f"[{repo.full_name}] invalid ctest")
                 return False
             
             test_dirs = self._extract_test_dirs()
             if test_dirs:
-                logging.debug(f"[{self.repo.full_name}] test directories: {test_dirs}")
+                logging.debug(f"[{repo.full_name}] test directories: {test_dirs}")
                 for d in test_dirs:
                     self.stats.test_dirs[d] += 1
                 conv_test_dir = test_dirs & self.config.valid_test_dirs
 
                 if conv_test_dir:
-                    logging.debug(f"[{self.repo.full_name}] conventional test directories {conv_test_dir}")
+                    logging.debug(f"[{repo.full_name}] conventional test directories {conv_test_dir}")
                     self.testing_flags = analyzer.extract_build_testing_flag()
                     self.test_flags = Counter(self.testing_flags.keys())
             
-            logging.info(f"[{self.repo.full_name}] ctest is defined")
+            logging.info(f"[{repo.full_name}] ctest is defined")
             return True
                 
-    def is_valid_commit(self, root: Path) -> bool:
-        self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree()
+    def is_valid_commit(self, repo: Repository, root: Path, sha: str) -> bool:
+        self.cmake_tree, self.tree_paths, self.tree = self._get_repo_tree(repo, sha)
         self.root_files = {item.path for item in self.tree if item.type == "blob"}
 
         vcpkg = self._has_root_vcpkg()
         conan = self._has_root_conan()
 
         if not self._has_root_cmake():
-            logging.error(f"[{self.repo.full_name}] no CMakeLists.txt at root found")
+            logging.error(f"[{repo.full_name}:{sha}] no CMakeLists.txt at root found")
             return False
         
-        logging.info(f"[{self.repo.full_name}] CMakeLists.txt at root found")
-        
+        logging.info(f"[{repo.full_name}:{sha}] CMakeLists.txt at root found")
         
         self.analyzer.reset()
         if not self.analyzer.has_testing(nolist=self.config.testing.no_list_testing):
-            logging.error(f"[{self.repo.full_name}] invalid ctest")
+            logging.error(f"[{repo.full_name}:{sha}] invalid ctest")
             return False
 
-        logging.info(f"[{self.repo.full_name}] ctest is defined")
+        logging.info(f"[{repo.full_name}:{sha}] ctest is defined")
         return True
     
     def _has_root_cmake(self) -> bool:
@@ -106,13 +104,13 @@ class StructureFilter:
     def _has_root_file(self, filename: str) -> bool:
         return filename in self.root_files
 
-    def _get_repo_tree(self) -> tuple[list[GitTreeElement], list[str], list[GitTreeElement]]:
-        tree = self.repo.get_git_tree(self.sha, recursive=True).tree
+    def _get_repo_tree(self, repo: Repository, sha: str) -> tuple[list[GitTreeElement], list[str], list[GitTreeElement]]:
+        tree = repo.get_git_tree(sha, recursive=True).tree
         tree_paths = [item.path for item in tree]
         cmake_tree = [item for item in tree if item.type == "blob" and item.path.endswith("CMakeLists.txt")]
         return cmake_tree, tree_paths, tree
     
-    def _get_cmake_lists(self, dest: Path) -> list[str]:
+    def _get_cmake_lists(self, dest: Path, repo: Repository, sha: str) -> list[str]:
         """
         Fetch only CMakeLists.txt files from a GitHub repo using requests, preserving folder structure.
         """
@@ -120,7 +118,7 @@ class StructureFilter:
         result_paths = []
         for item in self.cmake_tree:
             try: 
-                content_file = self._attempts(item.path) #.repo.get_contents(item.path, ref=self.sha)
+                content_file = self._attempts(item.path, repo, sha) #.repo.get_contents(item.path, ref=self.sha)
                 target_path = dest / item.path
                 os.makedirs(target_path.parent, exist_ok=True)
                 if isinstance(content_file, ContentFile):
@@ -129,14 +127,14 @@ class StructureFilter:
                     result_paths.append(str(target_path))
                 time.sleep(0.2)
             except Exception as e:
-                logging.warning(f"[{self.repo.full_name}] Failed to fetch/write {item.path}: {e}")
+                logging.warning(f"[{repo.full_name}] Failed to fetch/write {item.path}: {e}")
 
         return result_paths
     
-    def _attempts(self, path: str):
+    def _attempts(self, path: str, repo: Repository, sha: str):
         for attempt in range(5):
             try:
-                return self.repo.get_contents(path, ref=self.sha)
+                return repo.get_contents(path, ref=sha)
             except RateLimitExceededException:
                 reset = self.config.git_client.get_rate_limit().rate.reset.timestamp()
                 sleep_for = max(0, reset - time.time()) + 5

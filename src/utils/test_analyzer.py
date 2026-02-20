@@ -192,7 +192,7 @@ class TestAnalyzer:
         messages = [commit.commit.message]
         patches = [self.get_diff(commit)]
         
-        commit_filter = CommitFilter(commit, self.config, repo)
+        commit_filter = CommitFilter(repo, commit, self.config)
         extracted_refs = commit_filter.extract_fixed_issues()
         gh_refs = [
             (ref_type, number, issue.title, issue.body, issue) 

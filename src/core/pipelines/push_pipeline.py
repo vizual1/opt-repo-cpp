@@ -10,13 +10,13 @@ class PushPipeline():
 
     def push(self) -> None:
         if self.config.input:
-            commits = self.commit.get_commit_from_input(self.config)
+            commits = self.commit.get_commits()
             self._push_commits(commits)
         else:
             logging.warning(f"Invalid input: {self.config.input}")
     
-    def _push_commits(self, commits: list[tuple[str, str, str, list[str]]]) -> None:
-        for i, (repo_id, new_sha, old_sha, pr_shas) in enumerate(commits):
+    def _push_commits(self, commits: list[tuple[str, str, str]]) -> None:
+        for i, (repo_id, new_sha, old_sha) in enumerate(commits):
             local_image = image(repo_id, new_sha)
             if not self.config.dockerhub_force and local_image in self.config.dockerhub_containers:
                 continue
