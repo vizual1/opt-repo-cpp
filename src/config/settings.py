@@ -36,8 +36,8 @@ class LLMSettings:
 class TestingSettings:
     """Testing-related configuration."""
     no_list_testing: bool = True
-    warmup: int = 0
-    commit_test_times: int = 1
+    warmup: int = 1
+    commit_test_times: int = 30
     docker_test_dir: str = "/test_workspace"
 
 @dataclass
