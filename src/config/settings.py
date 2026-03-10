@@ -49,9 +49,10 @@ class GitHubSettings:
 class ResourceSettings:
     """Docker resource limits for --testcommits, --testdocker, --testpatch"""
     cpuset_cpus: str = ''
+    cpus_per_job: int = 2
     mem_limit: str = '8g'
     memswap_limit: str = '8g'
-    cpu_quota: int = 200000
+    cpu_quota: int = 100000
     cpu_period: int = 100000
     jobs: int = 1 # running cmake build with -j = jobs
     max_parallel_jobs: int = 8 # tests multiple test commits at the same time
@@ -60,6 +61,7 @@ class ResourceSettings:
 class ResourceSettingsCrawl(ResourceSettings):
     """Docker resource limits for --testcollect"""
     cpuset_cpus: str = '1-4'
+    cpus_per_job: int = 4
     mem_limit: str = '32g'
     memswap_limit: str = '32g'
     cpu_quota: int = 400000

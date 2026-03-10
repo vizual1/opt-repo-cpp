@@ -48,7 +48,7 @@ class CommitTesterPipeline:
 
         cpu_sets = generate_cpu_sets(
             cpus=available_cpus,
-            cpus_per_job=2,
+            cpus_per_job=self.config.resources.cpus_per_job,
             max_jobs=self.config.resources.max_parallel_jobs,
         )
 

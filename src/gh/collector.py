@@ -36,13 +36,13 @@ class RepositoryCollector:
             List of Repository objects that match language and composition criteria
         """
         seen_repo_ids = set()
-        path = Path(self.config.input_file)
+        path = Path(self.config.blacklist)
         if path.is_file:
-            seen_repo_ids = set(self._get_repo_ids(self.config.input_file))
+            seen_repo_ids = set(self._get_repo_ids(self.config.blacklist))
             logging.info(f"Loaded {len(seen_repo_ids)} existing repositories to skip")
 
         results: list[Repository] = []
-        limit = self.config.limit
+        limit = self.config.repos
         count = 0
 
         logging.info(f"Starting GitHub query for popular {self.language} repos...")

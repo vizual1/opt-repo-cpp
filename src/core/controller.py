@@ -29,13 +29,14 @@ class Controller:
         logging.info("Starting controller...")
 
         try:
-            if self.config.collect:
+            if self.config.collect and self.config.repos:
                 self._collect()
+                self._testcollect()
             
             if self.config.testcollect:
                 self._testcollect()
 
-            if self.config.commits:
+            if self.config.commits and self.config.filter:
                 self._commits()
 
             if self.config.testcommits or self.config.genimages:
@@ -58,14 +59,6 @@ class Controller:
                 self.config.genimages = False
                 self._testpatch()
 
-            if not any([
-                self.config.collect, self.config.testcollect, 
-                self.config.commits, self.config.testcommits, 
-                self.config.genimages, self.config.testdocker, 
-                self.config.patch, self.config.testpatch
-            ]):
-                logging.warning("No operation selected. Use --collect, --testcollect, --commits, --testcommits, --genimages, --testdocker, --patch or --testpatch")
-                
         except Exception as e:
             logging.error(f"Controller encountered an error: {e}", exc_info=True)
             raise
@@ -78,13 +71,6 @@ class Controller:
         pipeline = CollectionPipeline(self.config)
         repos = pipeline.query_popular_repos()
         logging.info(f"Collected {len(repos)} repositories.")
-
-        if self.config.test:
-            logging.info("Testing and validating GitHub repositories...")
-            repo_pipeline = RepositoryPipeline(self.config)
-            repo_pipeline.test_repos(repos)
-            valid_count = len(repo_pipeline.valid_repos)
-            logging.info(f"Collected {valid_count} valid repositories.")
 
     def _testcollect(self) -> None:
         logging.info("Testing and validating GitHub repositories...")

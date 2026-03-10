@@ -1,0 +1,192 @@
+{
+    "metadata": {
+        "collection_date": "2026-01-14T18:43:13.480590",
+        "repository": "https://github.com/madmann91/bvh",
+        "repository_name": "madmann91/bvh"
+    },
+    "commit_info": {
+        "old_sha": "7a03e8c2d2f4c46d842b4ade88e28e90113aac0d",
+        "new_sha": "d3ef6ffd4c007e17ca4a6c0f4555d26b6aca0d94",
+        "commit_message": [
+            "Extract more parallelism during construction"
+        ],
+        "commit_date": "2020-01-20T12:32:58+00:00",
+        "patch": [
+            "--- bvh.hpp\n@@ -291,9 +291,12 @@ struct BVH {\n             for (size_t i = item.begin; i < item.end; ++i)\n                 center_bbox.extend(centers[primitive_indices[i]]);\n \n-            int    best_axis = -1;\n-            size_t best_split = 0;\n-            Scalar best_cost  = std::numeric_limits<Scalar>::max();\n+            size_t best_split[3] = { 0, 0, 0 };\n+            Scalar best_cost[3] = {\n+                std::numeric_limits<Scalar>::max(),\n+                std::numeric_limits<Scalar>::max(),\n+                std::numeric_limits<Scalar>::max()\n+            };\n             std::array<Bin, bin_count> bins_per_axis[3];\n \n             auto inverse = Vec3(bin_count) * center_bbox.diagonal().inverse();\n@@ -302,6 +305,7 @@ struct BVH {\n                 return std::min(size_t(center[axis] * inverse[axis] + base[axis]), size_t(bin_count - 1));\n             };\n \n+            #pragma omp taskloop if (item.work_size() > parallel_threshold) grainsize(1) default(shared)\n             for (int axis = 0; axis < 3; ++axis) {\n                 auto& bins = bins_per_axis[axis];\n \n@@ -335,22 +339,27 @@ struct BVH {\n                     current_bbox.extend(bins[i].bbox);\n                     current_count += bins[i].primitive_count;\n                     float cost = current_bbox.half_area() * current_count + bins[i + 1].right_cost;\n-                    if (cost < best_cost) {\n-                        best_axis  = axis;\n-                        best_split = i + 1;\n-                        best_cost  = cost;\n+                    if (cost < best_cost[axis]) {\n+                        best_split[axis] = i + 1;\n+                        best_cost[axis]  = cost;\n                     }\n                 }\n             }\n \n+            int best_axis = 0;\n+            if (best_cost[0] > best_cost[1])\n+                best_axis = 1;\n+            if (best_cost[best_axis] > best_cost[2])\n+                best_axis = 2;\n+\n             size_t total_primitives = item.end - item.begin;\n             float  half_total_area  = node.bbox.half_area();\n \n             // Check that the split is useful\n-            if (best_split != 0 && best_cost + bvh->traversal_cost * half_total_area < total_primitives * half_total_area) {\n+            if (best_split[best_axis] != 0 && best_cost[best_axis] + bvh->traversal_cost * half_total_area < total_primitives * half_total_area) {\n                 // Split primitives according to split position\n                 size_t begin_right = std::partition(primitive_indices + item.begin, primitive_indices + item.end, [&] (size_t i) {\n-                    return bin_index(centers[i], best_axis) < best_split;\n+                    return bin_index(centers[i], best_axis) < best_split[best_axis];\n                 }) - primitive_indices;\n \n                 // Check that the split does not leave one side empty\n@@ -368,10 +377,10 @@ struct BVH {\n                     // Compute the bounding boxes of each node\n                     auto& bins = bins_per_axis[best_axis];\n                     left.bbox = BBox::empty();\n-                    for (size_t i = 0; i < best_split; ++i)\n+                    for (size_t i = 0; i < best_split[best_axis]; ++i)\n                         left.bbox.extend(bins[i].bbox);\n                     right.bbox = BBox::empty();\n-                    for (size_t i = best_split; i < bin_count; ++i)\n+                    for (size_t i = best_split[best_axis]; i < bin_count; ++i)\n                         right.bbox.extend(bins[i].bbox);\n \n                     // Return new work items"
+        ],
+        "files_changed": [
+            {
+                "filename": "bvh.hpp",
+                "status": "modified",
+                "additions": 20,
+                "deletions": 11,
+                "changes": 31,
+                "patch": "@@ -291,9 +291,12 @@ struct BVH {\n             for (size_t i = item.begin; i < item.end; ++i)\n                 center_bbox.extend(centers[primitive_indices[i]]);\n \n-            int    best_axis = -1;\n-            size_t best_split = 0;\n-            Scalar best_cost  = std::numeric_limits<Scalar>::max();\n+            size_t best_split[3] = { 0, 0, 0 };\n+            Scalar best_cost[3] = {\n+                std::numeric_limits<Scalar>::max(),\n+                std::numeric_limits<Scalar>::max(),\n+                std::numeric_limits<Scalar>::max()\n+            };\n             std::array<Bin, bin_count> bins_per_axis[3];\n \n             auto inverse = Vec3(bin_count) * center_bbox.diagonal().inverse();\n@@ -302,6 +305,7 @@ struct BVH {\n                 return std::min(size_t(center[axis] * inverse[axis] + base[axis]), size_t(bin_count - 1));\n             };\n \n+            #pragma omp taskloop if (item.work_size() > parallel_threshold) grainsize(1) default(shared)\n             for (int axis = 0; axis < 3; ++axis) {\n                 auto& bins = bins_per_axis[axis];\n \n@@ -335,22 +339,27 @@ struct BVH {\n                     current_bbox.extend(bins[i].bbox);\n                     current_count += bins[i].primitive_count;\n                     float cost = current_bbox.half_area() * current_count + bins[i + 1].right_cost;\n-                    if (cost < best_cost) {\n-                        best_axis  = axis;\n-                        best_split = i + 1;\n-                        best_cost  = cost;\n+                    if (cost < best_cost[axis]) {\n+                        best_split[axis] = i + 1;\n+                        best_cost[axis]  = cost;\n                     }\n                 }\n             }\n \n+            int best_axis = 0;\n+            if (best_cost[0] > best_cost[1])\n+                best_axis = 1;\n+            if (best_cost[best_axis] > best_cost[2])\n+                best_axis = 2;\n+\n             size_t total_primitives = item.end - item.begin;\n             float  half_total_area  = node.bbox.half_area();\n \n             // Check that the split is useful\n-            if (best_split != 0 && best_cost + bvh->traversal_cost * half_total_area < total_primitives * half_total_area) {\n+            if (best_split[best_axis] != 0 && best_cost[best_axis] + bvh->traversal_cost * half_total_area < total_primitives * half_total_area) {\n                 // Split primitives according to split position\n                 size_t begin_right = std::partition(primitive_indices + item.begin, primitive_indices + item.end, [&] (size_t i) {\n-                    return bin_index(centers[i], best_axis) < best_split;\n+                    return bin_index(centers[i], best_axis) < best_split[best_axis];\n                 }) - primitive_indices;\n \n                 // Check that the split does not leave one side empty\n@@ -368,10 +377,10 @@ struct BVH {\n                     // Compute the bounding boxes of each node\n                     auto& bins = bins_per_axis[best_axis];\n                     left.bbox = BBox::empty();\n-                    for (size_t i = 0; i < best_split; ++i)\n+                    for (size_t i = 0; i < best_split[best_axis]; ++i)\n                         left.bbox.extend(bins[i].bbox);\n                     right.bbox = BBox::empty();\n-                    for (size_t i = best_split; i < bin_count; ++i)\n+                    for (size_t i = best_split[best_axis]; i < bin_count; ++i)\n                         right.bbox.extend(bins[i].bbox);\n \n                     // Return new work items"
+            }
+        ],
+        "lines_added": 20,
+        "lines_removed": 11
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.9747672674278552,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9747672674278552,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999492777686,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.9264591948536022,
+        "relative_improvement": -0.10000000000000009,
+        "absolute_improvement_ms": -1.0000000000000009,
+        "old_mean_ms": 10.000000000000002,
+        "new_mean_ms": 11.000000000000004,
+        "old_std_ms": 1.7643790169011568e-15,
+        "new_std_ms": 4.025778999364489,
+        "effect_size_cohens_d": -0.35128941817132653,
+        "old_ci95_ms": [
+            10.000000000000002,
+            10.000000000000002
+        ],
+        "new_ci95_ms": [
+            9.49674941640542,
+            12.503250583594586
+        ],
+        "old_ci99_ms": [
+            10.0,
+            10.000000000000004
+        ],
+        "new_ci99_ms": [
+            8.974047200888624,
+            13.025952799111382
+        ],
+        "new_times_s": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.02,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.03,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+        ],
+        "old_times_s": [
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01,
+            0.01
+        ]
+    },
+    "tests": {
+        "total_tests": 0,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": []
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
+}

@@ -1,0 +1,329 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:00:28.580092",
+    "repository": "https://github.com/ERGO-Code/HiGHS",
+    "repository_name": "ERGO-Code/HiGHS"
+  },
+  "commit_info": {
+    "old_sha": "ba3e28db61d8b470721f87bf1ce868852d75ed00",
+    "new_sha": "5addb609e0d3bce9fe6aebe86dff602e2f51b7c5",
+    "commit_message": [
+      "QUASS: Performance: buffer some Vectors to avoid repeated memory allocation"
+    ],
+    "commit_date": "2024-01-31T00:29:53+00:00",
+    "patch": [
+      "--- src/qpsolver/basis.cpp\n@@ -5,7 +5,8 @@\n \n Basis::Basis(Runtime& rt, std::vector<HighsInt> active,\n              std::vector<BasisStatus> status, std::vector<HighsInt> inactive)\n-    : runtime(rt),\n+    : Ztprod_res(rt.instance.num_var),\n+      runtime(rt),\n       buffer_column_aq(rt.instance.num_var),\n       buffer_row_ep(rt.instance.num_var) {\n   buffer_vec2hvec.setup(rt.instance.num_var);\n@@ -275,14 +276,14 @@ Vector Basis::recomputex(const Instance& inst) {\n \n Vector& Basis::Ztprod(const Vector& rhs, Vector& target, bool buffer,\n                       HighsInt q) {\n-  Vector res_ = ftran(rhs, buffer, q);\n+  ftran(rhs, Ztprod_res, buffer, q);\n \n   target.reset();\n   for (size_t i = 0; i < nonactiveconstraintsidx.size(); i++) {\n     HighsInt nonactive = nonactiveconstraintsidx[i];\n     HighsInt idx = constraintindexinbasisfactor[nonactive];\n     target.index[i] = static_cast<HighsInt>(i);\n-    target.value[i] = res_.value[idx];\n+    target.value[i] = Ztprod_res.value[idx];\n   }\n   target.resparsify();\n   return target;\n--- src/qpsolver/basis.hpp\n@@ -16,6 +16,7 @@\n \n class Basis {\n   HVector buffer_vec2hvec;\n+  Vector Ztprod_res;\n \n   HVector& vec2hvec(const Vector& vec) {\n     buffer_vec2hvec.clear();\n--- src/qpsolver/dantzigpricing.hpp\n@@ -55,7 +55,6 @@ class DantzigPricing : public Pricing {\n       : runtime(rt), basis(bas), redcosts(rc){};\n \n   HighsInt price(const Vector& x, const Vector& gradient) {\n-    // Vector lambda = basis.ftran(gradient);\n     HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());\n     return minidx;\n   }\n--- src/qpsolver/devexharrispricing.hpp\n@@ -11,7 +11,7 @@ class DevexHarrisPricing : public Pricing {\n  private:\n   Runtime& runtime;\n   Basis& basis;\n-\n+  ReducedCosts& redcosts;\n   std::vector<double> weights;\n \n   HighsInt chooseconstrainttodrop(const Vector& lambda) {\n@@ -52,14 +52,14 @@ class DevexHarrisPricing : public Pricing {\n   }\n \n  public:\n-  DevexHarrisPricing(Runtime& rt, Basis& bas)\n+  DevexHarrisPricing(Runtime& rt, Basis& bas, ReducedCosts& rc)\n       : runtime(rt),\n-        basis(bas),\n-        weights(std::vector<double>(rt.instance.num_var, 1.0)){};\n+        basis(bas), \n+        redcosts(rc),\n+        weights(std::vector<double>(rt.instance.num_var, 1.0)) {};\n \n   HighsInt price(const Vector& x, const Vector& gradient) {\n-    Vector lambda = basis.ftran(gradient);\n-    HighsInt minidx = chooseconstrainttodrop(lambda);\n+    HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());\n     return minidx;\n   }\n \n--- src/qpsolver/quass.cpp\n@@ -79,7 +79,7 @@ static void computerowmove(Runtime& runtime, Basis& basis, Vector& p,\n static Vector& computesearchdirection_minor(Runtime& rt, Basis& bas,\n                                      CholeskyFactor& cf,\n                                      ReducedGradient& redgrad, Vector& p) {\n-  Vector g2 = -redgrad.get();\n+  Vector g2 = -redgrad.get(); // TODO PERF: buffer Vector\n   g2.sanitize();\n   cf.solve(g2);\n \n@@ -93,7 +93,7 @@ static Vector& computesearchdirection_major(Runtime& runtime, Basis& basis,\n                                      CholeskyFactor& factor, const Vector& yp,\n                                      Gradient& gradient, Vector& gyp, Vector& l,\n                                      Vector& m, Vector& p) {\n-  Vector yyp = yp;\n+  Vector yyp = yp; // TODO PERF: buffer Vector\n   // if (gradient.getGradient().dot(yp) > 0.0) {\n   //   yyp.scale(-1.0);\n   // }\n@@ -102,7 +102,7 @@ static Vector& computesearchdirection_major(Runtime& runtime, Basis& basis,\n     basis.Ztprod(gyp, m);\n     l = m;\n     factor.solveL(l);\n-    Vector v = l;\n+    Vector v = l; // TODO PERF: buffer Vector\n     factor.solveLT(v);\n     basis.Zprod(v, p);\n     if (gradient.getGradient().dot(yyp) < 0.0) {\n@@ -146,7 +146,7 @@ static QpSolverStatus reduce(Runtime& rt, Basis& basis, const HighsInt newactive\n   }\n \n   // TODO: this operation is inefficient.\n-  Vector aq = rt.instance.A.t().extractcol(newactivecon);\n+  Vector aq = rt.instance.A.t().extractcol(newactivecon); // TODO PERF: buffer Vector\n   basis.Ztprod(aq, buffer_d, true, newactivecon);\n \n   maxabsd = 0;\n@@ -428,7 +428,7 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim\n   runtime.instance.sumnumprimalinfeasibilities(\n       runtime.primal, runtime.instance.A.mat_vec(runtime.primal));\n \n-  Vector lambda = redcosts.getReducedCosts();\n+  Vector& lambda = redcosts.getReducedCosts();\n   for (auto e : basis.getactive()) {\n     HighsInt indexinbasis = basis.getindexinfactor()[e];\n     if (e >= runtime.instance.num_con) {\n--- src/qpsolver/steepestedgepricing.hpp\n@@ -11,7 +11,7 @@ class SteepestEdgePricing : public Pricing {\n  private:\n   Runtime& runtime;\n   Basis& basis;\n-\n+  ReducedCosts& redcosts;\n   std::vector<double> weights;\n \n   HighsInt chooseconstrainttodrop(const Vector& lambda) {\n@@ -52,14 +52,14 @@ class SteepestEdgePricing : public Pricing {\n   }\n \n  public:\n-  SteepestEdgePricing(Runtime& rt, Basis& bas)\n+  SteepestEdgePricing(Runtime& rt, Basis& bas, ReducedCosts& rc)\n       : runtime(rt),\n         basis(bas),\n-        weights(std::vector<double>(rt.instance.num_var, 1.0)){};\n+        redcosts(rc),\n+        weights(std::vector<double>(rt.instance.num_var, 1.0)) {};\n \n   HighsInt price(const Vector& x, const Vector& gradient) {\n-    Vector lambda = basis.ftran(gradient);\n-    HighsInt minidx = chooseconstrainttodrop(lambda);\n+    HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());\n     return minidx;\n   }\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "src/qpsolver/basis.cpp",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 3,
+        "changes": 7,
+        "patch": "@@ -5,7 +5,8 @@\n \n Basis::Basis(Runtime& rt, std::vector<HighsInt> active,\n              std::vector<BasisStatus> status, std::vector<HighsInt> inactive)\n-    : runtime(rt),\n+    : Ztprod_res(rt.instance.num_var),\n+      runtime(rt),\n       buffer_column_aq(rt.instance.num_var),\n       buffer_row_ep(rt.instance.num_var) {\n   buffer_vec2hvec.setup(rt.instance.num_var);\n@@ -275,14 +276,14 @@ Vector Basis::recomputex(const Instance& inst) {\n \n Vector& Basis::Ztprod(const Vector& rhs, Vector& target, bool buffer,\n                       HighsInt q) {\n-  Vector res_ = ftran(rhs, buffer, q);\n+  ftran(rhs, Ztprod_res, buffer, q);\n \n   target.reset();\n   for (size_t i = 0; i < nonactiveconstraintsidx.size(); i++) {\n     HighsInt nonactive = nonactiveconstraintsidx[i];\n     HighsInt idx = constraintindexinbasisfactor[nonactive];\n     target.index[i] = static_cast<HighsInt>(i);\n-    target.value[i] = res_.value[idx];\n+    target.value[i] = Ztprod_res.value[idx];\n   }\n   target.resparsify();\n   return target;"
+      },
+      {
+        "filename": "src/qpsolver/basis.hpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "patch": "@@ -16,6 +16,7 @@\n \n class Basis {\n   HVector buffer_vec2hvec;\n+  Vector Ztprod_res;\n \n   HVector& vec2hvec(const Vector& vec) {\n     buffer_vec2hvec.clear();"
+      },
+      {
+        "filename": "src/qpsolver/dantzigpricing.hpp",
+        "status": "modified",
+        "additions": 0,
+        "deletions": 1,
+        "changes": 1,
+        "patch": "@@ -55,7 +55,6 @@ class DantzigPricing : public Pricing {\n       : runtime(rt), basis(bas), redcosts(rc){};\n \n   HighsInt price(const Vector& x, const Vector& gradient) {\n-    // Vector lambda = basis.ftran(gradient);\n     HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());\n     return minidx;\n   }"
+      },
+      {
+        "filename": "src/qpsolver/devexharrispricing.hpp",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 6,
+        "changes": 12,
+        "patch": "@@ -11,7 +11,7 @@ class DevexHarrisPricing : public Pricing {\n  private:\n   Runtime& runtime;\n   Basis& basis;\n-\n+  ReducedCosts& redcosts;\n   std::vector<double> weights;\n \n   HighsInt chooseconstrainttodrop(const Vector& lambda) {\n@@ -52,14 +52,14 @@ class DevexHarrisPricing : public Pricing {\n   }\n \n  public:\n-  DevexHarrisPricing(Runtime& rt, Basis& bas)\n+  DevexHarrisPricing(Runtime& rt, Basis& bas, ReducedCosts& rc)\n       : runtime(rt),\n-        basis(bas),\n-        weights(std::vector<double>(rt.instance.num_var, 1.0)){};\n+        basis(bas), \n+        redcosts(rc),\n+        weights(std::vector<double>(rt.instance.num_var, 1.0)) {};\n \n   HighsInt price(const Vector& x, const Vector& gradient) {\n-    Vector lambda = basis.ftran(gradient);\n-    HighsInt minidx = chooseconstrainttodrop(lambda);\n+    HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());\n     return minidx;\n   }\n "
+      },
+      {
+        "filename": "src/qpsolver/quass.cpp",
+        "status": "modified",
+        "additions": 5,
+        "deletions": 5,
+        "changes": 10,
+        "patch": "@@ -79,7 +79,7 @@ static void computerowmove(Runtime& runtime, Basis& basis, Vector& p,\n static Vector& computesearchdirection_minor(Runtime& rt, Basis& bas,\n                                      CholeskyFactor& cf,\n                                      ReducedGradient& redgrad, Vector& p) {\n-  Vector g2 = -redgrad.get();\n+  Vector g2 = -redgrad.get(); // TODO PERF: buffer Vector\n   g2.sanitize();\n   cf.solve(g2);\n \n@@ -93,7 +93,7 @@ static Vector& computesearchdirection_major(Runtime& runtime, Basis& basis,\n                                      CholeskyFactor& factor, const Vector& yp,\n                                      Gradient& gradient, Vector& gyp, Vector& l,\n                                      Vector& m, Vector& p) {\n-  Vector yyp = yp;\n+  Vector yyp = yp; // TODO PERF: buffer Vector\n   // if (gradient.getGradient().dot(yp) > 0.0) {\n   //   yyp.scale(-1.0);\n   // }\n@@ -102,7 +102,7 @@ static Vector& computesearchdirection_major(Runtime& runtime, Basis& basis,\n     basis.Ztprod(gyp, m);\n     l = m;\n     factor.solveL(l);\n-    Vector v = l;\n+    Vector v = l; // TODO PERF: buffer Vector\n     factor.solveLT(v);\n     basis.Zprod(v, p);\n     if (gradient.getGradient().dot(yyp) < 0.0) {\n@@ -146,7 +146,7 @@ static QpSolverStatus reduce(Runtime& rt, Basis& basis, const HighsInt newactive\n   }\n \n   // TODO: this operation is inefficient.\n-  Vector aq = rt.instance.A.t().extractcol(newactivecon);\n+  Vector aq = rt.instance.A.t().extractcol(newactivecon); // TODO PERF: buffer Vector\n   basis.Ztprod(aq, buffer_d, true, newactivecon);\n \n   maxabsd = 0;\n@@ -428,7 +428,7 @@ void Quass::solve(const Vector& x0, const Vector& ra, Basis& b0, HighsTimer& tim\n   runtime.instance.sumnumprimalinfeasibilities(\n       runtime.primal, runtime.instance.A.mat_vec(runtime.primal));\n \n-  Vector lambda = redcosts.getReducedCosts();\n+  Vector& lambda = redcosts.getReducedCosts();\n   for (auto e : basis.getactive()) {\n     HighsInt indexinbasis = basis.getindexinfactor()[e];\n     if (e >= runtime.instance.num_con) {"
+      },
+      {
+        "filename": "src/qpsolver/steepestedgepricing.hpp",
+        "status": "modified",
+        "additions": 5,
+        "deletions": 5,
+        "changes": 10,
+        "patch": "@@ -11,7 +11,7 @@ class SteepestEdgePricing : public Pricing {\n  private:\n   Runtime& runtime;\n   Basis& basis;\n-\n+  ReducedCosts& redcosts;\n   std::vector<double> weights;\n \n   HighsInt chooseconstrainttodrop(const Vector& lambda) {\n@@ -52,14 +52,14 @@ class SteepestEdgePricing : public Pricing {\n   }\n \n  public:\n-  SteepestEdgePricing(Runtime& rt, Basis& bas)\n+  SteepestEdgePricing(Runtime& rt, Basis& bas, ReducedCosts& rc)\n       : runtime(rt),\n         basis(bas),\n-        weights(std::vector<double>(rt.instance.num_var, 1.0)){};\n+        redcosts(rc),\n+        weights(std::vector<double>(rt.instance.num_var, 1.0)) {};\n \n   HighsInt price(const Vector& x, const Vector& gradient) {\n-    Vector lambda = basis.ftran(gradient);\n-    HighsInt minidx = chooseconstrainttodrop(lambda);\n+    HighsInt minidx = chooseconstrainttodrop(redcosts.getReducedCosts());\n     return minidx;\n   }\n "
+      }
+    ],
+    "lines_added": 21,
+    "lines_removed": 20
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.46347161687378735,
+    "is_pair_significant": false,
+    "pair_p_value": 0.4622318005965333,
+    "is_binom_significant": false,
+    "binom_p_value": 0.707667644135654,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.5694082744888428,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.25716473098655035,
+    "relative_improvement": 0.05549845837615631,
+    "absolute_improvement_ms": 18.000000000000014,
+    "old_mean_ms": 324.3333333333333,
+    "new_mean_ms": 306.3333333333333,
+    "old_std_ms": 86.37062612642833,
+    "new_std_ms": 67.18391296225265,
+    "effect_size_cohens_d": 0.23263539753162712,
+    "old_ci95_ms": [
+      292.0820115020855,
+      356.5846551645811
+    ],
+    "new_ci95_ms": [
+      281.2464479418061,
+      331.4202187248605
+    ],
+    "old_ci99_ms": [
+      280.8677551708304,
+      367.7989114958362
+    ],
+    "new_ci99_ms": [
+      272.5233709527313,
+      340.1432957139353
+    ],
+    "new_times_s": [
+      0.37,
+      0.44,
+      0.37,
+      0.24,
+      0.43,
+      0.34,
+      0.27,
+      0.29,
+      0.31,
+      0.27,
+      0.23,
+      0.32,
+      0.27,
+      0.31,
+      0.4,
+      0.36,
+      0.32,
+      0.43,
+      0.27,
+      0.23,
+      0.26,
+      0.44,
+      0.24,
+      0.29,
+      0.34,
+      0.23,
+      0.25,
+      0.26,
+      0.25,
+      0.27,
+      0.26
+    ],
+    "old_times_s": [
+      0.27,
+      0.29,
+      0.29,
+      0.36,
+      0.26,
+      0.52,
+      0.26,
+      0.38,
+      0.33,
+      0.33,
+      0.23,
+      0.35,
+      0.25,
+      0.25,
+      0.36,
+      0.57,
+      0.34,
+      0.28,
+      0.27,
+      0.36,
+      0.26,
+      0.42,
+      0.49,
+      0.23,
+      0.25,
+      0.28,
+      0.35,
+      0.25,
+      0.37,
+      0.32,
+      0.23
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "cxx_examples_call_highs_from_cpp",
+        "is_significant": false,
+        "p_value": 0.2886489453281933,
+        "is_pair_significant": false,
+        "pair_p_value": 0.2780225801686075,
+        "is_binom_significant": false,
+        "binom_p_value": 0.5747229903936386,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.401083920335044,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.14831442251724702,
+        "relative_improvement": 0.08442982456140347,
+        "absolute_improvement_ms": 27.500000000000025,
+        "old_mean_ms": 325.7142857142857,
+        "new_mean_ms": 298.2142857142857,
+        "old_std_ms": 88.87896770029958,
+        "new_std_ms": 63.715430506715435,
+        "effect_size_cohens_d": 0.3556296423423199,
+        "old_ci95_ms": [
+          291.25061986668936,
+          360.1779515618821
+        ],
+        "new_ci95_ms": [
+          273.5080209686862,
+          322.9205504598852
+        ],
+        "old_ci99_ms": [
+          279.1763817125109,
+          372.2521897160606
+        ],
+        "new_ci99_ms": [
+          264.85225794690774,
+          331.57631348166365
+        ],
+        "new_times": [
+          0.24,
+          0.43,
+          0.34,
+          0.27,
+          0.29,
+          0.3,
+          0.27,
+          0.23,
+          0.32,
+          0.27,
+          0.31,
+          0.4,
+          0.36,
+          0.32,
+          0.43,
+          0.27,
+          0.23,
+          0.26,
+          0.44,
+          0.23,
+          0.29,
+          0.34,
+          0.23,
+          0.25,
+          0.26,
+          0.25,
+          0.27,
+          0.25
+        ],
+        "old_times": [
+          0.36,
+          0.26,
+          0.52,
+          0.26,
+          0.38,
+          0.33,
+          0.33,
+          0.23,
+          0.34,
+          0.25,
+          0.25,
+          0.36,
+          0.57,
+          0.34,
+          0.28,
+          0.27,
+          0.36,
+          0.26,
+          0.41,
+          0.49,
+          0.23,
+          0.25,
+          0.28,
+          0.35,
+          0.24,
+          0.37,
+          0.32,
+          0.23
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

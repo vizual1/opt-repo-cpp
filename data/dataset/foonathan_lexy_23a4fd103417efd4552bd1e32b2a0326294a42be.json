@@ -1,0 +1,393 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:13.588354",
+    "repository": "https://github.com/foonathan/lexy",
+    "repository_name": "foonathan/lexy"
+  },
+  "commit_info": {
+    "old_sha": "96a270761a18dd85c92601545f624983990fac04",
+    "new_sha": "23a4fd103417efd4552bd1e32b2a0326294a42be",
+    "commit_message": [
+      "Inline the loop functions of delimited/list\n\nThis both improves performance and the output of `perf record`."
+    ],
+    "commit_date": "2022-11-29T20:23:56+00:00",
+    "patch": [
+      "--- include/lexy/dsl/delimited.hpp\n@@ -205,7 +205,8 @@ struct _del : rule_base\n                                       _del_limit<Limit>, Limit>;\n \n     template <typename CloseParser, typename Context, typename Reader, typename Sink>\n-    static constexpr bool _loop(CloseParser& close, Context& context, Reader& reader, Sink& sink)\n+    LEXY_PARSER_FUNC static bool _loop(CloseParser& close, Context& context, Reader& reader,\n+                                       Sink& sink)\n     {\n         auto                     del_begin = reader.position();\n         _del_chars<Char, Reader> cur_chars(reader);\n--- include/lexy/dsl/list.hpp\n@@ -15,7 +15,7 @@ template <typename Item, typename Sep>\n struct _lst : _copy_base<Item>\n {\n     template <typename Context, typename Reader, typename Sink>\n-    static constexpr bool _loop(Context& context, Reader& reader, Sink& sink)\n+    LEXY_PARSER_FUNC static bool _loop(Context& context, Reader& reader, Sink& sink)\n     {\n         while (true)\n         {\n@@ -185,8 +185,8 @@ struct _lstt : rule_base\n     };\n \n     template <typename TermParser, typename Context, typename Reader, typename Sink>\n-    static constexpr bool _loop(_state initial_state, TermParser& term, Context& context,\n-                                Reader& reader, Sink& sink)\n+    LEXY_PARSER_FUNC static bool _loop(_state initial_state, TermParser& term, Context& context,\n+                                       Reader& reader, Sink& sink)\n     {\n         auto state = initial_state;\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "include/lexy/dsl/delimited.hpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 1,
+        "changes": 3,
+        "patch": "@@ -205,7 +205,8 @@ struct _del : rule_base\n                                       _del_limit<Limit>, Limit>;\n \n     template <typename CloseParser, typename Context, typename Reader, typename Sink>\n-    static constexpr bool _loop(CloseParser& close, Context& context, Reader& reader, Sink& sink)\n+    LEXY_PARSER_FUNC static bool _loop(CloseParser& close, Context& context, Reader& reader,\n+                                       Sink& sink)\n     {\n         auto                     del_begin = reader.position();\n         _del_chars<Char, Reader> cur_chars(reader);"
+      },
+      {
+        "filename": "include/lexy/dsl/list.hpp",
+        "status": "modified",
+        "additions": 3,
+        "deletions": 3,
+        "changes": 6,
+        "patch": "@@ -15,7 +15,7 @@ template <typename Item, typename Sep>\n struct _lst : _copy_base<Item>\n {\n     template <typename Context, typename Reader, typename Sink>\n-    static constexpr bool _loop(Context& context, Reader& reader, Sink& sink)\n+    LEXY_PARSER_FUNC static bool _loop(Context& context, Reader& reader, Sink& sink)\n     {\n         while (true)\n         {\n@@ -185,8 +185,8 @@ struct _lstt : rule_base\n     };\n \n     template <typename TermParser, typename Context, typename Reader, typename Sink>\n-    static constexpr bool _loop(_state initial_state, TermParser& term, Context& context,\n-                                Reader& reader, Sink& sink)\n+    LEXY_PARSER_FUNC static bool _loop(_state initial_state, TermParser& term, Context& context,\n+                                       Reader& reader, Sink& sink)\n     {\n         auto state = initial_state;\n "
+      }
+    ],
+    "lines_added": 5,
+    "lines_removed": 4
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLEXY_BUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLEXY_BUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.8811560702033249,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9647541853069278,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9506314266473055,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.967218666822995,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.25465032963940004,
+    "relative_improvement": -0.030945558739254968,
+    "absolute_improvement_ms": -36.000000000000696,
+    "old_mean_ms": 1163.333333333333,
+    "new_mean_ms": 1199.3333333333337,
+    "old_std_ms": 278.6585270768574,
+    "new_std_ms": 341.4061524336377,
+    "effect_size_cohens_d": -0.11552689956073772,
+    "old_ci95_ms": [
+      1059.2805292628614,
+      1267.386137403805
+    ],
+    "new_ci95_ms": [
+      1071.8501808876422,
+      1326.8164857790255
+    ],
+    "old_ci99_ms": [
+      1023.0998473380182,
+      1303.566819328648
+    ],
+    "new_ci99_ms": [
+      1027.5224241239705,
+      1371.1442425426972
+    ],
+    "new_times_s": [
+      1.68,
+      2.01,
+      1.56,
+      2.07,
+      2.12,
+      1.14,
+      1.13,
+      1.15,
+      1.11,
+      1.64,
+      1.26,
+      1.04,
+      1.08,
+      1.17,
+      1.03,
+      0.95,
+      0.95,
+      1.14,
+      0.96,
+      0.95,
+      0.95,
+      0.95,
+      1.09,
+      0.95,
+      1.29,
+      1.29,
+      1.18,
+      0.96,
+      0.95,
+      0.96,
+      0.95
+    ],
+    "old_times_s": [
+      1.78,
+      1.46,
+      2.17,
+      1.93,
+      1.36,
+      1.31,
+      1.21,
+      1.05,
+      0.98,
+      0.98,
+      1.22,
+      1.13,
+      0.98,
+      1.09,
+      0.97,
+      0.98,
+      1.11,
+      0.98,
+      0.98,
+      0.98,
+      1.18,
+      1.07,
+      0.97,
+      0.98,
+      0.98,
+      1.07,
+      1.37,
+      0.99,
+      1.08,
+      1.16,
+      1.18
+    ]
+  },
+  "tests": {
+    "total_tests": 2,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "lexy_test",
+        "is_significant": false,
+        "p_value": 0.9169315305062353,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9810111624032732,
+        "is_binom_significant": false,
+        "binom_p_value": 0.956420723348856,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9674568321394604,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.21969026678617687,
+        "relative_improvement": -0.03584347254192699,
+        "absolute_improvement_ms": -38.92857142857142,
+        "old_mean_ms": 1086.0714285714287,
+        "new_mean_ms": 1125.0,
+        "old_std_ms": 193.45473747038469,
+        "new_std_ms": 298.43418531221084,
+        "effect_size_cohens_d": -0.15479585216149971,
+        "old_ci95_ms": [
+          1011.0575124411747,
+          1161.0853447016825
+        ],
+        "new_ci95_ms": [
+          1009.2793035717829,
+          1240.7206964282173
+        ],
+        "old_ci99_ms": [
+          984.7766202041281,
+          1187.366236938729
+        ],
+        "new_ci99_ms": [
+          968.736917447785,
+          1281.2630825522149
+        ],
+        "new_times": [
+          2.04,
+          2.04,
+          1.11,
+          1.11,
+          1.12,
+          1.09,
+          1.58,
+          1.23,
+          1.01,
+          1.05,
+          1.14,
+          1.01,
+          0.92,
+          0.92,
+          1.07,
+          0.93,
+          0.92,
+          0.93,
+          0.92,
+          1.06,
+          0.93,
+          1.26,
+          1.24,
+          1.16,
+          0.93,
+          0.92,
+          0.93,
+          0.93
+        ],
+        "old_times": [
+          1.86,
+          1.33,
+          1.28,
+          1.18,
+          1.02,
+          0.95,
+          0.95,
+          1.16,
+          1.1,
+          0.95,
+          1.07,
+          0.95,
+          0.96,
+          1.08,
+          0.95,
+          0.95,
+          0.95,
+          1.15,
+          1.04,
+          0.95,
+          0.95,
+          0.95,
+          1.04,
+          1.34,
+          0.97,
+          1.05,
+          1.12,
+          1.16
+        ]
+      },
+      {
+        "test_name": "turing",
+        "is_significant": false,
+        "p_value": 0.924138757109663,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9131585379680052,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999999962747097,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999950727222319,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.7287867938379904,
+        "relative_improvement": -0.03448275862068969,
+        "absolute_improvement_ms": -0.357142857142858,
+        "old_mean_ms": 10.357142857142858,
+        "new_mean_ms": 10.714285714285715,
+        "old_std_ms": 1.8898223650461365,
+        "new_std_ms": 2.62265264156481,
+        "effect_size_cohens_d": -0.15624434890323363,
+        "old_ci95_ms": [
+          9.624346244114186,
+          11.08993947017153
+        ],
+        "new_ci95_ms": [
+          9.697327185041898,
+          11.731244243529535
+        ],
+        "old_ci99_ms": [
+          9.367613229599403,
+          11.346672484686314
+        ],
+        "new_ci99_ms": [
+          9.341038926871319,
+          12.087532501700114
+        ],
+        "new_times": [
+          0.01,
+          0.02,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.02,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.02,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

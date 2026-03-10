@@ -1,0 +1,289 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:00:29.784564",
+    "repository": "https://github.com/ERGO-Code/HiGHS",
+    "repository_name": "ERGO-Code/HiGHS"
+  },
+  "commit_info": {
+    "old_sha": "c09c0101219a60baaac68328eefeef19c57941ff",
+    "new_sha": "7a799cca6c8b907ec440dfcb0c1f855014d606ea",
+    "commit_message": [
+      "QUASS problems without constraints (just bounds) no longer recompute reduced hessian factorization at every iteration"
+    ],
+    "commit_date": "2024-03-24T15:34:08+00:00",
+    "patch": [
+      "--- src/qpsolver/factor.hpp\n@@ -204,7 +204,7 @@ class CholeskyFactor {\n   }\n \n   void solve(Vector& rhs) {\n-    if (!uptodate || (numberofreduces >= runtime.instance.num_con / 2 &&\n+    if (!uptodate || (numberofreduces >= runtime.instance.num_var / 2 &&\n                       !has_negative_eigenvalue)) {\n       recompute();\n     }"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/qpsolver/factor.hpp",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "changes": 2,
+        "patch": "@@ -204,7 +204,7 @@ class CholeskyFactor {\n   }\n \n   void solve(Vector& rhs) {\n-    if (!uptodate || (numberofreduces >= runtime.instance.num_con / 2 &&\n+    if (!uptodate || (numberofreduces >= runtime.instance.num_var / 2 &&\n                       !has_negative_eigenvalue)) {\n       recompute();\n     }"
+      }
+    ],
+    "lines_added": 1,
+    "lines_removed": 1
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.34830765846882517,
+    "is_pair_significant": false,
+    "pair_p_value": 0.3222847890733008,
+    "is_binom_significant": false,
+    "binom_p_value": 0.10024421103298667,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.2263315320708108,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.18703306492876104,
+    "relative_improvement": 0.07029478458049884,
+    "absolute_improvement_ms": 30.999999999999915,
+    "old_mean_ms": 440.99999999999994,
+    "new_mean_ms": 410.00000000000006,
+    "old_std_ms": 106.0042289332088,
+    "new_std_ms": 74.13873295476482,
+    "effect_size_cohens_d": 0.3389096764456702,
+    "old_ci95_ms": [
+      401.41737039402926,
+      480.5826296059706
+    ],
+    "new_ci95_ms": [
+      382.3161421432209,
+      437.68385785677924
+    ],
+    "old_ci99_ms": [
+      387.65391111663604,
+      494.34608888336385
+    ],
+    "new_ci99_ms": [
+      372.69005984283103,
+      447.309940157169
+    ],
+    "new_times_s": [
+      0.36,
+      0.35,
+      0.45,
+      0.51,
+      0.42,
+      0.34,
+      0.45,
+      0.42,
+      0.27,
+      0.48,
+      0.4,
+      0.34,
+      0.43,
+      0.38,
+      0.37,
+      0.38,
+      0.45,
+      0.5,
+      0.62,
+      0.47,
+      0.45,
+      0.42,
+      0.42,
+      0.35,
+      0.45,
+      0.46,
+      0.33,
+      0.38,
+      0.27,
+      0.31,
+      0.43
+    ],
+    "old_times_s": [
+      0.54,
+      0.31,
+      0.5,
+      0.62,
+      0.29,
+      0.45,
+      0.3,
+      0.38,
+      0.38,
+      0.77,
+      0.35,
+      0.52,
+      0.46,
+      0.42,
+      0.39,
+      0.44,
+      0.48,
+      0.44,
+      0.4,
+      0.63,
+      0.5,
+      0.58,
+      0.41,
+      0.45,
+      0.45,
+      0.49,
+      0.36,
+      0.33,
+      0.39,
+      0.37,
+      0.37
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "cxx_examples_call_highs_from_cpp",
+        "is_significant": false,
+        "p_value": 0.3124378260996546,
+        "is_pair_significant": false,
+        "pair_p_value": 0.285550814442594,
+        "is_binom_significant": false,
+        "binom_p_value": 0.17246422544121742,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.19965807510037542,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.16235862872802387,
+        "relative_improvement": 0.07679870654810018,
+        "absolute_improvement_ms": 33.928571428571416,
+        "old_mean_ms": 441.7857142857143,
+        "new_mean_ms": 407.8571428571429,
+        "old_std_ms": 107.29169556171593,
+        "new_std_ms": 76.32082104424536,
+        "effect_size_cohens_d": 0.36441933998134923,
+        "old_ci95_ms": [
+          400.1823379219207,
+          483.38909064950786
+        ],
+        "new_ci95_ms": [
+          378.26301792814456,
+          437.45126778614116
+        ],
+        "old_ci99_ms": [
+          385.60672439155104,
+          497.9647041798775
+        ],
+        "new_ci99_ms": [
+          367.89480829143935,
+          447.8194774228464
+        ],
+        "new_times": [
+          0.51,
+          0.42,
+          0.34,
+          0.45,
+          0.42,
+          0.27,
+          0.48,
+          0.4,
+          0.34,
+          0.43,
+          0.37,
+          0.37,
+          0.38,
+          0.45,
+          0.5,
+          0.62,
+          0.46,
+          0.45,
+          0.42,
+          0.41,
+          0.35,
+          0.44,
+          0.45,
+          0.32,
+          0.37,
+          0.26,
+          0.31,
+          0.43
+        ],
+        "old_times": [
+          0.62,
+          0.28,
+          0.45,
+          0.29,
+          0.38,
+          0.38,
+          0.77,
+          0.35,
+          0.51,
+          0.46,
+          0.42,
+          0.38,
+          0.44,
+          0.48,
+          0.44,
+          0.4,
+          0.63,
+          0.5,
+          0.58,
+          0.41,
+          0.45,
+          0.44,
+          0.49,
+          0.36,
+          0.33,
+          0.39,
+          0.37,
+          0.37
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

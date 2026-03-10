@@ -1,0 +1,413 @@
+{
+    "metadata": {
+        "collection_date": "2026-01-14T18:40:44.473875",
+        "repository": "https://github.com/ERGO-Code/HiGHS",
+        "repository_name": "ERGO-Code/HiGHS"
+    },
+    "commit_info": {
+        "old_sha": "76f2aed7ab8adf7d29041737cedfd1001e6ecd69",
+        "new_sha": "efb75a038695f16af1b4d9972e21375ec353f3a9",
+        "commit_message": [
+            "avoid unnecessary string copying due to pass-by-value signatures"
+        ],
+        "commit_date": "2022-05-19T05:38:58+00:00",
+        "patch": [
+            "--- src/Highs.h\n@@ -114,12 +114,12 @@ class Highs {\n   /**\n    * @brief Read in a model\n    */\n-  HighsStatus readModel(const std::string filename);\n+  HighsStatus readModel(const std::string& filename);\n \n   /**\n    * @brief Read in a basis\n    */\n-  HighsStatus readBasis(const std::string filename);\n+  HighsStatus readBasis(const std::string& filename);\n \n   /**\n    * @brief Presolve the incumbent model\n@@ -139,12 +139,12 @@ class Highs {\n   /**\n    * @brief Write the current solution to a file in a given style\n    */\n-  HighsStatus writeSolution(const std::string filename, const HighsInt style);\n+  HighsStatus writeSolution(const std::string& filename, const HighsInt style);\n \n   /**\n    * @brief Read a HiGHS solution file in a given style\n    */\n-  HighsStatus readSolution(const std::string filename, const HighsInt style);\n+  HighsStatus readSolution(const std::string& filename, const HighsInt style);\n \n   /**\n    * @brief Check the feasibility of the current solution. Of value\n@@ -174,14 +174,14 @@ class Highs {\n   HighsStatus setOptionValue(const std::string& option, const double value);\n \n   HighsStatus setOptionValue(const std::string& option,\n-                             const std::string value);\n+                             const std::string& value);\n \n   HighsStatus setOptionValue(const std::string& option, const char* value);\n \n   /**\n    * @brief Read option values from a file\n    */\n-  HighsStatus readOptions(const std::string filename);\n+  HighsStatus readOptions(const std::string& filename);\n \n   /**\n    * @brief Pass a HighsOptions instance to Highs\n@@ -222,7 +222,7 @@ class Highs {\n    * file, with the extension \".html\" producing HTML, otherwise using\n    * the standard format used to read options from a file.\n    */\n-  HighsStatus writeOptions(const std::string filename,  //!< The filename\n+  HighsStatus writeOptions(const std::string& filename,  //!< The filename\n                            const bool report_only_deviations = false) const;\n \n   /**\n@@ -249,7 +249,7 @@ class Highs {\n    * producing HTML, otherwise using the standard format used to read\n    * options from a file.\n    */\n-  HighsStatus writeInfo(const std::string filename) const;\n+  HighsStatus writeInfo(const std::string& filename) const;\n \n   /**\n    * @brief Get the value of infinity used by HiGHS\n@@ -551,12 +551,12 @@ class Highs {\n   /**\n    * @brief Write out the incumbent model to a file\n    */\n-  HighsStatus writeModel(const std::string filename);\n+  HighsStatus writeModel(const std::string& filename);\n \n   /**\n    * @brief Write out the internal HighsBasis instance to a file\n    */\n-  HighsStatus writeBasis(const std::string filename);\n+  HighsStatus writeBasis(const std::string& filename);\n \n   /**\n    * Methods for incumbent model modification\n@@ -842,7 +842,7 @@ class Highs {\n    * instance. The origin string is used to identify the source of the\n    * HighsBasis instance.\n    */\n-  HighsStatus setBasis(const HighsBasis& basis, const std::string origin = \"\");\n+  HighsStatus setBasis(const HighsBasis& basis, const std::string& origin = \"\");\n \n   /**\n    * @brief Clear the internal HighsBasis instance\n@@ -859,7 +859,7 @@ class Highs {\n   /**\n    * @brief Open a named log file\n    */\n-  HighsStatus openLogFile(const std::string log_file = \"\");\n+  HighsStatus openLogFile(const std::string& log_file = \"\");\n \n   /**\n    * @brief Interpret common qualifiers to string values\n@@ -978,13 +978,14 @@ class Highs {\n   HighsStatus setHighsOptionValue(const std::string& option,\n                                   const double value);\n \n-  HighsStatus setHighsOptionValue(const std::string& option,\n-                                  const std::string value  //!< The option value\n+  HighsStatus setHighsOptionValue(\n+      const std::string& option,\n+      const std::string& value  //!< The option value\n   );\n \n   HighsStatus setHighsOptionValue(const std::string& option, const char* value);\n \n-  HighsStatus readHighsOptions(const std::string filename  //!< The filename\n+  HighsStatus readHighsOptions(const std::string& filename  //!< The filename\n   );\n \n   HighsStatus passHighsOptions(const HighsOptions& options  //!< The options\n@@ -1008,7 +1009,7 @@ class Highs {\n   HighsStatus resetHighsOptions();\n \n   HighsStatus writeHighsOptions(\n-      const std::string filename,  //!< The filename\n+      const std::string& filename,  //!< The filename\n       const bool report_only_non_default_values = true);\n \n   HighsInt getSimplexIterationCount() {\n@@ -1027,22 +1028,19 @@ class Highs {\n   HighsStatus getHighsInfoValue(const std::string& info,\n                                 double& value) const;  //!< The info value\n \n-  HighsStatus writeHighsInfo(const std::string filename  //!< The filename\n+  HighsStatus writeHighsInfo(const std::string& filename  //!< The filename\n   );\n \n   double getHighsInfinity();\n \n   double getHighsRunTime();\n \n-  HighsStatus writeSolution(const std::string filename,\n-                            const bool pretty = false) const;\n-\n   const HighsModelStatus& getModelStatus(const bool scaled_model) const;\n \n   void logHeader();\n \n-  void deprecationMessage(const std::string method_name,\n-                          const std::string alt_method_name) const;\n+  void deprecationMessage(const std::string& method_name,\n+                          const std::string& alt_method_name) const;\n \n   // End of deprecated methods\n  private:\n@@ -1141,7 +1139,7 @@ class Highs {\n   HighsStatus returnFromHighs(const HighsStatus return_status);\n   void reportSolvedLpQpStats();\n \n-  void underDevelopmentLogMessage(const std::string method_name);\n+  void underDevelopmentLogMessage(const std::string& method_name);\n \n   // Interface methods\n   HighsStatus basisForSolution();\n@@ -1217,7 +1215,7 @@ class Highs {\n   bool aFormatOk(const HighsInt num_nz, const HighsInt format);\n   bool qFormatOk(const HighsInt num_nz, const HighsInt format);\n   void clearZeroHessian();\n-  HighsStatus checkOptimality(const std::string solver_type,\n+  HighsStatus checkOptimality(const std::string& solver_type,\n                               HighsStatus return_status);\n   HighsStatus invertRequirementError(std::string method_name);\n };\n--- src/lp_data/Highs.cpp\n@@ -79,7 +79,7 @@ HighsStatus Highs::setOptionValue(const std::string& option,\n }\n \n HighsStatus Highs::setOptionValue(const std::string& option,\n-                                  const std::string value) {\n+                                  const std::string& value) {\n   HighsLogOptions report_log_options = options_.log_options;\n   if (setLocalOptionValue(report_log_options, option, options_.log_options,\n                           options_.records, value) == OptionStatus::kOk)\n@@ -96,7 +96,7 @@ HighsStatus Highs::setOptionValue(const std::string& option,\n   return HighsStatus::kError;\n }\n \n-HighsStatus Highs::readOptions(const std::string filename) {\n+HighsStatus Highs::readOptions(const std::string& filename) {\n   if (filename.size() <= 0) {\n     highsLogUser(options_.log_options, HighsLogType::kWarning,\n                  \"Empty file name so not reading options\\n\");\n@@ -160,7 +160,7 @@ HighsStatus Highs::resetOptions() {\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::writeOptions(const std::string filename,\n+HighsStatus Highs::writeOptions(const std::string& filename,\n                                 const bool report_only_deviations) const {\n   HighsStatus return_status = HighsStatus::kOk;\n   FILE* file;\n@@ -217,7 +217,7 @@ HighsStatus Highs::getInfoValue(const std::string& info, double& value) const {\n   }\n }\n \n-HighsStatus Highs::writeInfo(const std::string filename) const {\n+HighsStatus Highs::writeInfo(const std::string& filename) const {\n   HighsStatus return_status = HighsStatus::kOk;\n   FILE* file;\n   bool html;\n@@ -484,7 +484,7 @@ HighsStatus Highs::passHessian(const HighsInt dim, const HighsInt num_nz,\n   return passHessian(hessian);\n }\n \n-HighsStatus Highs::readModel(const std::string filename) {\n+HighsStatus Highs::readModel(const std::string& filename) {\n   this->logHeader();\n   HighsStatus return_status = HighsStatus::kOk;\n   Filereader* reader =\n@@ -524,7 +524,7 @@ HighsStatus Highs::readModel(const std::string filename) {\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::readBasis(const std::string filename) {\n+HighsStatus Highs::readBasis(const std::string& filename) {\n   this->logHeader();\n   HighsStatus return_status = HighsStatus::kOk;\n   // Try to read basis file into read_basis\n@@ -549,7 +549,7 @@ HighsStatus Highs::readBasis(const std::string filename) {\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::writeModel(const std::string filename) {\n+HighsStatus Highs::writeModel(const std::string& filename) {\n   HighsStatus return_status = HighsStatus::kOk;\n \n   // Ensure that the LP is column-wise\n@@ -575,7 +575,7 @@ HighsStatus Highs::writeModel(const std::string filename) {\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::writeBasis(const std::string filename) {\n+HighsStatus Highs::writeBasis(const std::string& filename) {\n   HighsStatus return_status = HighsStatus::kOk;\n   HighsStatus call_status;\n   FILE* file;\n@@ -1598,7 +1598,8 @@ HighsStatus Highs::setLogCallback(void (*log_callback)(HighsLogType,\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::setBasis(const HighsBasis& basis, const std::string origin) {\n+HighsStatus Highs::setBasis(const HighsBasis& basis,\n+                            const std::string& origin) {\n   if (basis.alien) {\n     // An alien basis needs to be checked properly, since it may be\n     // singular, or even incomplete.\n@@ -2328,7 +2329,7 @@ HighsStatus Highs::postsolve(const HighsSolution& solution,\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::writeSolution(const std::string filename,\n+HighsStatus Highs::writeSolution(const std::string& filename,\n                                  const HighsInt style) {\n   HighsStatus return_status = HighsStatus::kOk;\n   HighsStatus call_status;\n@@ -2361,7 +2362,7 @@ HighsStatus Highs::writeSolution(const std::string filename,\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::readSolution(const std::string filename,\n+HighsStatus Highs::readSolution(const std::string& filename,\n                                 const HighsInt style) {\n   return readSolutionFile(filename, options_, model_.lp_, basis_, solution_,\n                           style);\n@@ -2392,8 +2393,8 @@ std::string Highs::basisValidityToString(const HighsInt basis_validity) const {\n }\n \n // Private methods\n-void Highs::deprecationMessage(const std::string method_name,\n-                               const std::string alt_method_name) const {\n+void Highs::deprecationMessage(const std::string& method_name,\n+                               const std::string& alt_method_name) const {\n   if (alt_method_name.compare(\"None\") == 0) {\n     highsLogUser(options_.log_options, HighsLogType::kWarning,\n                  \"Method %s is deprecated: no alternative method\\n\",\n@@ -3228,7 +3229,7 @@ void Highs::reportSolvedLpQpStats() {\n                \"HiGHS run time      : %13.2f\\n\", run_time);\n }\n \n-void Highs::underDevelopmentLogMessage(const std::string method_name) {\n+void Highs::underDevelopmentLogMessage(const std::string& method_name) {\n   highsLogUser(options_.log_options, HighsLogType::kWarning,\n                \"Method %s is still under development and behaviour may be \"\n                \"unpredictable\\n\",\n@@ -3262,7 +3263,7 @@ HighsStatus Highs::crossover(const HighsSolution& user_solution) {\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::openLogFile(const std::string log_file) {\n+HighsStatus Highs::openLogFile(const std::string& log_file) {\n   highsOpenLogFile(options_.log_options, options_.records, log_file);\n   return HighsStatus::kOk;\n }\n--- src/lp_data/HighsDeprecated.cpp\n@@ -35,7 +35,7 @@ HighsStatus Highs::setHighsOptionValue(const std::string& option,\n }\n \n HighsStatus Highs::setHighsOptionValue(const std::string& option,\n-                                       const std::string value) {\n+                                       const std::string& value) {\n   deprecationMessage(\"setHighsOptionValue\", \"setOptionValue\");\n   return setOptionValue(option, value);\n }\n@@ -46,7 +46,7 @@ HighsStatus Highs::setHighsOptionValue(const std::string& option,\n   return setOptionValue(option, value);\n }\n \n-HighsStatus Highs::readHighsOptions(const std::string filename) {\n+HighsStatus Highs::readHighsOptions(const std::string& filename) {\n   deprecationMessage(\"readHighsOptions\", \"readOptions\");\n   return readOptions(filename);\n }\n@@ -91,7 +91,7 @@ HighsStatus Highs::resetHighsOptions() {\n }\n \n HighsStatus Highs::writeHighsOptions(\n-    const std::string filename, const bool report_only_non_default_values) {\n+    const std::string& filename, const bool report_only_non_default_values) {\n   deprecationMessage(\"writeHighsOptions\", \"writeOptions\");\n   return writeOptions(filename, report_only_non_default_values);\n }\n@@ -129,7 +129,7 @@ HighsStatus Highs::getHighsInfoValue(const std::string& info,\n   return getInfoValue(info, value);\n }\n \n-HighsStatus Highs::writeHighsInfo(const std::string filename) {\n+HighsStatus Highs::writeHighsInfo(const std::string& filename) {\n   deprecationMessage(\"writeHighsInfo\", \"writeInfo\");\n   return writeInfo(filename);\n }\n@@ -145,7 +145,7 @@ double Highs::getHighsRunTime() {\n }\n \n #if 0\n-HighsStatus Highs::writeSolution(const std::string filename,\n+HighsStatus Highs::writeSolution(const std::string& filename,\n                                 const bool pretty) const {\n   deprecationMessage(\"writeSolution(filename, pretty)\", \"writeSolution(filename, style)\");\n   HighsStatus return_status = HighsStatus::kOk;\n--- src/lp_data/HighsInterface.cpp\n@@ -1462,7 +1462,7 @@ void Highs::clearZeroHessian() {\n   }\n }\n \n-HighsStatus Highs::checkOptimality(const std::string solver_type,\n+HighsStatus Highs::checkOptimality(const std::string& solver_type,\n                                    HighsStatus return_status) {\n   // Check for infeasibility measures incompatible with optimality\n   assert(return_status != HighsStatus::kError);"
+        ],
+        "files_changed": [
+            {
+                "filename": "src/Highs.h",
+                "status": "modified",
+                "additions": 22,
+                "deletions": 24,
+                "changes": 46,
+                "patch": "@@ -114,12 +114,12 @@ class Highs {\n   /**\n    * @brief Read in a model\n    */\n-  HighsStatus readModel(const std::string filename);\n+  HighsStatus readModel(const std::string& filename);\n \n   /**\n    * @brief Read in a basis\n    */\n-  HighsStatus readBasis(const std::string filename);\n+  HighsStatus readBasis(const std::string& filename);\n \n   /**\n    * @brief Presolve the incumbent model\n@@ -139,12 +139,12 @@ class Highs {\n   /**\n    * @brief Write the current solution to a file in a given style\n    */\n-  HighsStatus writeSolution(const std::string filename, const HighsInt style);\n+  HighsStatus writeSolution(const std::string& filename, const HighsInt style);\n \n   /**\n    * @brief Read a HiGHS solution file in a given style\n    */\n-  HighsStatus readSolution(const std::string filename, const HighsInt style);\n+  HighsStatus readSolution(const std::string& filename, const HighsInt style);\n \n   /**\n    * @brief Check the feasibility of the current solution. Of value\n@@ -174,14 +174,14 @@ class Highs {\n   HighsStatus setOptionValue(const std::string& option, const double value);\n \n   HighsStatus setOptionValue(const std::string& option,\n-                             const std::string value);\n+                             const std::string& value);\n \n   HighsStatus setOptionValue(const std::string& option, const char* value);\n \n   /**\n    * @brief Read option values from a file\n    */\n-  HighsStatus readOptions(const std::string filename);\n+  HighsStatus readOptions(const std::string& filename);\n \n   /**\n    * @brief Pass a HighsOptions instance to Highs\n@@ -222,7 +222,7 @@ class Highs {\n    * file, with the extension \".html\" producing HTML, otherwise using\n    * the standard format used to read options from a file.\n    */\n-  HighsStatus writeOptions(const std::string filename,  //!< The filename\n+  HighsStatus writeOptions(const std::string& filename,  //!< The filename\n                            const bool report_only_deviations = false) const;\n \n   /**\n@@ -249,7 +249,7 @@ class Highs {\n    * producing HTML, otherwise using the standard format used to read\n    * options from a file.\n    */\n-  HighsStatus writeInfo(const std::string filename) const;\n+  HighsStatus writeInfo(const std::string& filename) const;\n \n   /**\n    * @brief Get the value of infinity used by HiGHS\n@@ -551,12 +551,12 @@ class Highs {\n   /**\n    * @brief Write out the incumbent model to a file\n    */\n-  HighsStatus writeModel(const std::string filename);\n+  HighsStatus writeModel(const std::string& filename);\n \n   /**\n    * @brief Write out the internal HighsBasis instance to a file\n    */\n-  HighsStatus writeBasis(const std::string filename);\n+  HighsStatus writeBasis(const std::string& filename);\n \n   /**\n    * Methods for incumbent model modification\n@@ -842,7 +842,7 @@ class Highs {\n    * instance. The origin string is used to identify the source of the\n    * HighsBasis instance.\n    */\n-  HighsStatus setBasis(const HighsBasis& basis, const std::string origin = \"\");\n+  HighsStatus setBasis(const HighsBasis& basis, const std::string& origin = \"\");\n \n   /**\n    * @brief Clear the internal HighsBasis instance\n@@ -859,7 +859,7 @@ class Highs {\n   /**\n    * @brief Open a named log file\n    */\n-  HighsStatus openLogFile(const std::string log_file = \"\");\n+  HighsStatus openLogFile(const std::string& log_file = \"\");\n \n   /**\n    * @brief Interpret common qualifiers to string values\n@@ -978,13 +978,14 @@ class Highs {\n   HighsStatus setHighsOptionValue(const std::string& option,\n                                   const double value);\n \n-  HighsStatus setHighsOptionValue(const std::string& option,\n-                                  const std::string value  //!< The option value\n+  HighsStatus setHighsOptionValue(\n+      const std::string& option,\n+      const std::string& value  //!< The option value\n   );\n \n   HighsStatus setHighsOptionValue(const std::string& option, const char* value);\n \n-  HighsStatus readHighsOptions(const std::string filename  //!< The filename\n+  HighsStatus readHighsOptions(const std::string& filename  //!< The filename\n   );\n \n   HighsStatus passHighsOptions(const HighsOptions& options  //!< The options\n@@ -1008,7 +1009,7 @@ class Highs {\n   HighsStatus resetHighsOptions();\n \n   HighsStatus writeHighsOptions(\n-      const std::string filename,  //!< The filename\n+      const std::string& filename,  //!< The filename\n       const bool report_only_non_default_values = true);\n \n   HighsInt getSimplexIterationCount() {\n@@ -1027,22 +1028,19 @@ class Highs {\n   HighsStatus getHighsInfoValue(const std::string& info,\n                                 double& value) const;  //!< The info value\n \n-  HighsStatus writeHighsInfo(const std::string filename  //!< The filename\n+  HighsStatus writeHighsInfo(const std::string& filename  //!< The filename\n   );\n \n   double getHighsInfinity();\n \n   double getHighsRunTime();\n \n-  HighsStatus writeSolution(const std::string filename,\n-                            const bool pretty = false) const;\n-\n   const HighsModelStatus& getModelStatus(const bool scaled_model) const;\n \n   void logHeader();\n \n-  void deprecationMessage(const std::string method_name,\n-                          const std::string alt_method_name) const;\n+  void deprecationMessage(const std::string& method_name,\n+                          const std::string& alt_method_name) const;\n \n   // End of deprecated methods\n  private:\n@@ -1141,7 +1139,7 @@ class Highs {\n   HighsStatus returnFromHighs(const HighsStatus return_status);\n   void reportSolvedLpQpStats();\n \n-  void underDevelopmentLogMessage(const std::string method_name);\n+  void underDevelopmentLogMessage(const std::string& method_name);\n \n   // Interface methods\n   HighsStatus basisForSolution();\n@@ -1217,7 +1215,7 @@ class Highs {\n   bool aFormatOk(const HighsInt num_nz, const HighsInt format);\n   bool qFormatOk(const HighsInt num_nz, const HighsInt format);\n   void clearZeroHessian();\n-  HighsStatus checkOptimality(const std::string solver_type,\n+  HighsStatus checkOptimality(const std::string& solver_type,\n                               HighsStatus return_status);\n   HighsStatus invertRequirementError(std::string method_name);\n };"
+            },
+            {
+                "filename": "src/lp_data/Highs.cpp",
+                "status": "modified",
+                "additions": 16,
+                "deletions": 15,
+                "changes": 31,
+                "patch": "@@ -79,7 +79,7 @@ HighsStatus Highs::setOptionValue(const std::string& option,\n }\n \n HighsStatus Highs::setOptionValue(const std::string& option,\n-                                  const std::string value) {\n+                                  const std::string& value) {\n   HighsLogOptions report_log_options = options_.log_options;\n   if (setLocalOptionValue(report_log_options, option, options_.log_options,\n                           options_.records, value) == OptionStatus::kOk)\n@@ -96,7 +96,7 @@ HighsStatus Highs::setOptionValue(const std::string& option,\n   return HighsStatus::kError;\n }\n \n-HighsStatus Highs::readOptions(const std::string filename) {\n+HighsStatus Highs::readOptions(const std::string& filename) {\n   if (filename.size() <= 0) {\n     highsLogUser(options_.log_options, HighsLogType::kWarning,\n                  \"Empty file name so not reading options\\n\");\n@@ -160,7 +160,7 @@ HighsStatus Highs::resetOptions() {\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::writeOptions(const std::string filename,\n+HighsStatus Highs::writeOptions(const std::string& filename,\n                                 const bool report_only_deviations) const {\n   HighsStatus return_status = HighsStatus::kOk;\n   FILE* file;\n@@ -217,7 +217,7 @@ HighsStatus Highs::getInfoValue(const std::string& info, double& value) const {\n   }\n }\n \n-HighsStatus Highs::writeInfo(const std::string filename) const {\n+HighsStatus Highs::writeInfo(const std::string& filename) const {\n   HighsStatus return_status = HighsStatus::kOk;\n   FILE* file;\n   bool html;\n@@ -484,7 +484,7 @@ HighsStatus Highs::passHessian(const HighsInt dim, const HighsInt num_nz,\n   return passHessian(hessian);\n }\n \n-HighsStatus Highs::readModel(const std::string filename) {\n+HighsStatus Highs::readModel(const std::string& filename) {\n   this->logHeader();\n   HighsStatus return_status = HighsStatus::kOk;\n   Filereader* reader =\n@@ -524,7 +524,7 @@ HighsStatus Highs::readModel(const std::string filename) {\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::readBasis(const std::string filename) {\n+HighsStatus Highs::readBasis(const std::string& filename) {\n   this->logHeader();\n   HighsStatus return_status = HighsStatus::kOk;\n   // Try to read basis file into read_basis\n@@ -549,7 +549,7 @@ HighsStatus Highs::readBasis(const std::string filename) {\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::writeModel(const std::string filename) {\n+HighsStatus Highs::writeModel(const std::string& filename) {\n   HighsStatus return_status = HighsStatus::kOk;\n \n   // Ensure that the LP is column-wise\n@@ -575,7 +575,7 @@ HighsStatus Highs::writeModel(const std::string filename) {\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::writeBasis(const std::string filename) {\n+HighsStatus Highs::writeBasis(const std::string& filename) {\n   HighsStatus return_status = HighsStatus::kOk;\n   HighsStatus call_status;\n   FILE* file;\n@@ -1598,7 +1598,8 @@ HighsStatus Highs::setLogCallback(void (*log_callback)(HighsLogType,\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::setBasis(const HighsBasis& basis, const std::string origin) {\n+HighsStatus Highs::setBasis(const HighsBasis& basis,\n+                            const std::string& origin) {\n   if (basis.alien) {\n     // An alien basis needs to be checked properly, since it may be\n     // singular, or even incomplete.\n@@ -2328,7 +2329,7 @@ HighsStatus Highs::postsolve(const HighsSolution& solution,\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::writeSolution(const std::string filename,\n+HighsStatus Highs::writeSolution(const std::string& filename,\n                                  const HighsInt style) {\n   HighsStatus return_status = HighsStatus::kOk;\n   HighsStatus call_status;\n@@ -2361,7 +2362,7 @@ HighsStatus Highs::writeSolution(const std::string filename,\n   return HighsStatus::kOk;\n }\n \n-HighsStatus Highs::readSolution(const std::string filename,\n+HighsStatus Highs::readSolution(const std::string& filename,\n                                 const HighsInt style) {\n   return readSolutionFile(filename, options_, model_.lp_, basis_, solution_,\n                           style);\n@@ -2392,8 +2393,8 @@ std::string Highs::basisValidityToString(const HighsInt basis_validity) const {\n }\n \n // Private methods\n-void Highs::deprecationMessage(const std::string method_name,\n-                               const std::string alt_method_name) const {\n+void Highs::deprecationMessage(const std::string& method_name,\n+                               const std::string& alt_method_name) const {\n   if (alt_method_name.compare(\"None\") == 0) {\n     highsLogUser(options_.log_options, HighsLogType::kWarning,\n                  \"Method %s is deprecated: no alternative method\\n\",\n@@ -3228,7 +3229,7 @@ void Highs::reportSolvedLpQpStats() {\n                \"HiGHS run time      : %13.2f\\n\", run_time);\n }\n \n-void Highs::underDevelopmentLogMessage(const std::string method_name) {\n+void Highs::underDevelopmentLogMessage(const std::string& method_name) {\n   highsLogUser(options_.log_options, HighsLogType::kWarning,\n                \"Method %s is still under development and behaviour may be \"\n                \"unpredictable\\n\",\n@@ -3262,7 +3263,7 @@ HighsStatus Highs::crossover(const HighsSolution& user_solution) {\n   return returnFromHighs(return_status);\n }\n \n-HighsStatus Highs::openLogFile(const std::string log_file) {\n+HighsStatus Highs::openLogFile(const std::string& log_file) {\n   highsOpenLogFile(options_.log_options, options_.records, log_file);\n   return HighsStatus::kOk;\n }"
+            },
+            {
+                "filename": "src/lp_data/HighsDeprecated.cpp",
+                "status": "modified",
+                "additions": 5,
+                "deletions": 5,
+                "changes": 10,
+                "patch": "@@ -35,7 +35,7 @@ HighsStatus Highs::setHighsOptionValue(const std::string& option,\n }\n \n HighsStatus Highs::setHighsOptionValue(const std::string& option,\n-                                       const std::string value) {\n+                                       const std::string& value) {\n   deprecationMessage(\"setHighsOptionValue\", \"setOptionValue\");\n   return setOptionValue(option, value);\n }\n@@ -46,7 +46,7 @@ HighsStatus Highs::setHighsOptionValue(const std::string& option,\n   return setOptionValue(option, value);\n }\n \n-HighsStatus Highs::readHighsOptions(const std::string filename) {\n+HighsStatus Highs::readHighsOptions(const std::string& filename) {\n   deprecationMessage(\"readHighsOptions\", \"readOptions\");\n   return readOptions(filename);\n }\n@@ -91,7 +91,7 @@ HighsStatus Highs::resetHighsOptions() {\n }\n \n HighsStatus Highs::writeHighsOptions(\n-    const std::string filename, const bool report_only_non_default_values) {\n+    const std::string& filename, const bool report_only_non_default_values) {\n   deprecationMessage(\"writeHighsOptions\", \"writeOptions\");\n   return writeOptions(filename, report_only_non_default_values);\n }\n@@ -129,7 +129,7 @@ HighsStatus Highs::getHighsInfoValue(const std::string& info,\n   return getInfoValue(info, value);\n }\n \n-HighsStatus Highs::writeHighsInfo(const std::string filename) {\n+HighsStatus Highs::writeHighsInfo(const std::string& filename) {\n   deprecationMessage(\"writeHighsInfo\", \"writeInfo\");\n   return writeInfo(filename);\n }\n@@ -145,7 +145,7 @@ double Highs::getHighsRunTime() {\n }\n \n #if 0\n-HighsStatus Highs::writeSolution(const std::string filename,\n+HighsStatus Highs::writeSolution(const std::string& filename,\n                                 const bool pretty) const {\n   deprecationMessage(\"writeSolution(filename, pretty)\", \"writeSolution(filename, style)\");\n   HighsStatus return_status = HighsStatus::kOk;"
+            },
+            {
+                "filename": "src/lp_data/HighsInterface.cpp",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "changes": 2,
+                "patch": "@@ -1462,7 +1462,7 @@ void Highs::clearZeroHessian() {\n   }\n }\n \n-HighsStatus Highs::checkOptimality(const std::string solver_type,\n+HighsStatus Highs::checkOptimality(const std::string& solver_type,\n                                    HighsStatus return_status) {\n   // Check for infeasibility measures incompatible with optimality\n   assert(return_status != HighsStatus::kError);"
+            }
+        ],
+        "lines_added": 44,
+        "lines_removed": 45
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.9881850049308121,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9999627288401225,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9999995660036802,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9990842219814436,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.68456185391914,
+        "relative_improvement": 0.0018309275670758667,
+        "absolute_improvement_ms": 375.6666666666604,
+        "old_mean_ms": 205178.3333333333,
+        "new_mean_ms": 204802.66666666666,
+        "old_std_ms": 16663.368886383032,
+        "new_std_ms": 17077.293844677824,
+        "effect_size_cohens_d": 0.022266213557597263,
+        "old_ci95_ms": [
+            198956.12913209392,
+            211400.5375345727
+        ],
+        "new_ci95_ms": [
+            198425.90034584262,
+            211179.4329874907
+        ],
+        "old_ci99_ms": [
+            196792.57772098537,
+            213564.08894568126
+        ],
+        "new_ci99_ms": [
+            196208.6054250202,
+            213396.7279083131
+        ],
+        "new_times_s": [
+            405.8,
+            186.33,
+            184.55,
+            186.06,
+            186.07,
+            225.52,
+            187.01,
+            185.98,
+            184.82,
+            185.34,
+            186.75,
+            188.84,
+            187.33,
+            186.77,
+            186.66,
+            198.8,
+            222.64,
+            222.58,
+            223.75,
+            221.31,
+            222.19,
+            223.42,
+            223.4,
+            222.53,
+            215.39,
+            215.49,
+            218.38,
+            218.42,
+            216.31,
+            217.67,
+            213.77
+        ],
+        "old_times_s": [
+            184.06,
+            184.53,
+            184.45,
+            184.44,
+            210.26,
+            186.84,
+            184.99,
+            215.05,
+            186.37,
+            185.26,
+            185.93,
+            187.21,
+            186.48,
+            186.88,
+            186.43,
+            222.13,
+            220.98,
+            221.97,
+            224.56,
+            221.76,
+            221.65,
+            224.37,
+            221.21,
+            200.47,
+            216.94,
+            216.59,
+            217.84,
+            217.98,
+            216.96,
+            217.63,
+            217.19
+        ]
+    },
+    "tests": {
+        "total_tests": 2,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "capi_unit_tests",
+                "is_significant": false,
+                "p_value": 0.6124377966505716,
+                "is_pair_significant": false,
+                "pair_p_value": 0.6175475892572053,
+                "is_binom_significant": false,
+                "binom_p_value": 0.9319770261645317,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.6554971182133914,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.2978252604578022,
+                "relative_improvement": 0.03250975292587776,
+                "absolute_improvement_ms": 8.62068965517243,
+                "old_mean_ms": 265.1724137931035,
+                "new_mean_ms": 256.55172413793105,
+                "old_std_ms": 64.6761542309712,
+                "new_std_ms": 61.602171927675535,
+                "effect_size_cohens_d": 0.13649431124039627,
+                "old_ci95_ms": [
+                    240.5709204358245,
+                    289.77390715038246
+                ],
+                "new_ci95_ms": [
+                    233.11951111455767,
+                    279.9839371613044
+                ],
+                "old_ci99_ms": [
+                    231.98546499011053,
+                    298.3593625960964
+                ],
+                "new_ci99_ms": [
+                    224.94211236948814,
+                    288.16133590637395
+                ],
+                "new_times": [
+                    0.18,
+                    0.18,
+                    0.21,
+                    0.23,
+                    0.24,
+                    0.17,
+                    0.19,
+                    0.19,
+                    0.2,
+                    0.28,
+                    0.27,
+                    0.19,
+                    0.27,
+                    0.3,
+                    0.27,
+                    0.24,
+                    0.43,
+                    0.27,
+                    0.35,
+                    0.32,
+                    0.25,
+                    0.38,
+                    0.24,
+                    0.28,
+                    0.24,
+                    0.32,
+                    0.27,
+                    0.24,
+                    0.24
+                ],
+                "old_times": [
+                    0.18,
+                    0.27,
+                    0.22,
+                    0.19,
+                    0.25,
+                    0.33,
+                    0.31,
+                    0.19,
+                    0.27,
+                    0.28,
+                    0.19,
+                    0.17,
+                    0.19,
+                    0.25,
+                    0.25,
+                    0.25,
+                    0.29,
+                    0.24,
+                    0.42,
+                    0.22,
+                    0.34,
+                    0.24,
+                    0.32,
+                    0.21,
+                    0.34,
+                    0.23,
+                    0.37,
+                    0.35,
+                    0.33
+                ]
+            },
+            {
+                "test_name": "unit-test-build",
+                "is_significant": false,
+                "p_value": 0.9998442037944777,
+                "is_pair_significant": false,
+                "pair_p_value": 0.9995678315476771,
+                "is_binom_significant": false,
+                "binom_p_value": 0.9999923817813396,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9997650686449088,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.5196406555190388,
+                "relative_improvement": 0.0031397174254317838,
+                "absolute_improvement_ms": 0.6896551724138167,
+                "old_mean_ms": 219.6551724137931,
+                "new_mean_ms": 218.9655172413793,
+                "old_std_ms": 11.489982786475249,
+                "new_std_ms": 9.390279010842963,
+                "effect_size_cohens_d": 0.0657266130055278,
+                "old_ci95_ms": [
+                    215.28461670345746,
+                    224.02572812412876
+                ],
+                "new_ci95_ms": [
+                    215.39364613285218,
+                    222.53738834990642
+                ],
+                "old_ci99_ms": [
+                    213.7593755004475,
+                    225.55096932713872
+                ],
+                "new_ci99_ms": [
+                    214.1471307358095,
+                    223.7839037469491
+                ],
+                "new_times": [
+                    0.2,
+                    0.23,
+                    0.23,
+                    0.21,
+                    0.22,
+                    0.24,
+                    0.22,
+                    0.2,
+                    0.23,
+                    0.23,
+                    0.23,
+                    0.21,
+                    0.23,
+                    0.22,
+                    0.22,
+                    0.21,
+                    0.21,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.21,
+                    0.21,
+                    0.21
+                ],
+                "old_times": [
+                    0.2,
+                    0.2,
+                    0.21,
+                    0.21,
+                    0.22,
+                    0.21,
+                    0.22,
+                    0.23,
+                    0.24,
+                    0.21,
+                    0.21,
+                    0.24,
+                    0.25,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.21,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.22,
+                    0.23,
+                    0.23,
+                    0.22,
+                    0.22,
+                    0.21,
+                    0.21,
+                    0.22,
+                    0.23
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
+}

@@ -1,0 +1,305 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:14.845807",
+    "repository": "https://github.com/fraillt/bitsery",
+    "repository_name": "fraillt/bitsery"
+  },
+  "commit_info": {
+    "old_sha": "cd73aca2f56d521513f10cc7b6a4f672e6e548f7",
+    "new_sha": "be2f2953108c623cb21ebea1aee7ed7964ff3fd9",
+    "commit_message": [
+      "Discourage inlining the resize case, as that should happen rather rarely.\n\nIf you additionally reuse buffers, this will increase the performance\nfurther.\n\nThe metrics based on some internal benchmarks show a speedup of about 1%:\n\nbitsery <dont inline bad cases>\n  BigString: 222092ns\n  ComplexLittleObjects: 34115ns\n  ComplexLittleObjectsBig: 6222801ns\n\nbitsery <original>\n  BigString: 242853ns\n  ComplexLittleObjects: 35738ns\n  ComplexLittleObjectsBig: 6334747ns\n\nThe assembly has been checked to be correct: https://godbolt.org/z/Wr7qvfGrK\n\nAdditionally, when allocating code, we can tell the compiler that we are\nnot resizing to a lower size, this saves on gcc 14 a few instructions.\nThe improvement should be negligible."
+    ],
+    "commit_date": "2024-06-24T08:57:22+00:00",
+    "patch": [
+      "--- include/bitsery/adapter/buffer.h\n@@ -269,12 +269,11 @@ class OutputBufferAdapter\n \n   void maybeResize(size_t newOffset, std::true_type)\n   {\n-    if (newOffset > _bufferSize) {\n-      traits::BufferAdapterTraits<Buffer>::increaseBufferSize(\n-        *_buffer, _currOffset, newOffset);\n-      _beginIt = std::begin(*_buffer);\n-      _bufferSize = traits::ContainerTraits<Buffer>::size(*_buffer);\n-    }\n+    if (newOffset > _bufferSize)\n+      BITSERY_UNLIKELY\n+      {\n+        doResize(newOffset);\n+      }\n   }\n \n   void maybeResize(BITSERY_MAYBE_UNUSED size_t newOffset, std::false_type)\n@@ -289,6 +288,14 @@ class OutputBufferAdapter\n     std::copy_n(data, size, _beginIt + static_cast<diff_t>(_currOffset));\n     _currOffset = newOffset;\n   }\n+\n+  BITSERY_NOINLINE void doResize(size_t newOffset)\n+  {\n+    traits::BufferAdapterTraits<Buffer>::increaseBufferSize(\n+      *_buffer, _currOffset, newOffset);\n+    _beginIt = std::begin(*_buffer);\n+    _bufferSize = traits::ContainerTraits<Buffer>::size(*_buffer);\n+  }\n };\n \n }\n--- include/bitsery/bitsery.h\n@@ -36,12 +36,73 @@\n   BITSERY_BUILD_VERSION_STR(                                                   \\\n     BITSERY_MAJOR_VERSION, BITSERY_MINOR_VERSION, BITSERY_PATCH_VERSION)\n \n-#if __cplusplus > 201402L\n-#define BITSERY_MAYBE_UNUSED [[maybe_unused]]\n+#define BITSERY_DO_PRAGMA(x) _Pragma(#x)\n+#ifdef __GNUC__\n+#define BITSERY_DISABLE_WARNINGS(...)                                          \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic push)                                       \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic ignored __VA_ARGS__)\n+#define BITSERY_ENABLE_WARNINGS() BITSERY_DO_PRAGMA(GCC diagnostic pop)\n+#elif defined(_MSC_VER)\n+#define BITSERY_DISABLE_WARNINGS(...)                                          \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic push)                                       \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic ignored __VA_ARGS__)                        \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic pop)\n+#define BITSERY_ENABLE_WARNINGS() BITSERY_DO_PRAGMA(GCC diagnostic pop)\n+#else\n+#define BITSERY_DISABLE_WARNINGS(...)\n+#define BITSERY_ENABLE_WARNINGS()\n+#endif\n+\n+#ifdef __clang__\n+#define BITSERY_ATTRIBUTE(...)                                                 \\\n+  BITSERY_DISABLE_WARNINGS(\"-Wfuture-attribute-extensions\")                    \\\n+  [[__VA_ARGS__]] BITSERY_ENABLE_WARNINGS()\n+#elif defined(__GNUC__)\n+#define BITSERY_ATTRIBUTE(...) [[__VA_ARGS__]]\n+#elif defined(_MSC_VER)\n+#define BITSERY_ATTRIBUTE(...) [[__VA_ARGS__]]\n+#else\n+#define BITSERY_ATTRIBUTE(...) [[__VA_ARGS__]]\n+#endif\n+\n+#if __has_cpp_attribute(likely)\n+#define BITSERY_LIKELY BITSERY_ATTRIBUTE(likey)\n+#else\n+#define BITSERY_LIKELY\n+#endif\n+\n+#if __has_cpp_attribute(unlikely)\n+#define BITSERY_UNLIKELY BITSERY_ATTRIBUTE(unlikely)\n+#else\n+#define BITSERY_UNLIKELY\n+#endif\n+\n+#if __has_cpp_attribute(maybe_unused)\n+#define BITSERY_MAYBE_UNUSED BITSERY_ATTRIBUTE(maybe_unused)\n #else\n #define BITSERY_MAYBE_UNUSED\n #endif\n \n+#if __GNUC__\n+#define BITSERY_NOINLINE __attribute__((noinline))\n+#elif defined(_MSC_VER)\n+#define BITSERY_NOINLINE __declspec(noinline)\n+#else\n+#define BITSERY_NOINLINE\n+#endif\n+\n+#if __GNUC__\n+#define BITSERY_ASSUME(cond)                                                   \\\n+  do {                                                                         \\\n+    if (!(cond))                                                               \\\n+      __builtin_unreachable();                                                 \\\n+  } while (0)\n+#elif defined(_MSC_VER)\n+#define BITSERY_ASSUME(cond) __assume(cond)\n+#else\n+#define BITSERY_ASSUME(cond)\n+#endif\n+\n #include \"deserializer.h\"\n #include \"serializer.h\"\n \n--- include/bitsery/traits/core/std_defaults.h\n@@ -23,6 +23,7 @@\n #ifndef BITSERY_TRAITS_CORE_STD_DEFAULTS_H\n #define BITSERY_TRAITS_CORE_STD_DEFAULTS_H\n \n+#include \"../../bitsery.h\"\n #include \"../../details/serialization_common.h\"\n #include \"traits.h\"\n \n@@ -103,8 +104,11 @@ struct StdContainerForBufferAdapter<T, true>\n       static_cast<size_t>(static_cast<double>(container.size()) * 1.5) + 128;\n     // make data cache friendly\n     newSize -= newSize % 64; // 64 is cache line size\n-    container.resize(\n-      (std::max)(newSize > minSize ? newSize : minSize, container.capacity()));\n+    auto resize =\n+      (std::max)(newSize > minSize ? newSize : minSize, container.capacity());\n+    BITSERY_ASSUME(resize >= container.size());\n+    BITSERY_ASSUME(resize >= container.capacity());\n+    container.resize(resize);\n   }\n };\n "
+    ],
+    "files_changed": [
+      {
+        "filename": "include/bitsery/adapter/buffer.h",
+        "status": "modified",
+        "additions": 13,
+        "deletions": 6,
+        "changes": 19,
+        "patch": "@@ -269,12 +269,11 @@ class OutputBufferAdapter\n \n   void maybeResize(size_t newOffset, std::true_type)\n   {\n-    if (newOffset > _bufferSize) {\n-      traits::BufferAdapterTraits<Buffer>::increaseBufferSize(\n-        *_buffer, _currOffset, newOffset);\n-      _beginIt = std::begin(*_buffer);\n-      _bufferSize = traits::ContainerTraits<Buffer>::size(*_buffer);\n-    }\n+    if (newOffset > _bufferSize)\n+      BITSERY_UNLIKELY\n+      {\n+        doResize(newOffset);\n+      }\n   }\n \n   void maybeResize(BITSERY_MAYBE_UNUSED size_t newOffset, std::false_type)\n@@ -289,6 +288,14 @@ class OutputBufferAdapter\n     std::copy_n(data, size, _beginIt + static_cast<diff_t>(_currOffset));\n     _currOffset = newOffset;\n   }\n+\n+  BITSERY_NOINLINE void doResize(size_t newOffset)\n+  {\n+    traits::BufferAdapterTraits<Buffer>::increaseBufferSize(\n+      *_buffer, _currOffset, newOffset);\n+    _beginIt = std::begin(*_buffer);\n+    _bufferSize = traits::ContainerTraits<Buffer>::size(*_buffer);\n+  }\n };\n \n }"
+      },
+      {
+        "filename": "include/bitsery/bitsery.h",
+        "status": "modified",
+        "additions": 63,
+        "deletions": 2,
+        "changes": 65,
+        "patch": "@@ -36,12 +36,73 @@\n   BITSERY_BUILD_VERSION_STR(                                                   \\\n     BITSERY_MAJOR_VERSION, BITSERY_MINOR_VERSION, BITSERY_PATCH_VERSION)\n \n-#if __cplusplus > 201402L\n-#define BITSERY_MAYBE_UNUSED [[maybe_unused]]\n+#define BITSERY_DO_PRAGMA(x) _Pragma(#x)\n+#ifdef __GNUC__\n+#define BITSERY_DISABLE_WARNINGS(...)                                          \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic push)                                       \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic ignored __VA_ARGS__)\n+#define BITSERY_ENABLE_WARNINGS() BITSERY_DO_PRAGMA(GCC diagnostic pop)\n+#elif defined(_MSC_VER)\n+#define BITSERY_DISABLE_WARNINGS(...)                                          \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic push)                                       \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic ignored __VA_ARGS__)                        \\\n+  BITSERY_DO_PRAGMA(GCC diagnostic pop)\n+#define BITSERY_ENABLE_WARNINGS() BITSERY_DO_PRAGMA(GCC diagnostic pop)\n+#else\n+#define BITSERY_DISABLE_WARNINGS(...)\n+#define BITSERY_ENABLE_WARNINGS()\n+#endif\n+\n+#ifdef __clang__\n+#define BITSERY_ATTRIBUTE(...)                                                 \\\n+  BITSERY_DISABLE_WARNINGS(\"-Wfuture-attribute-extensions\")                    \\\n+  [[__VA_ARGS__]] BITSERY_ENABLE_WARNINGS()\n+#elif defined(__GNUC__)\n+#define BITSERY_ATTRIBUTE(...) [[__VA_ARGS__]]\n+#elif defined(_MSC_VER)\n+#define BITSERY_ATTRIBUTE(...) [[__VA_ARGS__]]\n+#else\n+#define BITSERY_ATTRIBUTE(...) [[__VA_ARGS__]]\n+#endif\n+\n+#if __has_cpp_attribute(likely)\n+#define BITSERY_LIKELY BITSERY_ATTRIBUTE(likey)\n+#else\n+#define BITSERY_LIKELY\n+#endif\n+\n+#if __has_cpp_attribute(unlikely)\n+#define BITSERY_UNLIKELY BITSERY_ATTRIBUTE(unlikely)\n+#else\n+#define BITSERY_UNLIKELY\n+#endif\n+\n+#if __has_cpp_attribute(maybe_unused)\n+#define BITSERY_MAYBE_UNUSED BITSERY_ATTRIBUTE(maybe_unused)\n #else\n #define BITSERY_MAYBE_UNUSED\n #endif\n \n+#if __GNUC__\n+#define BITSERY_NOINLINE __attribute__((noinline))\n+#elif defined(_MSC_VER)\n+#define BITSERY_NOINLINE __declspec(noinline)\n+#else\n+#define BITSERY_NOINLINE\n+#endif\n+\n+#if __GNUC__\n+#define BITSERY_ASSUME(cond)                                                   \\\n+  do {                                                                         \\\n+    if (!(cond))                                                               \\\n+      __builtin_unreachable();                                                 \\\n+  } while (0)\n+#elif defined(_MSC_VER)\n+#define BITSERY_ASSUME(cond) __assume(cond)\n+#else\n+#define BITSERY_ASSUME(cond)\n+#endif\n+\n #include \"deserializer.h\"\n #include \"serializer.h\"\n "
+      },
+      {
+        "filename": "include/bitsery/traits/core/std_defaults.h",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 2,
+        "changes": 8,
+        "patch": "@@ -23,6 +23,7 @@\n #ifndef BITSERY_TRAITS_CORE_STD_DEFAULTS_H\n #define BITSERY_TRAITS_CORE_STD_DEFAULTS_H\n \n+#include \"../../bitsery.h\"\n #include \"../../details/serialization_common.h\"\n #include \"traits.h\"\n \n@@ -103,8 +104,11 @@ struct StdContainerForBufferAdapter<T, true>\n       static_cast<size_t>(static_cast<double>(container.size()) * 1.5) + 128;\n     // make data cache friendly\n     newSize -= newSize % 64; // 64 is cache line size\n-    container.resize(\n-      (std::max)(newSize > minSize ? newSize : minSize, container.capacity()));\n+    auto resize =\n+      (std::max)(newSize > minSize ? newSize : minSize, container.capacity());\n+    BITSERY_ASSUME(resize >= container.size());\n+    BITSERY_ASSUME(resize >= container.capacity());\n+    container.resize(resize);\n   }\n };\n "
+      }
+    ],
+    "lines_added": 82,
+    "lines_removed": 10
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBITSERY_BUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBITSERY_BUILD_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.987298484479212,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9945757137596174,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999957848340273,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9996297043527206,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.6243036832421653,
+    "relative_improvement": -0.010357815442561152,
+    "absolute_improvement_ms": -11.00000000000012,
+    "old_mean_ms": 1062.0,
+    "new_mean_ms": 1073.0000000000002,
+    "old_std_ms": 99.3565505537055,
+    "new_std_ms": 120.14789736561896,
+    "effect_size_cohens_d": -0.0997791606128075,
+    "old_ci95_ms": [
+      1024.89965429613,
+      1099.10034570387
+    ],
+    "new_ci95_ms": [
+      1028.1360378050956,
+      1117.8639621949046
+    ],
+    "old_ci99_ms": [
+      1011.9993214391285,
+      1112.0006785608716
+    ],
+    "new_ci99_ms": [
+      1012.536181938043,
+      1133.4638180619575
+    ],
+    "new_times_s": [
+      1.02,
+      1.0,
+      1.01,
+      1.01,
+      1.01,
+      1.02,
+      1.28,
+      1.46,
+      1.01,
+      1.03,
+      1.25,
+      1.01,
+      1.03,
+      1.0,
+      1.02,
+      1.03,
+      1.03,
+      1.04,
+      1.03,
+      1.02,
+      1.42,
+      1.01,
+      1.02,
+      1.02,
+      1.02,
+      1.03,
+      1.04,
+      1.03,
+      1.15,
+      1.05,
+      1.11
+    ],
+    "old_times_s": [
+      1.01,
+      1.01,
+      1.07,
+      1.01,
+      1.28,
+      1.01,
+      1.0,
+      1.23,
+      1.02,
+      1.02,
+      1.36,
+      1.03,
+      1.02,
+      1.02,
+      1.02,
+      1.03,
+      1.04,
+      1.04,
+      1.34,
+      1.02,
+      1.03,
+      1.01,
+      1.02,
+      1.02,
+      1.01,
+      1.02,
+      1.02,
+      1.02,
+      1.03,
+      1.02,
+      1.09
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "SerializeExtensionPointerSerialization.WhenNonNullPointerIsNullThenAssert",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999393422746,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.0,
+        "new_mean_ms": 10.0,
+        "old_std_ms": 0.0,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": "NaN",
+        "old_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

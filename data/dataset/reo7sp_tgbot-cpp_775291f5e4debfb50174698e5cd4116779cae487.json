@@ -1,0 +1,297 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:05:08.763545",
+    "repository": "https://github.com/reo7sp/tgbot-cpp",
+    "repository_name": "reo7sp/tgbot-cpp"
+  },
+  "commit_info": {
+    "old_sha": "f88c33242bdaeb8fa63629ee10d71f9858aed3dc",
+    "new_sha": "775291f5e4debfb50174698e5cd4116779cae487",
+    "commit_message": [
+      "net: Allow curl handle in `CurlHttpClient` to be kept alive\n\nThe `CurlHttpClient` currently produces an excessive number of\n`connect()` syscalls, as every `makeRequest` creates a new TCP\nconnection. This inefficiency becomes particularly evident with\n`TgLongPoll`, which continuously calls `getUpdates` in an endless loop,\ncreating a relentless cycle of `connect()` and `close()` operations.\n\nA more sensible approach is to reuse HTTP connections by keeping them\nalive across multiple requests. I suggest modifying the implementation\nto allow the curl handle to persist until the `CurlHttpClient` object is\ndestroyed.\n\nFor thread safety, we can maintain a\n`std::unordered_map<std::thread::id, CURL*> curlHandles` within the\n`CurlHttpClient` class, ensuring each thread gets its own handle.\n\nAfter all, treating connections like disposable napkins doesn't exactly\nscream efficiency.\n\nSigned-off-by: Ammar Faizi <ammarfaizi2@gnuweeb.org>"
+    ],
+    "commit_date": "2025-01-21T20:26:45+00:00",
+    "patch": [
+      "--- include/tgbot/net/CurlHttpClient.h\n@@ -10,8 +10,11 @@\n \n #include <curl/curl.h>\n \n+#include <mutex>\n #include <string>\n #include <vector>\n+#include <thread>\n+#include <unordered_map>\n \n namespace TgBot {\n \n@@ -35,9 +38,14 @@ class TGBOT_API CurlHttpClient : public HttpClient {\n     std::string makeRequest(const Url& url, const std::vector<HttpReqArg>& args) const override;\n \n     /**\n-     * @brief Raw curl settings storage for fine tuning.\n+     * @brief Raw curl handles, each thread has its own handle.\n      */\n-    CURL* curlSettings;\n+    std::unordered_map<std::thread::id, CURL*> curlHandles;\n+\n+    /**\n+     * @brief Lock for curlHandles access.\n+     */\n+    std::mutex curlHandlesMutex;\n \n private:\n     const HttpParser _httpParser;\n--- src/net/CurlHttpClient.cpp\n@@ -8,14 +8,33 @@\n namespace TgBot {\n \n CurlHttpClient::CurlHttpClient() : _httpParser() {\n-    curlSettings = curl_easy_init();\n-    \n-    curl_easy_setopt(curlSettings, CURLOPT_CONNECTTIMEOUT, 20);\n-    curl_easy_setopt(curlSettings, CURLOPT_TIMEOUT, _timeout);\n }\n \n CurlHttpClient::~CurlHttpClient() {\n-    curl_easy_cleanup(curlSettings);\n+    std::lock_guard<std::mutex> lock(curlHandlesMutex);\n+    for (auto& c : curlHandles) {\n+        curl_easy_cleanup(c.second);\n+    }\n+}\n+\n+static CURL* getCurlHandle(const CurlHttpClient *c_) {\n+    CurlHttpClient *c = const_cast<CurlHttpClient *>(c_);\n+\n+    std::lock_guard<std::mutex> lock(c->curlHandlesMutex);\n+    auto id = std::this_thread::get_id();\n+    auto it = c->curlHandles.find(id);\n+    if (it == c->curlHandles.end()) {\n+        CURL* curl = curl_easy_init();\n+        if (!curl) {\n+            throw std::runtime_error(\"curl_easy_init() failed\");\n+        }\n+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20);\n+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, c->_timeout);\n+        c->curlHandles[id] = curl;\n+        return curl;\n+    }\n+\n+    return it->second;\n }\n \n static std::size_t curlWriteString(char* ptr, std::size_t size, std::size_t nmemb, void* userdata) {\n@@ -24,21 +43,14 @@ static std::size_t curlWriteString(char* ptr, std::size_t size, std::size_t nmem\n }\n \n std::string CurlHttpClient::makeRequest(const Url& url, const std::vector<HttpReqArg>& args) const {\n-    // Copy settings for each call because we change CURLOPT_URL and other stuff.\n-    // This also protects multithreaded case.\n-    auto curl = curl_easy_duphandle(curlSettings);\n+    CURL* curl = getCurlHandle(this);\n \n     std::string u = url.protocol + \"://\" + url.host + url.path;\n     if (args.empty()) {\n         u += \"?\" + url.query;\n     }\n     curl_easy_setopt(curl, CURLOPT_URL, u.c_str());\n \n-    // disable keep-alive\n-    struct curl_slist* headers = nullptr;\n-    headers = curl_slist_append(headers, \"Connection: close\");\n-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);\n-\n     curl_mime* mime;\n     curl_mimepart* part;\n     mime = curl_mime_init(curl);\n@@ -64,8 +76,6 @@ std::string CurlHttpClient::makeRequest(const Url& url, const std::vector<HttpRe\n     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);\n \n     auto res = curl_easy_perform(curl);\n-    curl_slist_free_all(headers);\n-    curl_easy_cleanup(curl);\n     curl_mime_free(mime);\n \n     // If the request did not complete correctly, show the error"
+    ],
+    "files_changed": [
+      {
+        "filename": "include/tgbot/net/CurlHttpClient.h",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 2,
+        "changes": 12,
+        "patch": "@@ -10,8 +10,11 @@\n \n #include <curl/curl.h>\n \n+#include <mutex>\n #include <string>\n #include <vector>\n+#include <thread>\n+#include <unordered_map>\n \n namespace TgBot {\n \n@@ -35,9 +38,14 @@ class TGBOT_API CurlHttpClient : public HttpClient {\n     std::string makeRequest(const Url& url, const std::vector<HttpReqArg>& args) const override;\n \n     /**\n-     * @brief Raw curl settings storage for fine tuning.\n+     * @brief Raw curl handles, each thread has its own handle.\n      */\n-    CURL* curlSettings;\n+    std::unordered_map<std::thread::id, CURL*> curlHandles;\n+\n+    /**\n+     * @brief Lock for curlHandles access.\n+     */\n+    std::mutex curlHandlesMutex;\n \n private:\n     const HttpParser _httpParser;"
+      },
+      {
+        "filename": "src/net/CurlHttpClient.cpp",
+        "status": "modified",
+        "additions": 25,
+        "deletions": 15,
+        "changes": 40,
+        "patch": "@@ -8,14 +8,33 @@\n namespace TgBot {\n \n CurlHttpClient::CurlHttpClient() : _httpParser() {\n-    curlSettings = curl_easy_init();\n-    \n-    curl_easy_setopt(curlSettings, CURLOPT_CONNECTTIMEOUT, 20);\n-    curl_easy_setopt(curlSettings, CURLOPT_TIMEOUT, _timeout);\n }\n \n CurlHttpClient::~CurlHttpClient() {\n-    curl_easy_cleanup(curlSettings);\n+    std::lock_guard<std::mutex> lock(curlHandlesMutex);\n+    for (auto& c : curlHandles) {\n+        curl_easy_cleanup(c.second);\n+    }\n+}\n+\n+static CURL* getCurlHandle(const CurlHttpClient *c_) {\n+    CurlHttpClient *c = const_cast<CurlHttpClient *>(c_);\n+\n+    std::lock_guard<std::mutex> lock(c->curlHandlesMutex);\n+    auto id = std::this_thread::get_id();\n+    auto it = c->curlHandles.find(id);\n+    if (it == c->curlHandles.end()) {\n+        CURL* curl = curl_easy_init();\n+        if (!curl) {\n+            throw std::runtime_error(\"curl_easy_init() failed\");\n+        }\n+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20);\n+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, c->_timeout);\n+        c->curlHandles[id] = curl;\n+        return curl;\n+    }\n+\n+    return it->second;\n }\n \n static std::size_t curlWriteString(char* ptr, std::size_t size, std::size_t nmemb, void* userdata) {\n@@ -24,21 +43,14 @@ static std::size_t curlWriteString(char* ptr, std::size_t size, std::size_t nmem\n }\n \n std::string CurlHttpClient::makeRequest(const Url& url, const std::vector<HttpReqArg>& args) const {\n-    // Copy settings for each call because we change CURLOPT_URL and other stuff.\n-    // This also protects multithreaded case.\n-    auto curl = curl_easy_duphandle(curlSettings);\n+    CURL* curl = getCurlHandle(this);\n \n     std::string u = url.protocol + \"://\" + url.host + url.path;\n     if (args.empty()) {\n         u += \"?\" + url.query;\n     }\n     curl_easy_setopt(curl, CURLOPT_URL, u.c_str());\n \n-    // disable keep-alive\n-    struct curl_slist* headers = nullptr;\n-    headers = curl_slist_append(headers, \"Connection: close\");\n-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);\n-\n     curl_mime* mime;\n     curl_mimepart* part;\n     mime = curl_mime_init(curl);\n@@ -64,8 +76,6 @@ std::string CurlHttpClient::makeRequest(const Url& url, const std::vector<HttpRe\n     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);\n \n     auto res = curl_easy_perform(curl);\n-    curl_slist_free_all(headers);\n-    curl_easy_cleanup(curl);\n     curl_mime_free(mime);\n \n     // If the request did not complete correctly, show the error"
+      }
+    ],
+    "lines_added": 35,
+    "lines_removed": 17
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999999783976847,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 1.0,
+    "relative_improvement": 0.0,
+    "absolute_improvement_ms": 0.0,
+    "old_mean_ms": 10.000000000000002,
+    "new_mean_ms": 10.000000000000002,
+    "old_std_ms": 1.7643790169011568e-15,
+    "new_std_ms": 1.7643790169011568e-15,
+    "effect_size_cohens_d": 0.0,
+    "old_ci95_ms": [
+      10.000000000000002,
+      10.000000000000002
+    ],
+    "new_ci95_ms": [
+      10.000000000000002,
+      10.000000000000002
+    ],
+    "old_ci99_ms": [
+      10.0,
+      10.000000000000004
+    ],
+    "new_ci99_ms": [
+      10.0,
+      10.000000000000004
+    ],
+    "new_times_s": [
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01
+    ],
+    "old_times_s": [
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01,
+      0.01
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "TgBot_test",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999393422746,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.0,
+        "new_mean_ms": 10.0,
+        "old_std_ms": 0.0,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": "NaN",
+        "old_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

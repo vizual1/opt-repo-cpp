@@ -1,0 +1,419 @@
+{
+    "metadata": {
+        "collection_date": "2026-01-14T18:40:29.807352",
+        "repository": "https://github.com/ERGO-Code/HiGHS",
+        "repository_name": "ERGO-Code/HiGHS"
+    },
+    "commit_info": {
+        "old_sha": "20fb52db768df931dc3739e9cc93271604d0b23c",
+        "new_sha": "78793f96a4588c57948e49fddb82c4169f604302",
+        "commit_message": [
+            "Now taking 1 iteration in bin/unit_tests hot-start-after-delete for nonbasic row deletion and addition"
+        ],
+        "commit_date": "2025-01-13T18:55:10+00:00",
+        "patch": [
+            "--- src/lp_data/Highs.cpp\n@@ -1282,7 +1282,7 @@ HighsStatus Highs::solve() {\n         \"LP without presolve, or with basis, or unconstrained\";\n     // If there is a valid HiGHS basis, refine any status values that\n     // are simply HighsBasisStatus::kNonbasic\n-    if (basis_.valid) refineBasis(incumbent_lp, solution_, basis_);\n+    if (basis_.useful) refineBasis(incumbent_lp, solution_, basis_);\n     solveLp(incumbent_lp,\n             \"Solving LP without presolve, or with basis, or unconstrained\",\n             this_solve_original_lp_time);\n--- src/lp_data/HighsInterface.cpp\n@@ -471,7 +471,8 @@ HighsStatus Highs::addRowsInterface(HighsInt ext_num_new_row,\n   HighsLp& lp = model_.lp_;\n   HighsBasis& basis = basis_;\n   HighsScale& scale = lp.scale_;\n-  bool& valid_basis = basis.valid;\n+  bool& useful_basis = basis.useful;\n+  \n   bool& lp_has_scaling = lp.scale_.has_scaling;\n \n   // Check that if nonzeros are to be added then the model has a positive number\n@@ -559,7 +560,7 @@ HighsStatus Highs::addRowsInterface(HighsInt ext_num_new_row,\n                                        &scale.row[lp.num_row_]);\n   }\n   // Update the basis corresponding to new basic rows\n-  if (valid_basis) appendBasicRowsToBasisInterface(ext_num_new_row);\n+  if (useful_basis) appendBasicRowsToBasisInterface(ext_num_new_row);\n \n   // Possibly add row names\n   lp.addRowNames(\"\", ext_num_new_row);\n@@ -1343,27 +1344,20 @@ void Highs::appendNonbasicColsToBasisInterface(const HighsInt ext_num_new_col) {\n void Highs::appendBasicRowsToBasisInterface(const HighsInt ext_num_new_row) {\n   if (ext_num_new_row == 0) return;\n   HighsBasis& highs_basis = basis_;\n-  if (!highs_basis.valid) return;\n+  if (!highs_basis.useful) return;\n   const bool has_simplex_basis = ekk_instance_.status_.has_basis;\n   SimplexBasis& simplex_basis = ekk_instance_.basis_;\n   HighsLp& lp = model_.lp_;\n-  const bool has_highs_basis = highs_basis.valid && highs_basis.useful;\n-\n-  if (has_highs_basis) {\n-    assert(highs_basis.col_status.size() == static_cast<size_t>(lp.num_col_));\n-    assert(highs_basis.row_status.size() == static_cast<size_t>(lp.num_row_));\n-  }\n \n-  if (!has_highs_basis && !has_simplex_basis) return;\n+  assert(highs_basis.col_status.size() == static_cast<size_t>(lp.num_col_));\n+  assert(highs_basis.row_status.size() == static_cast<size_t>(lp.num_row_));\n \n   // Add basic logicals\n   // Add the new rows to the Highs basis\n   HighsInt newNumRow = lp.num_row_ + ext_num_new_row;\n-  if (has_highs_basis) {\n-    highs_basis.row_status.resize(newNumRow);\n-    for (HighsInt iRow = lp.num_row_; iRow < newNumRow; iRow++)\n-      highs_basis.row_status[iRow] = HighsBasisStatus::kBasic;\n-  }\n+  highs_basis.row_status.resize(newNumRow);\n+  for (HighsInt iRow = lp.num_row_; iRow < newNumRow; iRow++)\n+    highs_basis.row_status[iRow] = HighsBasisStatus::kBasic;\n   if (has_simplex_basis) {\n     // Add the new rows to the simplex basis\n     HighsInt newNumTot = lp.num_col_ + newNumRow;\n--- src/lp_data/HighsSolution.cpp\n@@ -677,7 +677,7 @@ double computeObjectiveValue(const HighsLp& lp, const HighsSolution& solution) {\n // and any solution values\n void refineBasis(const HighsLp& lp, const HighsSolution& solution,\n                  HighsBasis& basis) {\n-  assert(basis.valid);\n+  assert(basis.useful);\n   assert(isBasisRightSize(lp, basis));\n   const bool have_highs_solution = solution.value_valid;\n \n--- src/simplex/HApp.h\n@@ -144,6 +144,9 @@ inline HighsStatus solveLpSimplex(HighsLpSolverObject& solver_object) {\n     assert(basis.row_status.size() == static_cast<size_t>(incumbent_lp.num_row_));\n     HighsStatus return_status = formSimplexLpBasisAndFactor(solver_object);\n     if (return_status != HighsStatus::kOk) return returnFromSolveLpSimplex(solver_object, HighsStatus::kError);\n+    // formSimplexLpBasisAndFactor may introduce variables with\n+    // HighsBasisStatus::kNonbasic, so refine it\n+    refineBasis(incumbent_lp, solution, basis);\n     basis.valid = true;\n   }\n   // Move the LP to EKK, updating other EKK pointers and any simplex"
+        ],
+        "files_changed": [
+            {
+                "filename": "src/lp_data/Highs.cpp",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "changes": 2,
+                "patch": "@@ -1282,7 +1282,7 @@ HighsStatus Highs::solve() {\n         \"LP without presolve, or with basis, or unconstrained\";\n     // If there is a valid HiGHS basis, refine any status values that\n     // are simply HighsBasisStatus::kNonbasic\n-    if (basis_.valid) refineBasis(incumbent_lp, solution_, basis_);\n+    if (basis_.useful) refineBasis(incumbent_lp, solution_, basis_);\n     solveLp(incumbent_lp,\n             \"Solving LP without presolve, or with basis, or unconstrained\",\n             this_solve_original_lp_time);"
+            },
+            {
+                "filename": "src/lp_data/HighsInterface.cpp",
+                "status": "modified",
+                "additions": 9,
+                "deletions": 15,
+                "changes": 24,
+                "patch": "@@ -471,7 +471,8 @@ HighsStatus Highs::addRowsInterface(HighsInt ext_num_new_row,\n   HighsLp& lp = model_.lp_;\n   HighsBasis& basis = basis_;\n   HighsScale& scale = lp.scale_;\n-  bool& valid_basis = basis.valid;\n+  bool& useful_basis = basis.useful;\n+  \n   bool& lp_has_scaling = lp.scale_.has_scaling;\n \n   // Check that if nonzeros are to be added then the model has a positive number\n@@ -559,7 +560,7 @@ HighsStatus Highs::addRowsInterface(HighsInt ext_num_new_row,\n                                        &scale.row[lp.num_row_]);\n   }\n   // Update the basis corresponding to new basic rows\n-  if (valid_basis) appendBasicRowsToBasisInterface(ext_num_new_row);\n+  if (useful_basis) appendBasicRowsToBasisInterface(ext_num_new_row);\n \n   // Possibly add row names\n   lp.addRowNames(\"\", ext_num_new_row);\n@@ -1343,27 +1344,20 @@ void Highs::appendNonbasicColsToBasisInterface(const HighsInt ext_num_new_col) {\n void Highs::appendBasicRowsToBasisInterface(const HighsInt ext_num_new_row) {\n   if (ext_num_new_row == 0) return;\n   HighsBasis& highs_basis = basis_;\n-  if (!highs_basis.valid) return;\n+  if (!highs_basis.useful) return;\n   const bool has_simplex_basis = ekk_instance_.status_.has_basis;\n   SimplexBasis& simplex_basis = ekk_instance_.basis_;\n   HighsLp& lp = model_.lp_;\n-  const bool has_highs_basis = highs_basis.valid && highs_basis.useful;\n-\n-  if (has_highs_basis) {\n-    assert(highs_basis.col_status.size() == static_cast<size_t>(lp.num_col_));\n-    assert(highs_basis.row_status.size() == static_cast<size_t>(lp.num_row_));\n-  }\n \n-  if (!has_highs_basis && !has_simplex_basis) return;\n+  assert(highs_basis.col_status.size() == static_cast<size_t>(lp.num_col_));\n+  assert(highs_basis.row_status.size() == static_cast<size_t>(lp.num_row_));\n \n   // Add basic logicals\n   // Add the new rows to the Highs basis\n   HighsInt newNumRow = lp.num_row_ + ext_num_new_row;\n-  if (has_highs_basis) {\n-    highs_basis.row_status.resize(newNumRow);\n-    for (HighsInt iRow = lp.num_row_; iRow < newNumRow; iRow++)\n-      highs_basis.row_status[iRow] = HighsBasisStatus::kBasic;\n-  }\n+  highs_basis.row_status.resize(newNumRow);\n+  for (HighsInt iRow = lp.num_row_; iRow < newNumRow; iRow++)\n+    highs_basis.row_status[iRow] = HighsBasisStatus::kBasic;\n   if (has_simplex_basis) {\n     // Add the new rows to the simplex basis\n     HighsInt newNumTot = lp.num_col_ + newNumRow;"
+            },
+            {
+                "filename": "src/lp_data/HighsSolution.cpp",
+                "status": "modified",
+                "additions": 1,
+                "deletions": 1,
+                "changes": 2,
+                "patch": "@@ -677,7 +677,7 @@ double computeObjectiveValue(const HighsLp& lp, const HighsSolution& solution) {\n // and any solution values\n void refineBasis(const HighsLp& lp, const HighsSolution& solution,\n                  HighsBasis& basis) {\n-  assert(basis.valid);\n+  assert(basis.useful);\n   assert(isBasisRightSize(lp, basis));\n   const bool have_highs_solution = solution.value_valid;\n "
+            },
+            {
+                "filename": "src/simplex/HApp.h",
+                "status": "modified",
+                "additions": 3,
+                "deletions": 0,
+                "changes": 3,
+                "patch": "@@ -144,6 +144,9 @@ inline HighsStatus solveLpSimplex(HighsLpSolverObject& solver_object) {\n     assert(basis.row_status.size() == static_cast<size_t>(incumbent_lp.num_row_));\n     HighsStatus return_status = formSimplexLpBasisAndFactor(solver_object);\n     if (return_status != HighsStatus::kOk) return returnFromSolveLpSimplex(solver_object, HighsStatus::kError);\n+    // formSimplexLpBasisAndFactor may introduce variables with\n+    // HighsBasisStatus::kNonbasic, so refine it\n+    refineBasis(incumbent_lp, solution, basis);\n     basis.valid = true;\n   }\n   // Move the LP to EKK, updating other EKK pointers and any simplex"
+            }
+        ],
+        "lines_added": 14,
+        "lines_removed": 17
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DBUILD_EXTRA_UNIT_TESTS=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DBUILD_EXTRA_UNIT_TESTS=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": true,
+        "p_value": 0.021920054636062513,
+        "is_pair_significant": true,
+        "pair_p_value": 0.025007740102081868,
+        "is_binom_significant": true,
+        "binom_p_value": 0.008062400855123998,
+        "is_wilcoxon_significant": true,
+        "wilcoxon_p_value": 0.019353790205935147,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.005677401299368197,
+        "relative_improvement": 0.17540106951871656,
+        "absolute_improvement_ms": 54.66666666666675,
+        "old_mean_ms": 311.6666666666667,
+        "new_mean_ms": 256.99999999999994,
+        "old_std_ms": 81.62501870236184,
+        "new_std_ms": 69.09014601129505,
+        "effect_size_cohens_d": 0.72293420217079,
+        "old_ci95_ms": [
+            281.18738377021015,
+            342.1459495631233
+        ],
+        "new_ci95_ms": [
+            231.20131548986922,
+            282.79868451013067
+        ],
+        "old_ci99_ms": [
+            270.5892912956705,
+            352.7440420376629
+        ],
+        "new_ci99_ms": [
+            222.2307355359811,
+            291.7692644640188
+        ],
+        "new_times_s": [
+            0.24,
+            0.21,
+            0.33,
+            0.12,
+            0.36,
+            0.3,
+            0.24,
+            0.11,
+            0.24,
+            0.28,
+            0.27,
+            0.22,
+            0.34,
+            0.25,
+            0.32,
+            0.35,
+            0.33,
+            0.3,
+            0.26,
+            0.27,
+            0.17,
+            0.25,
+            0.22,
+            0.19,
+            0.27,
+            0.16,
+            0.18,
+            0.21,
+            0.26,
+            0.35,
+            0.35
+        ],
+        "old_times_s": [
+            0.18,
+            0.4,
+            0.36,
+            0.24,
+            0.14,
+            0.39,
+            0.36,
+            0.21,
+            0.34,
+            0.39,
+            0.31,
+            0.22,
+            0.38,
+            0.4,
+            0.19,
+            0.22,
+            0.41,
+            0.34,
+            0.4,
+            0.38,
+            0.24,
+            0.35,
+            0.39,
+            0.27,
+            0.21,
+            0.25,
+            0.43,
+            0.34,
+            0.22,
+            0.32,
+            0.25
+        ]
+    },
+    "tests": {
+        "total_tests": 2,
+        "significant_improvements": 1,
+        "significant_improvements_tests": [
+            "cxx_examples_call_highs_from_cpp"
+        ],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 1,
+        "significant_wilcoxon_improvements_tests": [
+            "cxx_examples_call_highs_from_cpp"
+        ],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 1,
+        "significant_mannwhitney_improvements_tests": [
+            "cxx_examples_call_highs_from_cpp"
+        ],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "cxx_examples_call_highs_from_cpp",
+                "is_significant": true,
+                "p_value": 0.037266793711152574,
+                "is_pair_significant": false,
+                "pair_p_value": 0.052963889804307274,
+                "is_binom_significant": false,
+                "binom_p_value": 0.12389428168535233,
+                "is_wilcoxon_significant": true,
+                "wilcoxon_p_value": 0.04477572029299634,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.01885630061134148,
+                "relative_improvement": 0.24373576309794975,
+                "absolute_improvement_ms": 36.896551724137886,
+                "old_mean_ms": 151.37931034482756,
+                "new_mean_ms": 114.48275862068968,
+                "old_std_ms": 57.7385819220089,
+                "new_std_ms": 67.3257649098,
+                "effect_size_cohens_d": 0.5883150197658135,
+                "old_ci95_ms": [
+                    129.41672836228904,
+                    173.3418923273661
+                ],
+                "new_ci95_ms": [
+                    88.87340726242634,
+                    140.09210997895303
+                ],
+                "old_ci99_ms": [
+                    121.75220302858062,
+                    181.0064176610745
+                ],
+                "new_ci99_ms": [
+                    79.93622845433784,
+                    149.02928878704154
+                ],
+                "new_times": [
+                    0.19,
+                    0.09,
+                    0.19,
+                    0.11,
+                    0.19,
+                    0.07,
+                    0.03,
+                    0.16,
+                    0.05,
+                    0.02,
+                    0.15,
+                    0.04,
+                    0.12,
+                    0.2,
+                    0.19,
+                    0.19,
+                    0.2,
+                    0.16,
+                    0.03,
+                    0.04,
+                    0.06,
+                    0.03,
+                    0.13,
+                    0.02,
+                    0.1,
+                    0.04,
+                    0.2,
+                    0.18,
+                    0.14
+                ],
+                "old_times": [
+                    0.15,
+                    0.14,
+                    0.11,
+                    0.19,
+                    0.19,
+                    0.18,
+                    0.14,
+                    0.2,
+                    0.12,
+                    0.2,
+                    0.2,
+                    0.2,
+                    0.11,
+                    0.02,
+                    0.2,
+                    0.2,
+                    0.19,
+                    0.16,
+                    0.05,
+                    0.19,
+                    0.18,
+                    0.07,
+                    0.16,
+                    0.16,
+                    0.22,
+                    0.23,
+                    0.02,
+                    0.11,
+                    0.1
+                ]
+            },
+            {
+                "test_name": "c_examples_call_highs_from_c_minimal",
+                "is_significant": false,
+                "p_value": 0.42504921120877126,
+                "is_pair_significant": false,
+                "pair_p_value": 0.42614984074928564,
+                "is_binom_significant": false,
+                "binom_p_value": 0.4252770096063614,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.36061158517706504,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.18023742789258845,
+                "relative_improvement": 0.06935123042505585,
+                "absolute_improvement_ms": 10.689655172413826,
+                "old_mean_ms": 154.1379310344828,
+                "new_mean_ms": 143.44827586206895,
+                "old_std_ms": 65.11074309969956,
+                "new_std_ms": 57.710847090656905,
+                "effect_size_cohens_d": 0.17375294210049197,
+                "old_ci95_ms": [
+                    129.37112891241568,
+                    178.9047331565499
+                ],
+                "new_ci95_ms": [
+                    121.49624364516484,
+                    165.40030807897307
+                ],
+                "old_ci99_ms": [
+                    120.7279838372852,
+                    187.54787823168036
+                ],
+                "new_ci99_ms": [
+                    113.83539997994302,
+                    173.0611517441949
+                ],
+                "new_times": [
+                    0.14,
+                    0.04,
+                    0.18,
+                    0.19,
+                    0.04,
+                    0.03,
+                    0.21,
+                    0.12,
+                    0.21,
+                    0.2,
+                    0.2,
+                    0.21,
+                    0.2,
+                    0.15,
+                    0.14,
+                    0.1,
+                    0.06,
+                    0.11,
+                    0.13,
+                    0.21,
+                    0.16,
+                    0.16,
+                    0.14,
+                    0.14,
+                    0.08,
+                    0.17,
+                    0.06,
+                    0.17,
+                    0.21
+                ],
+                "old_times": [
+                    0.21,
+                    0.1,
+                    0.02,
+                    0.2,
+                    0.16,
+                    0.02,
+                    0.2,
+                    0.19,
+                    0.19,
+                    0.02,
+                    0.17,
+                    0.2,
+                    0.08,
+                    0.2,
+                    0.2,
+                    0.13,
+                    0.21,
+                    0.21,
+                    0.18,
+                    0.16,
+                    0.22,
+                    0.19,
+                    0.05,
+                    0.08,
+                    0.21,
+                    0.11,
+                    0.2,
+                    0.21,
+                    0.15
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
+}

@@ -1,0 +1,387 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:06:20.679109",
+    "repository": "https://github.com/zxing-cpp/zxing-cpp",
+    "repository_name": "zxing-cpp/zxing-cpp"
+  },
+  "commit_info": {
+    "old_sha": "1352b3eab03a1946fee12d18b2ac4d64daa65597",
+    "new_sha": "7834f83ddc59102efd9d2081eb4d4a685349ffbe",
+    "commit_message": [
+      "DMDetector: use forced inline to reduce cost in c++20 build\n\nForce traceSteps() to inline to allow the compiler optimize for the\nmaxStepSize==1 case in traceLine() this can result in a 10% speedup\nof the falsepositive use case when build with c++20."
+    ],
+    "commit_date": "2023-10-30T08:36:35+00:00",
+    "patch": [
+      "--- core/src/datamatrix/DMDetector.cpp\n@@ -493,6 +493,13 @@ class EdgeTracer : public BitMatrixCursorF\n {\n \tenum class StepResult { FOUND, OPEN_END, CLOSED_END };\n \n+\t// force this function inline to allow the compiler optimize for the maxStepSize==1 case in traceLine()\n+\t// this can result in a 10% speedup of the falsepositive use case when build with c++20\n+#if defined(__clang__) || defined(__GNUC__)\n+\tinline __attribute__((always_inline))\n+#elif defined(_MSC_VER)\n+\t__forceinline\n+#endif\n \tStepResult traceStep(PointF dEdge, int maxStepSize, bool goodDirection)\n \t{\n \t\tdEdge = mainDirection(dEdge);"
+    ],
+    "files_changed": [
+      {
+        "filename": "core/src/datamatrix/DMDetector.cpp",
+        "status": "modified",
+        "additions": 7,
+        "deletions": 0,
+        "changes": 7,
+        "patch": "@@ -493,6 +493,13 @@ class EdgeTracer : public BitMatrixCursorF\n {\n \tenum class StepResult { FOUND, OPEN_END, CLOSED_END };\n \n+\t// force this function inline to allow the compiler optimize for the maxStepSize==1 case in traceLine()\n+\t// this can result in a 10% speedup of the falsepositive use case when build with c++20\n+#if defined(__clang__) || defined(__GNUC__)\n+\tinline __attribute__((always_inline))\n+#elif defined(_MSC_VER)\n+\t__forceinline\n+#endif\n \tStepResult traceStep(PointF dEdge, int maxStepSize, bool goodDirection)\n \t{\n \t\tdEdge = mainDirection(dEdge);"
+      }
+    ],
+    "lines_added": 7,
+    "lines_removed": 0
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_UNIT_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9999138048079035,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9995086711096327,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9973885603249073,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9989479436372486,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.00010884733223548905,
+    "relative_improvement": 0.026447383042560443,
+    "absolute_improvement_ms": 237.99999999999955,
+    "old_mean_ms": 8999.0,
+    "new_mean_ms": 8761.000000000002,
+    "old_std_ms": 141.28352516397183,
+    "new_std_ms": 249.25198439358098,
+    "effect_size_cohens_d": 1.1747709866378462,
+    "old_ci95_ms": [
+      8946.243864680955,
+      9051.756135319047
+    ],
+    "new_ci95_ms": [
+      8667.927779428304,
+      8854.072220571697
+    ],
+    "old_ci99_ms": [
+      8927.899784782161,
+      9070.10021521784
+    ],
+    "new_ci99_ms": [
+      8635.565206995727,
+      8886.434793004275
+    ],
+    "new_times_s": [
+      8.6,
+      9.02,
+      8.62,
+      9.26,
+      8.68,
+      8.65,
+      9.19,
+      8.68,
+      9.03,
+      8.53,
+      8.63,
+      8.62,
+      8.57,
+      8.47,
+      8.59,
+      9.22,
+      8.67,
+      8.44,
+      8.63,
+      8.63,
+      9.06,
+      9.04,
+      8.73,
+      8.61,
+      8.67,
+      9.31,
+      8.6,
+      8.68,
+      8.59,
+      8.61,
+      8.8
+    ],
+    "old_times_s": [
+      9.01,
+      8.91,
+      8.98,
+      9.08,
+      9.09,
+      9.19,
+      9.15,
+      8.95,
+      8.94,
+      9.14,
+      9.07,
+      8.96,
+      9.02,
+      8.96,
+      9.11,
+      8.61,
+      9.14,
+      8.74,
+      8.92,
+      8.94,
+      8.77,
+      8.92,
+      8.86,
+      9.14,
+      9.06,
+      8.93,
+      8.87,
+      9.09,
+      9.07,
+      9.18,
+      9.18
+    ]
+  },
+  "tests": {
+    "total_tests": 2,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "UnitTest"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "ZXingWriterTest",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999999393422746,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 1.0,
+        "relative_improvement": 0.0,
+        "absolute_improvement_ms": 0.0,
+        "old_mean_ms": 10.0,
+        "new_mean_ms": 10.0,
+        "old_std_ms": 0.0,
+        "new_std_ms": 0.0,
+        "effect_size_cohens_d": "NaN",
+        "old_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci95_ms": [
+          10.0,
+          10.0
+        ],
+        "old_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_ci99_ms": [
+          10.0,
+          10.0
+        ],
+        "new_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "old_times": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ]
+      },
+      {
+        "test_name": "UnitTest",
+        "is_significant": false,
+        "p_value": 0.9997327095045977,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9987990364989007,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9821509309113026,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.997266982959633,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.00012383815937511635,
+        "relative_improvement": 0.027372770251479935,
+        "absolute_improvement_ms": 246.07142857142782,
+        "old_mean_ms": 8989.642857142857,
+        "new_mean_ms": 8743.571428571428,
+        "old_std_ms": 145.81779962621417,
+        "new_std_ms": 251.36979231159128,
+        "effect_size_cohens_d": 1.1975051279054503,
+        "old_ci95_ms": [
+          8933.100617162128,
+          9046.185097123584
+        ],
+        "new_ci95_ms": [
+          8646.100398579063,
+          8841.042458563794
+        ],
+        "old_ci99_ms": [
+          8913.291219220626,
+          9065.994495065086
+        ],
+        "new_ci99_ms": [
+          8611.951726337831,
+          8875.191130805024
+        ],
+        "new_times": [
+          9.25,
+          8.67,
+          8.63,
+          9.17,
+          8.67,
+          9.02,
+          8.52,
+          8.62,
+          8.61,
+          8.55,
+          8.45,
+          8.58,
+          9.2,
+          8.66,
+          8.43,
+          8.61,
+          8.62,
+          9.05,
+          9.02,
+          8.72,
+          8.6,
+          8.66,
+          9.3,
+          8.59,
+          8.66,
+          8.58,
+          8.6,
+          8.78
+        ],
+        "old_times": [
+          9.06,
+          9.08,
+          9.18,
+          9.13,
+          8.93,
+          8.92,
+          9.13,
+          9.05,
+          8.95,
+          9.01,
+          8.94,
+          9.1,
+          8.6,
+          9.13,
+          8.73,
+          8.9,
+          8.93,
+          8.76,
+          8.91,
+          8.84,
+          9.13,
+          9.05,
+          8.91,
+          8.86,
+          9.08,
+          9.06,
+          9.17,
+          9.17
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

@@ -1,0 +1,425 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:00:31.635080",
+    "repository": "https://github.com/ERGO-Code/HiGHS",
+    "repository_name": "ERGO-Code/HiGHS"
+  },
+  "commit_info": {
+    "old_sha": "2d8d8af61488e8e9b208dfd13805971a7613fa6c",
+    "new_sha": "a251c86c9cacf95810190e93e8051b297078d699",
+    "commit_message": [
+      "Merge pull request #1914 from heshpdx/div_fixes\n\nReplace expensive computations"
+    ],
+    "commit_date": "2024-09-07T11:50:45+00:00",
+    "patch": [
+      "--- src/simplex/HEkk.cpp\n@@ -2126,6 +2126,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n \n   const double col_aq_scale = simplex_nla_.variableScaleFactor(variable_in);\n   const double col_ap_scale = simplex_nla_.basicColScaleFactor(row_out);\n+  const double inv_col_ap_scale = 1.0 / col_ap_scale;\n \n   const bool DSE_check = false;\n   HVector alt_dual_steepest_edge_column;\n@@ -2165,7 +2166,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n     HighsInt DSE_array_count = 0;\n     for (HighsInt iRow = 0; iRow < num_row; iRow++) {\n       const double dual_steepest_edge_array_value =\n-          dual_steepest_edge_array[iRow] / col_ap_scale;\n+          dual_steepest_edge_array[iRow] * inv_col_ap_scale;\n       if (dual_steepest_edge_array_value) DSE_array_count++;\n       if (std::abs(dual_steepest_edge_array_value) >\n               dse_column_value_tolerance ||\n@@ -2194,7 +2195,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n              (int)alt_dual_steepest_edge_column.count, (int)DSE_array_count);\n       for (HighsInt iRow = 0; iRow < num_row; iRow++) {\n         const double dual_steepest_edge_array_value =\n-            dual_steepest_edge_array[iRow] / col_ap_scale;\n+            dual_steepest_edge_array[iRow] * inv_col_ap_scale;\n         if (alt_dual_steepest_edge_column.array[iRow] != 0 &&\n             dual_steepest_edge_array_value != 0) {\n           const double dse_column_error =\n@@ -2236,7 +2237,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n       double basic_col_scale = simplex_nla_.basicColScaleFactor(iRow);\n       aa_iRow /= basic_col_scale;\n       aa_iRow *= col_aq_scale;\n-      dual_steepest_edge_array_value /= col_ap_scale;\n+      dual_steepest_edge_array_value *= inv_col_ap_scale;\n     }\n     if (DSE_check) {\n       const double pivotal_column_error =\n--- src/simplex/HEkkDual.cpp\n@@ -402,6 +402,7 @@ void HEkkDual::initialiseInstance() {\n   solver_num_col = ekk_instance_.lp_.num_col_;\n   solver_num_row = ekk_instance_.lp_.num_row_;\n   solver_num_tot = solver_num_col + solver_num_row;\n+  inv_solver_num_row = 1.0 / solver_num_row;\n \n   a_matrix = &ekk_instance_.lp_.a_matrix_;\n   simplex_nla = &ekk_instance_.simplex_nla_;\n@@ -1276,7 +1277,7 @@ void HEkkDual::iterateTasks() {\n   chooseRow();\n \n   // Disable slice when too sparse\n-  if (1.0 * row_ep.count / solver_num_row < 0.01) slice_PRICE = 0;\n+  if (1.0 * row_ep.count * inv_solver_num_row < 0.01) slice_PRICE = 0;\n \n   analysis->simplexTimerStart(Group1Clock);\n   // #pragma omp parallel\n@@ -1498,7 +1499,7 @@ void HEkkDual::chooseRow() {\n   move_out = delta_primal < 0 ? -1 : 1;\n   // Update the record of average row_ep (pi_p) density. This ignores\n   // any BTRANs done for skipped candidates\n-  const double local_row_ep_density = (double)row_ep.count / solver_num_row;\n+  const double local_row_ep_density = (double)row_ep.count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_row_ep_density, ekk_instance_.info_.row_ep_density);\n }\n@@ -1798,7 +1799,7 @@ void HEkkDual::chooseColumnSlice(HVector* row_ep) {\n   analysis->simplexTimerStop(Chuzc0Clock);\n \n   //  const HighsInt solver_num_row = ekk_instance_.lp_.num_row_;\n-  const double local_density = 1.0 * row_ep->count / solver_num_row;\n+  const double local_density = 1.0 * row_ep->count * inv_solver_num_row;\n   bool use_col_price;\n   bool use_row_price_w_switch;\n   HighsSimplexInfo& info = ekk_instance_.info_;\n@@ -1961,7 +1962,7 @@ void HEkkDual::updateFtran() {\n                      analysis->pointer_serial_factor_clocks);\n   if (analysis->analyse_simplex_summary_data)\n     analysis->operationRecordAfter(kSimplexNlaFtran, col_aq);\n-  const double local_col_aq_density = (double)col_aq.count / solver_num_row;\n+  const double local_col_aq_density = (double)col_aq.count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_col_aq_density, ekk_instance_.info_.col_aq_density);\n   // Save the pivot value computed column-wise - used for numerical checking\n@@ -2002,7 +2003,8 @@ void HEkkDual::updateFtranBFRT() {\n   if (time_updateFtranBFRT) {\n     analysis->simplexTimerStop(FtranBfrtClock);\n   }\n-  const double local_col_BFRT_density = (double)col_BFRT.count / solver_num_row;\n+  const double local_col_BFRT_density =\n+      (double)col_BFRT.count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_col_BFRT_density, ekk_instance_.info_.col_BFRT_density);\n }\n@@ -2043,7 +2045,7 @@ void HEkkDual::updateFtranDSE(HVector* DSE_Vector) {\n     analysis->operationRecordAfter(kSimplexNlaFtranDse, *DSE_Vector);\n   analysis->simplexTimerStop(FtranDseClock);\n   const double local_row_DSE_density =\n-      (double)DSE_Vector->count / solver_num_row;\n+      (double)DSE_Vector->count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_row_DSE_density, ekk_instance_.info_.row_DSE_density);\n }\n--- src/simplex/HEkkDual.h\n@@ -388,6 +388,7 @@ class HEkkDual {\n   HighsInt solver_num_row;\n   HighsInt solver_num_col;\n   HighsInt solver_num_tot;\n+  double inv_solver_num_row;  // 1.0 / solver_num_row\n \n   const HighsSparseMatrix* a_matrix;\n   const HSimplexNla* simplex_nla;\n--- src/util/HFactor.cpp\n@@ -211,6 +211,7 @@ void HFactor::setupGeneral(\n   num_row = num_row_;\n   num_col = num_col_;\n   num_basic = num_basic_;\n+  inv_num_row = 1.0 / num_row;\n   this->a_matrix_valid = true;\n   a_start = a_start_;\n   a_index = a_index_;\n@@ -1543,7 +1544,7 @@ void HFactor::ftranL(HVector& rhs, const double expected_density,\n   }\n \n   // Determine style of solve\n-  double current_density = 1.0 * rhs.count / num_row;\n+  double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperFtranL;\n   if (sparse_solve) {\n@@ -1591,7 +1592,7 @@ void HFactor::btranL(HVector& rhs, const double expected_density,\n   factor_timer.start(FactorBtranLower, factor_timer_clock_pointer);\n \n   // Determine style of solve\n-  const double current_density = 1.0 * rhs.count / num_row;\n+  const double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperBtranL;\n   if (sparse_solve) {\n@@ -1666,7 +1667,7 @@ void HFactor::ftranU(HVector& rhs, const double expected_density,\n   // The regular part\n   //\n   // Determine style of solve\n-  const double current_density = 1.0 * rhs.count / num_row;\n+  const double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperFtranU;\n   if (sparse_solve) {\n@@ -1720,7 +1721,7 @@ void HFactor::ftranU(HVector& rhs, const double expected_density,\n         rhs_synthetic_tick * 15 + (u_pivot_count - num_row) * 10;\n     factor_timer.stop(use_clock, factor_timer_clock_pointer);\n     if (report_ftran_upper_sparse) {\n-      const double final_density = 1.0 * rhs.count / num_row;\n+      const double final_density = 1.0 * rhs.count * inv_num_row;\n       printf(\n           \"FactorFtranUpperSps: expected_density = %10.4g; current_density = \"\n           \"%10.4g; final_density = %10.4g\\n\",\n@@ -1773,7 +1774,7 @@ void HFactor::btranU(HVector& rhs, const double expected_density,\n   // The regular part\n   //\n   // Determine style of solve\n-  const double current_density = 1.0 * rhs.count / num_row;\n+  const double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperBtranU;\n   if (sparse_solve) {\n--- src/util/HFactor.h\n@@ -347,6 +347,7 @@ class HFactor {\n   HighsInt num_row;\n   HighsInt num_col;\n   HighsInt num_basic;\n+  double inv_num_row;  // 1.0/num_row\n \n  private:\n   bool a_matrix_valid;\n--- src/util/HighsSparseMatrix.cpp\n@@ -1383,6 +1383,7 @@ void HighsSparseMatrix::priceByRowWithSwitch(\n   assert(HighsInt(result.size) == this->num_col_);\n   assert(HighsInt(result.index.size()) == this->num_col_);\n   if (expected_density <= kHyperPriceDensity) {\n+    double inv_num_col = 1.0 / this->num_col_;\n     for (HighsInt ix = next_index; ix < column.count; ix++) {\n       HighsInt iRow = column.index[ix];\n       // Determine whether p_end_ or the next start_ ends the loop\n@@ -1394,7 +1395,7 @@ void HighsSparseMatrix::priceByRowWithSwitch(\n       }\n       // Possibly switch to standard row-wise price\n       HighsInt row_num_nz = to_iEl - this->start_[iRow];\n-      double local_density = (1.0 * result.count) / this->num_col_;\n+      double local_density = (1.0 * result.count) * inv_num_col;\n       bool switch_to_dense = result.count + row_num_nz >= this->num_col_ ||\n                              local_density > switch_density;\n       if (switch_to_dense) break;"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/simplex/HEkk.cpp",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 3,
+        "changes": 7,
+        "patch": "@@ -2126,6 +2126,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n \n   const double col_aq_scale = simplex_nla_.variableScaleFactor(variable_in);\n   const double col_ap_scale = simplex_nla_.basicColScaleFactor(row_out);\n+  const double inv_col_ap_scale = 1.0 / col_ap_scale;\n \n   const bool DSE_check = false;\n   HVector alt_dual_steepest_edge_column;\n@@ -2165,7 +2166,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n     HighsInt DSE_array_count = 0;\n     for (HighsInt iRow = 0; iRow < num_row; iRow++) {\n       const double dual_steepest_edge_array_value =\n-          dual_steepest_edge_array[iRow] / col_ap_scale;\n+          dual_steepest_edge_array[iRow] * inv_col_ap_scale;\n       if (dual_steepest_edge_array_value) DSE_array_count++;\n       if (std::abs(dual_steepest_edge_array_value) >\n               dse_column_value_tolerance ||\n@@ -2194,7 +2195,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n              (int)alt_dual_steepest_edge_column.count, (int)DSE_array_count);\n       for (HighsInt iRow = 0; iRow < num_row; iRow++) {\n         const double dual_steepest_edge_array_value =\n-            dual_steepest_edge_array[iRow] / col_ap_scale;\n+            dual_steepest_edge_array[iRow] * inv_col_ap_scale;\n         if (alt_dual_steepest_edge_column.array[iRow] != 0 &&\n             dual_steepest_edge_array_value != 0) {\n           const double dse_column_error =\n@@ -2236,7 +2237,7 @@ void HEkk::updateDualSteepestEdgeWeights(\n       double basic_col_scale = simplex_nla_.basicColScaleFactor(iRow);\n       aa_iRow /= basic_col_scale;\n       aa_iRow *= col_aq_scale;\n-      dual_steepest_edge_array_value /= col_ap_scale;\n+      dual_steepest_edge_array_value *= inv_col_ap_scale;\n     }\n     if (DSE_check) {\n       const double pivotal_column_error ="
+      },
+      {
+        "filename": "src/simplex/HEkkDual.cpp",
+        "status": "modified",
+        "additions": 8,
+        "deletions": 6,
+        "changes": 14,
+        "patch": "@@ -402,6 +402,7 @@ void HEkkDual::initialiseInstance() {\n   solver_num_col = ekk_instance_.lp_.num_col_;\n   solver_num_row = ekk_instance_.lp_.num_row_;\n   solver_num_tot = solver_num_col + solver_num_row;\n+  inv_solver_num_row = 1.0 / solver_num_row;\n \n   a_matrix = &ekk_instance_.lp_.a_matrix_;\n   simplex_nla = &ekk_instance_.simplex_nla_;\n@@ -1276,7 +1277,7 @@ void HEkkDual::iterateTasks() {\n   chooseRow();\n \n   // Disable slice when too sparse\n-  if (1.0 * row_ep.count / solver_num_row < 0.01) slice_PRICE = 0;\n+  if (1.0 * row_ep.count * inv_solver_num_row < 0.01) slice_PRICE = 0;\n \n   analysis->simplexTimerStart(Group1Clock);\n   // #pragma omp parallel\n@@ -1498,7 +1499,7 @@ void HEkkDual::chooseRow() {\n   move_out = delta_primal < 0 ? -1 : 1;\n   // Update the record of average row_ep (pi_p) density. This ignores\n   // any BTRANs done for skipped candidates\n-  const double local_row_ep_density = (double)row_ep.count / solver_num_row;\n+  const double local_row_ep_density = (double)row_ep.count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_row_ep_density, ekk_instance_.info_.row_ep_density);\n }\n@@ -1798,7 +1799,7 @@ void HEkkDual::chooseColumnSlice(HVector* row_ep) {\n   analysis->simplexTimerStop(Chuzc0Clock);\n \n   //  const HighsInt solver_num_row = ekk_instance_.lp_.num_row_;\n-  const double local_density = 1.0 * row_ep->count / solver_num_row;\n+  const double local_density = 1.0 * row_ep->count * inv_solver_num_row;\n   bool use_col_price;\n   bool use_row_price_w_switch;\n   HighsSimplexInfo& info = ekk_instance_.info_;\n@@ -1961,7 +1962,7 @@ void HEkkDual::updateFtran() {\n                      analysis->pointer_serial_factor_clocks);\n   if (analysis->analyse_simplex_summary_data)\n     analysis->operationRecordAfter(kSimplexNlaFtran, col_aq);\n-  const double local_col_aq_density = (double)col_aq.count / solver_num_row;\n+  const double local_col_aq_density = (double)col_aq.count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_col_aq_density, ekk_instance_.info_.col_aq_density);\n   // Save the pivot value computed column-wise - used for numerical checking\n@@ -2002,7 +2003,8 @@ void HEkkDual::updateFtranBFRT() {\n   if (time_updateFtranBFRT) {\n     analysis->simplexTimerStop(FtranBfrtClock);\n   }\n-  const double local_col_BFRT_density = (double)col_BFRT.count / solver_num_row;\n+  const double local_col_BFRT_density =\n+      (double)col_BFRT.count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_col_BFRT_density, ekk_instance_.info_.col_BFRT_density);\n }\n@@ -2043,7 +2045,7 @@ void HEkkDual::updateFtranDSE(HVector* DSE_Vector) {\n     analysis->operationRecordAfter(kSimplexNlaFtranDse, *DSE_Vector);\n   analysis->simplexTimerStop(FtranDseClock);\n   const double local_row_DSE_density =\n-      (double)DSE_Vector->count / solver_num_row;\n+      (double)DSE_Vector->count * inv_solver_num_row;\n   ekk_instance_.updateOperationResultDensity(\n       local_row_DSE_density, ekk_instance_.info_.row_DSE_density);\n }"
+      },
+      {
+        "filename": "src/simplex/HEkkDual.h",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "patch": "@@ -388,6 +388,7 @@ class HEkkDual {\n   HighsInt solver_num_row;\n   HighsInt solver_num_col;\n   HighsInt solver_num_tot;\n+  double inv_solver_num_row;  // 1.0 / solver_num_row\n \n   const HighsSparseMatrix* a_matrix;\n   const HSimplexNla* simplex_nla;"
+      },
+      {
+        "filename": "src/util/HFactor.cpp",
+        "status": "modified",
+        "additions": 6,
+        "deletions": 5,
+        "changes": 11,
+        "patch": "@@ -211,6 +211,7 @@ void HFactor::setupGeneral(\n   num_row = num_row_;\n   num_col = num_col_;\n   num_basic = num_basic_;\n+  inv_num_row = 1.0 / num_row;\n   this->a_matrix_valid = true;\n   a_start = a_start_;\n   a_index = a_index_;\n@@ -1543,7 +1544,7 @@ void HFactor::ftranL(HVector& rhs, const double expected_density,\n   }\n \n   // Determine style of solve\n-  double current_density = 1.0 * rhs.count / num_row;\n+  double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperFtranL;\n   if (sparse_solve) {\n@@ -1591,7 +1592,7 @@ void HFactor::btranL(HVector& rhs, const double expected_density,\n   factor_timer.start(FactorBtranLower, factor_timer_clock_pointer);\n \n   // Determine style of solve\n-  const double current_density = 1.0 * rhs.count / num_row;\n+  const double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperBtranL;\n   if (sparse_solve) {\n@@ -1666,7 +1667,7 @@ void HFactor::ftranU(HVector& rhs, const double expected_density,\n   // The regular part\n   //\n   // Determine style of solve\n-  const double current_density = 1.0 * rhs.count / num_row;\n+  const double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperFtranU;\n   if (sparse_solve) {\n@@ -1720,7 +1721,7 @@ void HFactor::ftranU(HVector& rhs, const double expected_density,\n         rhs_synthetic_tick * 15 + (u_pivot_count - num_row) * 10;\n     factor_timer.stop(use_clock, factor_timer_clock_pointer);\n     if (report_ftran_upper_sparse) {\n-      const double final_density = 1.0 * rhs.count / num_row;\n+      const double final_density = 1.0 * rhs.count * inv_num_row;\n       printf(\n           \"FactorFtranUpperSps: expected_density = %10.4g; current_density = \"\n           \"%10.4g; final_density = %10.4g\\n\",\n@@ -1773,7 +1774,7 @@ void HFactor::btranU(HVector& rhs, const double expected_density,\n   // The regular part\n   //\n   // Determine style of solve\n-  const double current_density = 1.0 * rhs.count / num_row;\n+  const double current_density = 1.0 * rhs.count * inv_num_row;\n   const bool sparse_solve = rhs.count < 0 || current_density > kHyperCancel ||\n                             expected_density > kHyperBtranU;\n   if (sparse_solve) {"
+      },
+      {
+        "filename": "src/util/HFactor.h",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "patch": "@@ -347,6 +347,7 @@ class HFactor {\n   HighsInt num_row;\n   HighsInt num_col;\n   HighsInt num_basic;\n+  double inv_num_row;  // 1.0/num_row\n \n  private:\n   bool a_matrix_valid;"
+      },
+      {
+        "filename": "src/util/HighsSparseMatrix.cpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 1,
+        "changes": 3,
+        "patch": "@@ -1383,6 +1383,7 @@ void HighsSparseMatrix::priceByRowWithSwitch(\n   assert(HighsInt(result.size) == this->num_col_);\n   assert(HighsInt(result.index.size()) == this->num_col_);\n   if (expected_density <= kHyperPriceDensity) {\n+    double inv_num_col = 1.0 / this->num_col_;\n     for (HighsInt ix = next_index; ix < column.count; ix++) {\n       HighsInt iRow = column.index[ix];\n       // Determine whether p_end_ or the next start_ ends the loop\n@@ -1394,7 +1395,7 @@ void HighsSparseMatrix::priceByRowWithSwitch(\n       }\n       // Possibly switch to standard row-wise price\n       HighsInt row_num_nz = to_iEl - this->start_[iRow];\n-      double local_density = (1.0 * result.count) / this->num_col_;\n+      double local_density = (1.0 * result.count) * inv_num_col;\n       bool switch_to_dense = result.count + row_num_nz >= this->num_col_ ||\n                              local_density > switch_density;\n       if (switch_to_dense) break;"
+      }
+    ],
+    "lines_added": 22,
+    "lines_removed": 15
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9830947276555196,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9892374100975949,
+    "is_binom_significant": false,
+    "binom_p_value": 0.8997557889670134,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.975269035243576,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.7004728380611633,
+    "relative_improvement": -0.03710575139146554,
+    "absolute_improvement_ms": -19.999999999999794,
+    "old_mean_ms": 539.0,
+    "new_mean_ms": 558.9999999999999,
+    "old_std_ms": 73.21908550889323,
+    "new_std_ms": 95.35234116432193,
+    "effect_size_cohens_d": -0.2352688544802246,
+    "old_ci95_ms": [
+      511.65954414316326,
+      566.3404558568368
+    ],
+    "new_ci95_ms": [
+      523.39485065499,
+      594.6051493450096
+    ],
+    "old_ci99_ms": [
+      502.15286774099263,
+      575.8471322590074
+    ],
+    "new_ci99_ms": [
+      511.0144194417584,
+      606.9855805582413
+    ],
+    "new_times_s": [
+      0.45,
+      0.54,
+      0.51,
+      0.56,
+      0.53,
+      0.52,
+      0.52,
+      0.49,
+      0.77,
+      0.52,
+      0.56,
+      0.47,
+      0.65,
+      0.82,
+      0.61,
+      0.68,
+      0.62,
+      0.68,
+      0.5,
+      0.67,
+      0.49,
+      0.47,
+      0.45,
+      0.47,
+      0.44,
+      0.53,
+      0.51,
+      0.51,
+      0.62,
+      0.45,
+      0.61
+    ],
+    "old_times_s": [
+      0.56,
+      0.45,
+      0.46,
+      0.66,
+      0.5,
+      0.44,
+      0.51,
+      0.49,
+      0.54,
+      0.47,
+      0.56,
+      0.52,
+      0.52,
+      0.61,
+      0.68,
+      0.64,
+      0.43,
+      0.72,
+      0.55,
+      0.45,
+      0.55,
+      0.52,
+      0.49,
+      0.59,
+      0.59,
+      0.54,
+      0.59,
+      0.52,
+      0.46,
+      0.57,
+      0.55
+    ]
+  },
+  "tests": {
+    "total_tests": 2,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "cxx_examples_call_highs_from_cpp",
+        "is_significant": false,
+        "p_value": 0.8579800026659238,
+        "is_pair_significant": false,
+        "pair_p_value": 0.8542616766116202,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9821509309113026,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9176401785283715,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.7175400373574251,
+        "relative_improvement": -0.006657789613848298,
+        "absolute_improvement_ms": -1.7857142857142794,
+        "old_mean_ms": 268.2142857142857,
+        "new_mean_ms": 270.0,
+        "old_std_ms": 59.693884011343975,
+        "new_std_ms": 47.9969134810115,
+        "effect_size_cohens_d": -0.03296982005187252,
+        "old_ci95_ms": [
+          245.06741390711915,
+          291.3611575214523
+        ],
+        "new_ci95_ms": [
+          251.38873987034398,
+          288.61126012965605
+        ],
+        "old_ci99_ms": [
+          236.95797935190157,
+          299.4705920766699
+        ],
+        "new_ci99_ms": [
+          244.8683427614419,
+          295.13165723855815
+        ],
+        "new_times": [
+          0.28,
+          0.29,
+          0.27,
+          0.24,
+          0.27,
+          0.32,
+          0.27,
+          0.3,
+          0.24,
+          0.33,
+          0.35,
+          0.31,
+          0.35,
+          0.28,
+          0.25,
+          0.25,
+          0.32,
+          0.2,
+          0.22,
+          0.22,
+          0.2,
+          0.2,
+          0.28,
+          0.29,
+          0.27,
+          0.35,
+          0.2,
+          0.21
+        ],
+        "old_times": [
+          0.26,
+          0.26,
+          0.2,
+          0.26,
+          0.24,
+          0.27,
+          0.21,
+          0.28,
+          0.24,
+          0.26,
+          0.36,
+          0.35,
+          0.39,
+          0.2,
+          0.4,
+          0.26,
+          0.22,
+          0.35,
+          0.28,
+          0.26,
+          0.35,
+          0.19,
+          0.22,
+          0.25,
+          0.23,
+          0.2,
+          0.3,
+          0.22
+        ]
+      },
+      {
+        "test_name": "c_examples_call_highs_from_c_minimal",
+        "is_significant": false,
+        "p_value": 0.9614229253519322,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9531551488662353,
+        "is_binom_significant": false,
+        "binom_p_value": 0.9075333289802074,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9243391690797522,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.7287843222466868,
+        "relative_improvement": -0.05591677503250983,
+        "absolute_improvement_ms": -15.357142857142902,
+        "old_mean_ms": 274.6428571428571,
+        "new_mean_ms": 290.00000000000006,
+        "old_std_ms": 49.92454624190707,
+        "new_std_ms": 70.76303701373627,
+        "effect_size_cohens_d": -0.25078330421625,
+        "old_ci95_ms": [
+          255.28413905922937,
+          294.0015752264849
+        ],
+        "new_ci95_ms": [
+          262.5609587385624,
+          317.43904126143764
+        ],
+        "old_ci99_ms": [
+          248.50187238060713,
+          300.7838419051071
+        ],
+        "new_ci99_ms": [
+          252.94777596288176,
+          327.0522240371183
+        ],
+        "new_times": [
+          0.28,
+          0.24,
+          0.25,
+          0.28,
+          0.22,
+          0.46,
+          0.25,
+          0.26,
+          0.23,
+          0.31,
+          0.46,
+          0.3,
+          0.34,
+          0.34,
+          0.43,
+          0.25,
+          0.35,
+          0.28,
+          0.25,
+          0.22,
+          0.26,
+          0.24,
+          0.26,
+          0.21,
+          0.24,
+          0.27,
+          0.25,
+          0.39
+        ],
+        "old_times": [
+          0.39,
+          0.25,
+          0.24,
+          0.24,
+          0.25,
+          0.26,
+          0.25,
+          0.28,
+          0.28,
+          0.26,
+          0.25,
+          0.33,
+          0.24,
+          0.23,
+          0.32,
+          0.29,
+          0.22,
+          0.2,
+          0.24,
+          0.23,
+          0.23,
+          0.4,
+          0.33,
+          0.34,
+          0.28,
+          0.26,
+          0.27,
+          0.33
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

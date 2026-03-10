@@ -1,0 +1,301 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:19.252955",
+    "repository": "https://github.com/gabime/spdlog",
+    "repository_name": "gabime/spdlog"
+  },
+  "commit_info": {
+    "old_sha": "4accce5d7b57c268ea37e566a268e51a485b8581",
+    "new_sha": "bd5a81df7092c899b63c3f1bc3792a5f97113cc4",
+    "commit_message": [
+      "Check IsDebuggerPresent in msvc_sink before doing work. Fix #2408"
+    ],
+    "commit_date": "2022-10-31T22:52:39+00:00",
+    "patch": [
+      "--- include/spdlog/sinks/msvc_sink.h\n@@ -1,8 +1,9 @@\n-// Copyright(c) 2016 Alexander Dalshov.\n+// Copyright(c) 2016 Alexander Dalshov & spdlog contributors.\n // Distributed under the MIT License (http://opensource.org/licenses/MIT)\n \n #pragma once\n \n+\n #if defined(_WIN32)\n \n #    include <spdlog/details/null_mutex.h>\n@@ -13,6 +14,7 @@\n \n // Avoid including windows.h (https://stackoverflow.com/a/30741042)\n extern \"C\" __declspec(dllimport) void __stdcall OutputDebugStringA(const char *lpOutputString);\n+extern \"C\" __declspec(dllimport) int __stdcall IsDebuggerPresent();\n \n namespace spdlog {\n namespace sinks {\n@@ -24,17 +26,25 @@ class msvc_sink : public base_sink<Mutex>\n {\n public:\n     msvc_sink() = default;\n+    msvc_sink(bool check_ebugger_present)\n+        : check_debbugger_present_{check_ebugger_present} {};\n \n protected:\n     void sink_it_(const details::log_msg &msg) override\n     {\n+        if (check_debbugger_present_ && !IsDebuggerPresent())\n+        {\n+            return;\n+        }\n         memory_buf_t formatted;\n         base_sink<Mutex>::formatter_->format(msg, formatted);\n         formatted.push_back('\\0'); // add a null terminator for OutputDebugStringA\n         OutputDebugStringA(formatted.data());\n     }\n \n     void flush_() override {}\n+\n+    bool check_debbugger_present_ = true;\n };\n \n using msvc_sink_mt = msvc_sink<std::mutex>;"
+    ],
+    "files_changed": [
+      {
+        "filename": "include/spdlog/sinks/msvc_sink.h",
+        "status": "modified",
+        "additions": 11,
+        "deletions": 1,
+        "changes": 12,
+        "patch": "@@ -1,8 +1,9 @@\n-// Copyright(c) 2016 Alexander Dalshov.\n+// Copyright(c) 2016 Alexander Dalshov & spdlog contributors.\n // Distributed under the MIT License (http://opensource.org/licenses/MIT)\n \n #pragma once\n \n+\n #if defined(_WIN32)\n \n #    include <spdlog/details/null_mutex.h>\n@@ -13,6 +14,7 @@\n \n // Avoid including windows.h (https://stackoverflow.com/a/30741042)\n extern \"C\" __declspec(dllimport) void __stdcall OutputDebugStringA(const char *lpOutputString);\n+extern \"C\" __declspec(dllimport) int __stdcall IsDebuggerPresent();\n \n namespace spdlog {\n namespace sinks {\n@@ -24,17 +26,25 @@ class msvc_sink : public base_sink<Mutex>\n {\n public:\n     msvc_sink() = default;\n+    msvc_sink(bool check_ebugger_present)\n+        : check_debbugger_present_{check_ebugger_present} {};\n \n protected:\n     void sink_it_(const details::log_msg &msg) override\n     {\n+        if (check_debbugger_present_ && !IsDebuggerPresent())\n+        {\n+            return;\n+        }\n         memory_buf_t formatted;\n         base_sink<Mutex>::formatter_->format(msg, formatted);\n         formatted.push_back('\\0'); // add a null terminator for OutputDebugStringA\n         OutputDebugStringA(formatted.data());\n     }\n \n     void flush_() override {}\n+\n+    bool check_debbugger_present_ = true;\n };\n \n using msvc_sink_mt = msvc_sink<std::mutex>;"
+      }
+    ],
+    "lines_added": 11,
+    "lines_removed": 1
+  },
+  "issues": [
+    {
+      "number": 2408,
+      "url": "https://github.com/gabime/spdlog/issues/2408",
+      "title": "Check IsDebuggerPresent in msvc_sink before doing work",
+      "body": "I'm not sure if everybody will want to do this, so this is just a suggestion and something up for discussion. I've included some code below.\r\n\r\nThe `OutputDebugString` function can be relatively slow at times since it has to lock a global mutex before copying your message to a listener. With many applications trying to use this in parallel you can hit contention and slow down your program. One way to mitigate this is to check if a debugger is attached first using `IsDebuggerPresent` before doing any processing work and calling `OutputDebugString`.\r\n\r\nThe `IsDebuggerPresent` function itself just checks a global flag in your process address space, so it doesn't need to lock or go into the kernel, so it is quite fast and can be checked before each call. \r\n\r\nI've seen people call it once at program startup when setting up logging, so if a debugger is not attached you skip initialising that sink. In this case you do end up missing all logging output when you later attach a debugger to the running process.\r\n\r\nThe one down side I see of checking if a debugger is attached before sinking every log message is that you won't see your debug output in something like Sysinternals DebugView tool. But realistically you should be able to hook up a different logging sink if you want a live feed.\r\n\r\nThe code changes required are adding this forward declare:\r\n```\r\nextern \"C\" __declspec(dllimport) int __stdcall IsDebuggerPresent();\r\n```\r\nThen changing the body of `msvc_sink.h` to something like:\r\n```\r\n        if (IsDebuggerPresent()) // Check if debugger is attached before sinking\r\n        {\r\n            memory_buf_t formatted;\r\n            base_sink<Mutex>::formatter_->format(msg, formatted);\r\n            formatted.push_back('\\0'); // add a null terminator for OutputDebugStringA\r\n            OutputDebugStringA(formatted.data());\r\n        }\r\n```\r\n",
+      "created_at": "2022-06-17T22:08:54+00:00"
+    }
+  ],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPDLOG_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DSPDLOG_BUILD_TESTS=ON -DBENCHMARK_ENABLE_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 1.0,
+    "is_pair_significant": false,
+    "pair_p_value": 1.0,
+    "is_binom_significant": false,
+    "binom_p_value": 1.0,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999991713512352,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.04901379308841815,
+    "relative_improvement": 0.0012111425111021857,
+    "absolute_improvement_ms": 6.0000000000011156,
+    "old_mean_ms": 4954.0,
+    "new_mean_ms": 4947.999999999998,
+    "old_std_ms": 13.79655129321116,
+    "new_std_ms": 14.239333576037062,
+    "effect_size_cohens_d": 0.4279695021107343,
+    "old_ci95_ms": [
+      4948.848283081017,
+      4959.151716918982
+    ],
+    "new_ci95_ms": [
+      4942.682945459361,
+      4953.3170545406365
+    ],
+    "old_ci99_ms": [
+      4947.05695575565,
+      4960.94304424435
+    ],
+    "new_ci99_ms": [
+      4940.8341278246,
+      4955.165872175397
+    ],
+    "new_times_s": [
+      4.95,
+      4.95,
+      4.96,
+      4.93,
+      4.95,
+      4.95,
+      4.96,
+      4.93,
+      4.97,
+      4.92,
+      4.95,
+      4.94,
+      4.96,
+      4.95,
+      4.93,
+      4.94,
+      4.93,
+      4.94,
+      4.96,
+      4.95,
+      4.95,
+      4.94,
+      4.93,
+      4.99,
+      4.96,
+      4.95,
+      4.95,
+      4.95,
+      4.94,
+      4.95,
+      4.96
+    ],
+    "old_times_s": [
+      4.97,
+      4.96,
+      4.94,
+      4.96,
+      4.98,
+      4.94,
+      4.94,
+      4.97,
+      4.95,
+      4.94,
+      4.97,
+      4.96,
+      4.96,
+      4.94,
+      4.95,
+      4.93,
+      4.95,
+      4.93,
+      4.95,
+      4.96,
+      4.95,
+      4.94,
+      4.98,
+      4.96,
+      4.98,
+      4.96,
+      4.96,
+      4.96,
+      4.94,
+      4.96,
+      4.95
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "spdlog-utests"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "spdlog-utests",
+        "is_significant": false,
+        "p_value": 1.0,
+        "is_pair_significant": false,
+        "pair_p_value": 1.0,
+        "is_binom_significant": false,
+        "binom_p_value": 1.0,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9999987660359945,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.036596530816174755,
+        "relative_improvement": 0.0013228434171134007,
+        "absolute_improvement_ms": 6.551724137931814,
+        "old_mean_ms": 4952.758620689656,
+        "new_mean_ms": 4946.206896551724,
+        "old_std_ms": 14.115986814383243,
+        "new_std_ms": 14.494775685311255,
+        "effect_size_cohens_d": 0.4579500470252235,
+        "old_ci95_ms": [
+          4947.3891864681145,
+          4958.128054911197
+        ],
+        "new_ci95_ms": [
+          4940.693378749414,
+          4951.720414354034
+        ],
+        "old_ci99_ms": [
+          4945.515355574669,
+          4960.0018858046415
+        ],
+        "new_ci99_ms": [
+          4938.769265413956,
+          4953.644527689491
+        ],
+        "new_times": [
+          4.96,
+          4.93,
+          4.95,
+          4.95,
+          4.96,
+          4.93,
+          4.96,
+          4.92,
+          4.95,
+          4.94,
+          4.96,
+          4.95,
+          4.93,
+          4.93,
+          4.93,
+          4.94,
+          4.95,
+          4.95,
+          4.95,
+          4.94,
+          4.93,
+          4.99,
+          4.96,
+          4.94,
+          4.95,
+          4.95,
+          4.93,
+          4.95,
+          4.96
+        ],
+        "old_times": [
+          4.94,
+          4.96,
+          4.97,
+          4.94,
+          4.93,
+          4.97,
+          4.95,
+          4.94,
+          4.97,
+          4.96,
+          4.96,
+          4.94,
+          4.95,
+          4.93,
+          4.95,
+          4.93,
+          4.95,
+          4.96,
+          4.95,
+          4.94,
+          4.98,
+          4.96,
+          4.98,
+          4.96,
+          4.96,
+          4.96,
+          4.94,
+          4.96,
+          4.94
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

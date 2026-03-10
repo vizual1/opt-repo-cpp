@@ -1,0 +1,305 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:59.077561",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "f61a223a42460204205425604c6521c3eae03058",
+    "new_sha": "ff3070cdf3eb4f531b706d9e3d0adced74401e13",
+    "commit_message": [
+      "Made enhancements to x86 ExtractLane operation"
+    ],
+    "commit_date": "2023-07-19T16:25:13+00:00",
+    "patch": [
+      "--- hwy/ops/x86_128-inl.h\n@@ -4060,9 +4060,8 @@ template <size_t kLane, typename T, size_t N, HWY_IF_T_SIZE(T, 4)>\n HWY_INLINE T ExtractLane(const Vec128<T, N> v) {\n   static_assert(kLane < N, \"Lane index out of bounds\");\n #if HWY_TARGET >= HWY_SSSE3\n-  alignas(16) T lanes[4];\n-  Store(v, DFromV<decltype(v)>(), lanes);\n-  return lanes[kLane];\n+  return static_cast<T>(_mm_cvtsi128_si32(\n+      (kLane == 0) ? v.raw : _mm_shuffle_epi32(v.raw, kLane)));\n #else\n   return static_cast<T>(_mm_extract_epi32(v.raw, kLane));\n #endif\n@@ -4087,9 +4086,8 @@ template <size_t kLane, size_t N>\n HWY_INLINE float ExtractLane(const Vec128<float, N> v) {\n   static_assert(kLane < N, \"Lane index out of bounds\");\n #if HWY_TARGET >= HWY_SSSE3\n-  alignas(16) float lanes[4];\n-  Store(v, DFromV<decltype(v)>(), lanes);\n-  return lanes[kLane];\n+  return _mm_cvtss_f32((kLane == 0) ? v.raw\n+                                    : _mm_shuffle_ps(v.raw, v.raw, kLane));\n #else\n   // Bug in the intrinsic, returns int but should be float.\n   const int32_t bits = _mm_extract_ps(v.raw, kLane);\n--- hwy/ops/x86_256-inl.h\n@@ -3011,6 +3011,14 @@ template <typename T>\n HWY_API T ExtractLane(const Vec256<T> v, size_t i) {\n   const DFromV<decltype(v)> d;\n   HWY_DASSERT(i < Lanes(d));\n+\n+#if !HWY_IS_DEBUG_BUILD && HWY_COMPILER_GCC  // includes clang\n+  constexpr size_t kLanesPerBlock = 16 / sizeof(T);\n+  if (__builtin_constant_p(i < kLanesPerBlock) && (i < kLanesPerBlock)) {\n+    return ExtractLane(LowerHalf(Half<decltype(d)>(), v), i);\n+  }\n+#endif\n+\n   alignas(32) T lanes[32 / sizeof(T)];\n   Store(v, d, lanes);\n   return lanes[i];\n--- hwy/ops/x86_512-inl.h\n@@ -2565,6 +2565,14 @@ template <typename T>\n HWY_API T ExtractLane(const Vec512<T> v, size_t i) {\n   const DFromV<decltype(v)> d;\n   HWY_DASSERT(i < Lanes(d));\n+\n+#if !HWY_IS_DEBUG_BUILD && HWY_COMPILER_GCC  // includes clang\n+  constexpr size_t kLanesPerBlock = 16 / sizeof(T);\n+  if (__builtin_constant_p(i < kLanesPerBlock) && (i < kLanesPerBlock)) {\n+    return ExtractLane(ResizeBitCast(Full128<T>(), v), i);\n+  }\n+#endif\n+\n   alignas(64) T lanes[64 / sizeof(T)];\n   Store(v, d, lanes);\n   return lanes[i];"
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/ops/x86_128-inl.h",
+        "status": "modified",
+        "additions": 4,
+        "deletions": 6,
+        "changes": 10,
+        "patch": "@@ -4060,9 +4060,8 @@ template <size_t kLane, typename T, size_t N, HWY_IF_T_SIZE(T, 4)>\n HWY_INLINE T ExtractLane(const Vec128<T, N> v) {\n   static_assert(kLane < N, \"Lane index out of bounds\");\n #if HWY_TARGET >= HWY_SSSE3\n-  alignas(16) T lanes[4];\n-  Store(v, DFromV<decltype(v)>(), lanes);\n-  return lanes[kLane];\n+  return static_cast<T>(_mm_cvtsi128_si32(\n+      (kLane == 0) ? v.raw : _mm_shuffle_epi32(v.raw, kLane)));\n #else\n   return static_cast<T>(_mm_extract_epi32(v.raw, kLane));\n #endif\n@@ -4087,9 +4086,8 @@ template <size_t kLane, size_t N>\n HWY_INLINE float ExtractLane(const Vec128<float, N> v) {\n   static_assert(kLane < N, \"Lane index out of bounds\");\n #if HWY_TARGET >= HWY_SSSE3\n-  alignas(16) float lanes[4];\n-  Store(v, DFromV<decltype(v)>(), lanes);\n-  return lanes[kLane];\n+  return _mm_cvtss_f32((kLane == 0) ? v.raw\n+                                    : _mm_shuffle_ps(v.raw, v.raw, kLane));\n #else\n   // Bug in the intrinsic, returns int but should be float.\n   const int32_t bits = _mm_extract_ps(v.raw, kLane);"
+      },
+      {
+        "filename": "hwy/ops/x86_256-inl.h",
+        "status": "modified",
+        "additions": 8,
+        "deletions": 0,
+        "changes": 8,
+        "patch": "@@ -3011,6 +3011,14 @@ template <typename T>\n HWY_API T ExtractLane(const Vec256<T> v, size_t i) {\n   const DFromV<decltype(v)> d;\n   HWY_DASSERT(i < Lanes(d));\n+\n+#if !HWY_IS_DEBUG_BUILD && HWY_COMPILER_GCC  // includes clang\n+  constexpr size_t kLanesPerBlock = 16 / sizeof(T);\n+  if (__builtin_constant_p(i < kLanesPerBlock) && (i < kLanesPerBlock)) {\n+    return ExtractLane(LowerHalf(Half<decltype(d)>(), v), i);\n+  }\n+#endif\n+\n   alignas(32) T lanes[32 / sizeof(T)];\n   Store(v, d, lanes);\n   return lanes[i];"
+      },
+      {
+        "filename": "hwy/ops/x86_512-inl.h",
+        "status": "modified",
+        "additions": 8,
+        "deletions": 0,
+        "changes": 8,
+        "patch": "@@ -2565,6 +2565,14 @@ template <typename T>\n HWY_API T ExtractLane(const Vec512<T> v, size_t i) {\n   const DFromV<decltype(v)> d;\n   HWY_DASSERT(i < Lanes(d));\n+\n+#if !HWY_IS_DEBUG_BUILD && HWY_COMPILER_GCC  // includes clang\n+  constexpr size_t kLanesPerBlock = 16 / sizeof(T);\n+  if (__builtin_constant_p(i < kLanesPerBlock) && (i < kLanesPerBlock)) {\n+    return ExtractLane(ResizeBitCast(Full128<T>(), v), i);\n+  }\n+#endif\n+\n   alignas(64) T lanes[64 / sizeof(T)];\n   Store(v, d, lanes);\n   return lanes[i];"
+      }
+    ],
+    "lines_added": 20,
+    "lines_removed": 6
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON -DHWY_ENABLE_TESTS=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.8362042298859086,
+    "is_pair_significant": false,
+    "pair_p_value": 0.976079780485941,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999995660036802,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9991460966396878,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.5470837418425665,
+    "relative_improvement": -0.004674160161528706,
+    "absolute_improvement_ms": -97.99999999999898,
+    "old_mean_ms": 20966.333333333336,
+    "new_mean_ms": 21064.333333333332,
+    "old_std_ms": 4560.391304545556,
+    "new_std_ms": 4654.904483136731,
+    "effect_size_cohens_d": -0.021267867782559218,
+    "old_ci95_ms": [
+      19263.455234197747,
+      22669.211432468925
+    ],
+    "new_ci95_ms": [
+      19326.163433307287,
+      22802.50323335938
+    ],
+    "old_ci99_ms": [
+      18671.339611634812,
+      23261.327055031856
+    ],
+    "new_ci99_ms": [
+      18721.776335372022,
+      23406.890331294642
+    ],
+    "new_times_s": [
+      18.34,
+      18.22,
+      18.27,
+      35.66,
+      23.32,
+      18.52,
+      18.47,
+      18.53,
+      18.64,
+      18.37,
+      18.44,
+      27.78,
+      27.52,
+      18.62,
+      18.59,
+      18.47,
+      18.48,
+      18.63,
+      22.57,
+      27.07,
+      19.4,
+      18.76,
+      18.67,
+      18.64,
+      19.24,
+      18.64,
+      21.32,
+      33.65,
+      21.83,
+      18.86,
+      18.75
+    ],
+    "old_times_s": [
+      18.32,
+      18.46,
+      18.42,
+      32.67,
+      18.44,
+      18.59,
+      18.37,
+      18.41,
+      18.65,
+      18.49,
+      27.1,
+      24.33,
+      18.43,
+      18.61,
+      18.58,
+      18.62,
+      18.59,
+      18.72,
+      25.88,
+      27.19,
+      19.17,
+      18.84,
+      19.13,
+      18.55,
+      18.65,
+      18.66,
+      19.07,
+      33.95,
+      28.82,
+      18.81,
+      18.79
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "NanobenchmarkTest.RunAll",
+        "is_significant": false,
+        "p_value": 0.7967255051484584,
+        "is_pair_significant": false,
+        "pair_p_value": 0.8146529175515693,
+        "is_binom_significant": false,
+        "binom_p_value": 0.5747229903936386,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.699800782193825,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.26370897461658316,
+        "relative_improvement": -0.015140045420136205,
+        "absolute_improvement_ms": -7.142857142857062,
+        "old_mean_ms": 471.78571428571433,
+        "new_mean_ms": 478.9285714285714,
+        "old_std_ms": 112.35042967260539,
+        "new_std_ms": 162.1919138897403,
+        "effect_size_cohens_d": -0.05119779454056541,
+        "old_ci95_ms": [
+          428.22076561161424,
+          515.3506629598144
+        ],
+        "new_ci95_ms": [
+          416.03711276169383,
+          541.8200300954488
+        ],
+        "old_ci99_ms": [
+          412.95792132245015,
+          530.6135072489785
+        ],
+        "new_ci99_ms": [
+          394.0032857983757,
+          563.8538570587671
+        ],
+        "new_times": [
+          0.87,
+          0.92,
+          0.35,
+          0.41,
+          0.46,
+          0.36,
+          0.35,
+          0.38,
+          0.72,
+          0.45,
+          0.41,
+          0.38,
+          0.41,
+          0.38,
+          0.49,
+          0.51,
+          0.35,
+          0.32,
+          0.35,
+          0.49,
+          0.44,
+          0.46,
+          0.44,
+          0.51,
+          0.81,
+          0.62,
+          0.41,
+          0.36
+        ],
+        "old_times": [
+          0.49,
+          0.38,
+          0.48,
+          0.36,
+          0.46,
+          0.56,
+          0.45,
+          0.36,
+          0.46,
+          0.37,
+          0.37,
+          0.44,
+          0.5,
+          0.44,
+          0.54,
+          0.56,
+          0.64,
+          0.4,
+          0.6,
+          0.45,
+          0.38,
+          0.4,
+          0.49,
+          0.33,
+          0.67,
+          0.83,
+          0.41,
+          0.39
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

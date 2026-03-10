@@ -1,0 +1,192 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:06:14.140590",
+    "repository": "https://github.com/zeux/pugixml",
+    "repository_name": "zeux/pugixml"
+  },
+  "commit_info": {
+    "old_sha": "dfb2b7f7b46d95d0ae8c17badbf14445db486431",
+    "new_sha": "58616a29aa278048acc583163fa418e7e70d4f00",
+    "commit_message": [
+      "Avoid store-load penalty on cursor->parent\n\nThis reclaims the performance lost in PCDATA reorganization and gains a\nlittle more on top of that."
+    ],
+    "commit_date": "2023-09-06T05:23:31+00:00",
+    "patch": [
+      "--- src/pugixml.cpp\n@@ -3503,12 +3503,13 @@ PUGI_IMPL_NS_BEGIN\n \t\t\t\t\t\t}\n \t\t\t\t\t\telse\n \t\t\t\t\t\t{\n+\t\t\t\t\t\t\txml_node_struct* prev_cursor = cursor;\n \t\t\t\t\t\t\tPUGI_IMPL_PUSHNODE(node_pcdata); // Append a new node on the tree.\n \n \t\t\t\t\t\t\tcursor->value = parsed_pcdata; // Save the offset.\n \t\t\t\t\t\t\tmerged = parsed_pcdata; // Used for parse_merge_pcdata above, cheaper to save unconditionally\n \n-\t\t\t\t\t\t\tPUGI_IMPL_POPNODE(); // Pop since this is a standalone.\n+\t\t\t\t\t\t\tcursor = prev_cursor; // Pop since this is a standalone.\n \t\t\t\t\t\t}\n \n \t\t\t\t\t\tif (!*s) break;"
+    ],
+    "files_changed": [
+      {
+        "filename": "src/pugixml.cpp",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 1,
+        "changes": 3,
+        "patch": "@@ -3503,12 +3503,13 @@ PUGI_IMPL_NS_BEGIN\n \t\t\t\t\t\t}\n \t\t\t\t\t\telse\n \t\t\t\t\t\t{\n+\t\t\t\t\t\t\txml_node_struct* prev_cursor = cursor;\n \t\t\t\t\t\t\tPUGI_IMPL_PUSHNODE(node_pcdata); // Append a new node on the tree.\n \n \t\t\t\t\t\t\tcursor->value = parsed_pcdata; // Save the offset.\n \t\t\t\t\t\t\tmerged = parsed_pcdata; // Used for parse_merge_pcdata above, cheaper to save unconditionally\n \n-\t\t\t\t\t\t\tPUGI_IMPL_POPNODE(); // Pop since this is a standalone.\n+\t\t\t\t\t\t\tcursor = prev_cursor; // Pop since this is a standalone.\n \t\t\t\t\t\t}\n \n \t\t\t\t\t\tif (!*s) break;"
+      }
+    ],
+    "lines_added": 2,
+    "lines_removed": 1
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPUGIXML_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPUGIXML_BUILD_TESTS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.9976148145289812,
+    "is_pair_significant": false,
+    "pair_p_value": 0.9994836481385678,
+    "is_binom_significant": false,
+    "binom_p_value": 0.991937599144876,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9988022547845614,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.47045370331650316,
+    "relative_improvement": 0.005887681159420245,
+    "absolute_improvement_ms": 4.3333333333333,
+    "old_mean_ms": 736.0,
+    "new_mean_ms": 731.6666666666667,
+    "old_std_ms": 47.60469406005804,
+    "new_std_ms": 40.26492726699122,
+    "effect_size_cohens_d": 0.09828867930070484,
+    "old_ci95_ms": [
+      718.2241150994824,
+      753.7758849005176
+    ],
+    "new_ci95_ms": [
+      716.6314957290537,
+      746.7018376042797
+    ],
+    "old_ci99_ms": [
+      712.0431799169701,
+      759.9568200830299
+    ],
+    "new_ci99_ms": [
+      711.4035468790543,
+      751.9297864542791
+    ],
+    "new_times_s": [
+      0.68,
+      0.7,
+      0.71,
+      0.74,
+      0.79,
+      0.69,
+      0.68,
+      0.75,
+      0.7,
+      0.67,
+      0.73,
+      0.71,
+      0.74,
+      0.79,
+      0.8,
+      0.76,
+      0.67,
+      0.72,
+      0.77,
+      0.78,
+      0.75,
+      0.69,
+      0.76,
+      0.74,
+      0.76,
+      0.75,
+      0.76,
+      0.71,
+      0.77,
+      0.72,
+      0.64
+    ],
+    "old_times_s": [
+      0.77,
+      0.7,
+      0.71,
+      0.8,
+      0.79,
+      0.72,
+      0.73,
+      0.7,
+      0.67,
+      0.73,
+      0.71,
+      0.76,
+      0.75,
+      0.7,
+      0.8,
+      0.7,
+      0.75,
+      0.76,
+      0.69,
+      0.82,
+      0.8,
+      0.74,
+      0.73,
+      0.74,
+      0.71,
+      0.77,
+      0.85,
+      0.72,
+      0.72,
+      0.65,
+      0.66
+    ]
+  },
+  "tests": {
+    "total_tests": 0,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": []
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

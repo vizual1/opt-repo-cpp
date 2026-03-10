@@ -1,16 +1,39 @@
-# C++ Repository Automation Tool
+# C++ Performance Optimization Commit Dataset Pipeline
 
-A Python-based tool to collect C++ repositories from GitHub, gather commits, apply filtering, and run automated testing in Docker environments.
+This repository contains the automated pipeline used in the thesis:
 
----
+"Automated Construction of a Dataset of Performance-Improving Commits from Open-Source C++ Projects"
+
+The pipeline collects repositories from GitHub, identifies candidate performance-improving commits, builds and executes them in Docker environments, and performs statistical performance evaluation.
+
+## Overview
+
+The pipeline performs the following steps:
+
+1. Repository collection from GitHub
+2. Structural commit filtering
+3. LLM-based classification of candidate performance-improving commits
+4. Containerized build and test execution
+5. Statistical runtime analysis
+6. Dataset generation
+
+The resulting dataset contains executable commits and Docker environments that enable reproducible performance measurements.
+
+## Artifacts
+
+Dataset and Docker images:
+
+DockerHub  
+https://hub.docker.com/repository/docker/tommyho1999/opt-repo-cpp
 
 ## Features
-- **Repository Collection**: Crawl GitHub for C++ repositories with customizable filters
-- **Commit Analysis**: Filter and analyze commits using LLMs
-- **Automated Testing**: Run tests in isolated Docker environments
-- **Patch Management**: Generate and test patches using AI (OpenHands)
-- **Docker Integration**: Build, test, and push Docker images
-- **Comprehensive Output**: JSON-formatted results with detailed test metrics
+
+- Automated repository collection from GitHub
+- LLM-based commit classification
+- Docker-based reproducible execution environments
+- Automated dependency resolution
+- Statistical performance evaluation
+- Integration with OpenHands for patch generation experiments
 
 ---
 
@@ -21,8 +44,8 @@ A Python-based tool to collect C++ repositories from GitHub, gather commits, app
 ```bash
 export GITHUB_ACCESS_TOKEN=your_github_token
 export LLM_API_KEY=your_api_key # if using LLM filtering
-export DOCKER_HUB_USER=your_username # optional, for pushing images
-export DOCKER_HUB_REPO=repository # optional, for pushing images
+export DOCKER_HUB_USER=your_username # optional, for pushing or pulling images
+export DOCKER_HUB_REPO=repository # optional, for pushing or pulling images
 ```
 
 2. **Install Python dependencies**:
@@ -50,6 +73,7 @@ Note: OpenHands commit patches can be found in ```data/patches/``` as ```*.patch
 ---
 
 ## Project Structure
+```
 ├── main.py                  # Main entry point
 ├── src/                     # Source code
 │   ├── core/                # Core functionality
@@ -61,84 +85,67 @@ Note: OpenHands commit patches can be found in ```data/patches/``` as ```*.patch
 │   ├── filtered_commits.txt # Filtered commits
 │   └── commits/             # Individual commit test results
 └── docker/                  # Docker configuration files
+```
 
 # Running
 1. **Collecting Repositories**
 Use the --collect flag to crawl GitHub for C++ repositories:
 ```bash
-# Basic collection (default: 10 repos, min 20 stars, max 1000 stars)
-python3 main.py --collect
+# Collect and structurally validate (most recent commit): 
+# 10 repos (min 20 stars, max 1000 stars)
+python3 main.py --collect --repos=10 --stars=1000
 
-# Collect 50 repositories
-python3 main.py --collect --limit=50
+# Collect, structurally validate, and build and test (most recent commit)
+python3 main.py --collect --repos=10 --stars=1000 --test
 
-# Collect repositories with up to 5000 stars
-python3 main.py --collect --stars=5000
-
-# Collect and immediately test repositories
-python3 main.py --collect --test
+# Structurally validate, and build and test (most recent commit)
+python3 main.py --testcollect --input=data/collect.txt
 ```
 
 **Outputs**
 - ```data/collect.txt``` - Raw collection results (owner/repo per line)
-- ```data/testcollect.txt``` - Successfully validated (structure, build and test) repositories
-- ```data/fail.txt``` - Repositories that failed validation
+- ```data/testcollect.txt``` - Successfully validated structure, or with ```--test``` build and test, repositories (owner/repo per line)
+- ```data/fail.txt``` - Repositories that failed validation (owner/repo per line)
 
-2. **Testing Collected Repositories**
-If you collected repositories without the --test flag, validate them later:
-```bash
-python3 main.py --testcollect --input=data/collect.txt
-```
-
-3. **Analyzing Commits**
+2. **Collecting Commits**
 Filter commits from collected repositories:
 ```bash
-# Basic commit collection with LLM filtering
+# Collect and filter commits with LLM
 python3 main.py --commits --filter=llm --input=data/collect.txt
 
-# Collect and immediately test commits
+# Collect and filter commits, then build and test commits
 python3 main.py --commits --test --filter=llm --input=data/collect.txt
-```
 
-**Output**:
-- ```data/filtered_commits.txt``` per line ```owner/repo | newsha | oldsha```
-
-4. **Testing Commits**
-Test previously collected commits:
-```bash
+# Build and test commits
 python3 main.py --testcommits --input=data/filtered_commits.txt
 ```
 
 **Output**:
-- JSON files in ```data/commits/owner_repo_newsha.json``` containing:
+- ```data/filtered_commits.txt``` - filtered commits (```owner/repo | newsha | oldsha``` per line)
+- ```data/commits/owner_repo_newsha.json``` - multiple JSON files of built and tests commits, containing:
     - Build and test commands executed
     - Execution times
     - Statistical analysis
-    - Pass/fail status
 
-5. **Docker Operations**
+3. **Docker Operations**
 ```bash
-# Test from a folder of JSON results
-python3 main.py --testdocker --input=data/commits/
-
 # Test from a filtered commits file
 python3 main.py --testdocker --input=data/filtered_commits.txt
 
+# Test from a folder of JSON files of collected commits
+python3 main.py --testdocker --input=data/dataset/
+
 # Test a specific Docker image
 python3 main.py --testdocker --docker=owner_repo_newsha
+
+# Generate Docker images without testing of collected commits from a folder of JSON files
+python3 main.py --genimages --input=data/dataset/
+
+# Pulls Docker images from Dockerhub of collected commits from a folder of JSON files
+python3 main.py --pullimages --input=data/dataset/
 ```
 
-**Generate Docker Images** (no testing):
-```bash
-python3 main.py --genimages --input=data/commits/
-```
-
-**Push Images to Dockerhub**:
-```bash
-python3 main.py --pushimages --input=data/commits/
-```
-
-6. **Patch Management**:
+4. **Patch Management**:
 Generate and test patches using OpenHands:
 ```bash
 # Generate a patch for a specific commit
@@ -150,11 +157,16 @@ python3 main.py --testpatch --docker=owner_repo_newsha --mount=/path/to/patched/
 # Test a patch from a diff file (the diff file is applied to /test_workspace/workspace/old)
 python3 main.py --testpatch --docker=owner_repo_newsha --diff=/path/to/diff.patch
 ```
+**Output**:
+- ```data/patch/``` - patch files generated by ```--patch``` flag.
+- ```data/commits/owner_repo_newsha.json``` - multiple JSON files of built and tests of generated patches, containing:
+    - Build and test commands executed
+    - Execution times
+    - Statistical analysis
 
 ---
 
 ## Docker Container Structure
-
 When running tests in Docker, the container has the following structure:
 - ```/test_workspace/workspace/old``` - Original commit
 - ```/test_workspace/workspace/new``` - Patched commit
@@ -162,14 +174,3 @@ When running tests in Docker, the container has the following structure:
 - ```/test_workspace/new_build.sh```  - Patched build script
 - ```/test_workspace/old_test.sh```   - Original test script
 - ```/test_workspace/new_test.sh```   - Patched test script
-
----
-
-## Example
-Testing docker images:
-```bash
-docker pull tommyho1999/opt-repo-cpp:owner_repo_newsha
-docker tag tommyho1999/opt-repo-cpp:owner_repo_newsha owner_repo_newsha
-python3 main.py --testdocker --docker=owner_repo_newsha
-```
-

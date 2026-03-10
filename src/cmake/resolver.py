@@ -165,9 +165,9 @@ class DependencyResolver:
             logging.error(f"{method} executable not found on system.")
         return False
         
-    def unresolved_dep(self, unresolved_dependencies: set[str]) -> tuple[set[str], set[str]]:
+    def unresolved_dep(self, unresolved_dependencies: set[str], ubuntu_ver: str) -> tuple[set[str], set[str]]:
         logging.info(f"All unresolved dependencies {unresolved_dependencies}")
-        llm_output = self.llm.llm_prompt(list(unresolved_dependencies), timeout=100)
+        llm_output = self.llm.llm_prompt(list(unresolved_dependencies), ubuntu_ver, timeout=100)
         logging.info(f"LLM prompt returned:\n{llm_output}")
 
         if not llm_output.strip():
@@ -276,7 +276,7 @@ class DependencyResolver:
             else:
                 self.llm = OpenRouterLLM(self.config, self.config.llm.ollama_resolver_model)
 
-        def llm_prompt(self, deps: list[str], timeout: int = 60) -> str:
+        def llm_prompt(self, deps: list[str], ubuntu_ver: str, timeout: int = 60) -> str:
             result: dict[str, str] = {"out": ""}
 
             res_user = (
@@ -285,14 +285,14 @@ class DependencyResolver:
                 Given one or more missing dependency names, return a single JSON object where each key is a <dependency>:
                 {{
                 "<dependency>": {{
-                    "apt": "<Ubuntu 24.04 packages or libraries>"
+                    "apt": "<<ubuntu> packages or libraries>"
                 }}
                 }}
                 Rules:
-                1. Use correct libraries and package names for Ubuntu 24.04 if possible otherwise for Ubuntu 22.02.
+                1. Use correct libraries and package names for <ubuntu>.
                 2. If there are multiple possible libraries and packages, then put them into an array ["library1", "library2", ...].
                 3. Output only valid JSON (no text)
-                4. For unknown deps, set "<Ubuntu 24.04 packages or libraries>" to "".
+                4. For unknown deps, set "<<ubuntu> packages or libraries>" to "".
                 5. Generate it for all <dependency> in <deps>.
                 """
             )
@@ -300,7 +300,7 @@ class DependencyResolver:
             def run_llm():
                 p = Prompt([Prompt.Message(
                     "user",
-                    res_user.replace("<deps>", f"{deps}")
+                    res_user.replace("<deps>", f"{deps}").replace("<ubuntu>", ubuntu_ver)
                 )])
                 try:
                     llm_output = self.llm.generate(p)

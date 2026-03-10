@@ -1,0 +1,291 @@
+{
+    "metadata": {
+        "collection_date": "2026-01-14T18:43:12.981753",
+        "repository": "https://github.com/madmann91/bvh",
+        "repository_name": "madmann91/bvh"
+    },
+    "commit_info": {
+        "old_sha": "66f99ff8954f88cd1d404737b5af9b3dcb2eb299",
+        "new_sha": "5b95ec87b6b5b1fdf60f55f035575ef17b4f5ae4",
+        "commit_message": [
+            "Improve traversal"
+        ],
+        "commit_date": "2020-01-16T18:37:08+00:00",
+        "patch": [
+            "--- bvh.hpp\n@@ -223,11 +223,13 @@ struct BVH {\n         using Size = uint32_t;\n #endif\n         BBox bbox;\n-        bool leaf : 1;\n-        Size primitive_count : sizeof(Size) * CHAR_BIT - 1;\n+        bool is_leaf : 1;\n+        bool is_contracted : 1;\n+        Size primitive_count : sizeof(Size) * CHAR_BIT - 2;\n         Size first_child_or_primitive;\n \n         std::pair<Scalar, Scalar> intersect(const Vec3& inverse_origin, const Vec3& inverse_direction, Scalar tmin, Scalar tmax, unsigned ix, unsigned iy, unsigned iz) const {\n+            assert(!is_contracted);\n             auto values = reinterpret_cast<const float*>(this);\n             Scalar entry_x = multiply_add(values[    ix], inverse_direction.x, inverse_origin.x);\n             Scalar entry_y = multiply_add(values[    iy], inverse_direction.y, inverse_origin.y);\n@@ -282,7 +284,7 @@ struct BVH {\n             auto make_leaf = [] (Node& node, size_t begin, size_t end) {\n                 node.first_child_or_primitive = begin;\n                 node.primitive_count          = end - begin;\n-                node.leaf                     = true;\n+                node.is_leaf                  = true;\n             };\n \n             if (item.work_size() <= 1 || item.depth >= max_depth) {\n@@ -382,7 +384,7 @@ struct BVH {\n                     Node& right = bvh->nodes[left_index + 1];\n                     node.first_child_or_primitive = left_index;\n                     node.primitive_count          = 0;\n-                    node.leaf                     = false;\n+                    node.is_leaf                  = false;\n                     \n                     // Compute the bounding boxes of each node\n                     auto& bins = bins_per_axis[SweepAllAxes ? best_axis : 0];\n@@ -470,7 +472,7 @@ struct BVH {\n         };\n \n         // If the root is a leaf, intersect it and return\n-        if (nodes[0].leaf) {\n+        if (nodes[0].is_leaf) {\n             intersect_leaf(nodes[0].first_child_or_primitive, nodes[0].primitive_count);\n             return best_hit;\n         }\n@@ -491,10 +493,9 @@ struct BVH {\n         // This is generally beneficial for performance because intersections will likely be found which will\n         // allow to cull more subtrees with the ray-box test of the traversal loop.\n         TraversalStack<size_t, stack_size> stack;\n-        stack.push(0);\n-        while (!stack.empty()) {\n-            auto& node = nodes[stack.pop()];\n-            auto first_child = node.first_child_or_primitive;\n+        auto node = nodes.get();\n+        while (true) {\n+            auto first_child = node->first_child_or_primitive;\n \n             auto& left  = nodes[first_child + 0];\n             auto& right = nodes[first_child + 1];\n@@ -503,13 +504,13 @@ struct BVH {\n             bool hit_left  = distance_left.first  <= distance_left.second;\n             bool hit_right = distance_right.first <= distance_right.second;\n \n-            if (hit_left && left.leaf) {\n+            if (hit_left && left.is_leaf) {\n                 if (intersect_leaf(left.first_child_or_primitive, left.primitive_count) && AnyHit)\n                     break;\n                 hit_left = false;\n             }\n \n-            if (hit_right && right.leaf) {\n+            if (hit_right && right.is_leaf) {\n                 if (intersect_leaf(right.first_child_or_primitive, right.primitive_count) && AnyHit)\n                     break;\n                 hit_right = false;\n@@ -518,9 +519,13 @@ struct BVH {\n             if (hit_left && hit_right) {\n                 int order = distance_left.first < distance_right.first ? 0 : 1;\n                 stack.push(first_child + (1 - order));\n-                stack.push(first_child + order);\n+                node = &nodes[first_child + order];\n             } else if (hit_left ^ hit_right) {\n-                stack.push(first_child + (hit_left ? 0 : 1));\n+                node = &nodes[first_child + (hit_left ? 0 : 1)];\n+            } else {\n+                if (stack.empty())\n+                    break;\n+                node = &nodes[stack.pop()];\n             }\n         }\n "
+        ],
+        "files_changed": [
+            {
+                "filename": "bvh.hpp",
+                "status": "modified",
+                "additions": 18,
+                "deletions": 13,
+                "changes": 31,
+                "patch": "@@ -223,11 +223,13 @@ struct BVH {\n         using Size = uint32_t;\n #endif\n         BBox bbox;\n-        bool leaf : 1;\n-        Size primitive_count : sizeof(Size) * CHAR_BIT - 1;\n+        bool is_leaf : 1;\n+        bool is_contracted : 1;\n+        Size primitive_count : sizeof(Size) * CHAR_BIT - 2;\n         Size first_child_or_primitive;\n \n         std::pair<Scalar, Scalar> intersect(const Vec3& inverse_origin, const Vec3& inverse_direction, Scalar tmin, Scalar tmax, unsigned ix, unsigned iy, unsigned iz) const {\n+            assert(!is_contracted);\n             auto values = reinterpret_cast<const float*>(this);\n             Scalar entry_x = multiply_add(values[    ix], inverse_direction.x, inverse_origin.x);\n             Scalar entry_y = multiply_add(values[    iy], inverse_direction.y, inverse_origin.y);\n@@ -282,7 +284,7 @@ struct BVH {\n             auto make_leaf = [] (Node& node, size_t begin, size_t end) {\n                 node.first_child_or_primitive = begin;\n                 node.primitive_count          = end - begin;\n-                node.leaf                     = true;\n+                node.is_leaf                  = true;\n             };\n \n             if (item.work_size() <= 1 || item.depth >= max_depth) {\n@@ -382,7 +384,7 @@ struct BVH {\n                     Node& right = bvh->nodes[left_index + 1];\n                     node.first_child_or_primitive = left_index;\n                     node.primitive_count          = 0;\n-                    node.leaf                     = false;\n+                    node.is_leaf                  = false;\n                     \n                     // Compute the bounding boxes of each node\n                     auto& bins = bins_per_axis[SweepAllAxes ? best_axis : 0];\n@@ -470,7 +472,7 @@ struct BVH {\n         };\n \n         // If the root is a leaf, intersect it and return\n-        if (nodes[0].leaf) {\n+        if (nodes[0].is_leaf) {\n             intersect_leaf(nodes[0].first_child_or_primitive, nodes[0].primitive_count);\n             return best_hit;\n         }\n@@ -491,10 +493,9 @@ struct BVH {\n         // This is generally beneficial for performance because intersections will likely be found which will\n         // allow to cull more subtrees with the ray-box test of the traversal loop.\n         TraversalStack<size_t, stack_size> stack;\n-        stack.push(0);\n-        while (!stack.empty()) {\n-            auto& node = nodes[stack.pop()];\n-            auto first_child = node.first_child_or_primitive;\n+        auto node = nodes.get();\n+        while (true) {\n+            auto first_child = node->first_child_or_primitive;\n \n             auto& left  = nodes[first_child + 0];\n             auto& right = nodes[first_child + 1];\n@@ -503,13 +504,13 @@ struct BVH {\n             bool hit_left  = distance_left.first  <= distance_left.second;\n             bool hit_right = distance_right.first <= distance_right.second;\n \n-            if (hit_left && left.leaf) {\n+            if (hit_left && left.is_leaf) {\n                 if (intersect_leaf(left.first_child_or_primitive, left.primitive_count) && AnyHit)\n                     break;\n                 hit_left = false;\n             }\n \n-            if (hit_right && right.leaf) {\n+            if (hit_right && right.is_leaf) {\n                 if (intersect_leaf(right.first_child_or_primitive, right.primitive_count) && AnyHit)\n                     break;\n                 hit_right = false;\n@@ -518,9 +519,13 @@ struct BVH {\n             if (hit_left && hit_right) {\n                 int order = distance_left.first < distance_right.first ? 0 : 1;\n                 stack.push(first_child + (1 - order));\n-                stack.push(first_child + order);\n+                node = &nodes[first_child + order];\n             } else if (hit_left ^ hit_right) {\n-                stack.push(first_child + (hit_left ? 0 : 1));\n+                node = &nodes[first_child + (hit_left ? 0 : 1)];\n+            } else {\n+                if (stack.empty())\n+                    break;\n+                node = &nodes[stack.pop()];\n             }\n         }\n "
+            }
+        ],
+        "lines_added": 18,
+        "lines_removed": 13
+    },
+    "issues": [],
+    "pull_requests": [],
+    "build_info": {
+        "old_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/old/build -- -j 1"
+        ],
+        "new_build_script": [
+            "apt-get update",
+            "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+            "cmake --build /test_workspace/workspace/new/build -- -j 1"
+        ],
+        "old_test_script": [
+            "cd /test_workspace/workspace/old/build",
+            "ctest --output-on-failure"
+        ],
+        "new_test_script": [
+            "cd /test_workspace/workspace/new/build",
+            "ctest --output-on-failure"
+        ],
+        "build_system": "cmake"
+    },
+    "performance_analysis": {
+        "is_significant": false,
+        "p_value": 0.9972183293549227,
+        "is_pair_significant": false,
+        "pair_p_value": 0.9916597262467687,
+        "is_binom_significant": false,
+        "binom_p_value": 0.991937599144876,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.9669633423852887,
+        "is_mannwhitney_significant": false,
+        "mannwhitney_p_value": 0.7204642050844078,
+        "relative_improvement": -0.04210526315789465,
+        "absolute_improvement_ms": -2.6666666666666785,
+        "old_mean_ms": 63.333333333333336,
+        "new_mean_ms": 66.00000000000001,
+        "old_std_ms": 9.942362632324558,
+        "new_std_ms": 5.632418479750465,
+        "effect_size_cohens_d": -0.33003058614835695,
+        "old_ci95_ms": [
+            59.620794112548936,
+            67.04587255411775
+        ],
+        "new_ci95_ms": [
+            63.89682037487146,
+            68.10317962512858
+        ],
+        "old_ci99_ms": [
+            58.32988992327083,
+            68.33677674339584
+        ],
+        "new_ci99_ms": [
+            63.16551405662894,
+            68.83448594337109
+        ],
+        "new_times_s": [
+            0.05,
+            0.06,
+            0.07,
+            0.07,
+            0.06,
+            0.07,
+            0.07,
+            0.07,
+            0.06,
+            0.07,
+            0.06,
+            0.06,
+            0.06,
+            0.07,
+            0.07,
+            0.06,
+            0.07,
+            0.07,
+            0.07,
+            0.06,
+            0.06,
+            0.07,
+            0.07,
+            0.06,
+            0.07,
+            0.06,
+            0.07,
+            0.08,
+            0.06,
+            0.06,
+            0.07
+        ],
+        "old_times_s": [
+            0.06,
+            0.07,
+            0.04,
+            0.03,
+            0.07,
+            0.06,
+            0.07,
+            0.07,
+            0.07,
+            0.07,
+            0.05,
+            0.06,
+            0.07,
+            0.06,
+            0.07,
+            0.07,
+            0.06,
+            0.06,
+            0.07,
+            0.06,
+            0.07,
+            0.05,
+            0.07,
+            0.07,
+            0.07,
+            0.07,
+            0.07,
+            0.06,
+            0.06,
+            0.07,
+            0.06
+        ]
+    },
+    "tests": {
+        "total_tests": 1,
+        "significant_improvements": 0,
+        "significant_improvements_tests": [],
+        "significant_regressions": 0,
+        "significant_regressions_tests": [],
+        "significant_pair_improvements": 0,
+        "significant_pair_improvements_tests": [],
+        "significant_pair_regressions": 0,
+        "significant_pair_regressions_tests": [],
+        "significant_binom_improvements": 0,
+        "significant_binom_improvements_tests": [],
+        "significant_binom_regressions": 0,
+        "significant_binom_regressions_tests": [],
+        "significant_wilcoxon_improvements": 0,
+        "significant_wilcoxon_improvements_tests": [],
+        "significant_wilcoxon_regressions": 0,
+        "significant_wilcoxon_regressions_tests": [],
+        "significant_mannwhitney_improvements": 0,
+        "significant_mannwhitney_improvements_tests": [],
+        "significant_mannwhitney_regressions": 0,
+        "significant_mannwhitney_regressions_tests": [],
+        "tests": [
+            {
+                "test_name": "custom_intersector_test",
+                "is_significant": false,
+                "p_value": 0.3303743128168457,
+                "is_pair_significant": false,
+                "pair_p_value": 0.3014423689636388,
+                "is_binom_significant": false,
+                "binom_p_value": 0.9999481420964003,
+                "is_wilcoxon_significant": false,
+                "wilcoxon_p_value": 0.9781154292868453,
+                "is_mannwhitney_significant": false,
+                "mannwhitney_p_value": 0.08588757855908224,
+                "relative_improvement": 0.07272727272727278,
+                "absolute_improvement_ms": 1.3793103448275883,
+                "old_mean_ms": 18.965517241379313,
+                "new_mean_ms": 17.586206896551726,
+                "old_std_ms": 3.0993404669460345,
+                "new_std_ms": 4.354941703556928,
+                "effect_size_cohens_d": 0.3649312153192544,
+                "old_ci95_ms": [
+                    17.786591177884244,
+                    20.144443304874383
+                ],
+                "new_ci95_ms": [
+                    15.92967566544633,
+                    19.24273812765712
+                ],
+                "old_ci99_ms": [
+                    17.375168300218444,
+                    20.555866182540182
+                ],
+                "new_ci99_ms": [
+                    15.351577625927076,
+                    19.820836167176374
+                ],
+                "new_times": [
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.01,
+                    0.01,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.01,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.01,
+                    0.02,
+                    0.01,
+                    0.01,
+                    0.01,
+                    0.02
+                ],
+                "old_times": [
+                    0.01,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.02,
+                    0.01,
+                    0.02,
+                    0.01,
+                    0.02,
+                    0.02,
+                    0.02
+                ]
+            }
+        ]
+    },
+    "logs": {
+        "full_log_path": "/logs/full.log",
+        "config_log_path": "/logs/config.log",
+        "build_log_path": "/logs/build.log",
+        "test_log_path": "/logs/test.log",
+        "build_success": true,
+        "test_success": true
+    },
+    "raw_timing_data": {
+        "warmup_runs": 1,
+        "measurement_runs": 30,
+        "min_exec_time_improvement": 0.05,
+        "min_p_value": 0.05
+    }
+}

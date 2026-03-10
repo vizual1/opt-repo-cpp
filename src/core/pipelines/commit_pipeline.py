@@ -88,13 +88,12 @@ class CommitPipeline:
 
     def _read_commits(self) -> list[str]:
         """
-        Merges multiple 'owner/repo | patched_sha | original_sha | new_shaN' into 
-        'owner/repo | patched_sha | original_sha | [new_sha1, ..., new_shaN]'
+        Merges multiple 'owner/repo | patched_sha | original_sha' into 
+        'owner/repo | patched_sha | original_sha'
         """
         commits: dict[str, list[str]] = {}
-        path = self.config.output_file or self.config.storage_paths['clones']
-        file = "filtered.txt"
-        path = Path(path) / file
+        path = Path(self.config.output_file or self.config.storage_paths['commits'])
+        file_path = path
         with open(path, "r") as f:
             for line_no, line in enumerate(f, start=1):
                 line = line.strip()
@@ -107,15 +106,10 @@ class CommitPipeline:
                     continue
                 msg = f"{parts[0]} | {parts[1]} | {parts[2]}"
                 
-                if len(parts) > 3:
-                    # repo_id | new_sha | old_sha | new_sha_not_pr
-                    extra_commits = ast.literal_eval(parts[3])
-                    commits.setdefault(msg, []).extend(extra_commits)
-                    continue
-                
                 commits.setdefault(msg, [])
                     
-        output = [f"{k} | {v}" for k, v in commits.items()]
+        #output = [f"{k} | {v}" for k, v in commits.items()]
+        output = [k for k, _ in commits.items()]
         return output
     
     def _organize_commits(self) -> list[str]:
@@ -126,9 +120,7 @@ class CommitPipeline:
     
     def _rewrite_commits(self) -> None:
         commits = self._organize_commits()
-        path = self.config.output_file or self.config.storage_paths['clones']
-        file = "filtered.txt"
-        path = Path(path) / file
+        path = Path(self.config.output_file or self.config.storage_paths['commits'])
         with open(path, "w") as f:
             for line in commits:
                 f.write(line + "\n")

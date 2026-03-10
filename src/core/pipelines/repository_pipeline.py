@@ -39,12 +39,12 @@ class RepositoryPipeline:
             repo = self.config.git_client.get_repo(repo_id)
             
             try:
-                if structure.is_valid(repo) and process.valid_run("_".join(repo.full_name.split("/")), repo):
+                if structure.is_valid(repo) and (self.config.test and process.valid_run("_".join(repo.full_name.split("/")), repo)):
                     self.valid_repos.append(repo)
-                    if self.config.collect or self.config.output_file:
+                    if self.config.collect:
                         Writer(repo_id, self.config.output_file or self.config.storage_paths['testcollect']).write_repo()
             
-                elif self.config.output_file:
+                else:
                     Writer(repo_id, self.config.storage_paths['fail']).write_repo()
 
             except Exception as e:

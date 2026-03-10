@@ -371,7 +371,7 @@ class CMakeProcess:
             self.test_flags |= oflags
             
             if unresolved_dependencies:
-                unresolved_dependencies, oflags = self.resolver.unresolved_dep(unresolved_dependencies)
+                unresolved_dependencies, oflags = self.resolver.unresolved_dep(unresolved_dependencies, self.analyzer.get_ubuntu_version())
                 self.test_flags |= oflags
 
             save_resolutions = self.other_flags

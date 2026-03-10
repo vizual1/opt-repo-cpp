@@ -1,0 +1,208 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:01:22.364041",
+    "repository": "https://github.com/google/highway",
+    "repository_name": "google/highway"
+  },
+  "commit_info": {
+    "old_sha": "00badbc1ca09a2bf8390642740a797946a3be427",
+    "new_sha": "0a7424871aac7838722604a7e68e6c8d65ab41f8",
+    "commit_message": [
+      "Avoid Sorter memory allocation for non-scalable vectors\n\nPiperOrigin-RevId: 436407421"
+    ],
+    "commit_date": "2022-03-22T08:05:43+00:00",
+    "patch": [
+      "--- hwy/contrib/sort/shared-inl.h\n@@ -42,7 +42,7 @@ struct SortConstants {\n   static constexpr size_t kMaxRowsLog2 = 4;\n   static constexpr size_t kMaxRows = size_t{1} << kMaxRowsLog2;\n \n-  static HWY_INLINE size_t BaseCaseNum(size_t N) {\n+  static constexpr HWY_INLINE size_t BaseCaseNum(size_t N) {\n     return kMaxRows * HWY_MIN(N, kMaxCols);\n   }\n \n@@ -53,7 +53,7 @@ struct SortConstants {\n   // To change, must also update left + 3 * N etc. in the loop.\n   static constexpr size_t kPartitionUnroll = 4;\n \n-  static HWY_INLINE size_t PartitionBufNum(size_t N) {\n+  static constexpr HWY_INLINE size_t PartitionBufNum(size_t N) {\n     // The main loop reads kPartitionUnroll vectors, and first loads from\n     // both left and right beforehand, so it requires min = 2 *\n     // kPartitionUnroll vectors. To handle smaller amounts (only guaranteed\n@@ -65,9 +65,26 @@ struct SortConstants {\n   // Chunk := group of keys loaded for sampling a pivot. Matches the typical\n   // cache line size of 64 bytes to get maximum benefit per L2 miss. If vectors\n   // are larger, use entire vectors to ensure we do not overrun the array.\n-  static HWY_INLINE size_t LanesPerChunk(size_t sizeof_t, size_t N) {\n+  static constexpr HWY_INLINE size_t LanesPerChunk(size_t sizeof_t, size_t N) {\n     return HWY_MAX(64 / sizeof_t, N);\n   }\n+\n+  static constexpr HWY_INLINE size_t PivotBufNum(size_t sizeof_t, size_t N) {\n+    // 3 chunks of medians, 1 chunk of median medians plus two padding vectors.\n+    return (3 + 1) * LanesPerChunk(sizeof_t, N) + 2 * N;\n+  }\n+\n+  template <typename T>\n+  static constexpr HWY_INLINE size_t BufNum(size_t N) {\n+    // One extra for padding plus another for full-vector loads.\n+    return HWY_MAX(BaseCaseNum(N) + 2 * N,\n+                   HWY_MAX(PartitionBufNum(N), PivotBufNum(sizeof(T), N)));\n+  }\n+\n+  template <typename T>\n+  static constexpr HWY_INLINE size_t BufBytes(size_t vector_size) {\n+    return sizeof(T) * BufNum<T>(vector_size / sizeof(T));\n+  }\n };\n \n }  // namespace hwy\n--- hwy/contrib/sort/vqsort-inl.h\n@@ -695,6 +695,16 @@ void Sort(D d, Traits st, T* HWY_RESTRICT keys, size_t num,\n   // PERFORMANCE WARNING: vqsort is not enabled for the non-SIMD target\n   return detail::HeapSort(st, keys, num);\n #else\n+#if !HWY_HAVE_SCALABLE\n+  // On targets with fixed-size vectors, avoid _using_ the allocated memory.\n+  // We avoid (potentially expensive for small input sizes) allocations on\n+  // platforms where no targets are scalable. For 512-bit vectors, this fits on\n+  // the stack (several KiB).\n+  HWY_ALIGN T storage[SortConstants::BufNum<T>(HWY_LANES(T))] = {};\n+  static_assert(sizeof(storage) <= 8192, \"Unexpectedly large, check size\");\n+  buf = storage;\n+#endif  // !HWY_HAVE_SCALABLE\n+\n   if (detail::HandleSpecialCases(d, st, keys, num, buf)) return;\n \n #if HWY_MAX_BYTES > 64\n--- hwy/contrib/sort/vqsort.cc\n@@ -26,6 +26,16 @@\n // After foreach_target\n #include \"hwy/contrib/sort/shared-inl.h\"\n \n+// Architectures for which we know HWY_HAVE_SCALABLE == 0. This opts into an\n+// optimization that replaces dynamic allocation with stack storage.\n+#ifndef VQSORT_STACK\n+#if HWY_ARCH_X86 || HWY_ARCH_WASM\n+#define VQSORT_STACK 1\n+#else\n+#define VQSORT_STACK 0\n+#endif\n+#endif  // VQSORT_STACK\n+\n // Check if we have sys/random.h. First skip some systems on which the check\n // itself (features.h) might be problematic.\n #if defined(ANDROID) || defined(__ANDROID__) || HWY_ARCH_RVV\n@@ -104,40 +114,32 @@ namespace {\n HWY_EXPORT(VectorSize);\n HWY_EXPORT(HaveFloat64);\n \n-HWY_INLINE size_t PivotBufNum(size_t sizeof_t, size_t N) {\n-  // 3 chunks of medians, 1 chunk of median medians plus two padding vectors.\n-  const size_t lpc = SortConstants::LanesPerChunk(sizeof_t, N);\n-  return (3 + 1) * lpc + 2 * N;\n-}\n-\n }  // namespace\n \n Sorter::Sorter() {\n+#if VQSORT_STACK\n+  ptr_ = nullptr;  // Sort will use stack storage instead\n+#else\n   // Determine the largest buffer size required for any type by trying them all.\n   // (The capping of N in BaseCaseNum means that smaller N but larger sizeof_t\n   // may require a larger buffer.)\n   const size_t vector_size = HWY_DYNAMIC_DISPATCH(VectorSize)();\n-  size_t max_bytes = 0;\n-  for (size_t sizeof_t :\n-       {sizeof(uint16_t), sizeof(uint32_t), sizeof(uint64_t)}) {\n-    const size_t N = vector_size / sizeof_t;\n-    // One extra for padding plus another for full-vector loads.\n-    const size_t base_case = SortConstants::BaseCaseNum(N) + 2 * N;\n-    const size_t partition_num = SortConstants::PartitionBufNum(N);\n-    const size_t buf_lanes =\n-        HWY_MAX(base_case, HWY_MAX(partition_num, PivotBufNum(sizeof_t, N)));\n-    max_bytes = HWY_MAX(max_bytes, buf_lanes * sizeof_t);\n-  }\n-\n+  const size_t max_bytes =\n+      HWY_MAX(HWY_MAX(SortConstants::BufBytes<uint16_t>(vector_size),\n+                      SortConstants::BufBytes<uint32_t>(vector_size)),\n+              SortConstants::BufBytes<uint64_t>(vector_size));\n   ptr_ = hwy::AllocateAlignedBytes(max_bytes, nullptr, nullptr);\n \n   // Prevent msan errors by initializing.\n   memset(ptr_, 0, max_bytes);\n+#endif\n }\n \n void Sorter::Delete() {\n+#if !VQSORT_STACK\n   FreeAlignedBytes(ptr_, nullptr, nullptr);\n   ptr_ = nullptr;\n+#endif\n }\n \n #if !VQSORT_SECURE_RNG"
+    ],
+    "files_changed": [
+      {
+        "filename": "hwy/contrib/sort/shared-inl.h",
+        "status": "modified",
+        "additions": 20,
+        "deletions": 3,
+        "changes": 23,
+        "patch": "@@ -42,7 +42,7 @@ struct SortConstants {\n   static constexpr size_t kMaxRowsLog2 = 4;\n   static constexpr size_t kMaxRows = size_t{1} << kMaxRowsLog2;\n \n-  static HWY_INLINE size_t BaseCaseNum(size_t N) {\n+  static constexpr HWY_INLINE size_t BaseCaseNum(size_t N) {\n     return kMaxRows * HWY_MIN(N, kMaxCols);\n   }\n \n@@ -53,7 +53,7 @@ struct SortConstants {\n   // To change, must also update left + 3 * N etc. in the loop.\n   static constexpr size_t kPartitionUnroll = 4;\n \n-  static HWY_INLINE size_t PartitionBufNum(size_t N) {\n+  static constexpr HWY_INLINE size_t PartitionBufNum(size_t N) {\n     // The main loop reads kPartitionUnroll vectors, and first loads from\n     // both left and right beforehand, so it requires min = 2 *\n     // kPartitionUnroll vectors. To handle smaller amounts (only guaranteed\n@@ -65,9 +65,26 @@ struct SortConstants {\n   // Chunk := group of keys loaded for sampling a pivot. Matches the typical\n   // cache line size of 64 bytes to get maximum benefit per L2 miss. If vectors\n   // are larger, use entire vectors to ensure we do not overrun the array.\n-  static HWY_INLINE size_t LanesPerChunk(size_t sizeof_t, size_t N) {\n+  static constexpr HWY_INLINE size_t LanesPerChunk(size_t sizeof_t, size_t N) {\n     return HWY_MAX(64 / sizeof_t, N);\n   }\n+\n+  static constexpr HWY_INLINE size_t PivotBufNum(size_t sizeof_t, size_t N) {\n+    // 3 chunks of medians, 1 chunk of median medians plus two padding vectors.\n+    return (3 + 1) * LanesPerChunk(sizeof_t, N) + 2 * N;\n+  }\n+\n+  template <typename T>\n+  static constexpr HWY_INLINE size_t BufNum(size_t N) {\n+    // One extra for padding plus another for full-vector loads.\n+    return HWY_MAX(BaseCaseNum(N) + 2 * N,\n+                   HWY_MAX(PartitionBufNum(N), PivotBufNum(sizeof(T), N)));\n+  }\n+\n+  template <typename T>\n+  static constexpr HWY_INLINE size_t BufBytes(size_t vector_size) {\n+    return sizeof(T) * BufNum<T>(vector_size / sizeof(T));\n+  }\n };\n \n }  // namespace hwy"
+      },
+      {
+        "filename": "hwy/contrib/sort/vqsort-inl.h",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 0,
+        "changes": 10,
+        "patch": "@@ -695,6 +695,16 @@ void Sort(D d, Traits st, T* HWY_RESTRICT keys, size_t num,\n   // PERFORMANCE WARNING: vqsort is not enabled for the non-SIMD target\n   return detail::HeapSort(st, keys, num);\n #else\n+#if !HWY_HAVE_SCALABLE\n+  // On targets with fixed-size vectors, avoid _using_ the allocated memory.\n+  // We avoid (potentially expensive for small input sizes) allocations on\n+  // platforms where no targets are scalable. For 512-bit vectors, this fits on\n+  // the stack (several KiB).\n+  HWY_ALIGN T storage[SortConstants::BufNum<T>(HWY_LANES(T))] = {};\n+  static_assert(sizeof(storage) <= 8192, \"Unexpectedly large, check size\");\n+  buf = storage;\n+#endif  // !HWY_HAVE_SCALABLE\n+\n   if (detail::HandleSpecialCases(d, st, keys, num, buf)) return;\n \n #if HWY_MAX_BYTES > 64"
+      },
+      {
+        "filename": "hwy/contrib/sort/vqsort.cc",
+        "status": "modified",
+        "additions": 20,
+        "deletions": 18,
+        "changes": 38,
+        "patch": "@@ -26,6 +26,16 @@\n // After foreach_target\n #include \"hwy/contrib/sort/shared-inl.h\"\n \n+// Architectures for which we know HWY_HAVE_SCALABLE == 0. This opts into an\n+// optimization that replaces dynamic allocation with stack storage.\n+#ifndef VQSORT_STACK\n+#if HWY_ARCH_X86 || HWY_ARCH_WASM\n+#define VQSORT_STACK 1\n+#else\n+#define VQSORT_STACK 0\n+#endif\n+#endif  // VQSORT_STACK\n+\n // Check if we have sys/random.h. First skip some systems on which the check\n // itself (features.h) might be problematic.\n #if defined(ANDROID) || defined(__ANDROID__) || HWY_ARCH_RVV\n@@ -104,40 +114,32 @@ namespace {\n HWY_EXPORT(VectorSize);\n HWY_EXPORT(HaveFloat64);\n \n-HWY_INLINE size_t PivotBufNum(size_t sizeof_t, size_t N) {\n-  // 3 chunks of medians, 1 chunk of median medians plus two padding vectors.\n-  const size_t lpc = SortConstants::LanesPerChunk(sizeof_t, N);\n-  return (3 + 1) * lpc + 2 * N;\n-}\n-\n }  // namespace\n \n Sorter::Sorter() {\n+#if VQSORT_STACK\n+  ptr_ = nullptr;  // Sort will use stack storage instead\n+#else\n   // Determine the largest buffer size required for any type by trying them all.\n   // (The capping of N in BaseCaseNum means that smaller N but larger sizeof_t\n   // may require a larger buffer.)\n   const size_t vector_size = HWY_DYNAMIC_DISPATCH(VectorSize)();\n-  size_t max_bytes = 0;\n-  for (size_t sizeof_t :\n-       {sizeof(uint16_t), sizeof(uint32_t), sizeof(uint64_t)}) {\n-    const size_t N = vector_size / sizeof_t;\n-    // One extra for padding plus another for full-vector loads.\n-    const size_t base_case = SortConstants::BaseCaseNum(N) + 2 * N;\n-    const size_t partition_num = SortConstants::PartitionBufNum(N);\n-    const size_t buf_lanes =\n-        HWY_MAX(base_case, HWY_MAX(partition_num, PivotBufNum(sizeof_t, N)));\n-    max_bytes = HWY_MAX(max_bytes, buf_lanes * sizeof_t);\n-  }\n-\n+  const size_t max_bytes =\n+      HWY_MAX(HWY_MAX(SortConstants::BufBytes<uint16_t>(vector_size),\n+                      SortConstants::BufBytes<uint32_t>(vector_size)),\n+              SortConstants::BufBytes<uint64_t>(vector_size));\n   ptr_ = hwy::AllocateAlignedBytes(max_bytes, nullptr, nullptr);\n \n   // Prevent msan errors by initializing.\n   memset(ptr_, 0, max_bytes);\n+#endif\n }\n \n void Sorter::Delete() {\n+#if !VQSORT_STACK\n   FreeAlignedBytes(ptr_, nullptr, nullptr);\n   ptr_ = nullptr;\n+#endif\n }\n \n #if !VQSORT_SECURE_RNG"
+      }
+    ],
+    "lines_added": 50,
+    "lines_removed": 21
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.857713252070624,
+    "is_pair_significant": false,
+    "pair_p_value": 0.999874553023936,
+    "is_binom_significant": false,
+    "binom_p_value": 0.9999995660036802,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.9999604467302561,
+    "is_mannwhitney_significant": false,
+    "mannwhitney_p_value": 0.6414074733239608,
+    "relative_improvement": -0.019770949194080466,
+    "absolute_improvement_ms": -279.6666666666692,
+    "old_mean_ms": 14145.333333333332,
+    "new_mean_ms": 14425.0,
+    "old_std_ms": 3699.7807328630124,
+    "new_std_ms": 3562.9237799971197,
+    "effect_size_cohens_d": -0.07700079939633252,
+    "old_ci95_ms": [
+      12763.812503022904,
+      15526.85416364376
+    ],
+    "new_ci95_ms": [
+      13094.582395747711,
+      15755.41760425229
+    ],
+    "old_ci99_ms": [
+      12283.437503228048,
+      16007.229163438617
+    ],
+    "new_ci99_ms": [
+      12631.97673512502,
+      16218.023264874982
+    ],
+    "new_times_s": [
+      16.74,
+      18.67,
+      18.37,
+      17.35,
+      18.01,
+      13.81,
+      16.99,
+      17.49,
+      18.98,
+      16.02,
+      14.07,
+      15.75,
+      16.49,
+      17.0,
+      14.95,
+      13.57,
+      14.48,
+      12.41,
+      15.12,
+      15.08,
+      17.46,
+      18.33,
+      17.74,
+      12.43,
+      8.69,
+      8.6,
+      9.18,
+      9.06,
+      8.95,
+      8.67,
+      9.03
+    ],
+    "old_times_s": [
+      18.89,
+      19.65,
+      18.35,
+      17.58,
+      16.96,
+      13.65,
+      19.26,
+      14.5,
+      18.44,
+      16.75,
+      14.53,
+      14.58,
+      14.34,
+      14.72,
+      13.77,
+      13.08,
+      13.23,
+      13.56,
+      15.53,
+      15.69,
+      19.43,
+      17.3,
+      17.99,
+      8.94,
+      9.04,
+      8.89,
+      8.94,
+      8.96,
+      9.12,
+      8.75,
+      8.83
+    ]
+  },
+  "tests": {
+    "total_tests": 0,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 0,
+    "significant_mannwhitney_improvements_tests": [],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": []
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

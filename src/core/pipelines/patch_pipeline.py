@@ -62,6 +62,7 @@ class PatchPipeline:
                         temp_git_dir.rename(path / ".git")
                 if path.exists():
                     shutil.rmtree(path)
+                    
         elif self.config.docker_image:
             # start docker container of self.config.docker_image
             # move all the files inside the container in /test_workspace/workspace/old/. into path outside

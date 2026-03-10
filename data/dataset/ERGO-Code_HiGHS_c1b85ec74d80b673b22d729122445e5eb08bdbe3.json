@@ -1,0 +1,291 @@
+{
+  "metadata": {
+    "collection_date": "2026-02-03T20:00:33.428474",
+    "repository": "https://github.com/ERGO-Code/HiGHS",
+    "repository_name": "ERGO-Code/HiGHS"
+  },
+  "commit_info": {
+    "old_sha": "13363c9f1252b015cf6527132eb9cf8f4b5bf020",
+    "new_sha": "c1b85ec74d80b673b22d729122445e5eb08bdbe3",
+    "commit_message": [
+      "highspy: release python GIL when calling run"
+    ],
+    "commit_date": "2024-04-24T14:57:27+00:00",
+    "patch": [
+      "--- highspy/highs_bindings.cpp\n@@ -551,6 +551,15 @@ std::tuple<HighsStatus, int> highs_getRowByName(Highs* h,\n }\n \n \n+HighsStatus highs_run(Highs* h)\n+{\n+  py::gil_scoped_release release;\n+  HighsStatus status = h->run();\n+  py::gil_scoped_acquire();\n+  return status;\n+}\n+\n+\n PYBIND11_MODULE(highspy, m) {\n      \n   // enum classes\n@@ -835,7 +844,7 @@ PYBIND11_MODULE(highspy, m) {\n       .def(\"writeBasis\", &Highs::writeBasis)\n       .def(\"postsolve\", &highs_postsolve)\n       .def(\"postsolve\", &highs_mipPostsolve)\n-      .def(\"run\", &Highs::run)\n+      .def(\"run\", &highs_run)\n       .def(\"presolve\", &Highs::presolve)\n       .def(\"writeSolution\", &highs_writeSolution)\n       .def(\"readSolution\", &Highs::readSolution)"
+    ],
+    "files_changed": [
+      {
+        "filename": "highspy/highs_bindings.cpp",
+        "status": "modified",
+        "additions": 10,
+        "deletions": 1,
+        "changes": 11,
+        "patch": "@@ -551,6 +551,15 @@ std::tuple<HighsStatus, int> highs_getRowByName(Highs* h,\n }\n \n \n+HighsStatus highs_run(Highs* h)\n+{\n+  py::gil_scoped_release release;\n+  HighsStatus status = h->run();\n+  py::gil_scoped_acquire();\n+  return status;\n+}\n+\n+\n PYBIND11_MODULE(highspy, m) {\n      \n   // enum classes\n@@ -835,7 +844,7 @@ PYBIND11_MODULE(highspy, m) {\n       .def(\"writeBasis\", &Highs::writeBasis)\n       .def(\"postsolve\", &highs_postsolve)\n       .def(\"postsolve\", &highs_mipPostsolve)\n-      .def(\"run\", &Highs::run)\n+      .def(\"run\", &highs_run)\n       .def(\"presolve\", &Highs::presolve)\n       .def(\"writeSolution\", &highs_writeSolution)\n       .def(\"readSolution\", &Highs::readSolution)"
+      }
+    ],
+    "lines_added": 10,
+    "lines_removed": 1
+  },
+  "issues": [],
+  "pull_requests": [],
+  "build_info": {
+    "old_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/old/build -- -j 1"
+    ],
+    "new_build_script": [
+      "apt-get update",
+      "cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON",
+      "cmake --build /test_workspace/workspace/new/build -- -j 1"
+    ],
+    "old_test_script": [
+      "cd /test_workspace/workspace/old/build",
+      "ctest --output-on-failure"
+    ],
+    "new_test_script": [
+      "cd /test_workspace/workspace/new/build",
+      "ctest --output-on-failure"
+    ],
+    "build_system": "cmake"
+  },
+  "performance_analysis": {
+    "is_significant": false,
+    "p_value": 0.16024836302851603,
+    "is_pair_significant": false,
+    "pair_p_value": 0.17061432599464083,
+    "is_binom_significant": false,
+    "binom_p_value": 0.644464448094368,
+    "is_wilcoxon_significant": false,
+    "wilcoxon_p_value": 0.39835706427759354,
+    "is_mannwhitney_significant": true,
+    "mannwhitney_p_value": 0.01629633711263106,
+    "relative_improvement": 0.08077544426494346,
+    "absolute_improvement_ms": 16.66666666666669,
+    "old_mean_ms": 206.33333333333334,
+    "new_mean_ms": 189.66666666666666,
+    "old_std_ms": 31.456958369891034,
+    "new_std_ms": 17.515182248421006,
+    "effect_size_cohens_d": 0.6546472210134344,
+    "old_ci95_ms": [
+      194.58711203427194,
+      218.07955463239472
+    ],
+    "new_ci95_ms": [
+      183.12639012866973,
+      196.2069432046636
+    ],
+    "old_ci99_ms": [
+      190.5027790800891,
+      222.16388758657757
+    ],
+    "new_ci99_ms": [
+      180.85224031372076,
+      198.48109301961253
+    ],
+    "new_times_s": [
+      0.17,
+      0.16,
+      0.19,
+      0.19,
+      0.24,
+      0.18,
+      0.17,
+      0.18,
+      0.2,
+      0.18,
+      0.21,
+      0.21,
+      0.19,
+      0.18,
+      0.17,
+      0.18,
+      0.18,
+      0.19,
+      0.18,
+      0.2,
+      0.19,
+      0.18,
+      0.22,
+      0.18,
+      0.19,
+      0.17,
+      0.18,
+      0.22,
+      0.21,
+      0.18,
+      0.19
+    ],
+    "old_times_s": [
+      0.3,
+      0.22,
+      0.2,
+      0.19,
+      0.24,
+      0.23,
+      0.17,
+      0.18,
+      0.19,
+      0.2,
+      0.25,
+      0.19,
+      0.29,
+      0.18,
+      0.23,
+      0.22,
+      0.18,
+      0.22,
+      0.22,
+      0.18,
+      0.18,
+      0.19,
+      0.19,
+      0.19,
+      0.25,
+      0.21,
+      0.18,
+      0.19,
+      0.17,
+      0.28,
+      0.18
+    ]
+  },
+  "tests": {
+    "total_tests": 1,
+    "significant_improvements": 0,
+    "significant_improvements_tests": [],
+    "significant_regressions": 0,
+    "significant_regressions_tests": [],
+    "significant_pair_improvements": 0,
+    "significant_pair_improvements_tests": [],
+    "significant_pair_regressions": 0,
+    "significant_pair_regressions_tests": [],
+    "significant_binom_improvements": 0,
+    "significant_binom_improvements_tests": [],
+    "significant_binom_regressions": 0,
+    "significant_binom_regressions_tests": [],
+    "significant_wilcoxon_improvements": 0,
+    "significant_wilcoxon_improvements_tests": [],
+    "significant_wilcoxon_regressions": 0,
+    "significant_wilcoxon_regressions_tests": [],
+    "significant_mannwhitney_improvements": 1,
+    "significant_mannwhitney_improvements_tests": [
+      "cxx_examples_call_highs_from_cpp"
+    ],
+    "significant_mannwhitney_regressions": 0,
+    "significant_mannwhitney_regressions_tests": [],
+    "tests": [
+      {
+        "test_name": "cxx_examples_call_highs_from_cpp",
+        "is_significant": false,
+        "p_value": 0.19521445752672256,
+        "is_pair_significant": false,
+        "pair_p_value": 0.20644397409132564,
+        "is_binom_significant": false,
+        "binom_p_value": 0.8275357745587826,
+        "is_wilcoxon_significant": false,
+        "wilcoxon_p_value": 0.42750536745702555,
+        "is_mannwhitney_significant": true,
+        "mannwhitney_p_value": 0.028340880948698497,
+        "relative_improvement": 0.07853403141361259,
+        "absolute_improvement_ms": 16.07142857142857,
+        "old_mean_ms": 204.64285714285717,
+        "new_mean_ms": 188.57142857142858,
+        "old_std_ms": 32.60108415115497,
+        "new_std_ms": 17.5782453332154,
+        "effect_size_cohens_d": 0.613649042466569,
+        "old_ci95_ms": [
+          192.0014764031145,
+          217.2842378825998
+        ],
+        "new_ci95_ms": [
+          181.75529659975894,
+          195.38756054309823
+        ],
+        "old_ci99_ms": [
+          187.57260797326515,
+          221.71310631244918
+        ],
+        "new_ci99_ms": [
+          179.36728596037452,
+          197.77557118248265
+        ],
+        "new_times": [
+          0.19,
+          0.24,
+          0.18,
+          0.17,
+          0.18,
+          0.2,
+          0.18,
+          0.21,
+          0.2,
+          0.18,
+          0.18,
+          0.17,
+          0.17,
+          0.18,
+          0.19,
+          0.18,
+          0.19,
+          0.19,
+          0.17,
+          0.22,
+          0.18,
+          0.18,
+          0.17,
+          0.18,
+          0.22,
+          0.21,
+          0.18,
+          0.19
+        ],
+        "old_times": [
+          0.18,
+          0.24,
+          0.23,
+          0.17,
+          0.18,
+          0.19,
+          0.19,
+          0.25,
+          0.19,
+          0.29,
+          0.18,
+          0.23,
+          0.22,
+          0.18,
+          0.22,
+          0.22,
+          0.18,
+          0.18,
+          0.19,
+          0.19,
+          0.18,
+          0.24,
+          0.21,
+          0.18,
+          0.19,
+          0.17,
+          0.28,
+          0.18
+        ]
+      }
+    ]
+  },
+  "logs": {
+    "full_log_path": "/logs/full.log",
+    "config_log_path": "/logs/config.log",
+    "build_log_path": "/logs/build.log",
+    "test_log_path": "/logs/test.log",
+    "build_success": true,
+    "test_success": true
+  },
+  "raw_timing_data": {
+    "warmup_runs": 1,
+    "measurement_runs": 30,
+    "min_exec_time_improvement": 0.05,
+    "min_p_value": 0.05
+  }
+}

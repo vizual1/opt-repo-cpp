@@ -16,8 +16,6 @@ from src.utils.image_handling import image_exists, image
 
 class DockerTester:
     def __init__(self, config: Config):
-        #self.repo = repo
-        #self.repo_id = self.repo.full_name
         self.config = config
 
     def run_commit_pair(
@@ -233,7 +231,8 @@ class DockerTester:
         writer = Writer(repo.full_name, self.config.output or self.config.storage_paths["performance"])
         writer.write_results(results)
 
-        old_process.save_docker_image(repo.full_name, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
+        if not self.config.noimage:
+            old_process.save_docker_image(repo.full_name, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
             
         if total_improvement < self.config.min_p_value or overall_change_with_new_outperforms_old:
             logging.info(f"[{repo.full_name}:{new_sha}] significantly improves execution time.")

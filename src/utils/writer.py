@@ -65,9 +65,7 @@ class Writer:
         new_sha: str = results['commit_info']["new_sha"]
         old_sha: str = results['commit_info']["old_sha"]
         repo_id: str = results['metadata']['repository_name']
-        p_value: float = results['performance_analysis']['p_value']
-        rel_improv: float = results['performance_analysis']['relative_improvement']
-        msg = f"{repo_id} | {new_sha} | {old_sha} | {p_value} | {rel_improv}\n"
+        msg = f"{repo_id} | {new_sha} | {old_sha}\n"
         self._write(path, msg)
 
     def write_results(self, results: dict) -> None:

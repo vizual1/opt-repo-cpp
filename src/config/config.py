@@ -9,12 +9,27 @@ from src.utils.image_handling import dockerhub_containers, check_dockerhub
 
 @dataclass
 class Config:
-    # Core operation modes
+    # collect repositories or commits from github
     collect: bool = False
+
+    # compiles and tests the most recent commit of the collected repositories
+    test: bool = False 
+
+    # indicates the number of repositories collected from github before stopping
+    repos: int = 0 
+
+    # path to file of already collected repositories that shouldn't be collected again
+    blacklist: str = "" 
+
+    # given a file of repositories, runs "--collect --test" without collecting repositories from github 
     testcollect: bool = False 
+
+    # filter type for collecting commits given repositories
+    filter: str = ""
+
     commits: bool = False 
     testcommits: bool = False
-    test: bool = False
+    
     genimages: bool = False
     pushimages: bool = False
     testdocker: bool = False
@@ -22,10 +37,10 @@ class Config:
     testpatch: bool = False
     
     # Limits and filters
-    limit: int = 10 # indicates the number of repositories collected from github before stopping
+    limit: int = 10
     stars: int = 1000 # indicates the maximum number of stars of repositories collected from github
-    filter: str = "llm" # filter type for filtering commits
-    filter_type: str = field(init=False)
+    #filter: str = "llm" # filter type for filtering commits
+    #filter_type: str = field(init=False)
     
     input: str = ""
     output: str = ""
@@ -43,6 +58,7 @@ class Config:
     sha: str = ""
     
     # Docker settings
+    noimage: bool = False # does not save the docker image for --testcommits flag
     docker: str = ""
     docker_image: str = field(init=False)
     mount: str = ""
@@ -82,7 +98,6 @@ class Config:
     _git: Optional[Github] = field(init=False, default=None)
 
     def __post_init__(self):
-        self.filter_type = self.filter
         self.repo_id = self.repo.removeprefix("https://github.com/").strip() if self.repo else self.repo
         self.input_file = self.input
         self.output_file = self.output
@@ -97,8 +112,8 @@ class Config:
 
     def _validate(self) -> None:
         """Validate configuration consistency."""
-        if self.filter_type not in ("simple", "llm", "issue"):
-            raise ValueError(f"Unknown filter type: {self.filter_type}")
+        if self.filter not in ("simple", "llm", "issue"):
+            raise ValueError(f"Unknown filter type: {self.filter}")
 
         if self.stars < 0 or self.limit <= 0:
             raise ValueError("Stars and limit must be positive.")

@@ -20,18 +20,18 @@ class CommitFilter:
     def accept(self) -> bool: 
         logging.info(f"[{self.repo.full_name}] ({self.commit.sha}) Filtering...")
         name = self.config.llm.ollama_stage1_model + "_" + self.config.llm.ollama_diff_model + "_" + self.config.llm.ollama_stage2_model if self.config.llm.ollama_enabled else self.config.llm.model1 + "_" + self.config.llm.model2
-        cached = self.cache.get(self.repo.full_name, {}).get(self.config.filter_type + (f"_{name}" if self.config.filter_type == "llm" else ""), {}).get(self.commit.sha)
+        cached = self.cache.get(self.repo.full_name, {}).get(self.config.filter + (f"_{name}" if self.config.filter == "llm" else ""), {}).get(self.commit.sha)
         if cached is not None:
-            logging.info(f"Cache hit for {self.commit.sha} ({self.config.filter_type}) -> {cached}")
+            logging.info(f"Cache hit for {self.commit.sha} ({self.config.filter}) -> {cached}")
             return cached
 
-        if self.config.filter_type == "simple":
+        if self.config.filter == "simple":
             result = self._simple_filter() and self.only_cpp_source_modified()
             self._save_cache(self.commit, result)
-        elif self.config.filter_type == "llm":
+        elif self.config.filter == "llm":
             result = self.only_cpp_source_modified() and self._llm_filter() 
             self._save_cache(self.commit, result, extra=f"_{name}")
-        elif self.config.filter_type == "issue":
+        elif self.config.filter == "issue":
             result = self.only_cpp_source_modified() and self._fixed_performance_issue() is not None
             self._save_cache(self.commit, result, extra=f"_{name}")
         else:
@@ -198,7 +198,7 @@ class CommitFilter:
     
     def _save_cache(self, commit: Commit, decision: bool, extra: str = "") -> None:
         repo_name = self.repo.full_name
-        filter_type = self.config.filter_type + extra
+        filter_type = self.config.filter + extra
 
         if repo_name not in self.cache:
             self.cache[repo_name] = {}
@@ -302,6 +302,70 @@ class CommitFilter:
         except Exception as e:
             logging.error(f"Error checking if #{number} is performance issue: {e}")
             return False
+        
+############ ISSUES ############
+
+    def get_all_performance_issues(self) -> set[int]:
+        """
+        Get all unique performance issues fixed by this commit.
+        Handles both direct issue references and issues closed by referenced PRs.
+        
+        Returns:
+            Set of unique performance issue numbers
+        """
+        refs = self.extract_fixed_issues()
+        if not refs:
+            return set()
+        
+        performance_issues = set()
+        issues_to_check: list[tuple[int, str]] = []
+        
+        for number, ref_type in refs.items():
+            if ref_type == "pull_request":
+                pr_issues = self.get_issues_from_pr(number)
+                for issue_num in pr_issues:
+                    issues_to_check.append((issue_num, "issue"))
+                issues_to_check.append((number, ref_type))
+            else:
+                issues_to_check.append((number, ref_type))
+        
+        checked = set()
+        for number, ref_type in issues_to_check:
+            if number in checked:
+                continue
+            checked.add(number)
+            
+            if self._is_performance_issue(number, ref_type):
+                self.is_issue = True
+                performance_issues.add(number)
+                logging.info(f"Identified performance issue: #{number}")
+        
+        if performance_issues:
+            logging.info(
+                f"Commit {self.commit.sha} fixes {len(performance_issues)} "
+                f"unique performance issue(s): {sorted(performance_issues)}"
+            )
+        else:
+            logging.info(f"Commit {self.commit.sha} does not fix any performance issues")
+        
+        return performance_issues
+    
+    def get_ref_type(self, n: int, issue_cache: dict) -> str:
+        """Return 'issue', 'pull_request', or 'unknown'."""
+        if n in issue_cache:
+            return issue_cache[n]
+        try:
+            issue = self.repo.get_issue(n)
+            ref_type = "issue" if getattr(issue, "pull_request", None) is None else "pull_request"
+            issue_cache[n] = ref_type
+            return ref_type
+        except UnknownObjectException:
+            issue_cache[n] = "unknown"
+            return "unknown"
+        except Exception as e:
+            logging.warning(f"Error checking issue #{n} in {self.repo.full_name}: {e}")
+            issue_cache[n] = "unknown"
+            return "unknown"
 
     def extract_fixed_issues(self) -> dict[int, str]:
         """Extract issue/PR numbers from commit message that are explicitly closed/fixed."""
@@ -315,7 +379,7 @@ class CommitFilter:
         closing_prefix = r'(?:(?<![A-Za-z])(?:fix|fixes|fixed|close|closes|closed|resolve|resolves|resolved|address|addresses|addressed))(?:\s*[:\-])?\s+'
         issue_patterns = [r'#(\d+)', r'GH-(\d+)', r'issue\s*#(\d+)', r'bug\s*#(\d+)']
         full_repo_patterns = [r'([\w.-]+/[\w.-]+)#(\d+)', r'https?://github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)']
-        pr_patterns = [r'https?://github\.com/([\w.-]+/[\w.-]+)/pull/(\d+)']
+        pr_patterns = [r'https?://github\.com/([\w.-]+/[\w.-]+)/pull/(\d+)', r'\(#(\d+)\)', r'\(([\w.-]+/[\w.-]+)#(\d+)\)']
         
         all_issue_patterns = issue_patterns + full_repo_patterns
         compiled_issue_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in all_issue_patterns]
@@ -328,23 +392,6 @@ class CommitFilter:
 
         issue_cache = {}
         
-        def get_ref_type(n: int) -> str:
-            """Return 'issue', 'pull_request', or 'unknown'."""
-            if n in issue_cache:
-                return issue_cache[n]
-            try:
-                issue = self.repo.get_issue(n)
-                ref_type = "issue" if getattr(issue, "pull_request", None) is None else "pull_request"
-                issue_cache[n] = ref_type
-                return ref_type
-            except UnknownObjectException:
-                issue_cache[n] = "unknown"
-                return "unknown"
-            except Exception as e:
-                logging.warning(f"Error checking issue #{n} in {self.repo.full_name}: {e}")
-                issue_cache[n] = "unknown"
-                return "unknown"
-
         try:
             for block in fix_block.finditer(msg):
                 block_text = block.group(0)
@@ -370,10 +417,26 @@ class CommitFilter:
                                 issue_number = int(match.group(2))
 
                         if issue_number:
-                            ref_type = get_ref_type(issue_number)
+                            ref_type = self.get_ref_type(issue_number, issue_cache)
                             if ref_type in ("issue", "pull_request"):
                                 results[issue_number] = ref_type
                                 logging.info(f"Found {ref_type} reference: #{issue_number}")
+
+            # detect standalone PR references like (#4957)
+            for pr_pattern in compiled_pr_patterns:
+                for match in pr_pattern.finditer(msg):
+                    groups = match.groups()
+
+                    if len(groups) == 1:
+                        number = int(groups[0])
+                        results[number] = "pull_request"
+                        logging.info(f"Found standalone PR reference: #{number}")
+
+                    elif len(groups) == 2:
+                        repo_name, number = groups
+                        if repo_name.lower() == self.repo.full_name.lower():
+                            results[int(number)] = "pull_request"
+                            logging.info(f"Found standalone PR reference: {repo_name}#{number}")
 
         except Exception as e:
             logging.error(f"Error parsing commit message for issues: {e}")
@@ -420,51 +483,6 @@ class CommitFilter:
             logging.error(f"Error fetching issues from PR #{pr_number}: {e}")
             return set()
 
-
-    def get_all_performance_issues(self) -> set[int]:
-        """
-        Get all unique performance issues fixed by this commit.
-        Handles both direct issue references and issues closed by referenced PRs.
-        
-        Returns:
-            Set of unique performance issue numbers
-        """
-        refs = self.extract_fixed_issues()
-        if not refs:
-            return set()
-        
-        performance_issues = set()
-        issues_to_check: list[tuple[int, str]] = []
-        
-        for number, ref_type in refs.items():
-            if ref_type == "pull_request":
-                pr_issues = self.get_issues_from_pr(number)
-                for issue_num in pr_issues:
-                    issues_to_check.append((issue_num, "issue"))
-                issues_to_check.append((number, ref_type))
-            else:
-                issues_to_check.append((number, ref_type))
-        
-        checked = set()
-        for number, ref_type in issues_to_check:
-            if number in checked:
-                continue
-            checked.add(number)
-            
-            if self._is_performance_issue(number, ref_type):
-                self.is_issue = True
-                performance_issues.add(number)
-                logging.info(f"Identified performance issue: #{number}")
-        
-        if performance_issues:
-            logging.info(
-                f"Commit {self.commit.sha} fixes {len(performance_issues)} "
-                f"unique performance issue(s): {sorted(performance_issues)}"
-            )
-        else:
-            logging.info(f"Commit {self.commit.sha} does not fix any performance issues")
-        
-        return performance_issues
     
 ############ SIMPLE ############
 
