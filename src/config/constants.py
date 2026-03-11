@@ -1,8 +1,8 @@
 from pathlib import Path
 from datetime import datetime, timezone
 
-DATA_DIR = Path("data")
-CACHE_DIR = Path("cache")
+DATA_DIR = Path("data").absolute()
+CACHE_DIR = Path("cache").absolute()
 
 STORAGE_PATHS = {
     "collect": DATA_DIR / "collect.txt",

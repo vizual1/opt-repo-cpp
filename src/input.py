@@ -8,15 +8,12 @@ def setup_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    
-
     # mode selection
     mode = parser.add_argument_group()
     mode.add_argument("--collect", action="store_true",
                       help="Collect and structurally validate (most recent commit) C++ Repositories from GitHub. Set with --repos flag.")
     mode.add_argument("--testcollect", action="store_true",
                       help="Validate the build and test (most recent commit) of C++ repositories without the collect process.")
-    
     
     mode.add_argument("--commits", action="store_true",
                       help="Gather and filter commits from C++ Repositories. Set with --filter flag.")
@@ -37,8 +34,6 @@ def setup_parser() -> argparse.ArgumentParser:
     mode.add_argument("--pullimages", action="store_true",
                       help="Given a folder of json files generated via the --testcommits flag, " \
                       "pull the image from Dockerhub.")
-    mode.add_argument("--pullimages", action="store_true",
-                      help="Pulls Docker images from Dockerhub of collected commits from a folder of JSON files.")
     mode.add_argument("--testdocker", action="store_true",
                       help="Build and test docker images. " \
                       "Given a file of docker images 'owner_repo_newsha' with commits in " \
@@ -57,7 +52,7 @@ def setup_parser() -> argparse.ArgumentParser:
     
     # input/output
     io_group = parser.add_argument_group("Input / Output Options")
-    io_group.add_argument("--blacklist", type=str,
+    io_group.add_argument("--blacklist", type=str, 
                           help="Sets a blacklist for collecting repositores (e.g. data/testcollect.txt)")
     io_group.add_argument("--input", type=str,
                           help="Path to input file (e.g., crawl.txt).")
@@ -77,21 +72,20 @@ def setup_parser() -> argparse.ArgumentParser:
 
     # === Filtering / Analysis ===
     filter_group = parser.add_argument_group("Filtering and Analysis Options")
-    filter_group.add_argument("--limit", type=int, default=10,
+    filter_group.add_argument("--repos", type=int, default=10,
                               help="Limit number of repositories or commits (default: 10).")
     filter_group.add_argument("--stars", type=int, default=1000,
                               help="Minimum star count for popular repos (default: 1000).")
     filter_group.add_argument("--filter", type=str, choices=["simple", "llm", "issue"],
                               default="llm", help="Filter strategy to use (default: llm).")
-
+    filter_group.add_argument("--limit", type=int, default=-1,
+                              help="Limit number of collected commits (default: -1 (unlimited)).")
     # === Docker / Testing ===
     docker_group = parser.add_argument_group("Docker and Testing Options")
     docker_group.add_argument("--tar", type=str,
                               help="Saves the docker image as a tar file.")
     docker_group.add_argument("--docker", type=str,
                               help="Docker image to create a docker container that builds and tests the commits.")
-    docker_group.add_argument("--mount", type=str,
-                              help="Mounts a folder to the docker container.")
     docker_group.add_argument("--diff", type=str,
                               help="Applies the diff patch to the old (original) commit in the docker container.")
     docker_group.add_argument("--check_dockerhub", action="store_true",

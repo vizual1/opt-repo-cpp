@@ -31,7 +31,7 @@ class CommitTesterPipeline:
         self.config = config
         self.commit = CommitHandler(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
 
-    def test_commit(self, commits_list: list[Commit] = []) -> None:
+    def test_commit(self, commits_list: list[tuple[str, Commit]] = []) -> None:
         if self.config.docker_image:
             # owner_name_sha or dockerhub_owner/dockerhub_name:owner_name_sha
             owner, name, new_sha = tuple(self.config.docker_image.split(":")[-1].split("_"))

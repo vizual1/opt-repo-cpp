@@ -6,6 +6,22 @@ This repository contains the automated pipeline used in the thesis:
 
 The pipeline collects repositories from GitHub, identifies candidate performance-improving commits, builds and executes them in Docker environments, and performs statistical performance evaluation.
 
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/vizual1/opt-repo-cpp
+cd opt-repo-cpp
+
+pip install -r requirements.txt
+
+# Minimal pipeline example
+python3 main.py --collect --repos=5 --stars=1000
+```
+
+---
+
 ## Overview
 
 The pipeline performs the following steps:
@@ -19,12 +35,7 @@ The pipeline performs the following steps:
 
 The resulting dataset contains executable commits and Docker environments that enable reproducible performance measurements.
 
-## Artifacts
-
-Dataset and Docker images:
-
-DockerHub  
-https://hub.docker.com/repository/docker/tommyho1999/opt-repo-cpp
+---
 
 ## Features
 
@@ -50,7 +61,7 @@ export DOCKER_HUB_REPO=repository # optional, for pushing or pulling images
 
 2. **Install Python dependencies**:
 ```bash
-pip install cmakeast docker pygithub jsonschema openai numpy scipy
+pip install -r requirements.txt
 ```
 
 3. **Build Docker images** for different C++ versions:
@@ -72,21 +83,6 @@ Note: OpenHands commit patches can be found in ```data/patches/``` as ```*.patch
 
 ---
 
-## Project Structure
-```
-├── main.py                  # Main entry point
-├── src/                     # Source code
-│   ├── core/                # Core functionality
-│   └── config/              # Configuration handling
-├── data/                    # Output directory
-│   ├── collect.txt          # Collected repositories
-│   ├── testcollect.txt      # Validated repositories
-│   ├── fail.txt             # Failed repositories
-│   ├── filtered_commits.txt # Filtered commits
-│   └── commits/             # Individual commit test results
-└── docker/                  # Docker configuration files
-```
-
 # Running
 1. **Collecting Repositories**
 Use the --collect flag to crawl GitHub for C++ repositories:
@@ -102,12 +98,14 @@ python3 main.py --collect --repos=10 --stars=1000 --test
 python3 main.py --testcollect --input=data/collect.txt
 ```
 
-**Outputs**
+*Outputs*
 - ```data/collect.txt``` - Raw collection results (owner/repo per line)
 - ```data/testcollect.txt``` - Successfully validated structure, or with ```--test``` build and test, repositories (owner/repo per line)
 - ```data/fail.txt``` - Repositories that failed validation (owner/repo per line)
 
-2. **Collecting Commits**
+2. **Collecting and Testing Commits**
+LLM filtering currently supports Ollama, OpenAI, and OpenRouter APIs. The default model configuration is defined in ```src/config/settings.py```. 
+
 Filter commits from collected repositories:
 ```bash
 # Collect and filter commits with LLM
@@ -120,7 +118,7 @@ python3 main.py --commits --test --filter=llm --input=data/collect.txt
 python3 main.py --testcommits --input=data/filtered_commits.txt
 ```
 
-**Output**:
+*Outputs*:
 - ```data/filtered_commits.txt``` - filtered commits (```owner/repo | newsha | oldsha``` per line)
 - ```data/commits/owner_repo_newsha.json``` - multiple JSON files of built and tests commits, containing:
     - Build and test commands executed
@@ -129,40 +127,80 @@ python3 main.py --testcommits --input=data/filtered_commits.txt
 
 3. **Docker Operations**
 ```bash
-# Test from a filtered commits file
-python3 main.py --testdocker --input=data/filtered_commits.txt
-
-# Test from a folder of JSON files of collected commits
-python3 main.py --testdocker --input=data/dataset/
-
 # Test a specific Docker image
 python3 main.py --testdocker --docker=owner_repo_newsha
 
 # Generate Docker images without testing of collected commits from a folder of JSON files
 python3 main.py --genimages --input=data/dataset/
-
-# Pulls Docker images from Dockerhub of collected commits from a folder of JSON files
-python3 main.py --pullimages --input=data/dataset/
 ```
+
+*Outputs*:
+- ```data/commits/owner_repo_newsha.json``` - multiple JSON files of built and tests commits, containing:
+    - Build and test commands executed
+    - Execution times
+    - Statistical analysis
 
 4. **Patch Management**:
 Generate and test patches using OpenHands:
 ```bash
 # Generate a patch for a specific commit
-python3 main.py --patch --repo=owner/repo --sha=<commit_sha> --prompt="Fix memory leak"
+python3 main.py --patch --repo=<owner/repo> --sha=<commit_sha> --prompt=<prompt_message>
 
-# Test a patch from a mounted folder
-python3 main.py --testpatch --docker=owner_repo_newsha --mount=/path/to/patched/folder
+# Example:
+python3 main.py --patch --repo=ccache/ccache --sha=69d511f8aeced5aed9a438256668e604006f8aa0 --prompt="Fix memory leak"
 
 # Test a patch from a diff file (the diff file is applied to /test_workspace/workspace/old)
-python3 main.py --testpatch --docker=owner_repo_newsha --diff=/path/to/diff.patch
+python3 main.py --testpatch --docker=<owner_repo_newsha> --diff=/path/to/diff.patch
 ```
-**Output**:
+
+*Outputs*:
 - ```data/patch/``` - patch files generated by ```--patch``` flag.
 - ```data/commits/owner_repo_newsha.json``` - multiple JSON files of built and tests of generated patches, containing:
     - Build and test commands executed
     - Execution times
     - Statistical analysis
+
+---
+
+## Artifacts and Dataset
+
+Dataset Docker images:
+```bash
+# Pulls Docker images from Dockerhub of collected commits from a folder of JSON files
+# WARNING: This command downloads the entire dataset of Docker images (347)
+python3 main.py --pullimages --input=data/dataset/
+```
+Note: Prebuilt Docker images are available on
+[DockerHub](https://hub.docker.com/repository/docker/tommyho1999/opt-repo-cpp)
+
+Results are in:
+```
+├── data/
+│   └── dataset/                       # Final dataset test results
+│   └── patch/                         # OpenHands (gpt-5-mini) generated patches on the dataset
+│   └── significant/                   # Dataset with statistical significant test results
+│   └── llm_qwen_filter_eval.csv       # Manual annotations of LLM-filtered commits
+│   └── openhands_patch_comparison.csv # Manual comparisons of openhands patches to ground-truth
+```
+
+---
+
+## Project Structure
+```
+├── main.py                  # Main entry point
+├── src/                     # Source code
+│   ├── core/                # Core functionality
+│   └── config/              # Configuration handling
+│       └── config.py        # Main project configuration file
+│       └── settings.py      # LLM, test, resource settings
+├── data/                    # Output directory
+│   ├── collect.txt          # Collected repositories
+│   ├── testcollect.txt      # Validated repositories
+│   ├── fail.txt             # Failed repositories
+│   ├── filtered_commits.txt # Filtered commits
+│   └── commits/             # Individual commit test results
+└── docker/                  # Docker configuration files
+```
 
 ---
 
@@ -174,3 +212,11 @@ When running tests in Docker, the container has the following structure:
 - ```/test_workspace/new_build.sh```  - Patched build script
 - ```/test_workspace/old_test.sh```   - Original test script
 - ```/test_workspace/new_test.sh```   - Patched test script
+
+---
+
+## Testing
+Run a minimal pipeline test:
+```bash
+python3 test.py
+```

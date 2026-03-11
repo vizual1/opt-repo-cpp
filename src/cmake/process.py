@@ -512,10 +512,12 @@ class CMakeProcess:
     def _ctest_collection(self) -> bool:
         cmd = self._check_tests_exists()
         if not cmd:
+            logging.error("No commands for tests found")
             return False
         
         test_exec_flag = self.analyzer.get_list_test_arg()
         if test_exec_flag and not self._individual_tests_collection(test_exec_flag):
+            logging.error(f"Found {test_exec_flag} to enumerate test cases, but individual tests collection failed.")
             return False
 
         logging.info(f"Test commands: {self.test_commands}")
@@ -682,6 +684,7 @@ class CMakeProcess:
             test_name = unit_map['name']
             exe_path = unit_map['exe']
         except:
+            logging.error(f"Test mapping failed: {command}")
             return False
 
         if (len(self.per_test_times[test_name]['parsed']) >= len(self.test_time['parsed']) and
@@ -691,13 +694,14 @@ class CMakeProcess:
 
         logging.debug(command + extra)
         exit_code, stdout, stderr, time = self.docker.run_command_in_docker(
-            command + extra, self.root, check=False, timeout=self.config.max_test_time, log=False
+            command + extra, self.root, check=False, timeout=self.config.max_test_time, log=True
         )
         logging.debug(f"Individual CTest stdout:\n{stdout}")
 
         elapsed: float = parse_framework_output(stdout, self.framework, test_name)
                     
         if elapsed < 0.0:
+            logging.error(f"Couldn't parse elapsed time in individual CTest:\n{stdout}")
             return False
         
         if elapsed == 0.0:

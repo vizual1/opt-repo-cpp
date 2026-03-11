@@ -36,8 +36,7 @@ class RepositoryCollector:
             List of Repository objects that match language and composition criteria
         """
         seen_repo_ids = set()
-        path = Path(self.config.blacklist)
-        if path.is_file:
+        if self.config.blacklist and Path(self.config.blacklist).is_file:
             seen_repo_ids = set(self._get_repo_ids(self.config.blacklist))
             logging.info(f"Loaded {len(seen_repo_ids)} existing repositories to skip")
 
@@ -52,7 +51,7 @@ class RepositoryCollector:
         window_end = datetime.now(timezone.utc)
         window_size = timedelta(days=1)
             
-        with tqdm(desc="Discovering repos", unit="repo", mininterval=5) as pbar:
+        with tqdm(desc="Discovering repos", unit=" repos", mininterval=5) as pbar:
             while window_end > start_boundary and count < limit:
                 window_start = max(start_boundary, window_end - window_size)
                 pushed_range = f"pushed:{window_start.date()}..{window_end.date()}"
@@ -156,7 +155,7 @@ class RepositoryCollector:
             repo_ids.append(repo_id)
             logging.info(f"Using single repository from URL: {repo_id}")
             return repo_ids
-        
+
         try:
             file_path = Path(path)
             if not file_path.exists():

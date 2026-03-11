@@ -5,7 +5,7 @@ from src.core.pipelines.pipeline import (
     RepositoryPipeline, 
     CommitPipeline, 
     CommitTesterPipeline,
-    PushPipeline,
+    DockerHubPipeline,
     PatchPipeline
 )
 from src.config.config import Config
@@ -31,7 +31,6 @@ class Controller:
         try:
             if self.config.collect and self.config.repos:
                 self._collect()
-                self._testcollect()
             
             if self.config.testcollect:
                 self._testcollect()
@@ -39,11 +38,14 @@ class Controller:
             if self.config.commits and self.config.filter:
                 self._commits()
 
-            if self.config.testcommits or self.config.genimages:
+            if self.config.testcommits:
                 self._testcommits()
 
             if self.config.genimages:
                 self._genimages()
+            
+            if self.config.pullimages:
+                self._pullimages()
 
             if self.config.pushimages:
                 self._pushimages()
@@ -71,6 +73,12 @@ class Controller:
         pipeline = CollectionPipeline(self.config)
         repos = pipeline.query_popular_repos()
         logging.info(f"Collected {len(repos)} repositories.")
+
+        logging.info("Testing and validating GitHub repositories...")
+        repo_pipeline = RepositoryPipeline(self.config)
+        repo_pipeline.test_repos(repos)
+        valid_count = len(repo_pipeline.valid_repos)
+        logging.info(f"Found {valid_count} valid repositories.")
 
     def _testcollect(self) -> None:
         logging.info("Testing and validating GitHub repositories...")
@@ -110,10 +118,16 @@ class Controller:
         logging.info("Docker images generated.")
 
     def _pushimages(self) -> None:
-        logging.info("Pushing docker images to GHCR...")
-        push_pipeline = PushPipeline(self.config)
-        push_pipeline.push()
-        logging.info("Docker images pushed to GHCR.")
+        logging.info("Pushing docker images to Dockerhub...")
+        dockerhub_pipeline = DockerHubPipeline(self.config)
+        dockerhub_pipeline.push()
+        logging.info("Docker images pushed to Dockerhub.")
+
+    def _pullimages(self) -> None:
+        logging.info("Pulling docker images from Dockerhub...")
+        dockerhub_pipeline = DockerHubPipeline(self.config)
+        dockerhub_pipeline.pull()
+        logging.info("Docker images pulled from Dockerhub.")
 
     def _testdocker(self) -> None:
         logging.info("Testing docker images...")

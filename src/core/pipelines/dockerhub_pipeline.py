@@ -3,7 +3,7 @@ from src.config.config import Config
 from src.utils.commit import CommitHandler
 from src.utils.image_handling import image_exists, image
 
-class PushPipeline():
+class DockerHubPipeline():
     def __init__(self, config: Config):
         self.config = config
         self.commit = CommitHandler(self.config.input_file or self.config.storage_paths['commits'], self.config.storage_paths['clones'])
@@ -26,6 +26,21 @@ class PushPipeline():
                 subprocess.run(["docker", "tag", local_image, remote_image], check=True)
                 logging.info(f"Pushing {remote_image} to Dockerhub")
                 subprocess.run(["docker", "push", remote_image], check=True)
+
+    def pull(self) -> None:
+        if self.config.input:
+            commits = self.commit.get_commits()
+            self._pull_commits(commits)
+        else:
+            logging.warning(f"Invalid input: {self.config.input}")
+
+    def _pull_commits(self, commits: list[tuple[str, str, str]]) -> None:
+        for i, (repo_id, new_sha, old_sha) in enumerate(commits):
+            local_image = image(repo_id, new_sha)
+            remote_image = f"{self.config.dockerhub_user}/{self.config.dockerhub_repo}:{local_image}"
+            logging.info(f"Pulling {remote_image} from Dockerhub")
+            subprocess.run(["docker", "pull", remote_image], check=True)
+            subprocess.run(["docker", "tag", remote_image, local_image], check=True)
             
             
             

@@ -1,0 +1,61 @@
+15:14:57,223 root INFO Command run: main.py --testpatch --docker=madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5 --diff=data/test/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.patch
+15:14:57,224 root INFO Starting the GitHub repository pipeline...
+15:14:57,227 root INFO Starting controller...
+15:14:57,228 root INFO Testing patched docker images...
+15:14:58,221 root INFO Commits found 1
+15:14:58,223 root INFO Available CPUs: [0, 1, 2, 3, 4, 5, 6, 7]
+15:14:58,224 root INFO CPU pinning sets: ['0']
+15:15:00,870 root INFO Run docker image (madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.
+15:15:02,141 root INFO Command run in docker: ['chmod', '777', '/test_workspace/new_build.sh']
+15:15:02,771 root INFO Command run in docker: ['cat', '/test_workspace/new_build.sh']
+15:15:03,296 root INFO Command run in docker: ['chmod', '777', '/test_workspace/new_test.sh']
+15:15:03,798 root INFO Command run in docker: ['cat', '/test_workspace/new_test.sh']
+15:15:04,325 root INFO Command run in docker: ['rm', '-rf', '/test_workspace/workspace/old/build', '/test_workspace/workspace/old/CMakeCache.txt', '/test_workspace/workspace/old/CMakeFiles']
+15:15:04,531 root INFO Old (original) commit cleaned: rm -rf /test_workspace/workspace/old/build /test_workspace/workspace/old/CMakeCache.txt /test_workspace/workspace/old/CMakeFiles
+15:15:06,801 root INFO Command run in docker: ['chmod', '-R', '777', '/test_workspace/workspace/new']
+15:15:07,449 root INFO Command run in docker: ['rm', '-rf', '/test_workspace/workspace/new']
+15:15:07,667 root INFO New (patched) commit deleted: rm -rf /test_workspace/workspace/new
+15:15:08,42 root INFO Command run in docker: ['cp', '-a', '/test_workspace/workspace/old', '/test_workspace/workspace/new']
+15:15:08,219 root INFO Old (original) commit copied: cp -a /test_workspace/workspace/old /test_workspace/workspace/new
+15:15:08,627 root INFO Command run in docker: ['patch', '-p1', '-d', '/test_workspace/workspace/new', '-i', '/tmp/apply.patch']
+15:15:08,835 root INFO Diff applied successfully
+15:15:08,835 root INFO apt-get update
+15:15:16,374 root INFO Command run in docker: ['apt-get', 'update']
+15:15:16,506 root INFO cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON
+15:15:17,476 root INFO Command run in docker: ['cmake', '-S', '/test_workspace/workspace/new', '-B', '/test_workspace/workspace/new/build', '-DCMAKE_BUILD_TYPE=Debug', '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON', '-DBUILD_TESTING=ON']
+15:15:17,694 root INFO CMake configuration successful for /test_workspace/workspace/new/build
+15:15:17,695 root INFO cmake --build /test_workspace/workspace/new/build -- -j 1
+15:15:28,329 root INFO Command run in docker: ['cmake', '--build', '/test_workspace/workspace/new/build', '--', '-j', '1']
+15:15:28,531 root INFO CMake build completed for /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/new
+15:15:28,532 root INFO [madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] New docker commit setup successful.
+15:15:28,672 root INFO Run docker image (madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.
+15:15:28,697 root ERROR Docker execution failed: 409 Client Error for http+docker://localhost/v1.51/containers/create?name=madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5: Conflict ("Conflict. The container name "/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5" is already in use by container "2a0fe6ecff8c28ccacf3b5bea185babfd04c5624d3b69187a8a0165b3a799a86". You have to remove (or rename) that container to be able to reuse that name.")
+15:15:29,46 root INFO Command run in docker: ['chmod', '777', '/test_workspace/old_build.sh']
+15:15:29,690 root INFO Command run in docker: ['cat', '/test_workspace/old_build.sh']
+15:15:30,240 root INFO Command run in docker: ['chmod', '777', '/test_workspace/old_test.sh']
+15:15:30,832 root INFO Command run in docker: ['cat', '/test_workspace/old_test.sh']
+15:15:31,31 root INFO apt-get update
+15:15:33,389 root INFO Command run in docker: ['apt-get', 'update']
+15:15:33,565 root INFO cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON
+15:15:34,495 root INFO Command run in docker: ['cmake', '-S', '/test_workspace/workspace/old', '-B', '/test_workspace/workspace/old/build', '-DCMAKE_BUILD_TYPE=Debug', '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON', '-DBUILD_TESTING=ON']
+15:15:34,689 root INFO CMake configuration successful for /test_workspace/workspace/old/build
+15:15:34,690 root INFO cmake --build /test_workspace/workspace/old/build -- -j 1
+15:15:42,914 root INFO Command run in docker: ['cmake', '--build', '/test_workspace/workspace/old/build', '--', '-j', '1']
+15:15:43,78 root INFO CMake build completed for /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/old
+15:15:43,79 root INFO [madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] Old docker commit setup successful.
+15:15:43,82 root INFO ctest --output-on-failure in /test_workspace/workspace/old/build
+15:15:59,660 root INFO CTest passed for /test_workspace/workspace/old/build
+15:15:59,661 root INFO Tests run: 11, Failures: 0, Skipped: 0, Time elapsed: 16.06 s
+15:15:59,661 root INFO ctest --output-on-failure in /test_workspace/workspace/new/build
+15:16:14,827 root INFO CTest passed for /test_workspace/workspace/new/build
+15:16:14,828 root INFO Tests run: 11, Failures: 0, Skipped: 0, Time elapsed: 14.65 s
+15:16:14,830 root INFO Times Old: [16.06], New: [14.65]
+15:16:14,865 root INFO pvalue: nan
+15:16:14,879 root INFO new outperforms old: []
+15:16:14,880 root INFO overall change: 0.08671241422333108
+15:16:15,587 root INFO Results: {'is_significant': False, 'p_value': 'NaN', 'is_pair_significant': False, 'pair_p_value': 'NaN', 'is_binom_significant': False, 'binom_p_value': 0.5, 'is_wilcoxon_significant': False, 'wilcoxon_p_value': 0.5, 'is_mannwhitney_significant': False, 'mannwhitney_p_value': 0.5, 'relative_improvement': 0.08779576587795757, 'absolute_improvement_ms': 1409.9999999999984, 'old_mean_ms': 16059.999999999998, 'new_mean_ms': 14650.0, 'old_std_ms': 'NaN', 'new_std_ms': 'NaN', 'effect_size_cohens_d': 'NaN', 'old_ci95_ms': (0.0, 0.0), 'new_ci95_ms': (0.0, 0.0), 'old_ci99_ms': (0.0, 0.0), 'new_ci99_ms': (0.0, 0.0), 'new_times_s': [14.65], 'old_times_s': [16.06]}
+15:16:15,600 root INFO [madmann91/bvh] Wrote results to /mnt/c/Data/Master/opt-repo-cpp/data/commits/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.json
+15:16:26,149 root INFO [madmann91/bvh] Stopped the container
+15:16:26,185 root INFO Testing patched docker images completed.
+15:16:26,186 root INFO Controller execution completed.
+15:16:26,189 root INFO Pipeline finished successfully.

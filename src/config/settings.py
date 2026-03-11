@@ -19,11 +19,6 @@ class LLMSettings:
     ollama_diff_model: str = "qwen2.5-coder:7b"
     ollama_stage2_model: str = "qwen3:8b"
     ollama_resolver_model: str = "qwen3:8b"
-    
-    # Behavior flags
-    commit_message_only: bool = False
-    issue_only: bool = False
-    with_diff: bool = True
 
     # OpenHands settings
     sandbox_base_container_image: str = "ghcr.io/openhands/runtime:oh_v1.3.0_odjrubqcfxjb4y1s_kxyxnblfp0d1rp6p"
@@ -35,7 +30,7 @@ class LLMSettings:
 @dataclass
 class TestingSettings:
     """Testing-related configuration."""
-    no_list_testing: bool = True
+    no_list_testing: bool = True # False forces the commits to have test frameworks that allows list testing
     warmup: int = 1
     commit_test_times: int = 30
     docker_test_dir: str = "/test_workspace"
@@ -49,13 +44,13 @@ class GitHubSettings:
 class ResourceSettings:
     """Docker resource limits for --testcommits, --testdocker, --testpatch"""
     cpuset_cpus: str = ''
-    cpus_per_job: int = 2
-    mem_limit: str = '8g'
-    memswap_limit: str = '8g'
+    cpus_per_job: int = 1
+    mem_limit: str = '2g'
+    memswap_limit: str = '2g'
     cpu_quota: int = 100000
     cpu_period: int = 100000
     jobs: int = 1 # running cmake build with -j = jobs
-    max_parallel_jobs: int = 8 # tests multiple test commits at the same time
+    max_parallel_jobs: int = 1 # tests multiple test commits at the same time
     
 @dataclass
 class ResourceSettingsCrawl(ResourceSettings):

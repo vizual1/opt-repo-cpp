@@ -60,7 +60,7 @@ class ProcessFilter:
                     return False
                     
                 if not process.collect_tests():
-                    logging.error(f"[{repo.full_name}:{sha}] test failed")
+                    logging.error(f"[{repo.full_name}:{sha}] collecting test failed")
                     process.docker.stop_container(repo.full_name)
                     return False
                 
@@ -132,7 +132,7 @@ class ProcessFilter:
         try:
             return self.build_collect_test(repo, sha, process, enable_testing_path, flags, container_name, startup, cpuset_cpus, msg)
         except Exception as e:
-            logging.exception(f"[{repo.full_name}:{sha}] Unexpected error during process run: {e}")
+            logging.error(f"[{repo.full_name}:{sha}] Unexpected error during process run: {e}")
             return None
         
     def docker_commit_setup_and_build(

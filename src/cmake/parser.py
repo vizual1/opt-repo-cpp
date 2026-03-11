@@ -286,11 +286,15 @@ class CMakeParser:
             line = line.strip()
             line = self._clean(line)
 
+            if "All available test cases:" in line:
+                continue
             if line.endswith("ms"):
                 continue
             if not line or line.startswith("["):
                 continue
             if line.endswith("tests"):
+                continue
+            if "test cases" in line:
                 continue
 
             tests.append(line)

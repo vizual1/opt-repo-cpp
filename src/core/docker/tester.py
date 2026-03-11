@@ -32,6 +32,7 @@ class DockerTester:
         ) as (new_process, old_process):
             
             if not new_process or not old_process:
+                logging.error(f"new process ({new_process}) or old process ({old_process}) failed.")
                 return
 
             if self.config.genimages and not self.config.test:
@@ -90,7 +91,6 @@ class DockerTester:
     ) -> tuple[CMakeProcess, CMakeProcess]:
         new_pf = ProcessFilter(self.config, new_path)
         old_pf = ProcessFilter(self.config, old_path)
-        docker_image = ""
 
         new_process = None
         old_process = None
@@ -110,7 +110,7 @@ class DockerTester:
             
             return new_process, old_process
         
-        else: 
+        else:
             local_image = image(repo.full_name, new_sha)
             container_name = local_image
 
@@ -118,7 +118,7 @@ class DockerTester:
             
             if not new_process:
                 raise UndefinedStructureFilter("New commit CMakeProcess is None")
-
+            
             old_process = old_pf.commit_setup_and_build("Old", repo, old_sha, container_name=container_name, startup=False)
             
             if not old_process:
@@ -231,7 +231,7 @@ class DockerTester:
         writer = Writer(repo.full_name, self.config.output or self.config.storage_paths["performance"])
         writer.write_results(results)
 
-        if not self.config.noimage:
+        if not self.config.noimage and not self.config.testdocker and not self.config.testpatch:
             old_process.save_docker_image(repo.full_name, new_sha, new_build_cmd, old_build_cmd, new_test_cmd, old_test_cmd, results)
             
         if total_improvement < self.config.min_p_value or overall_change_with_new_outperforms_old:

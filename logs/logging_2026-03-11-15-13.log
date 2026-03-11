@@ -1,0 +1,15 @@
+15:13:42,593 root INFO Command run: main.py --testpatch --docker=<function image at 0x7623953f0fe0> --diff=data/test/<function image at 0x7623953f0fe0>.patch
+15:13:42,594 root INFO Starting the GitHub repository pipeline...
+15:13:42,595 root INFO Starting controller...
+15:13:42,596 root INFO Testing patched docker images...
+15:13:42,596 root ERROR Controller encountered an error: not enough values to unpack (expected 3, got 1)
+Traceback (most recent call last):
+  File "/mnt/c/Data/Master/opt-repo-cpp/src/core/controller.py", line 62, in run
+    self._testpatch()
+  File "/mnt/c/Data/Master/opt-repo-cpp/src/core/controller.py", line 147, in _testpatch
+    image_pipeline.test_commit()
+  File "/mnt/c/Data/Master/opt-repo-cpp/src/core/pipelines/commit_tester_pipeline.py", line 37, in test_commit
+    owner, name, new_sha = tuple(self.config.docker_image.split(":")[-1].split("_"))
+    ^^^^^^^^^^^^^^^^^^^^
+ValueError: not enough values to unpack (expected 3, got 1)
+15:13:42,616 root INFO Controller execution completed.

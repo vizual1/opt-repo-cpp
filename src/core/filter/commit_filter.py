@@ -64,8 +64,10 @@ class CommitFilter:
         )
 
         p = Prompt([
-            Prompt.Message("system", system_prompt),
-            Prompt.Message("user", user_prompt)
+            Prompt.Message("system", self.config.prompts.stage1_case2_system),
+            Prompt.Message("user", self.config.prompts.stage1_case2_user
+                           .replace("<repo>", self.repo.full_name)
+                           .replace("<msg>", msg))
         ])
 
         if self.config.llm.ollama_enabled:
@@ -124,8 +126,11 @@ class CommitFilter:
                 )
                 
                 p = Prompt([
-                    Prompt.Message("system", system_prompt),
-                    Prompt.Message("user", file_prompt)
+                    Prompt.Message("system", self.config.prompts.stage2_system),
+                    Prompt.Message("user", self.config.prompts.stage2_user
+                                   .replace("<repo>", self.repo.full_name)
+                                   .replace("<msg>", msg)
+                                   .replace("<diff>", diff_text))
                 ])
                 
                 if self.config.llm.ollama_enabled:
@@ -268,8 +273,13 @@ class CommitFilter:
             )
 
             p = Prompt([
-                Prompt.Message("system", system),
-                Prompt.Message("user", user)
+                Prompt.Message("system", self.config.prompts.stage1_case1_system),
+                Prompt.Message("user", self.config.prompts.stage1_case1_user
+                               .replace("<repo>", self.repo.full_name)
+                               .replace("<ref_type>", ref_type_display)
+                               .replace("<title>", title)
+                               .replace("<body>", body)
+                               .replace("<msg>", msg))
             ])
         
             

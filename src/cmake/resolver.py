@@ -274,7 +274,7 @@ class DependencyResolver:
             if self.config.llm.ollama_enabled:
                 self.llm = OllamaLLM(self.config, self.config.llm.ollama_resolver_model)
             else:
-                self.llm = OpenRouterLLM(self.config, self.config.llm.ollama_resolver_model)
+                self.llm = OpenRouterLLM(self.config, self.config.llm.model1)
 
         def llm_prompt(self, deps: list[str], ubuntu_ver: str, timeout: int = 60) -> str:
             result: dict[str, str] = {"out": ""}

@@ -1,0 +1,176 @@
+14:22:48,473 root INFO Command run: main.py --testdocker --docker=ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7
+14:22:48,474 root INFO Starting the GitHub repository pipeline...
+14:22:48,476 root INFO Starting controller...
+14:22:48,476 root INFO Testing docker images...
+14:22:49,549 root INFO Commits found 1
+14:22:49,550 root INFO Available CPUs: [0, 1, 2, 3, 4, 5, 6, 7]
+14:22:49,551 root INFO CPU pinning sets: ['0']
+14:22:52,619 root INFO Run docker image (ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7.
+14:22:54,481 root INFO Command run in docker: ['chmod', '777', '/test_workspace/new_build.sh']
+14:22:55,154 root INFO Command run in docker: ['cat', '/test_workspace/new_build.sh']
+14:22:55,914 root INFO Command run in docker: ['chmod', '777', '/test_workspace/new_test.sh']
+14:22:56,543 root INFO Command run in docker: ['cat', '/test_workspace/new_test.sh']
+14:22:56,723 root INFO [ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7] New docker commit setup successful.
+14:22:56,855 root INFO Run docker image (ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7.
+14:22:56,877 root ERROR Docker execution failed: 409 Client Error for http+docker://localhost/v1.51/containers/create?name=ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7: Conflict ("Conflict. The container name "/ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7" is already in use by container "709e53731302012a5194769aa95e8a0b2bc0f84c8f0db5b76d84f2bae847eeb3". You have to remove (or rename) that container to be able to reuse that name.")
+14:22:57,194 root INFO Command run in docker: ['chmod', '777', '/test_workspace/old_build.sh']
+14:22:57,670 root INFO Command run in docker: ['cat', '/test_workspace/old_build.sh']
+14:22:58,164 root INFO Command run in docker: ['chmod', '777', '/test_workspace/old_test.sh']
+14:22:58,676 root INFO Command run in docker: ['cat', '/test_workspace/old_test.sh']
+14:22:58,890 root INFO [ccache_ccache_445af8a6d7c1865e86d988839b261de54c4833b7] Old docker commit setup successful.
+14:22:58,894 root INFO ctest --output-on-failure in /test_workspace/workspace/old/build
+14:24:53,83 root ERROR CTest failed for /test_workspace/workspace/old/build (return code 8) with command ctest --output-on-failure
+NoneType: None
+14:24:53,85 root INFO Tests run: 45, Failures: 1, Skipped: 0, Time elapsed: 113.61 s
+14:24:53,85 root ERROR Output (stdout):
+Test project /test_workspace/workspace/old/build
+      Start  1: unittest
+ 1/45 Test  #1: unittest .........................***Failed    0.37 sec
+[doctest] doctest version is "2.4.9"
+[doctest] run with "--help" for options
+===============================================================================
+/test_workspace/workspace/old/unittest/test_ZstdCompression.cpp:38:
+TEST SUITE: ZstdCompression
+TEST CASE:  Small compression::Type::zstd roundtrip
+
+/test_workspace/workspace/old/unittest/test_ZstdCompression.cpp:70: ERROR: CHECK_THROWS_WITH( decompressor->read(buffer, 1), "Failed to read from file stream" ) threw a DIFFERENT exception: "Failed to read from zstd input stream"
+
+===============================================================================
+/test_workspace/workspace/old/unittest/test_ZstdCompression.cpp:74:
+TEST SUITE: ZstdCompression
+TEST CASE:  Large compressible compression::Type::zstd roundtrip
+
+/test_workspace/workspace/old/unittest/test_ZstdCompression.cpp:104: ERROR: CHECK_THROWS_WITH( decompressor->read(buffer, 1), "Failed to read from file stream" ) threw a DIFFERENT exception: "Failed to read from zstd input stream"
+
+===============================================================================
+[doctest] test cases:  173 |  171 passed | 2 failed | 5 skipped
+[doctest] assertions: 2504 | 2502 passed | 2 failed |
+[doctest] Status: FAILURE!
+Note: Test data has been left in testdir/208
+
+      Start  2: test.base
+ 2/45 Test  #2: test.base ........................   Passed   17.61 sec
+      Start  3: test.basedir
+ 3/45 Test  #3: test.basedir .....................   Passed    4.57 sec
+      Start  4: test.cache_levels
+ 4/45 Test  #4: test.cache_levels ................   Passed    1.53 sec
+      Start  5: test.cleanup
+ 5/45 Test  #5: test.cleanup .....................   Passed    4.07 sec
+      Start  6: test.color_diagnostics
+ 6/45 Test  #6: test.color_diagnostics ...........   Passed   11.73 sec
+      Start  7: test.config
+ 7/45 Test  #7: test.config ......................   Passed    0.30 sec
+      Start  8: test.cpp1
+ 8/45 Test  #8: test.cpp1 ........................   Passed    0.49 sec
+      Start  9: test.debug_prefix_map
+ 9/45 Test  #9: test.debug_prefix_map ............   Passed    0.58 sec
+      Start 10: test.depend
+10/45 Test #10: test.depend ......................   Passed    2.00 sec
+      Start 11: test.direct
+11/45 Test #11: test.direct ......................   Passed   18.08 sec
+      Start 12: test.fileclone
+12/45 Test #12: test.fileclone ...................***Skipped   0.23 sec
+      Start 13: test.hardlink
+13/45 Test #13: test.hardlink ....................   Passed    0.90 sec
+      Start 14: test.inode_cache
+14/45 Test #14: test.inode_cache .................***Skipped   0.31 sec
+      Start 15: test.input_charset
+15/45 Test #15: test.input_charset ...............   Passed    0.53 sec
+      Start 16: test.ivfsoverlay
+16/45 Test #16: test.ivfsoverlay .................***Skipped   0.27 sec
+      Start 17: test.masquerading
+17/45 Test #17: test.masquerading ................   Passed    0.69 sec
+      Start 18: test.modules
+18/45 Test #18: test.modules .....................***Skipped   0.21 sec
+      Start 19: test.multi_arch
+19/45 Test #19: test.multi_arch ..................***Skipped   0.22 sec
+      Start 20: test.namespace
+20/45 Test #20: test.namespace ...................   Passed    0.88 sec
+      Start 21: test.no_compression
+21/45 Test #21: test.no_compression ..............   Passed    1.22 sec
+      Start 22: test.nocpp2
+22/45 Test #22: test.nocpp2 ......................   Passed   16.88 sec
+      Start 23: test.nvcc
+23/45 Test #23: test.nvcc ........................***Skipped   0.21 sec
+      Start 24: test.nvcc_direct
+24/45 Test #24: test.nvcc_direct .................***Skipped   0.21 sec
+      Start 25: test.nvcc_ldir
+25/45 Test #25: test.nvcc_ldir ...................***Skipped   0.21 sec
+      Start 26: test.nvcc_nocpp2
+26/45 Test #26: test.nvcc_nocpp2 .................***Skipped   0.21 sec
+      Start 27: test.pch
+27/45 Test #27: test.pch .........................   Passed    9.07 sec
+      Start 28: test.profiling
+28/45 Test #28: test.profiling ...................   Passed    3.40 sec
+      Start 29: test.profiling_clang
+29/45 Test #29: test.profiling_clang .............***Skipped   0.31 sec
+      Start 30: test.profiling_gcc
+30/45 Test #30: test.profiling_gcc ...............   Passed    2.38 sec
+      Start 31: test.profiling_hip_clang
+31/45 Test #31: test.profiling_hip_clang .........***Skipped   0.36 sec
+      Start 32: test.readonly
+32/45 Test #32: test.readonly ....................***Skipped   0.30 sec
+      Start 33: test.readonly_direct
+33/45 Test #33: test.readonly_direct .............***Skipped   0.29 sec
+      Start 34: test.sanitize_blacklist
+34/45 Test #34: test.sanitize_blacklist ..........***Skipped   0.32 sec
+      Start 35: test.secondary_file
+35/45 Test #35: test.secondary_file ..............   Passed    2.42 sec
+      Start 36: test.secondary_http
+36/45 Test #36: test.secondary_http ..............   Passed    4.84 sec
+      Start 37: test.secondary_redis
+37/45 Test #37: test.secondary_redis .............***Skipped   0.25 sec
+      Start 38: test.secondary_redis_unix
+38/45 Test #38: test.secondary_redis_unix ........***Skipped   0.24 sec
+      Start 39: test.secondary_url
+39/45 Test #39: test.secondary_url ...............   Passed    0.54 sec
+      Start 40: test.serialize_diagnostics
+40/45 Test #40: test.serialize_diagnostics .......***Skipped   0.34 sec
+      Start 41: test.source_date_epoch
+41/45 Test #41: test.source_date_epoch ...........   Passed    1.02 sec
+      Start 42: test.split_dwarf
+42/45 Test #42: test.split_dwarf .................   Passed    1.72 sec
+      Start 43: test.stats_log
+43/45 Test #43: test.stats_log ...................   Passed    0.51 sec
+      Start 44: test.trim_dir
+44/45 Test #44: test.trim_dir ....................***Skipped   0.30 sec
+      Start 45: test.upgrade
+45/45 Test #45: test.upgrade .....................   Passed    0.46 sec
+
+98% tests passed, 1 tests failed out of 45
+
+Total Test time (real) = 113.61 sec
+
+The following tests did not run:
+	 12 - test.fileclone (Skipped)
+	 14 - test.inode_cache (Skipped)
+	 16 - test.ivfsoverlay (Skipped)
+	 18 - test.modules (Skipped)
+	 19 - test.multi_arch (Skipped)
+	 23 - test.nvcc (Skipped)
+	 24 - test.nvcc_direct (Skipped)
+	 25 - test.nvcc_ldir (Skipped)
+	 26 - test.nvcc_nocpp2 (Skipped)
+	 29 - test.profiling_clang (Skipped)
+	 31 - test.profiling_hip_clang (Skipped)
+	 32 - test.readonly (Skipped)
+	 33 - test.readonly_direct (Skipped)
+	 34 - test.sanitize_blacklist (Skipped)
+	 37 - test.secondary_redis (Skipped)
+	 38 - test.secondary_redis_unix (Skipped)
+	 40 - test.serialize_diagnostics (Skipped)
+	 44 - test.trim_dir (Skipped)
+
+The following tests FAILED:
+	  1 - unittest (Failed)
+Errors while running CTest
+113634 ms
+NoneType: None
+14:24:53,86 root ERROR [ccache/ccache:445af8a6d7c1865e86d988839b261de54c4833b7] Old test failed
+14:24:53,87 root ERROR Test failed early, stopping the test loops.
+14:24:53,88 root ERROR Test run '['ctest', '--output-on-failure']' failed
+14:24:53,88 root ERROR new process (None) or old process (None) failed.
+14:25:03,512 root INFO [ccache/ccache] Stopped the container
+14:25:03,555 root INFO Testing docker images completed.
+14:25:03,556 root INFO Controller execution completed.
+14:25:03,561 root INFO Pipeline finished successfully.

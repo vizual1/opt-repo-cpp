@@ -39,13 +39,11 @@ class DockerManager:
         try:
             if not check_and_fix_path_permissions(self.mount):
                 return
-
+            
             logging.info(f"Run docker image ({self.docker_image}) mounted on {str(self.mount)}.")
             mounts = []
             if self.mount:
                 mounts.append(Mount(target="/workspace", source=str(self.mount), type="bind", read_only=False))
-            if self.config.mount:
-                mounts.append(Mount(target="/test_workspace/workspace/new", source=self.config.mount, type="bind", read_only=False))
             self.container = self.client.containers.run(
                 self.docker_image,
                 command=["/bin/bash"],

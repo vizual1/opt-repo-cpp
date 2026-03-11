@@ -1,0 +1,37 @@
+15:06:08,148 root INFO Command run: main.py --testpatch --docker=madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5 --diff=data/test/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.patch
+15:06:08,149 root INFO Starting the GitHub repository pipeline...
+15:06:08,152 root INFO Starting controller...
+15:06:08,153 root INFO Testing patched docker images...
+15:06:09,123 root INFO Commits found 1
+15:06:09,124 root INFO Available CPUs: [0, 1, 2, 3, 4, 5, 6, 7]
+15:06:09,125 root INFO CPU pinning sets: ['0']
+15:06:09,876 root INFO Cloning repository https://github.com/madmann91/bvh.git for commit 1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5 into /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/new
+15:06:15,993 root INFO Repository checked out to commit 1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5 successfully
+15:06:15,994 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] Testing...
+15:06:16,314 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] CMakeLists.txt at root found
+15:06:16,556 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] ctest is defined
+15:06:18,706 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] path to enable_testing(): '.'
+15:06:18,706 root INFO Started Docker Image: madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5
+15:06:18,749 root INFO Run docker image (madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.
+15:06:21,26 root ERROR Docker execution failed: 404 Client Error for http+docker://localhost/v1.51/images/create?tag=latest&fromImage=madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5: Not Found ("pull access denied for madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5, repository does not exist or may require 'docker login': denied: requested access to the resource is denied")
+15:06:21,27 root ERROR No docker container started
+15:06:21,28 root ERROR Copy files failed with exit code 1: cp -r /workspace /test_workspace
+15:06:21,29 root ERROR No docker container started
+15:06:21,29 root ERROR [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] New build failed
+15:06:21,33 root ERROR New commit CMakeProcess is None
+15:06:21,34 root ERROR new process (None) or old process (None) failed.
+15:06:21,277 root ERROR [madmann91/bvh] Error testing commits: cannot access local variable 'new_process' where it is not associated with a value
+Traceback (most recent call last):
+  File "/mnt/c/Data/Master/opt-repo-cpp/src/core/pipelines/commit_tester_pipeline.py", line 21, in run_one_commit
+    docker.run_commit_pair(repo, new_sha, old_sha, new_path, old_path, cpuset_cpus)
+  File "/mnt/c/Data/Master/opt-repo-cpp/src/core/docker/tester.py", line 30, in run_commit_pair
+    with self._commit_pair_test(
+  File "/home/linuxbrew/.linuxbrew/opt/python@3.12/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/mnt/c/Data/Master/opt-repo-cpp/src/core/docker/tester.py", line 77, in _commit_pair_test
+    if new_process:
+       ^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'new_process' where it is not associated with a value
+15:06:21,313 root INFO Testing patched docker images completed.
+15:06:21,314 root INFO Controller execution completed.
+15:06:21,317 root INFO Pipeline finished successfully.

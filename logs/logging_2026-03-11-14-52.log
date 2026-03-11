@@ -1,0 +1,75 @@
+14:52:00,813 root INFO Command run: main.py --genimages --input=data/test/
+14:52:00,814 root INFO Starting the GitHub repository pipeline...
+14:52:00,816 root INFO Starting controller...
+14:52:00,817 root INFO Generating Docker Images...
+14:52:00,826 root INFO Commits found 1
+14:52:00,827 root INFO Available CPUs: [0, 1, 2, 3, 4, 5, 6, 7]
+14:52:00,827 root INFO CPU pinning sets: ['0']
+14:52:01,447 root INFO Cloning repository https://github.com/madmann91/bvh.git for commit 1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5 into /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/new
+14:52:07,507 root INFO Repository checked out to commit 1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5 successfully
+14:52:07,508 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] Testing...
+14:52:07,779 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] CMakeLists.txt at root found
+14:52:08,82 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] ctest is defined
+14:52:09,949 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] path to enable_testing(): '.'
+14:52:09,959 root INFO cmake_minimum_required found: 3.13
+14:52:09,960 root INFO Started Docker Image: cpp24
+14:52:10,8 root INFO Run docker image (cpp24) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.
+14:52:11,922 root INFO Command run in docker: ['cp', '-r', '/workspace', '/test_workspace']
+14:52:12,28 root INFO Files copied into docker: cp -r /workspace /test_workspace
+14:52:12,29 root INFO stdout: 867 ms
+
+14:52:12,30 root INFO [Attempt 1/10] Configuring project at /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/new
+14:52:12,257 root INFO Command run in docker: ['rm', '-rf', '/test_workspace/workspace/new/build']
+14:52:12,382 root INFO cmake -S /test_workspace/workspace/new -B /test_workspace/workspace/new/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON
+14:52:13,281 root INFO Command run in docker: ['cmake', '-S', '/test_workspace/workspace/new', '-B', '/test_workspace/workspace/new/build', '-DCMAKE_BUILD_TYPE=Debug', '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON', '-DBUILD_TESTING=ON']
+14:52:13,425 root INFO CMake Configuration successful for /test_workspace/workspace/new/build
+14:52:13,426 root INFO cmake --build /test_workspace/workspace/new/build -- -j 1
+14:52:21,203 root INFO Command run in docker: ['cmake', '--build', '/test_workspace/workspace/new/build', '--', '-j', '1']
+14:52:21,329 root INFO CMake build completed for /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/new
+14:52:21,572 root INFO Command run in docker: ['ctest', '--help']
+14:52:21,916 root INFO Command run in docker: ['ctest', '-N']
+14:52:22,51 root INFO Test commands: []
+14:52:22,52 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] New build successful
+14:52:22,57 root INFO Cloning repository https://github.com/madmann91/bvh.git for commit f0ecce6902070713769d15d8a447bf9029ce700d into /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/old
+14:52:27,666 root INFO Repository checked out to commit f0ecce6902070713769d15d8a447bf9029ce700d successfully
+14:52:27,667 root INFO [madmann91/bvh:f0ecce6902070713769d15d8a447bf9029ce700d] Testing...
+14:52:27,947 root INFO [madmann91/bvh:f0ecce6902070713769d15d8a447bf9029ce700d] CMakeLists.txt at root found
+14:52:28,208 root INFO [madmann91/bvh:f0ecce6902070713769d15d8a447bf9029ce700d] ctest is defined
+14:52:28,271 root INFO [madmann91/bvh:f0ecce6902070713769d15d8a447bf9029ce700d] path to enable_testing(): '.'
+14:52:28,280 root INFO cmake_minimum_required found: 3.13
+14:52:28,280 root INFO Started Docker Image: cpp24
+14:52:28,315 root INFO Run docker image (cpp24) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.
+14:52:28,326 root ERROR Docker execution failed: 409 Client Error for http+docker://localhost/v1.51/containers/create?name=madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5: Conflict ("Conflict. The container name "/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5" is already in use by container "ba8e1a2472f66809ec0cf34302c923cdbe36a7827f9ad8ea0f6bc7181b6ec72d". You have to remove (or rename) that container to be able to reuse that name.")
+14:52:29,819 root INFO Command run in docker: ['cp', '-r', '/workspace', '/test_workspace']
+14:52:29,975 root INFO Files copied into docker: cp -r /workspace /test_workspace
+14:52:29,976 root INFO stdout: 1264 ms
+
+14:52:29,976 root INFO [Attempt 1/10] Configuring project at /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/old
+14:52:30,226 root INFO Command run in docker: ['rm', '-rf', '/test_workspace/workspace/old/build']
+14:52:30,433 root INFO cmake -S /test_workspace/workspace/old -B /test_workspace/workspace/old/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=ON
+14:52:31,239 root INFO Command run in docker: ['cmake', '-S', '/test_workspace/workspace/old', '-B', '/test_workspace/workspace/old/build', '-DCMAKE_BUILD_TYPE=Debug', '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON', '-DBUILD_TESTING=ON']
+14:52:31,356 root INFO CMake Configuration successful for /test_workspace/workspace/old/build
+14:52:31,356 root INFO cmake --build /test_workspace/workspace/old/build -- -j 1
+14:52:38,758 root INFO Command run in docker: ['cmake', '--build', '/test_workspace/workspace/old/build', '--', '-j', '1']
+14:52:38,866 root INFO CMake build completed for /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5/old
+14:52:39,121 root INFO Command run in docker: ['ctest', '--help']
+14:52:39,558 root INFO Command run in docker: ['ctest', '-N']
+14:52:39,759 root INFO Test commands: []
+14:52:39,760 root INFO [madmann91/bvh:f0ecce6902070713769d15d8a447bf9029ce700d] Old build successful
+14:52:39,912 root INFO Copied log file to ba8e1a2472f66809ec0cf34302c923cdbe36a7827f9ad8ea0f6bc7181b6ec72d:/test_workspace/logs/full.log
+14:52:40,7 root INFO Copied log file to ba8e1a2472f66809ec0cf34302c923cdbe36a7827f9ad8ea0f6bc7181b6ec72d:/test_workspace/logs/config.log
+14:52:40,77 root INFO Copied log file to ba8e1a2472f66809ec0cf34302c923cdbe36a7827f9ad8ea0f6bc7181b6ec72d:/test_workspace/logs/build.log
+14:52:40,163 root INFO Copied log file to ba8e1a2472f66809ec0cf34302c923cdbe36a7827f9ad8ea0f6bc7181b6ec72d:/test_workspace/logs/test.log
+14:52:40,251 root INFO Copied log file to ba8e1a2472f66809ec0cf34302c923cdbe36a7827f9ad8ea0f6bc7181b6ec72d:/test_workspace/logs/results.json
+14:52:45,328 root INFO Command run in docker: ['apt-get', 'autoremove', '-y']
+14:52:46,10 root INFO Command run in docker: ['apt-get', 'autoclean', '-y']
+14:52:46,493 root INFO Command run in docker: ['apt-get', 'clean']
+14:52:46,986 root INFO Command run in docker: ['rm', '-rf', '/var/lib/apt/lists/*']
+14:52:47,553 root INFO Command run in docker: ['rm', '-rf', '/tmp/*']
+14:52:48,168 root INFO Command run in docker: ['rm', '-rf', '/root/.cache']
+14:52:48,746 root INFO Command run in docker: ['rm', '-rf', '/home/*/.cache']
+14:52:50,106 root INFO [madmann91/bvh:1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] Docker image saved.
+14:53:01,177 root INFO [madmann91/bvh] Stopped the container
+14:53:01,222 root INFO Docker images generated.
+14:53:01,223 root INFO Controller execution completed.
+14:53:01,224 root INFO Pipeline finished successfully.

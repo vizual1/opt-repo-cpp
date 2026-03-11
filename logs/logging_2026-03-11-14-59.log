@@ -1,0 +1,49 @@
+14:59:48,282 root INFO Command run: main.py --testdocker --docker=madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5
+14:59:48,284 root INFO Starting the GitHub repository pipeline...
+14:59:48,287 root INFO Starting controller...
+14:59:48,288 root INFO Testing docker images...
+14:59:49,303 root INFO Commits found 1
+14:59:49,305 root INFO Available CPUs: [0, 1, 2, 3, 4, 5, 6, 7]
+14:59:49,306 root INFO CPU pinning sets: ['0']
+14:59:52,350 root INFO Run docker image (madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.
+14:59:53,508 root INFO Command run in docker: ['chmod', '777', '/test_workspace/new_build.sh']
+14:59:54,82 root INFO Command run in docker: ['cat', '/test_workspace/new_build.sh']
+14:59:54,749 root INFO Command run in docker: ['chmod', '777', '/test_workspace/new_test.sh']
+14:59:55,229 root INFO Command run in docker: ['cat', '/test_workspace/new_test.sh']
+14:59:55,350 root INFO [madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] New docker commit setup successful.
+14:59:55,492 root INFO Run docker image (madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5) mounted on /mnt/c/Data/Master/opt-repo-cpp/data/tmp/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.
+14:59:55,507 root ERROR Docker execution failed: 409 Client Error for http+docker://localhost/v1.51/containers/create?name=madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5: Conflict ("Conflict. The container name "/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5" is already in use by container "b6ca30badc8e029f151f23b810cc456c71543dc8c7cc93c6a9e1af1ee71da22a". You have to remove (or rename) that container to be able to reuse that name.")
+14:59:55,755 root INFO Command run in docker: ['chmod', '777', '/test_workspace/old_build.sh']
+14:59:56,148 root INFO Command run in docker: ['cat', '/test_workspace/old_build.sh']
+14:59:56,602 root INFO Command run in docker: ['chmod', '777', '/test_workspace/old_test.sh']
+14:59:57,162 root INFO Command run in docker: ['cat', '/test_workspace/old_test.sh']
+14:59:57,334 root INFO [madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5] Old docker commit setup successful.
+14:59:57,338 root INFO ctest --output-on-failure in /test_workspace/workspace/new/build
+15:00:11,822 root INFO CTest passed for /test_workspace/workspace/new/build
+15:00:11,823 root INFO Tests run: 11, Failures: 0, Skipped: 0, Time elapsed: 13.98 s
+15:00:11,824 root INFO ctest --output-on-failure in /test_workspace/workspace/old/build
+15:00:26,29 root INFO CTest passed for /test_workspace/workspace/old/build
+15:00:26,30 root INFO Tests run: 11, Failures: 0, Skipped: 0, Time elapsed: 13.79 s
+15:00:26,32 root INFO Times Old: [13.79], New: [13.98]
+15:00:26,64 root INFO pvalue: nan
+15:00:26,74 root INFO new outperforms old: []
+15:00:26,75 root INFO overall change: -0.014524328249818395
+15:00:26,607 root INFO Results: {'is_significant': False, 'p_value': 'NaN', 'is_pair_significant': False, 'pair_p_value': 'NaN', 'is_binom_significant': False, 'binom_p_value': 1.0, 'is_wilcoxon_significant': False, 'wilcoxon_p_value': 1.0, 'is_mannwhitney_significant': False, 'mannwhitney_p_value': 1.0, 'relative_improvement': -0.01377810007251641, 'absolute_improvement_ms': -190.00000000000128, 'old_mean_ms': 13790.0, 'new_mean_ms': 13980.0, 'old_std_ms': 'NaN', 'new_std_ms': 'NaN', 'effect_size_cohens_d': 'NaN', 'old_ci95_ms': (0.0, 0.0), 'new_ci95_ms': (0.0, 0.0), 'old_ci99_ms': (0.0, 0.0), 'new_ci99_ms': (0.0, 0.0), 'new_times_s': [13.98], 'old_times_s': [13.79]}
+15:00:26,618 root INFO [madmann91/bvh] Wrote results to /mnt/c/Data/Master/opt-repo-cpp/data/commits/madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5.json
+15:00:26,661 root INFO Removing existing image: madmann91_bvh_1b2472a44e22fcf7dc921b7eb36b7729ec97e8b5
+15:00:26,762 root INFO Copied log file to b6ca30badc8e029f151f23b810cc456c71543dc8c7cc93c6a9e1af1ee71da22a:/test_workspace/logs/full.log
+15:00:26,825 root INFO Copied log file to b6ca30badc8e029f151f23b810cc456c71543dc8c7cc93c6a9e1af1ee71da22a:/test_workspace/logs/config.log
+15:00:26,923 root INFO Copied log file to b6ca30badc8e029f151f23b810cc456c71543dc8c7cc93c6a9e1af1ee71da22a:/test_workspace/logs/build.log
+15:00:27,3 root INFO Copied log file to b6ca30badc8e029f151f23b810cc456c71543dc8c7cc93c6a9e1af1ee71da22a:/test_workspace/logs/test.log
+15:00:27,103 root INFO Copied log file to b6ca30badc8e029f151f23b810cc456c71543dc8c7cc93c6a9e1af1ee71da22a:/test_workspace/logs/results.json
+15:00:32,911 root INFO Command run in docker: ['apt-get', 'autoremove', '-y']
+15:00:33,486 root INFO Command run in docker: ['apt-get', 'autoclean', '-y']
+15:00:34,45 root INFO Command run in docker: ['apt-get', 'clean']
+15:00:34,608 root INFO Command run in docker: ['rm', '-rf', '/var/lib/apt/lists/*']
+15:00:35,244 root INFO Command run in docker: ['rm', '-rf', '/tmp/*']
+15:00:35,747 root INFO Command run in docker: ['rm', '-rf', '/root/.cache']
+15:00:36,245 root INFO Command run in docker: ['rm', '-rf', '/home/*/.cache']
+15:00:47,555 root INFO [madmann91/bvh] Stopped the container
+15:00:47,588 root INFO Testing docker images completed.
+15:00:47,589 root INFO Controller execution completed.
+15:00:47,592 root INFO Pipeline finished successfully.

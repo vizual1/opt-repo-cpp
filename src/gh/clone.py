@@ -20,15 +20,17 @@ class GitHandler:
             shutil.rmtree(repo_path, onerror=self._on_rm_error)
 
         repo_path.mkdir(parents=True, exist_ok=True)
-        
+
         if sha:
             logging.info(f"Cloning repository {url} for commit {sha} into {repo_path}")
             try:
                 subprocess.run(
-                    ["git", "clone", url, repo_path],
+                    ["git", "clone", url, str(repo_path)],
+                    cwd="/tmp",
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-
+                
+                """
                 subprocess.run(
                     ["git", "config", "--local", "safe.directory", str(repo_path)],
                     cwd=repo_path,
@@ -40,7 +42,7 @@ class GitHandler:
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-
+                """
                 subprocess.run(
                     ["git", "checkout", sha],
                     cwd=repo_path,
@@ -52,12 +54,13 @@ class GitHandler:
                     cwd=repo_path,
                     check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-
+                """
                 subprocess.run(
                     ["git", "config", "core.fileMode", "false"], 
                     cwd=repo_path, 
                     check=True
                 )
+                """
                 self.set_permission(str(repo_path))
                 logging.info(f"Repository checked out to commit {sha} successfully")
                 return True

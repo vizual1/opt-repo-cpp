@@ -28,12 +28,11 @@ class CommitHandler:
         
         return commits_info
     
-    def get_commits(self, commits_list: list[Commit] = []) -> list[tuple[str, str, str]]:
+    def get_commits(self, commits_list: list[tuple[str, Commit]] = []) -> list[tuple[str, str, str]]:
         """Return list of (repo_id, new_sha, old_sha) pairs."""
         file_path = Path(self.input_file)
-
         if commits_list:
-            all_commits = [(commit.repository.full_name, commit.sha, commit.parents[0].sha) for commit in commits_list]
+            all_commits = [(repo_id, commit.sha, commit.parents[0].sha) for repo_id, commit in commits_list if commit is not None]
         elif file_path.is_file():
             all_commits = self._get_filtered_commits(file_path)
         elif file_path.is_dir():
