@@ -29,9 +29,9 @@ def check_dockerhub() -> tuple[str, str]:
     dockerhub_user = os.environ.get("DOCKER_HUB_USER", "")
     dockerhub_repo = os.environ.get("DOCKER_HUB_REPO", "")
     if not dockerhub_user:
-        raise RuntimeError("DOCKERHUB_USER environment variable is not set")
+        logging.warning("DOCKERHUB_USER environment variable is not set")
     if not dockerhub_repo:
-        raise RuntimeError("DOCKERHUB_REPO environment variable is not set")
+        logging.warning("DOCKERHUB_REPO environment variable is not set")
     return dockerhub_user, dockerhub_repo
 
 
