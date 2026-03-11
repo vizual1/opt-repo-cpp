@@ -19,7 +19,10 @@ class CommitFilter:
 
     def accept(self) -> bool: 
         logging.info(f"[{self.repo.full_name}] ({self.commit.sha}) Filtering...")
-        name = self.config.llm.ollama_stage1_model + "_" + self.config.llm.ollama_diff_model + "_" + self.config.llm.ollama_stage2_model if self.config.llm.ollama_enabled else self.config.llm.model1 + "_" + self.config.llm.model2
+        if self.config.llm.ollama_enabled:
+            name = self.config.llm.ollama_stage1_model + "_" + self.config.llm.ollama_stage2_model  
+        else:
+            name = self.config.llm.model1 + "_" + self.config.llm.model2
         cached = self.cache.get(self.repo.full_name, {}).get(self.config.filter + (f"_{name}" if self.config.filter == "llm" else ""), {}).get(self.commit.sha)
         if cached is not None:
             logging.info(f"Cache hit for {self.commit.sha} ({self.config.filter}) -> {cached}")
@@ -134,7 +137,7 @@ class CommitFilter:
                 ])
                 
                 if self.config.llm.ollama_enabled:
-                    self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_diff_model)
+                    self.llm2 = OllamaLLM(self.config, self.config.llm.ollama_stage2_model)
                 else:
                     self.llm2 = OpenRouterLLM(self.config, self.config.llm.model2)
                 logging.info(f"[{self.repo.full_name}] Checking file {f.filename}:\n{p.messages[1].content}")

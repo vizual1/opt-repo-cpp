@@ -10,15 +10,27 @@ The pipeline collects repositories from GitHub, identifies candidate performance
 
 ## Quick Start
 
+Clone the repository and install dependencies:
 ```bash
-git clone https://github.com/vizual1/opt-repo-cpp
+git clone https://github.com/<repo>
 cd opt-repo-cpp
 
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+```
 
-# Minimal pipeline example
+Configure required environment variable:
+```bash
+export GITHUB_ACCESS_TOKEN=your_github_token
+```
+
+Run a minimal pipeline example:
+```bash
 python3 main.py --collect --repos=5 --stars=1000
 ```
+
+This collects a small set of C++ repositories and validates their structure.
 
 ---
 
@@ -27,8 +39,8 @@ python3 main.py --collect --repos=5 --stars=1000
 The pipeline performs the following steps:
 
 1. Repository collection from GitHub
-2. Structural commit filtering
-3. LLM-based classification of candidate performance-improving commits
+2. Structural commit filtering from GitHub repositories
+3. LLM-based classification of commits
 4. Containerized build and test execution
 5. Statistical runtime analysis
 6. Dataset generation
@@ -61,7 +73,9 @@ export DOCKER_HUB_REPO=repository # optional, for pushing or pulling images
 
 2. **Install Python dependencies**:
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+pip install cmakeast docker pygithub jsonschema openai numpy scipy
 ```
 
 3. **Build Docker images** for different C++ versions:
@@ -105,6 +119,13 @@ python3 main.py --testcollect --input=data/collect.txt
 
 2. **Collecting and Testing Commits**
 LLM filtering currently supports Ollama, OpenAI, and OpenRouter APIs. The default model configuration is defined in ```src/config/settings.py```. 
+
+Key settings include:
+- `LLM_API_KEY` – API key used for OpenRouter/OpenAI requests
+- `base_url` – API endpoint (default: OpenRouter)
+- `model1`, `model2` – models used for commit classification
+- `ollama_enabled` – enable local inference via Ollama
+- `ollama_url` – local Ollama API endpoint
 
 Filter commits from collected repositories:
 ```bash
@@ -166,6 +187,9 @@ python3 main.py --testpatch --docker=<owner_repo_newsha> --diff=/path/to/diff.pa
 
 Dataset Docker images:
 ```bash
+export DOCKER_HUB_USER=tommyho1999
+export DOCKER_HUB_REPO=opt-repo-cpp
+
 # Pulls Docker images from Dockerhub of collected commits from a folder of JSON files
 # WARNING: This command downloads the entire dataset of Docker images (347)
 python3 main.py --pullimages --input=data/dataset/

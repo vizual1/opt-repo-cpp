@@ -166,6 +166,9 @@ class DependencyResolver:
         return False
         
     def unresolved_dep(self, unresolved_dependencies: set[str], ubuntu_ver: str) -> tuple[set[str], set[str]]:
+        if not self.config.llm.dependency_resolver_enabled:
+            return set(), set()
+        
         logging.info(f"All unresolved dependencies {unresolved_dependencies}")
         llm_output = self.llm.llm_prompt(list(unresolved_dependencies), ubuntu_ver, timeout=100)
         logging.info(f"LLM prompt returned:\n{llm_output}")
@@ -274,7 +277,7 @@ class DependencyResolver:
             if self.config.llm.ollama_enabled:
                 self.llm = OllamaLLM(self.config, self.config.llm.ollama_resolver_model)
             else:
-                self.llm = OpenRouterLLM(self.config, self.config.llm.model1)
+                self.llm = OpenRouterLLM(self.config, self.config.llm.resolver_model)
 
         def llm_prompt(self, deps: list[str], ubuntu_ver: str, timeout: int = 60) -> str:
             result: dict[str, str] = {"out": ""}

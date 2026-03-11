@@ -7,16 +7,17 @@ from pathlib import Path
 class LLMSettings:
     """LLM-related configuration."""
     api_key: str = field(default_factory=lambda: os.getenv('LLM_API_KEY', ''))
+    dependency_resolver_enabled: bool = True
     base: bool = True
     base_url: str = "https://openrouter.ai/api/v1"
     model1: str = "openai/gpt-5-mini"
     model2: str = "openai/gpt-5-mini"
+    resolver_model: str = "openai/gpt-5-mini"
     
     # Ollama settings
     ollama_enabled: bool = False
     ollama_url: str = "http://127.0.0.1:11434/api/generate"
     ollama_stage1_model: str = "qwen2.5:7b"
-    ollama_diff_model: str = "qwen2.5-coder:7b"
     ollama_stage2_model: str = "qwen3:8b"
     ollama_resolver_model: str = "qwen3:8b"
 

@@ -26,8 +26,8 @@ def delete_image(repo_id: str = "", sha: str = "", other: str = "") -> None:
         logging.info(f"Failed to delete image: {e}")
 
 def check_dockerhub() -> tuple[str, str]:
-    dockerhub_user = os.environ.get("DOCKER_HUB_USER")
-    dockerhub_repo = os.environ.get("DOCKER_HUB_REPO")
+    dockerhub_user = os.environ.get("DOCKER_HUB_USER", "")
+    dockerhub_repo = os.environ.get("DOCKER_HUB_REPO", "")
     if not dockerhub_user:
         raise RuntimeError("DOCKERHUB_USER environment variable is not set")
     if not dockerhub_repo:
